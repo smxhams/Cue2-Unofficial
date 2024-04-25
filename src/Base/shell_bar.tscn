@@ -8,6 +8,7 @@ atlas = ExtResource("1_rmwen")
 region = Rect2(645, 258, 128, 128)
 
 [node name="shell_bar" type="Control"]
+y_sort_enabled = true
 clip_contents = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 3
@@ -28,49 +29,58 @@ grow_horizontal = 2
 grow_vertical = 2
 focus_mode = 1
 
-[node name="PanelContainer" type="HBoxContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 3
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 3
+theme_override_constants/margin_bottom = 3
 
-[node name="DragBar" type="Button" parent="PanelContainer"]
+[node name="PanelContainer" type="HBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+
+[node name="DragBar" type="Button" parent="MarginContainer/PanelContainer"]
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
-mouse_filter = 1
+focus_mode = 0
+mouse_default_cursor_shape = 6
 theme_override_font_sizes/font_size = 10
 text = "|"
 
-[node name="TypeIcon" type="Button" parent="PanelContainer"]
+[node name="TypeIcon" type="Button" parent="MarginContainer/PanelContainer"]
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
 tooltip_text = "This Cue has no connections"
+focus_mode = 0
 mouse_filter = 1
 icon = SubResource("AtlasTexture_ag1hf")
 expand_icon = true
 
-[node name="CueNumber" type="LineEdit" parent="PanelContainer"]
+[node name="CueNumber" type="LineEdit" parent="MarginContainer/PanelContainer"]
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
+focus_mode = 0
 mouse_filter = 1
 theme_override_font_sizes/font_size = 10
-placeholder_text = "New Shell"
 max_length = 4
 
-[node name="CueName" type="LineEdit" parent="PanelContainer"]
+[node name="CueName" type="LineEdit" parent="MarginContainer/PanelContainer"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
-mouse_filter = 1
+focus_mode = 0
+mouse_filter = 2
 theme_override_font_sizes/font_size = 10
 placeholder_text = "New Shell"
 max_length = 50
-editable = false
 expand_to_text_length = true
 flat = true
 
-[node name="ProgressBar" type="ProgressBar" parent="PanelContainer"]
+[node name="ProgressBar" type="ProgressBar" parent="MarginContainer/PanelContainer"]
 visible = false
 custom_minimum_size = Vector2(50, 22)
 layout_mode = 2
@@ -79,7 +89,7 @@ mouse_filter = 1
 value = 10.0
 show_percentage = false
 
-[node name="ProgressLabel" type="Label" parent="PanelContainer/ProgressBar"]
+[node name="ProgressLabel" type="Label" parent="MarginContainer/PanelContainer/ProgressBar"]
 visible = false
 layout_mode = 0
 offset_right = 40.0

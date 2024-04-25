@@ -15,4 +15,6 @@ public partial class GlobalSignals : Node
 	[Signal]
 	public delegate void FileSelectedEventHandler(string path);
 
+	
+
 }

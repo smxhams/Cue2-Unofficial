@@ -21,6 +21,8 @@ config/icon="res://icon.svg"
 GlobalSignals="*res://src/Shared/GlobalSignals.cs"
 GlobalData="*res://src/Shared/GlobalData.cs"
 Connections="*res://src/Shared/Connections.cs"
+GlobalStyles="*res://src/Shared/GlobalStyles.cs"
+ErrorHandler="*res://src/Shared/Error_Handler.cs"
 
 [display]
 
@@ -33,6 +35,10 @@ window/handheld/orientation=1
 [dotnet]
 
 project/assembly_name="Cue2"
+
+[editor]
+
+import/reimport_missing_imported_files=false
 
 [rendering]
 

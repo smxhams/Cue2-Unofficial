@@ -1,18 +1,45 @@
 using Godot;
+using Godot.NativeInterop;
 using System;
 using System.Collections;
+using System.ComponentModel;
+using System.Linq;
+using LibVLCSharp.Shared;
+
+// This script handles:
+// -Activation of cues
+// -Main window UI handling
+// 
+
 
 public partial class cue_2_base : Control
 {
-	private Node setWin;
 	private GlobalSignals _globalSignals;
-	// Called when the node enters the scene tree for the first time.
+	public GlobalData _gd;
+	private Connections _connections;
+
+	private Node setWin;
+
+
+	private Media _media;
+	private LibVLC libVLC;
+	private MediaPlayer mediaPlayer;
+	private IntPtr windowHandle;
+	private Window newWindow;
+
+
+	private AudioStreamPlayer streamPlayer = new AudioStreamPlayer();
+
+
 	public override void _Ready()
 	{
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CloseSettingsWindow += close_settings_window;
 		_globalSignals.ShellSelected += shell_selected;
+		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_connections = GetNode<Connections>("/root/Connections");
+
 	}
 
 
@@ -43,7 +70,7 @@ public partial class cue_2_base : Control
 		
 	}
 	private void shell_selected(int @cueID)
-	{ //From global signal, emitted by close button of settings window.
+	{ //From global signal, emitted by shell_bar
 		GD.Print("Shell Selected: " + @cueID);
 		
 	}
@@ -53,10 +80,92 @@ public partial class cue_2_base : Control
 		go();
 	}
 
+	private void _on_stop_pressed()
+	{
+		stop();
+	}
+
 	public void go()
 	{
+		// Check for next cue
+		if (_gd.nextCue != -1)
+		{
+			var cueNumToGo = _gd.nextCue;
+			var shellData = (Hashtable)_gd.cuelist[cueNumToGo];
+			var cueType = shellData["type"];
+			if ((string)cueType == "")
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.");
+			}
+
+			// Play audio file
+			else if ((string)cueType == "Audio")
+			{
+				var path = (string)shellData["filepath"];
+
+				libVLC = new LibVLC();
+				mediaPlayer = new MediaPlayer(libVLC);
+				_media = new Media(libVLC, new Uri(path));
+				mediaPlayer.Play(_media);
+				((Hashtable)_gd.cuelist[cueNumToGo])["media"] = _media;
+				((Hashtable)_gd.cuelist[cueNumToGo])["player"] = mediaPlayer;
+				_media.Dispose();
+
+				_gd.liveCues.Add(cueNumToGo);
+			}
+
+			// Play video
+			else if ((string)cueType == "Video")
+			{
+				var path = (string)shellData["filepath"];
+
+				newWindow = new Window();
+				AddChild(newWindow);
+				newWindow.Name = "Video Player";
+				newWindow.CloseRequested += NewWindowOnCloseRequested;
+				newWindow.PopupCentered(new Vector2I(700, 500));
+				windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, 1);
+				libVLC = new LibVLC();
+				mediaPlayer = new MediaPlayer(libVLC);
+				_media = new Media(libVLC, new Uri(path));
+				mediaPlayer.Hwnd = windowHandle;
+				mediaPlayer.Play(_media);
+
+
+			}
+
+			_gd.liveCues.Add(_gd.nextCue);
+
+			
+
+		}
+		else {_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");}
+
+		// Send cue to live
 		GD.Print("GOOOOO");
 	}
 
+
+	public void stop()
+	{
+		foreach (int cue in _gd.liveCues)
+		{
+			GD.Print(cue);
+			((MediaPlayer)((Hashtable)_gd.cuelist[cue])["player"]).Stop();
+			((MediaPlayer)((Hashtable)_gd.cuelist[cue])["player"]).Dispose();
+			_gd.liveCues.Remove(cue);
+			((Hashtable)_gd.cuelist[cue])["player"] = null;
+			((Hashtable)_gd.cuelist[cue])["media"] = null;
+
+
+		}
+	}
+	private void NewWindowOnCloseRequested()
+	{
+		// Clean up
+		newWindow.QueueFree();
+		mediaPlayer.Dispose();
+		libVLC.Dispose();
+	}
 
 }

@@ -3,6 +3,10 @@ using System;
 
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+
+// This script is attached to shell context tab
+
 
 public partial class ShellContext : MarginContainer
 {
@@ -49,8 +53,27 @@ public partial class ShellContext : MarginContainer
 
 	private void file_selected(string @path)
 	{
+		String newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
+		GD.Print(@path + "    :    " + newPath);
+		//DirAccess.CopyAbsolute((string)@path, (string)newPath);
 		GetNode<Label>("GridContainer/fileURL").Text = @path;
+		
+
 		((Hashtable)_globalData.cuelist[selectedCueID])["filepath"] = @path;
+		var extention = Path.GetExtension(newPath);
+		if (extention == ".wav")
+		{
+			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Audio";
+		}
+		if (extention == ".mov")
+		{
+			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Video";
+		}
+		if (extention == ".mp4")
+		{
+			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Video";
+		}
+
 		GD.Print(((Hashtable)_globalData.cuelist[selectedCueID])["filepath"]);
 
 	}

@@ -19,7 +19,7 @@ public partial class FileDialogue : FileDialog
 	{
 		string extention = Path.GetExtension(@path);
 
-		if (String.IsNullOrEmpty(extention) | extention != ".wav")
+		if (String.IsNullOrEmpty(extention))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "File select failed: " + extention + " Invalid File Type");
 			return;
