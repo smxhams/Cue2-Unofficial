@@ -15,6 +15,7 @@ public partial class GlobalSignals : Node
 	[Signal]
 	public delegate void FileSelectedEventHandler(string path);
 
-	
+	[Signal]
+	public delegate void CueGoEventHandler(int cue);
 
 }

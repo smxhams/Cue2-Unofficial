@@ -3,6 +3,7 @@ using LibVLCSharp.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 public partial class GlobalData : Node
 {
@@ -11,6 +12,8 @@ public partial class GlobalData : Node
 	public int cueTotal;
 	public int cueOrder;
 	public int nextCue = -1;
+
+	public int videoOutputWinNum;
 
 	//Create a referencable global class for all media
 	public GlobalMediaPlayerManager mediaManager = new GlobalMediaPlayerManager();
@@ -45,7 +48,7 @@ public class GlobalMediaPlayerManager
 		Core.Initialize();
 	}
 
-	public void PlayMedia(int id, string mediaPath)
+	public void PlayAudio(int id, string mediaPath)
 	{
 		var libVLC = new LibVLC();
 		var mediaPlayer = new MediaPlayer(libVLC);
@@ -53,6 +56,19 @@ public class GlobalMediaPlayerManager
 		mediaPlayer.Media = media;
 		mediaPlayer.Play();
 
+		mediaPlayers[id] = mediaPlayer;
+	}
+
+	public void PlayVideo(int id, string mediaPath, int windowID)
+	{
+		var libVLC = new LibVLC();
+		var mediaPlayer = new MediaPlayer(libVLC);
+		var media = new Media(libVLC, mediaPath);
+		mediaPlayer.Media = media;
+
+		var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, windowID);
+		mediaPlayer.Hwnd = windowHandle;
+		mediaPlayer.Play();
 		mediaPlayers[id] = mediaPlayer;
 	}
 
@@ -82,5 +98,22 @@ public class GlobalMediaPlayerManager
             mediaPlayer.Play();
         }
     }
+
+	public float GetProgress(int id)
+    {
+        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+        {
+			var totalTime = mediaPlayer.Length;
+			var currentTime = mediaPlayer.Time;
+			if (currentTime == (long)0)
+			{
+				return (float)0.0;
+			}
+			float progress = ((float)currentTime / (float)totalTime) * 100;
+            return (float)progress;
+        }
+		return (float)0.0;
+    }
+
 
 }

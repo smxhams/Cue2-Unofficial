@@ -20,18 +20,9 @@ public partial class cue_2_base : Control
 
 	private Node setWin;
 
-
-	private Media _media;
-	private LibVLC libVLC;
-	private MediaPlayer mediaPlayer;
-	private IntPtr windowHandle;
 	private Window newWindow;
 
-	public GlobalMediaPlayerManager mediaManager;
-
-
-	private AudioStreamPlayer streamPlayer = new AudioStreamPlayer();
-
+	//public GlobalMediaPlayerManager mediaManager;
 
 	public override void _Ready()
 	{
@@ -42,9 +33,18 @@ public partial class cue_2_base : Control
 		_gd = GetNode<GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
-		//mediaManager = new GlobalMediaPlayerManager();
-		//mediaManager.Initialize();
+		// Test video output window
+		newWindow = new Window();
+		AddChild(newWindow);
+		newWindow.Name = "Test Video Output";
 
+		//Set both transparents to true for invisible window
+		//newWindow.Transparent = true;
+		//newWindow.TransparentBg = true;
+
+		_gd.videoOutputWinNum = newWindow.GetWindowId();
+		DisplayServer.WindowSetCurrentScreen(1, _gd.videoOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.videoOutputWinNum);		
 	}
 
 
@@ -109,8 +109,7 @@ public partial class cue_2_base : Control
 			else if ((string)cueType == "Audio")
 			{
 				var path = (string)shellData["filepath"];
-				mediaManager = _gd.mediaManager;
-				mediaManager.PlayMedia(cueNumToGo, path);
+				_gd.mediaManager.PlayAudio(cueNumToGo, path);
 				_gd.liveCues.Add(cueNumToGo);
 			}
 
@@ -118,20 +117,9 @@ public partial class cue_2_base : Control
 			else if ((string)cueType == "Video")
 			{
 				var path = (string)shellData["filepath"];
-
-				newWindow = new Window();
-				AddChild(newWindow);
-				newWindow.Name = "Video Player";
-				newWindow.CloseRequested += NewWindowOnCloseRequested;
-				newWindow.PopupCentered(new Vector2I(700, 500));
-				windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, 1);
-				libVLC = new LibVLC();
-				mediaPlayer = new MediaPlayer(libVLC);
-				_media = new Media(libVLC, new Uri(path));
-				mediaPlayer.Hwnd = windowHandle;
-				mediaPlayer.Play(_media);
-
-
+				_gd.mediaManager.PlayVideo(cueNumToGo, path, _gd.videoOutputWinNum);
+				_gd.liveCues.Add(cueNumToGo);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueNumToGo);
 			}
 
 			foreach (var item in _gd.liveCues)
@@ -144,8 +132,6 @@ public partial class cue_2_base : Control
 		}
 		else {_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");}
 
-		// Send cue to live
-		GD.Print("GOOOOO");
 	}
 
 
@@ -154,18 +140,9 @@ public partial class cue_2_base : Control
 		foreach (int cue in _gd.liveCues)
 		{
 			GD.Print("Cue num stopping: " + cue);
-			mediaManager = _gd.mediaManager;
-			mediaManager.StopMedia(cue);
+			_gd.mediaManager.StopMedia(cue);
 			
 		}
 		_gd.liveCues.Clear();
 	}
-	private void NewWindowOnCloseRequested()
-	{
-		// Clean up
-		newWindow.QueueFree();
-		mediaPlayer.Dispose();
-		libVLC.Dispose();
-	}
-
 }

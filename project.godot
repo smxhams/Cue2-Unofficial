@@ -11,8 +11,10 @@ config_version=5
 [application]
 
 config/name="Cue2"
+config/version="0.00.003"
 run/main_scene="res://src/Base/cue_2_base.tscn"
 config/features=PackedStringArray("4.2", "C#")
+boot_splash/bg_color=Color(0.141176, 0.141176, 0.141176, 0)
 boot_splash/show_image=false
 config/icon="res://icon.svg"
 
@@ -30,7 +32,9 @@ window/size/viewport_width=600
 window/size/viewport_height=370
 window/size/borderless=true
 window/subwindows/embed_subwindows=false
+window/per_pixel_transparency/allowed=true
 window/handheld/orientation=1
+window/vsync/vsync_mode=0
 
 [dotnet]
 
@@ -44,4 +48,4 @@ import/reimport_missing_imported_files=false
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.168627, 0.168627, 0.168627, 1)
+environment/defaults/default_clear_color=Color(0, 0, 0, 0)
