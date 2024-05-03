@@ -1,4 +1,5 @@
 using Godot;
+using LibVLCSharp.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,6 +12,9 @@ public partial class GlobalData : Node
 	public int cueOrder;
 	public int nextCue = -1;
 
+	//Create a referencable global class for all media
+	public GlobalMediaPlayerManager mediaManager = new GlobalMediaPlayerManager();
+
 	public List<int> liveCues = new List<int>();
 
 	// Settings
@@ -20,10 +24,63 @@ public partial class GlobalData : Node
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		// Init MediaManager class so can be referenced everywhere
+		mediaManager.Initialize();
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
 	}
+}
+
+
+// Media manager
+public class GlobalMediaPlayerManager
+{
+	private Dictionary<int, MediaPlayer> mediaPlayers = new Dictionary<int, MediaPlayer>();
+
+	public void Initialize()
+	{
+		Core.Initialize();
+	}
+
+	public void PlayMedia(int id, string mediaPath)
+	{
+		var libVLC = new LibVLC();
+		var mediaPlayer = new MediaPlayer(libVLC);
+		var media = new Media(libVLC, mediaPath);
+		mediaPlayer.Media = media;
+		mediaPlayer.Play();
+
+		mediaPlayers[id] = mediaPlayer;
+	}
+
+	
+    public void StopMedia(int id)
+    {
+        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+        {
+            mediaPlayer.Stop();
+			mediaPlayer.Dispose();
+            mediaPlayers.Remove(id);
+        }
+    }
+
+    public void PauseMedia(int id)
+    {
+        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+        {
+            mediaPlayer.Pause();
+        }
+    }
+
+    public void ResumeMedia(int id)
+    {
+        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+        {
+            mediaPlayer.Play();
+        }
+    }
+
 }

@@ -27,6 +27,8 @@ public partial class cue_2_base : Control
 	private IntPtr windowHandle;
 	private Window newWindow;
 
+	public GlobalMediaPlayerManager mediaManager;
+
 
 	private AudioStreamPlayer streamPlayer = new AudioStreamPlayer();
 
@@ -39,6 +41,9 @@ public partial class cue_2_base : Control
 		_globalSignals.ShellSelected += shell_selected;
 		_gd = GetNode<GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
+
+		//mediaManager = new GlobalMediaPlayerManager();
+		//mediaManager.Initialize();
 
 	}
 
@@ -93,6 +98,8 @@ public partial class cue_2_base : Control
 			var cueNumToGo = _gd.nextCue;
 			var shellData = (Hashtable)_gd.cuelist[cueNumToGo];
 			var cueType = shellData["type"];
+
+			// Check cue type to determine how to play
 			if ((string)cueType == "")
 			{
 				_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.");
@@ -102,15 +109,8 @@ public partial class cue_2_base : Control
 			else if ((string)cueType == "Audio")
 			{
 				var path = (string)shellData["filepath"];
-
-				libVLC = new LibVLC();
-				mediaPlayer = new MediaPlayer(libVLC);
-				_media = new Media(libVLC, new Uri(path));
-				mediaPlayer.Play(_media);
-				((Hashtable)_gd.cuelist[cueNumToGo])["media"] = _media;
-				((Hashtable)_gd.cuelist[cueNumToGo])["player"] = mediaPlayer;
-				_media.Dispose();
-
+				mediaManager = _gd.mediaManager;
+				mediaManager.PlayMedia(cueNumToGo, path);
 				_gd.liveCues.Add(cueNumToGo);
 			}
 
@@ -134,7 +134,10 @@ public partial class cue_2_base : Control
 
 			}
 
-			_gd.liveCues.Add(_gd.nextCue);
+			foreach (var item in _gd.liveCues)
+			{
+				GD.Print(item);
+			}
 
 			
 
@@ -150,15 +153,12 @@ public partial class cue_2_base : Control
 	{
 		foreach (int cue in _gd.liveCues)
 		{
-			GD.Print(cue);
-			((MediaPlayer)((Hashtable)_gd.cuelist[cue])["player"]).Stop();
-			((MediaPlayer)((Hashtable)_gd.cuelist[cue])["player"]).Dispose();
-			_gd.liveCues.Remove(cue);
-			((Hashtable)_gd.cuelist[cue])["player"] = null;
-			((Hashtable)_gd.cuelist[cue])["media"] = null;
-
-
+			GD.Print("Cue num stopping: " + cue);
+			mediaManager = _gd.mediaManager;
+			mediaManager.StopMedia(cue);
+			
 		}
+		_gd.liveCues.Clear();
 	}
 	private void NewWindowOnCloseRequested()
 	{
