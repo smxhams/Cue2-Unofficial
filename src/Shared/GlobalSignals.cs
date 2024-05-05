@@ -18,4 +18,10 @@ public partial class GlobalSignals : Node
 	[Signal]
 	public delegate void CueGoEventHandler(int cue);
 
+	[Signal]
+	public delegate void UpdateShellBarEventHandler(int cue);
+
+	[Signal]
+	public delegate void SaveEventHandler();
+
 }

@@ -48,7 +48,8 @@ public partial class CueList : Control
 		var newShell = new Hashtable()
 		{
 			{"id", _globalData.cueCount},
-			{"name", "New Shell"},
+			{"name", (String)""},
+			{"cueNum", (String)""},
 			{"type", ""},
 			{"shellObj", shellBar},
 			{"filepath", ""},

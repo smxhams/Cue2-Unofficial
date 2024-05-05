@@ -34,15 +34,18 @@ public partial class ShellContext : MarginContainer
 
 	private void shell_selected(int @cueID)
 	{
-		GetNode<GridContainer>("GridContainer").Visible = true;
+		// Display shell insector
+		GetNode<ScrollContainer>("ShellScroll").Visible = true;
 
+		// Init shell inspector and load relevant data
 		selectedCueID = @cueID;
-		var shellData = (Hashtable)_globalData.cuelist[cueID];
+		Hashtable shellData = (Hashtable)_globalData.cuelist[cueID];
 		selectedData = shellData;
-		var shellObj = (Node)shellData["shellObj"];
+		Node shellObj = (Node)shellData["shellObj"];
 		GD.Print(shellObj.GetChildren());
-		GetNode<Label>("GridContainer/Label").Text = "Shell ID: " + shellData["id"];
-		GetNode<Label>("GridContainer/fileURL").Text = (string)selectedData["filepath"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = (string)selectedData["filepath"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = (string)selectedData["cueNum"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = (string)selectedData["name"];
 
 	}
 
@@ -56,7 +59,7 @@ public partial class ShellContext : MarginContainer
 		String newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
 		GD.Print(@path + "    :    " + newPath);
 		//DirAccess.CopyAbsolute((string)@path, (string)newPath);
-		GetNode<Label>("GridContainer/fileURL").Text = @path;
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = @path;
 		
 
 		((Hashtable)_globalData.cuelist[selectedCueID])["filepath"] = @path;
@@ -75,6 +78,35 @@ public partial class ShellContext : MarginContainer
 		}
 
 		GD.Print(((Hashtable)_globalData.cuelist[selectedCueID])["filepath"]);
+		//GetNode<Label>("ScrollContainer/VBoxContainer/HBoxContainer/CurrentType").Text = (string)((Hashtable)_globalData.cuelist[selectedCueID])["type"];
+
+	}
+
+	// Handling the updating of feilds
+	private void _onCueNumTextChanged(String data)
+	{
+		// Update GD
+		((Hashtable)_globalData.cuelist[selectedCueID])["cueNum"] = data;
+		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
+
+		//Directly update shell bar (This might be a terrible way of doing it)
+		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
+		selectedData = shellData;
+		Node shellObj = (Node)shellData["shellObj"];
+		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = data;
+
+	}
+	private void _onShellNameTextChanged(String data)
+	{
+		// Update GD
+		((Hashtable)_globalData.cuelist[selectedCueID])["name"] = data;
+		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
+
+		//Directly update shell bar (This might be a terrible way of doing it)
+		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
+		selectedData = shellData;
+		Node shellObj = (Node)shellData["shellObj"];
+		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = data;
 
 	}
 }

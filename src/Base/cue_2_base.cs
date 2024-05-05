@@ -9,7 +9,7 @@ using LibVLCSharp.Shared;
 // This script handles:
 // -Activation of cues
 // -Main window UI handling
-// 
+//
 
 
 public partial class cue_2_base : Control
@@ -21,6 +21,7 @@ public partial class cue_2_base : Control
 	private Node setWin;
 
 	private Window newWindow;
+	private Window uiWindow;
 
 	//public GlobalMediaPlayerManager mediaManager;
 
@@ -37,14 +38,30 @@ public partial class cue_2_base : Control
 		newWindow = new Window();
 		AddChild(newWindow);
 		newWindow.Name = "Test Video Output";
-
-		//Set both transparents to true for invisible window
-		//newWindow.Transparent = true;
-		//newWindow.TransparentBg = true;
-
 		_gd.videoOutputWinNum = newWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, _gd.videoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.videoOutputWinNum);		
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.videoOutputWinNum);	
+
+		// Test UI overlay
+		// I reckon in future video outputs set else where, ui should be a viewport set up as .tscn and loaded into window above video
+		uiWindow = new Window();
+		AddChild(uiWindow);
+		uiWindow.Name = "Top Layer";
+		_gd.uiOutputWinNum = uiWindow.GetWindowId();
+		uiWindow.AlwaysOnTop = true;
+		DisplayServer.WindowSetCurrentScreen(1, _gd.uiOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.uiOutputWinNum);	
+		Label testLabel = new Label();
+		uiWindow.AddChild(testLabel);
+		testLabel.Text = "AHHHHHH";
+
+
+		//Set both transparents to true for invisible window
+		uiWindow.Transparent = true;
+		uiWindow.TransparentBg = true;
+
+
+
 	}
 
 
@@ -120,6 +137,9 @@ public partial class cue_2_base : Control
 				_gd.mediaManager.PlayVideo(cueNumToGo, path, _gd.videoOutputWinNum);
 				_gd.liveCues.Add(cueNumToGo);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueNumToGo);
+				Label testLabel2 = new Label();
+				testLabel2.Text = "AHHHHHH2222";
+				newWindow.AddChild(testLabel2);
 			}
 
 			foreach (var item in _gd.liveCues)

@@ -5,6 +5,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+// This script manages global data it contains:
+// -Data management functions
+// -Manages saving and loading of shows
+// -Global media manager
+
 public partial class GlobalData : Node
 {
 	public Hashtable cuelist = new Hashtable();
@@ -14,6 +19,7 @@ public partial class GlobalData : Node
 	public int nextCue = -1;
 
 	public int videoOutputWinNum;
+	public int uiOutputWinNum;
 
 	//Create a referencable global class for all media
 	public GlobalMediaPlayerManager mediaManager = new GlobalMediaPlayerManager();
@@ -113,6 +119,24 @@ public class GlobalMediaPlayerManager
             return (float)progress;
         }
 		return (float)0.0;
+    }
+
+	public bool SetProgress(int id, float value)
+    {
+        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+        {
+			var totalTime = mediaPlayer.Length;
+			var currentTime = mediaPlayer.Time;
+			if (value == 0)
+			{
+				mediaPlayer.Time = 0;
+				return true;
+			}
+			float progress = ((float)totalTime / 100) * value;
+			mediaPlayer.Time = (long)progress;
+            return true;
+        }
+		return false;
     }
 
 

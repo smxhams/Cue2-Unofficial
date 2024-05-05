@@ -32,6 +32,14 @@ public partial class LiveView : PanelContainer
 	private void AddLiveCue(int @cueID)
 	{ //From global signal, emitted by shell_bar
 		GD.Print("New Live Cue: " + @cueID);
-		
+	}
+
+	private void _on_h_slider_value_changed(float @value)
+	{
+		foreach (int cue in _gd.liveCues)
+		{
+			bool success = _gd.mediaManager.SetProgress(cue, @value);		
+		}	
+
 	}
 }
