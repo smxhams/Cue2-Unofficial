@@ -10,7 +10,7 @@ public partial class GlobalSignals : Node
 	public delegate void ShellSelectedEventHandler(int cueID);
 
 	[Signal]
-	public delegate void ErrorLogEventHandler(string errorLog);
+	public delegate void ErrorLogEventHandler(string errorLog, int type);
 
 	[Signal]
 	public delegate void FileSelectedEventHandler(string path);
@@ -23,5 +23,8 @@ public partial class GlobalSignals : Node
 
 	[Signal]
 	public delegate void SaveEventHandler();
+
+	[Signal]
+	public delegate void SaveFileEventHandler(string url, string showName);
 
 }

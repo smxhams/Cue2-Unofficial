@@ -21,6 +21,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GlobalSignals="*res://src/Shared/GlobalSignals.cs"
+SaveManager="*res://src/Shared/SaveManager.cs"
 GlobalData="*res://src/Shared/GlobalData.cs"
 Connections="*res://src/Shared/Connections.cs"
 GlobalStyles="*res://src/Shared/GlobalStyles.cs"
@@ -44,6 +45,10 @@ naming/default_signal_callback_name="_on{NodeName}{SignalName}"
 naming/default_signal_callback_to_self_name="_on{Signal_name}"
 naming/scene_name_casing=1
 import/reimport_missing_imported_files=false
+
+[editor_plugins]
+
+enabled=PackedStringArray()
 
 [rendering]
 

@@ -12,6 +12,9 @@ using System.Runtime.CompilerServices;
 
 public partial class GlobalData : Node
 {
+	private GlobalSignals _globalSignals;
+	private SaveManager _saveManager;
+
 	public Hashtable cuelist = new Hashtable();
 	public int cueCount;
 	public int cueTotal;
@@ -28,21 +31,45 @@ public partial class GlobalData : Node
 
 	// Settings
 	public bool selectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
-
+	public bool autoloadOnStartup = true; // Loads last active show on startup
+	public string activeShowFile; // URL of current showfile to save to
+	public string showName;
+	public string showPath;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
 		// Init MediaManager class so can be referenced everywhere
 		mediaManager.Initialize();
+		//if (autoloadOnStartup == true){loadShow("Last");}
+
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		_globalSignals.Save += saveShow;
+		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
 	}
+
+	private void saveShow()
+	{
+		// First check if this is a first time save
+		if (showName == null)
+		{
+			GetNode<FileDialog>("/root/Cue2_Base/SaveDialog").Visible = true;
+			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
+			
+		}
+		else {_saveManager.saveShow(showPath, showName);}
+		
+	}
+
 }
 
+
+//
 
 // Media manager
 public class GlobalMediaPlayerManager

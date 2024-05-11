@@ -28,7 +28,7 @@ public partial class Error_Handler : Node
 	{
 	}
 
-	private void error_event(String @error)
+	private void error_event(String @error, int @type)
 	{
 		var printout = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error;
 		GetNode<Label>("/root/Cue2_Base/MarginContainer/BoxContainer/BottomContainer/ErrorPrintout").Text = printout;
@@ -36,6 +36,7 @@ public partial class Error_Handler : Node
 		errorCount = errorCount + 1;
 		GetNode<Label>("/root/Cue2_Base/MarginContainer/BoxContainer/BottomContainer/Log").Text = "Log " + errorCount;
 
+		/// TODO Type casts colour and urgency
 
 		GD.Print(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error);
 	}

@@ -11,7 +11,6 @@ using LibVLCSharp.Shared;
 // -Main window UI handling
 //
 
-
 public partial class cue_2_base : Control
 {
 	private GlobalSignals _globalSignals;
@@ -63,7 +62,6 @@ public partial class cue_2_base : Control
 
 
 	}
-
 
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -119,7 +117,7 @@ public partial class cue_2_base : Control
 			// Check cue type to determine how to play
 			if ((string)cueType == "")
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.");
+				_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.", 1);
 			}
 
 			// Play audio file
