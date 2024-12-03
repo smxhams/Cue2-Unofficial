@@ -41,7 +41,7 @@ public partial class ShellContext : MarginContainer
 		selectedCueID = @cueID;
 		Hashtable shellData = (Hashtable)_globalData.cuelist[cueID];
 		selectedData = shellData;
-		Node shellObj = (Node)shellData["shellObj"];
+		Node shellObj = (Node)_globalData.cueShellObj[cueID];
 		GD.Print(shellObj.GetChildren());
 		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = (string)selectedData["filepath"];
 		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = (string)selectedData["cueNum"];
@@ -92,7 +92,7 @@ public partial class ShellContext : MarginContainer
 		//Directly update shell bar (This might be a terrible way of doing it)
 		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
 		selectedData = shellData;
-		Node shellObj = (Node)shellData["shellObj"];
+		Node shellObj = (Node)_globalData.cueShellObj[selectedCueID];
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = data;
 
 	}
@@ -105,7 +105,7 @@ public partial class ShellContext : MarginContainer
 		//Directly update shell bar (This might be a terrible way of doing it)
 		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
 		selectedData = shellData;
-		Node shellObj = (Node)shellData["shellObj"];
+		Node shellObj = (Node)_globalData.cueShellObj[selectedCueID];
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = data;
 
 	}

@@ -64,7 +64,7 @@ public partial class shell_bar : Control
 		{
 			// Get existing next cue and reset style
 			var shellData = (Hashtable)_gd.cuelist[_gd.nextCue];
-			var shellObj = (Node)shellData["shellObj"];
+			var shellObj = (Node)_gd.cueShellObj[_gd.nextCue];
 			shellObj.GetChild<Panel>(0).RemoveThemeStyleboxOverride("panel");
 
 			// Set this shell as next cue

@@ -1,17 +1,22 @@
 using Godot;
-using System;
 using System.IO;
-using System.Reflection.Metadata.Ecma335;
+using Newtonsoft.Json;
+
 
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
 	public GlobalData _gd;
 
+	//private Dictionary<string, string> saveData;
+
+	private string DECODEPASS = "f8237hr8hnfv3fH@#R";
+
 
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -19,12 +24,24 @@ public partial class SaveManager : Node
 	{
 	}
 
-	public bool saveShow(string url, string showname)
+	public bool saveShow(string url, string showName)
 	{
 		folderCreator(url);
+		DirAccess.MakeDirRecursiveAbsolute(url.GetBaseDir());
+		DirAccess dir = DirAccess.Open(url);
+		
+		_gd = GetNode<GlobalData>("/root/GlobalData");
+
+
+		string saveJson = JsonConvert.SerializeObject(_gd.cuelist);
+
+
+		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName+".c2", Godot.FileAccess.ModeFlags.Write, DECODEPASS);
+		file.StoreString(saveJson);
+		file.Close();
 		_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Save working: " + url, 0);
 
-		
+
 		return true;
 	}
 

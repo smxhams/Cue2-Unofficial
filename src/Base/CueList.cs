@@ -12,7 +12,6 @@ public partial class CueList : Control
 	private GlobalData _globalData;
 	private GlobalStyles _globalStyles;
 
-	public Hashtable cuelist = new Hashtable();
 	private Variant cueCount;
 	private MediaPlayer mediaPlayer;
 
@@ -51,12 +50,13 @@ public partial class CueList : Control
 			{"name", (String)""},
 			{"cueNum", (String)""},
 			{"type", ""},
-			{"shellObj", shellBar},
+			//{"shellObj", shellBar},
 			{"filepath", ""},
 			{"player", null},
 			{"media", null}
 		};
 		_globalData.cuelist[_globalData.cueCount] = (Hashtable)newShell;
+		_globalData.cueShellObj[(int)_globalData.cueCount] = (Node)shellBar;
 		//Shift Add bar to bottom of cue list
 		//container.MoveChild(shellBar, cueCount);
 
@@ -75,7 +75,7 @@ public partial class CueList : Control
 			_globalData.nextCue = @cueID;
 		}
 		var shellData = (Hashtable)_globalData.cuelist[_globalData.nextCue];
-		var shellObj = (Node)shellData["shellObj"];
+		var shellObj = (Node)_globalData.cueShellObj[_globalData.nextCue];
 		shellObj.GetChild<Panel>(0).AddThemeStyleboxOverride("panel", nextStyle);
 
 	}

@@ -16,6 +16,7 @@ public partial class GlobalData : Node
 	private SaveManager _saveManager;
 
 	public Hashtable cuelist = new Hashtable();
+	public Dictionary<int, Node> cueShellObj = new Dictionary<int, Node>();
 	public int cueCount;
 	public int cueTotal;
 	public int cueOrder;
