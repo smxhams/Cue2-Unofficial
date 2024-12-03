@@ -6,8 +6,11 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Hardware.Info" Version="101.0.0" />
     <PackageReference Include="LibVLCSharp" Version="3.7.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.18" />
+    <PackageReference Update="Godot.SourceGenerators" Version="4.4.0-dev.5" />
+    <PackageReference Update="GodotSharp" Version="4.4.0-dev.5" />
   </ItemGroup>
 </Project>
