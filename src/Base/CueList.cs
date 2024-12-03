@@ -12,31 +12,31 @@ public partial class CueList : Control
 	private GlobalData _globalData;
 	private GlobalStyles _globalStyles;
 
-	private Variant cueCount;
-	private MediaPlayer mediaPlayer;
+	private Variant _cueCount;
+	private MediaPlayer _mediaPlayer;
 
-	private StyleBoxFlat nextStyle = new StyleBoxFlat();
+	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
 
 
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		cueCount = _globalData.cueCount;
+		_cueCount = _globalData.cueCount;
 
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
-		nextStyle = _globalStyles.nextStyle;
+		_nextStyle = _globalStyles.nextStyle;
 	}
 
 	private void _on_add_shell_pressed()
 	{
-		addShell();
+		CreateNewShell();
 	}
 
 	public override void _Process(double delta)
 	{
 	}
 
-	private void addShell()
+	private void CreateNewShell()
 	{
 		var shellBarScene = GD.Load<PackedScene>("res://src/Base/shell_bar.tscn");
 		var shellBar = shellBarScene.Instantiate();
@@ -61,22 +61,22 @@ public partial class CueList : Control
 		//container.MoveChild(shellBar, cueCount);
 
 		//Check if added cue is next cue
-		nextCueCheck(_globalData.cueCount);
+		NextCueCheck(_globalData.cueCount);
 
 		_globalData.cueCount = _globalData.cueCount + 1;
 
 	}
 
-	private void nextCueCheck(int @cueID)
+	private void NextCueCheck(int cueId)
 	{
 		if (_globalData.nextCue == -1)
 		{
 			GD.Print("No Next Cue");
-			_globalData.nextCue = @cueID;
+			_globalData.nextCue = cueId;
 		}
 		var shellData = (Hashtable)_globalData.cuelist[_globalData.nextCue];
 		var shellObj = (Node)_globalData.cueShellObj[_globalData.nextCue];
-		shellObj.GetChild<Panel>(0).AddThemeStyleboxOverride("panel", nextStyle);
+		shellObj.GetChild<Panel>(0).AddThemeStyleboxOverride("panel", _nextStyle);
 
 	}
 }
