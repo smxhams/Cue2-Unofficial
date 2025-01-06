@@ -1,10 +1,10 @@
-using Godot;
-using LibVLCSharp.Shared;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using Godot;
+using LibVLCSharp.Shared;
 
+namespace Cue2.Shared;
 // This script manages global data it contains:
 // -Data management functions
 // -Manages saving and loading of shows
@@ -64,13 +64,19 @@ public partial class GlobalData : Node
 			
 		}
 		else {_saveManager.saveShow(showPath, showName);}
-		
 	}
+	
 
+	public int getCueCount()
+	{
+		return cueCount;
+	}
 }
 
 
-//
+// Functions
+
+
 
 // Media manager
 public class GlobalMediaPlayerManager
@@ -107,36 +113,36 @@ public class GlobalMediaPlayerManager
 	}
 
 	
-    public void StopMedia(int id)
-    {
-        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
-        {
-            mediaPlayer.Stop();
+	public void StopMedia(int id)
+	{
+		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		{
+			mediaPlayer.Stop();
 			mediaPlayer.Dispose();
-            mediaPlayers.Remove(id);
-        }
-    }
+			mediaPlayers.Remove(id);
+		}
+	}
 
-    public void PauseMedia(int id)
-    {
-        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
-        {
-            mediaPlayer.Pause();
-        }
-    }
+	public void PauseMedia(int id)
+	{
+		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		{
+			mediaPlayer.Pause();
+		}
+	}
 
-    public void ResumeMedia(int id)
-    {
-        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
-        {
-            mediaPlayer.Play();
-        }
-    }
+	public void ResumeMedia(int id)
+	{
+		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		{
+			mediaPlayer.Play();
+		}
+	}
 
 	public float GetProgress(int id)
-    {
-        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
-        {
+	{
+		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		{
 			var totalTime = mediaPlayer.Length;
 			var currentTime = mediaPlayer.Time;
 			if (currentTime == (long)0)
@@ -144,15 +150,15 @@ public class GlobalMediaPlayerManager
 				return (float)0.0;
 			}
 			float progress = ((float)currentTime / (float)totalTime) * 100;
-            return (float)progress;
-        }
+			return (float)progress;
+		}
 		return (float)0.0;
-    }
+	}
 
 	public bool SetProgress(int id, float value)
-    {
-        if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
-        {
+	{
+		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		{
 			var totalTime = mediaPlayer.Length;
 			var currentTime = mediaPlayer.Time;
 			if (value == 0)
@@ -162,10 +168,10 @@ public class GlobalMediaPlayerManager
 			}
 			float progress = ((float)totalTime / 100) * value;
 			mediaPlayer.Time = (long)progress;
-            return true;
-        }
+			return true;
+		}
 		return false;
-    }
+	}
 
 
 }

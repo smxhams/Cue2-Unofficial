@@ -9,7 +9,7 @@ using System.Collections;
 
 public partial class shell_bar : Control
 {
-	private GlobalData _gd;
+	private Cue2.Shared.GlobalData _gd;
 	private GlobalSignals _globalSignals;
 	private GlobalStyles _globalStyles;
 
@@ -29,13 +29,13 @@ public partial class shell_bar : Control
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		cueID = GetNode<GlobalData>("/root/GlobalData").cueCount;
+		cueID = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData").cueCount;
 
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
 		hoverStyle = _globalStyles.hoverStyle;
 		nextStyle = _globalStyles.nextStyle;
 
-		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
 	}
 
@@ -77,6 +77,8 @@ public partial class shell_bar : Control
 	}
 	private void _on_focus_exited(){
 	}
+	
+	
 
 
 }

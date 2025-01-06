@@ -1,12 +1,12 @@
 using Godot;
 using System;
-
+using Cue2.Shared;
 
 
 public partial class LiveView : PanelContainer
 {
 	private GlobalSignals _globalSignals;
-	public GlobalData _gd;
+	public Cue2.Shared.GlobalData _gd;
 
 	public GlobalMediaPlayerManager mediaManager;
 
@@ -15,7 +15,7 @@ public partial class LiveView : PanelContainer
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CueGo += AddLiveCue;
-		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.

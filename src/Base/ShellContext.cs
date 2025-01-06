@@ -12,7 +12,7 @@ public partial class ShellContext : MarginContainer
 {
 	// Called when the node enters the scene tree for the first time.
 	private GlobalSignals _globalSignals;
-	private GlobalData _globalData;
+	private Cue2.Shared.GlobalData _globalData;
 
 	private Hashtable selectedData;
 	private int selectedCueID;
@@ -20,7 +20,7 @@ public partial class ShellContext : MarginContainer
 	
 	public override void _Ready()
 	{
-		_globalData = GetNode<GlobalData>("/root/GlobalData");
+		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.ShellSelected += shell_selected;

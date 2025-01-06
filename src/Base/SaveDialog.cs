@@ -6,11 +6,11 @@ public partial class SaveDialog : FileDialog
 {
 
 	private GlobalSignals _globalSignals;
-	public GlobalData _gd;
+	public Cue2.Shared.GlobalData _gd;
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		this.FileSelected += _onFileSelected;
 	}
 

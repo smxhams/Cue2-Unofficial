@@ -14,7 +14,7 @@ using LibVLCSharp.Shared;
 public partial class cue_2_base : Control
 {
 	private GlobalSignals _globalSignals;
-	public GlobalData _gd;
+	public Cue2.Shared.GlobalData _gd;
 	private Connections _connections;
 
 	private Node setWin;
@@ -30,7 +30,7 @@ public partial class cue_2_base : Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CloseSettingsWindow += close_settings_window;
 		_globalSignals.ShellSelected += shell_selected;
-		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
 		// Test video output window

@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
-	public GlobalData _gd;
+	public Cue2.Shared.GlobalData _gd;
 
 	//private Dictionary<string, string> saveData;
 
@@ -30,7 +30,7 @@ public partial class SaveManager : Node
 		DirAccess.MakeDirRecursiveAbsolute(url.GetBaseDir());
 		DirAccess dir = DirAccess.Open(url);
 		
-		_gd = GetNode<GlobalData>("/root/GlobalData");
+		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
 
 		string saveJson = JsonConvert.SerializeObject(_gd.cuelist);
