@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 public partial class CurrentTime : Label
 {
 
-	private String time;
+	private String _time;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{

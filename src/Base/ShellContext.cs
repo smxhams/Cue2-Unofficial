@@ -14,8 +14,8 @@ public partial class ShellContext : MarginContainer
 	private GlobalSignals _globalSignals;
 	private Cue2.Shared.GlobalData _globalData;
 
-	private Hashtable selectedData;
-	private int selectedCueID;
+	private Hashtable _selectedData;
+	private int _selectedCueId;
 
 	
 	public override void _Ready()
@@ -32,20 +32,20 @@ public partial class ShellContext : MarginContainer
 	{
 	}
 
-	private void shell_selected(int @cueID)
+	private void shell_selected(int cueId)
 	{
 		// Display shell insector
 		GetNode<ScrollContainer>("ShellScroll").Visible = true;
 
 		// Init shell inspector and load relevant data
-		selectedCueID = @cueID;
-		Hashtable shellData = (Hashtable)_globalData.cuelist[cueID];
-		selectedData = shellData;
-		Node shellObj = (Node)_globalData.cueShellObj[cueID];
+		_selectedCueId = cueId;
+		Hashtable shellData = (Hashtable)_globalData.Cuelist[cueId];
+		_selectedData = shellData;
+		Node shellObj = (Node)_globalData.CueShellObj[cueId];
 		GD.Print(shellObj.GetChildren());
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = (string)selectedData["filepath"];
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = (string)selectedData["cueNum"];
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = (string)selectedData["name"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = (string)_selectedData["filepath"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = (string)_selectedData["cueNum"];
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = (string)_selectedData["name"];
 
 	}
 
@@ -62,22 +62,22 @@ public partial class ShellContext : MarginContainer
 		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = @path;
 		
 
-		((Hashtable)_globalData.cuelist[selectedCueID])["filepath"] = @path;
+		((Hashtable)_globalData.Cuelist[_selectedCueId])["filepath"] = @path;
 		var extention = Path.GetExtension(newPath);
 		if (extention == ".wav")
 		{
-			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Audio";
+			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Audio";
 		}
 		if (extention == ".mov")
 		{
-			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Video";
+			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Video";
 		}
 		if (extention == ".mp4")
 		{
-			((Hashtable)_globalData.cuelist[selectedCueID])["type"] = "Video";
+			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Video";
 		}
 
-		GD.Print(((Hashtable)_globalData.cuelist[selectedCueID])["filepath"]);
+		GD.Print(((Hashtable)_globalData.Cuelist[_selectedCueId])["filepath"]);
 		//GetNode<Label>("ScrollContainer/VBoxContainer/HBoxContainer/CurrentType").Text = (string)((Hashtable)_globalData.cuelist[selectedCueID])["type"];
 
 	}
@@ -86,26 +86,26 @@ public partial class ShellContext : MarginContainer
 	private void _onCueNumTextChanged(String data)
 	{
 		// Update GD
-		((Hashtable)_globalData.cuelist[selectedCueID])["cueNum"] = data;
+		((Hashtable)_globalData.Cuelist[_selectedCueId])["cueNum"] = data;
 		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
 
 		//Directly update shell bar (This might be a terrible way of doing it)
-		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
-		selectedData = shellData;
-		Node shellObj = (Node)_globalData.cueShellObj[selectedCueID];
+		Hashtable shellData = (Hashtable)_globalData.Cuelist[_selectedCueId];
+		_selectedData = shellData;
+		Node shellObj = (Node)_globalData.CueShellObj[_selectedCueId];
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = data;
 
 	}
 	private void _onShellNameTextChanged(String data)
 	{
 		// Update GD
-		((Hashtable)_globalData.cuelist[selectedCueID])["name"] = data;
+		((Hashtable)_globalData.Cuelist[_selectedCueId])["name"] = data;
 		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
 
 		//Directly update shell bar (This might be a terrible way of doing it)
-		Hashtable shellData = (Hashtable)_globalData.cuelist[selectedCueID];
-		selectedData = shellData;
-		Node shellObj = (Node)_globalData.cueShellObj[selectedCueID];
+		Hashtable shellData = (Hashtable)_globalData.Cuelist[_selectedCueId];
+		_selectedData = shellData;
+		Node shellObj = (Node)_globalData.CueShellObj[_selectedCueId];
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = data;
 
 	}

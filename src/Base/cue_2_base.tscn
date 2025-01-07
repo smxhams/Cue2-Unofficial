@@ -1,8 +1,7 @@
 [gd_scene load_steps=34 format=4 uid="uid://df4ulfsdrorsq"]
 
-[ext_resource type="Script" path="res://src/Base/cue_2_base.cs" id="1_1otr5"]
-[ext_resource type="Script" path="res://src/launcher/launcherHandles.cs" id="2_7r4vq"]
 [ext_resource type="Script" path="res://src/Base/OutputOverrides.cs" id="2_cunlt"]
+[ext_resource type="Script" path="res://src/Base/Cue2Base.cs" id="2_jordm"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/ui/icons.png" id="2_t5jhx"]
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/ui/base_theme.tres" id="3_mx7do"]
 [ext_resource type="Theme" uid="uid://7h1277c0156g" path="res://src/ui/GO_theme.tres" id="3_r1t4e"]
@@ -12,6 +11,7 @@
 [ext_resource type="Script" path="res://src/Base/Preview.cs" id="8_fgnog"]
 [ext_resource type="Script" path="res://src/Base/FileDialogue.cs" id="8_qmrs6"]
 [ext_resource type="Script" path="res://src/Base/LiveView.cs" id="9_xsfbh"]
+[ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="11_lqxcy"]
 [ext_resource type="Script" path="res://src/Base/DropMenuFile.cs" id="12_bckya"]
 [ext_resource type="Script" path="res://src/Base/SaveDialog.cs" id="14_m5mfi"]
 
@@ -2382,7 +2382,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("3_mx7do")
-script = ExtResource("1_1otr5")
+script = ExtResource("2_jordm")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -2874,7 +2874,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme = SubResource("Theme_5ouab")
-script = ExtResource("2_7r4vq")
+script = ExtResource("11_lqxcy")
 
 [node name="DragBar" type="Control" parent="launcherHandles"]
 custom_minimum_size = Vector2(10, 22)

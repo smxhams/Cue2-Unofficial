@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://d207a67e3ebww"]
 
+[ext_resource type="Script" path="res://src/Base/ShellBar.cs" id="1_bg36s"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/ui/icons.png" id="1_rmwen"]
-[ext_resource type="Script" path="res://src/Base/shell_bar.cs" id="1_tbokl"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ag1hf"]
 atlas = ExtResource("1_rmwen")
@@ -18,7 +18,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 focus_mode = 1
-script = ExtResource("1_tbokl")
+script = ExtResource("1_bg36s")
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1

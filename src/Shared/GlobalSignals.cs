@@ -7,7 +7,7 @@ public partial class GlobalSignals : Node
 	public delegate void CloseSettingsWindowEventHandler();
 
 	[Signal]
-	public delegate void ShellSelectedEventHandler(int cueID);
+	public delegate void ShellSelectedEventHandler(int cueId);
 
 	[Signal]
 	public delegate void ErrorLogEventHandler(string errorLog, int type);

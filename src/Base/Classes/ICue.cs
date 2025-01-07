@@ -6,4 +6,5 @@ public interface ICue
     string Name { get; set; }
     string Command { get; set; }
     string CueNum { get; set; }
+    object ShellBar { get; set; }
 }

@@ -6,11 +6,11 @@ public partial class SaveDialog : FileDialog
 {
 
 	private GlobalSignals _globalSignals;
-	public Cue2.Shared.GlobalData _gd;
+	public Cue2.Shared.GlobalData Gd;
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		this.FileSelected += _onFileSelected;
 	}
 
@@ -22,8 +22,8 @@ public partial class SaveDialog : FileDialog
 	{
 		string showName = Path.GetFileName(@path);
 		GD.Print(@path + " and filename : "+ showName);
-		_gd.showName = showName;
-		_gd.showPath = @path;
+		Gd.ShowName = showName;
+		Gd.ShowPath = @path;
 
 		// URL and showname made to continue Save process		
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));

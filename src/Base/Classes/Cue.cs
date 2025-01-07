@@ -1,3 +1,5 @@
+using Godot;
+
 namespace Cue2.Base.Classes;
 
 public class Cue : ICue
@@ -7,10 +9,16 @@ public class Cue : ICue
     public string Name { get; set; }
     public string Command { get; set; }
     public string CueNum { get; set; }
+    
+    public object ShellBar { get; set; }
 
-    public void CreateCue()
+    public Cue() // Cue Constructor
     {
+        GD.Print("Cue created");
         Id = _nextId++;
+        Name = "New cue number " + Id.ToString();
+        CueNum = Id.ToString();
+        Command = "";
         
     }
 }

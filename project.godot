@@ -23,10 +23,9 @@ config/icon="res://icon.svg"
 GlobalSignals="*res://src/Shared/GlobalSignals.cs"
 SaveManager="*res://src/Shared/SaveManager.cs"
 GlobalData="*res://src/Shared/GlobalData.cs"
-Hardware="res://src/Shared/Hardware.cs"
 Connections="*res://src/Shared/Connections.cs"
 GlobalStyles="*res://src/Shared/GlobalStyles.cs"
-ErrorHandler="*res://src/Shared/Error_Handler.cs"
+ErrorHandler="*res://src/Shared/ErrorHandler.cs"
 
 [display]
 

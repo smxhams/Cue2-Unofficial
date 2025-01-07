@@ -11,16 +11,16 @@ using LibVLCSharp.Shared;
 // -Main window UI handling
 //
 
-public partial class cue_2_base : Control
+public partial class Cue2Base : Control
 {
 	private GlobalSignals _globalSignals;
-	public Cue2.Shared.GlobalData _gd;
+	public Cue2.Shared.GlobalData Gd;
 	private Connections _connections;
 
-	private Node setWin;
+	private Node _setWin;
 
-	private Window newWindow;
-	private Window uiWindow;
+	private Window _newWindow;
+	private Window _uiWindow;
 
 	//public GlobalMediaPlayerManager mediaManager;
 
@@ -30,34 +30,34 @@ public partial class cue_2_base : Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CloseSettingsWindow += close_settings_window;
 		_globalSignals.ShellSelected += shell_selected;
-		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
 		// Test video output window
-		newWindow = new Window();
-		AddChild(newWindow);
-		newWindow.Name = "Test Video Output";
-		_gd.videoOutputWinNum = newWindow.GetWindowId();
-		DisplayServer.WindowSetCurrentScreen(1, _gd.videoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.videoOutputWinNum);	
+		_newWindow = new Window();
+		AddChild(_newWindow);
+		_newWindow.Name = "Test Video Output";
+		Gd.VideoOutputWinNum = _newWindow.GetWindowId();
+		DisplayServer.WindowSetCurrentScreen(1, Gd.VideoOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);	
 
 		// Test UI overlay
 		// I reckon in future video outputs set else where, ui should be a viewport set up as .tscn and loaded into window above video
-		uiWindow = new Window();
-		AddChild(uiWindow);
-		uiWindow.Name = "Top Layer";
-		_gd.uiOutputWinNum = uiWindow.GetWindowId();
-		uiWindow.AlwaysOnTop = true;
-		DisplayServer.WindowSetCurrentScreen(1, _gd.uiOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _gd.uiOutputWinNum);	
+		_uiWindow = new Window();
+		AddChild(_uiWindow);
+		_uiWindow.Name = "Top Layer";
+		Gd.UiOutputWinNum = _uiWindow.GetWindowId();
+		_uiWindow.AlwaysOnTop = true;
+		DisplayServer.WindowSetCurrentScreen(1, Gd.UiOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.UiOutputWinNum);	
 		Label testLabel = new Label();
-		uiWindow.AddChild(testLabel);
+		_uiWindow.AddChild(testLabel);
 		testLabel.Text = "AHHHHHH";
 
 
 		//Set both transparents to true for invisible window
-		uiWindow.Transparent = true;
-		uiWindow.TransparentBg = true;
+		_uiWindow.Transparent = true;
+		_uiWindow.TransparentBg = true;
 
 
 
@@ -71,47 +71,47 @@ public partial class cue_2_base : Control
 
 	private void _on_settings_toggled(Boolean @toggle){
 		if (@toggle == true){
-			if (setWin == null){
+			if (_setWin == null){
 				var settings = GD.Load<PackedScene>("res://src/Base/settings.tscn");
-				setWin = settings.Instantiate();
-				AddChild(setWin);
+				_setWin = settings.Instantiate();
+				AddChild(_setWin);
 				}
 			else {
-				setWin.GetWindow().Show();
+				_setWin.GetWindow().Show();
 			}
 			
 		}
 		if (@toggle == false){
-			setWin.GetWindow().Hide();
+			_setWin.GetWindow().Hide();
 		}
 	}
 	private void close_settings_window(){ //From global signal, emitted by close button of settings window.
 		GetNode<Button>("MarginContainer/BoxContainer/HeaderContainer/Settings").ButtonPressed = false;
 		
 	}
-	private void shell_selected(int @cueID)
+	private void shell_selected(int cueId)
 	{ //From global signal, emitted by shell_bar
-		GD.Print("Shell Selected: " + @cueID);
+		GD.Print("Shell Selected: " + cueId);
 		
 	}
 
 	private void _on_go_pressed()
 	{
-		go();
+		Go();
 	}
 
 	private void _on_stop_pressed()
 	{
-		stop();
+		Stop();
 	}
 
-	public void go()
+	public void Go()
 	{
 		// Check for next cue
-		if (_gd.nextCue != -1)
+		if (Gd.NextCue != -1)
 		{
-			var cueNumToGo = _gd.nextCue;
-			var shellData = (Hashtable)_gd.cuelist[cueNumToGo];
+			var cueNumToGo = Gd.NextCue;
+			var shellData = (Hashtable)Gd.Cuelist[cueNumToGo];
 			var cueType = shellData["type"];
 
 			// Check cue type to determine how to play
@@ -124,23 +124,23 @@ public partial class cue_2_base : Control
 			else if ((string)cueType == "Audio")
 			{
 				var path = (string)shellData["filepath"];
-				_gd.mediaManager.PlayAudio(cueNumToGo, path);
-				_gd.liveCues.Add(cueNumToGo);
+				Gd.MediaManager.PlayAudio(cueNumToGo, path);
+				Gd.LiveCues.Add(cueNumToGo);
 			}
 
 			// Play video
 			else if ((string)cueType == "Video")
 			{
 				var path = (string)shellData["filepath"];
-				_gd.mediaManager.PlayVideo(cueNumToGo, path, _gd.videoOutputWinNum);
-				_gd.liveCues.Add(cueNumToGo);
+				Gd.MediaManager.PlayVideo(cueNumToGo, path, Gd.VideoOutputWinNum);
+				Gd.LiveCues.Add(cueNumToGo);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueNumToGo);
 				Label testLabel2 = new Label();
 				testLabel2.Text = "AHHHHHH2222";
-				newWindow.AddChild(testLabel2);
+				_newWindow.AddChild(testLabel2);
 			}
 
-			foreach (var item in _gd.liveCues)
+			foreach (var item in Gd.LiveCues)
 			{
 				GD.Print(item);
 			}
@@ -153,14 +153,14 @@ public partial class cue_2_base : Control
 	}
 
 
-	public void stop()
+	public void Stop()
 	{
-		foreach (int cue in _gd.liveCues)
+		foreach (int cue in Gd.LiveCues)
 		{
 			GD.Print("Cue num stopping: " + cue);
-			_gd.mediaManager.StopMedia(cue);
+			Gd.MediaManager.StopMedia(cue);
 			
 		}
-		_gd.liveCues.Clear();
+		Gd.LiveCues.Clear();
 	}
 }

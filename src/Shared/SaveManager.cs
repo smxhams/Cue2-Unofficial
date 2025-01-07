@@ -6,11 +6,11 @@ using Newtonsoft.Json;
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
-	public Cue2.Shared.GlobalData _gd;
+	public Cue2.Shared.GlobalData Gd;
 
 	//private Dictionary<string, string> saveData;
 
-	private string DECODEPASS = "f8237hr8hnfv3fH@#R";
+	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
 
 	public override void _Ready()
@@ -24,19 +24,19 @@ public partial class SaveManager : Node
 	{
 	}
 
-	public bool saveShow(string url, string showName)
+	public bool SaveShow(string url, string showName)
 	{
-		folderCreator(url);
+		FolderCreator(url);
 		DirAccess.MakeDirRecursiveAbsolute(url.GetBaseDir());
 		DirAccess dir = DirAccess.Open(url);
 		
-		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
 
-		string saveJson = JsonConvert.SerializeObject(_gd.cuelist);
+		string saveJson = JsonConvert.SerializeObject(Gd.Cuelist);
 
 
-		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName+".c2", Godot.FileAccess.ModeFlags.Write, DECODEPASS);
+		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName+".c2", Godot.FileAccess.ModeFlags.Write, _decodepass);
 		file.StoreString(saveJson);
 		file.Close();
 		_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Save working: " + url, 0);
@@ -45,14 +45,14 @@ public partial class SaveManager : Node
 		return true;
 	}
 
-	public bool loadShow(string url)
+	public bool LoadShow(string url)
 	{
 		GD.Print("Loading show: " + url);
 		return true;
 	}
 
 
-	public bool folderCreator(string url)
+	public bool FolderCreator(string url)
 	{
 		string folderPath = url;
 

@@ -15,37 +15,39 @@ public partial class GlobalData : Node
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
 
-	public Hashtable cuelist = new Hashtable();
-	public Dictionary<int, Node> cueShellObj = new Dictionary<int, Node>();
-	public int cueCount;
-	public int cueTotal;
-	public int cueOrder;
-	public int nextCue = -1;
+	public Hashtable Cuelist = new Hashtable();
+	public int FocusedCue = -1;
+	public Dictionary<int, Node> CueShellObj = new Dictionary<int, Node>();
+	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
+	public int CueCount;
+	public int CueTotal;
+	public int CueOrder;
+	public int NextCue = -1;
 
-	public int videoOutputWinNum;
-	public int uiOutputWinNum;
+	public int VideoOutputWinNum;
+	public int UiOutputWinNum;
 
 	//Create a referencable global class for all media
-	public GlobalMediaPlayerManager mediaManager = new GlobalMediaPlayerManager();
+	public GlobalMediaPlayerManager MediaManager = new GlobalMediaPlayerManager();
 
-	public List<int> liveCues = new List<int>();
+	public List<int> LiveCues = new List<int>();
 
 	// Settings
-	public bool selectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
-	public bool autoloadOnStartup = true; // Loads last active show on startup
-	public string activeShowFile; // URL of current showfile to save to
-	public string showName;
-	public string showPath;
+	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
+	public bool AutoloadOnStartup = true; // Loads last active show on startup
+	public string ActiveShowFile; // URL of current showfile to save to
+	public string ShowName;
+	public string ShowPath;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
 		// Init MediaManager class so can be referenced everywhere
-		mediaManager.Initialize();
+		MediaManager.Initialize();
 		//if (autoloadOnStartup == true){loadShow("Last");}
 
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.Save += saveShow;
+		_globalSignals.Save += SaveShow;
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 	}
 
@@ -54,22 +56,22 @@ public partial class GlobalData : Node
 	{
 	}
 
-	private void saveShow()
+	private void SaveShow()
 	{
 		// First check if this is a first time save
-		if (showName == null)
+		if (ShowName == null)
 		{
 			GetNode<FileDialog>("/root/Cue2_Base/SaveDialog").Visible = true;
 			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
 			
 		}
-		else {_saveManager.saveShow(showPath, showName);}
+		else {_saveManager.SaveShow(ShowPath, ShowName);}
 	}
 	
 
-	public int getCueCount()
+	public int GetCueCount()
 	{
-		return cueCount;
+		return CueCount;
 	}
 }
 
@@ -81,7 +83,7 @@ public partial class GlobalData : Node
 // Media manager
 public class GlobalMediaPlayerManager
 {
-	private Dictionary<int, MediaPlayer> mediaPlayers = new Dictionary<int, MediaPlayer>();
+	private Dictionary<int, MediaPlayer> _mediaPlayers = new Dictionary<int, MediaPlayer>();
 
 	public void Initialize()
 	{
@@ -90,42 +92,42 @@ public class GlobalMediaPlayerManager
 
 	public void PlayAudio(int id, string mediaPath)
 	{
-		var libVLC = new LibVLC();
-		var mediaPlayer = new MediaPlayer(libVLC);
-		var media = new Media(libVLC, mediaPath);
+		var libVlc = new LibVLC();
+		var mediaPlayer = new MediaPlayer(libVlc);
+		var media = new Media(libVlc, mediaPath);
 		mediaPlayer.Media = media;
 		mediaPlayer.Play();
 
-		mediaPlayers[id] = mediaPlayer;
+		_mediaPlayers[id] = mediaPlayer;
 	}
 
-	public void PlayVideo(int id, string mediaPath, int windowID)
+	public void PlayVideo(int id, string mediaPath, int windowId)
 	{
-		var libVLC = new LibVLC();
-		var mediaPlayer = new MediaPlayer(libVLC);
-		var media = new Media(libVLC, mediaPath);
+		var libVlc = new LibVLC();
+		var mediaPlayer = new MediaPlayer(libVlc);
+		var media = new Media(libVlc, mediaPath);
 		mediaPlayer.Media = media;
 
-		var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, windowID);
+		var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, windowId);
 		mediaPlayer.Hwnd = windowHandle;
 		mediaPlayer.Play();
-		mediaPlayers[id] = mediaPlayer;
+		_mediaPlayers[id] = mediaPlayer;
 	}
 
 	
 	public void StopMedia(int id)
 	{
-		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 		{
 			mediaPlayer.Stop();
 			mediaPlayer.Dispose();
-			mediaPlayers.Remove(id);
+			_mediaPlayers.Remove(id);
 		}
 	}
 
 	public void PauseMedia(int id)
 	{
-		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 		{
 			mediaPlayer.Pause();
 		}
@@ -133,7 +135,7 @@ public class GlobalMediaPlayerManager
 
 	public void ResumeMedia(int id)
 	{
-		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 		{
 			mediaPlayer.Play();
 		}
@@ -141,7 +143,7 @@ public class GlobalMediaPlayerManager
 
 	public float GetProgress(int id)
 	{
-		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 		{
 			var totalTime = mediaPlayer.Length;
 			var currentTime = mediaPlayer.Time;
@@ -157,7 +159,7 @@ public class GlobalMediaPlayerManager
 
 	public bool SetProgress(int id, float value)
 	{
-		if (mediaPlayers.TryGetValue(id, out var mediaPlayer))
+		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 		{
 			var totalTime = mediaPlayer.Length;
 			var currentTime = mediaPlayer.Time;

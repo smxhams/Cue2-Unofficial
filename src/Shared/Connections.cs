@@ -4,9 +4,9 @@ using System.Collections;
 
 public partial class Connections : Node
 {
-	public Hashtable audioOutputConnections;
+	public Hashtable AudioOutputConnections;
 
-	public AudioStreamPlayer testStreamer = new AudioStreamPlayer();
+	public AudioStreamPlayer TestStreamer = new AudioStreamPlayer();
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()

@@ -11,7 +11,10 @@ namespace Cue2.Base.Classes;
 public partial class CueList : Control
 {
 	private List<ICue> Cuelist { get; set; }
-
+	private Dictionary<int, Cue> _cueIndex = new Dictionary<int, Cue>();
+	
+	private Cue2.Shared.GlobalData _globalData;
+	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
 	public CueList()
 	{
 		Cuelist = new List<ICue>();
@@ -20,14 +23,50 @@ public partial class CueList : Control
 	public void AddCue(Cue cue)
 	{
 		Cuelist.Add(cue);
+		_cueIndex.Add(cue.Id, cue);
 	}
 
 	public void RemoveCue(Cue cue)
 	{
 		Cuelist.Remove(cue);
 	}
+
+	public void DisplayCues()
+	{
+		Console.WriteLine("Cue List:");
+		foreach (var cue in Cuelist)
+		{
+
+			Console.WriteLine($"Cue: {cue.Name} (ID: {cue.Id})");
+
+		}
+	}
+
+	// Received Signal Handling
+	private void _on_add_shell_pressed()
+		// Signal from add shell button
+	{
+		var newCue = new Cue();
+		AddCue(newCue);
+		DisplayCues();
+		CreateNewShell(newCue);
+		
+	}
 	
-	
+	// Functions
+	private void CreateNewShell(Cue newCue)
+	{
+		// Load in a shell bar
+		var shellBarScene = GD.Load<PackedScene>("res://src/Base/shell_bar.tscn");
+		var shellBar = shellBarScene.Instantiate();
+		var container = GetNode<VBoxContainer>("CueContainer");
+		container.AddChild(shellBar);
+		shellBar.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = newCue.CueNum.ToString(); // Cue Number
+		shellBar.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = newCue.Name.ToString(); // Cue Name
+		
+		newCue.ShellBar = shellBar; // Adds shellbar scene to the cue object.
+		shellBar.Set("CueId", newCue.Id); // Sets shell_bar property CueId
+	}
 }
 
 //

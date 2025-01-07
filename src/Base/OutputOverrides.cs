@@ -18,17 +18,17 @@ public partial class OutputOverrides : GridContainer
 	}
 
 	private void _on_expand_pressed(){
-		var window_number = GetWindow().GetWindowId();
+		var windowNumber = GetWindow().GetWindowId();
 		//if (DisplayServer.WindowGetSize(window_number) != DisplayServer.ScreenGetSize(DisplayServer.WindowGetCurrentScreen(window_number))){
 			//DisplayServer.WindowSetPosition(DisplayServer.ScreenGetPosition(DisplayServer.WindowGetCurrentScreen(window_number)), window_number);
 			//DisplayServer.WindowSetSize(DisplayServer.ScreenGetSize(DisplayServer.WindowGetCurrentScreen(window_number)), window_number);
 		if (DisplayServer.WindowGetMode() != DisplayServer.WindowMode.Fullscreen){
 			GD.Print("Maximise");
-			DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, window_number);
+			DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, windowNumber);
 		}
 		else {
 			GD.Print("Minimise");
-			DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, window_number);
+			DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, windowNumber);
 			//DisplayServer.WindowSetSize(new Vector2I(600,400), window_number);
 		}
 	}
