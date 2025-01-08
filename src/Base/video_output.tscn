@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dckucpjlmrd8r"]
 
-[ext_resource type="Script" path="res://src/launcher/launcherHandles.cs" id="1_ex6ss"]
+[ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="1_ex6ss"]
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/ui/base_theme.tres" id="2_kq7bg"]
 
 [node name="VideoOutput" type="Window"]

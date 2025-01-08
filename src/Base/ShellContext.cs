@@ -47,7 +47,7 @@ public partial class ShellContext : MarginContainer
 
 	private void _on_button_select_file_pressed()
 	{
-		GetNode<FileDialog>("/root/Cue2_Base/FileDialog").Visible = true;
+		GetNode<FileDialog>("/root/Cue2Base/FileDialog").Visible = true;
 	}
 
 	private void file_selected(string @path) // On Signal from file selection window

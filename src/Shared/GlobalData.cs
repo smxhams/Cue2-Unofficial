@@ -61,7 +61,7 @@ public partial class GlobalData : Node
 		// First check if this is a first time save
 		if (ShowName == null)
 		{
-			GetNode<FileDialog>("/root/Cue2_Base/SaveDialog").Visible = true;
+			GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
 			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
 			
 		}

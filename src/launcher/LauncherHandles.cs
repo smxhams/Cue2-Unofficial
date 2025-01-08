@@ -1,16 +1,13 @@
 using Godot;
-using System;
-using System.ComponentModel;
-using System.Numerics;
-using System.Runtime.CompilerServices;
 
+namespace Cue2.launcher;
 public partial class LauncherHandles : Control
 {
 	//Variables
 
-	private bool _dragging = false;
-	private bool _resizing = false;
-	private Vector2I _intitialMouse;
+	private bool _dragging;
+	private bool _resizing;
+	private Vector2I _initialMouse;
 	private Vector2I _initialWindow;
 
 	private int _offsetX;
@@ -51,7 +48,7 @@ public partial class LauncherHandles : Control
 	}
 
 	private void _gui_input_handling(InputEvent @event, Control @node){
-		if (@event is InputEventMouseButton mouseEvent && mouseEvent.ButtonIndex == MouseButton.Left)
+		if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left })
 		{
 			if (_resizing == false)
 			{
@@ -68,10 +65,10 @@ public partial class LauncherHandles : Control
 			if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Fullscreen) {
 				DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, _windowNumber);
 			}
-			_intitialMouse = DisplayServer.MouseGetPosition();
+			_initialMouse = DisplayServer.MouseGetPosition();
 			_initialWindow = DisplayServer.WindowGetPosition(_windowNumber);
-			_offsetX = (int)_initialWindow[0] - (int)_intitialMouse[0];
-			_offsetY = (int)_initialWindow[1] - (int)_intitialMouse[1];
+			_offsetX = _initialWindow[0] - _initialMouse[0];
+			_offsetY = _initialWindow[1] - _initialMouse[1];
 			_dragging = @event.IsPressed();
 			
 		}

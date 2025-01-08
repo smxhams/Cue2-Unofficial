@@ -62,7 +62,6 @@ public partial class ShellBar : Control
 
 	}
 	private void _on_focus_entered(){
-		GD.Print(CueId);
 		// Need to validate cue here on selection
 		
 		if (CueList.FocusedCueId == -1) // -1 if no current focused cue
@@ -71,7 +70,6 @@ public partial class ShellBar : Control
 		}
 		else if (CueList.FocusedCueId != CueId) 
 		{
-			GD.Print("Here");
 			var previouslyFocusedCue = CueList.FetchCueFromId(CueList.FocusedCueId);
 			var previousCueShellBar = previouslyFocusedCue.ShellBar;
 			// Needs to remove focus style of previous Shell

@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.Linq;
+using Cue2.Base.Classes;
 using LibVLCSharp.Shared;
 
 // This script handles:
@@ -112,12 +113,14 @@ public partial class Cue2Base : Control
 
 	public void Go()
 	{
+		// In Future this should only pass the selected cue's command to interpreter which will instruct relevant workers what to do
+		
 		// Check for next cue
-		if (Gd.NextCue != -1)
+		if (CueList.FocusedCueId != -1)
 		{
-			var cueNumToGo = Gd.NextCue;
-			var shellData = (Hashtable)Gd.Cuelist[cueNumToGo];
-			var cueType = shellData["type"];
+			var cueIdToGo = CueList.FocusedCueId;
+			var cueToGo = CueList.FetchCueFromId(cueIdToGo);
+			var cueType = cueToGo.Type;
 
 			// Check cue type to determine how to play
 			if ((string)cueType == "")
@@ -128,22 +131,23 @@ public partial class Cue2Base : Control
 			// Play audio file
 			else if ((string)cueType == "Audio")
 			{
-				var path = (string)shellData["filepath"];
-				Gd.MediaManager.PlayAudio(cueNumToGo, path);
-				Gd.LiveCues.Add(cueNumToGo);
+				var path = cueToGo.FilePath;
+				Gd.MediaManager.PlayAudio(cueIdToGo, path);
+				Gd.LiveCues.Add(cueIdToGo);
 			}
 
 			// Play video
 			else if ((string)cueType == "Video")
 			{
-				var path = (string)shellData["filepath"];
-				Gd.MediaManager.PlayVideo(cueNumToGo, path, Gd.VideoOutputWinNum);
-				Gd.LiveCues.Add(cueNumToGo);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueNumToGo);
+				var path = cueToGo.FilePath;
+				Gd.MediaManager.PlayVideo(cueIdToGo, path, Gd.VideoOutputWinNum);
+				Gd.LiveCues.Add(cueIdToGo);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueIdToGo);
 				Label testLabel2 = new Label();
 				testLabel2.Text = "AHHHHHH2222";
 				_newWindow.AddChild(testLabel2);
 			}
+			
 
 			foreach (var item in Gd.LiveCues)
 			{
@@ -153,7 +157,11 @@ public partial class Cue2Base : Control
 			
 
 		}
-		else {_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");
+			GD.Print("Couldn't find a Cue to GO");
+		}
 
 	}
 
