@@ -1,7 +1,8 @@
 using Godot;
 using System;
 
-public partial class Settings : Window
+namespace Cue2.Base;
+public partial class SettingsWindow : Window
 {
 	private GlobalSignals _globalSignals;
 	private Godot.Tree _setTree;

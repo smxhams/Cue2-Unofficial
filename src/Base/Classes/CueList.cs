@@ -11,7 +11,8 @@ namespace Cue2.Base.Classes;
 public partial class CueList : Control
 {
 	private List<ICue> Cuelist { get; set; }
-	private Dictionary<int, Cue> _cueIndex = new Dictionary<int, Cue>();
+	public static Dictionary<int, Cue> CueIndex = new Dictionary<int, Cue>();
+	public static int FocusedCueId = -1;
 	
 	private Cue2.Shared.GlobalData _globalData;
 	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
@@ -23,12 +24,25 @@ public partial class CueList : Control
 	public void AddCue(Cue cue)
 	{
 		Cuelist.Add(cue);
-		_cueIndex.Add(cue.Id, cue);
+		CueIndex.Add(cue.Id, cue);
 	}
 
 	public void RemoveCue(Cue cue)
 	{
 		Cuelist.Remove(cue);
+	}
+
+	public static Cue FetchCueFromId(int id)
+	{
+		try
+		{
+			CueIndex.TryGetValue(id, out Cue cue);
+			return cue;
+		}
+		catch (KeyNotFoundException)
+		{
+			return null;
+		}
 	}
 
 	public void DisplayCues()

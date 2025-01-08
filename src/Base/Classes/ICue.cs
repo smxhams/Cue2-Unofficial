@@ -1,3 +1,5 @@
+using Godot;
+
 namespace Cue2.Base.Classes;
 
 public interface ICue
@@ -6,5 +8,6 @@ public interface ICue
     string Name { get; set; }
     string Command { get; set; }
     string CueNum { get; set; }
-    object ShellBar { get; set; }
+    Node ShellBar { get; set; }
+    
 }

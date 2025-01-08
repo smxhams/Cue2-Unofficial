@@ -35,7 +35,7 @@ public partial class GlobalData : Node
 	// Settings
 	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
 	public bool AutoloadOnStartup = true; // Loads last active show on startup
-	public string ActiveShowFile; // URL of current showfile to save to
+	public string ActiveShowFile; // URL of current show file to save to
 	public string ShowName;
 	public string ShowPath;
 

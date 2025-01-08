@@ -20,7 +20,7 @@ public partial class ShellBar : Control
 
 	private StyleBoxFlat _hoverStyle = new StyleBoxFlat();
 	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
-	private StyleBoxFlat _selectedStyle = new StyleBoxFlat();
+	private StyleBoxFlat _focusedStyle = new StyleBoxFlat();
 	private StyleBoxFlat _activeStyle = new StyleBoxFlat();
 	private StyleBoxFlat _defaultStyle = new StyleBoxFlat();
 
@@ -36,6 +36,7 @@ public partial class ShellBar : Control
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
 		_hoverStyle = _globalStyles.HoverStyle;
 		_nextStyle = _globalStyles.NextStyle;
+		_focusedStyle = _globalStyles.FocusedStyle;
 
 		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
@@ -49,36 +50,43 @@ public partial class ShellBar : Control
 	private void _on_mouse_entered()
 	{
 		var panel = GetNode<Panel>("Panel");
-		if (_gd.NextCue != CueId){
+		if (CueList.FocusedCueId != CueId){
 			GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _hoverStyle);
 		}
-		GD.Print(CueId);
-		
 	}
 	private void _on_mouse_exited()
 	{
-		if (_gd.NextCue != CueId){
+		if (CueList.FocusedCueId != CueId){
 			GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
 		}
 
 	}
 	private void _on_focus_entered(){
-		if (_gd.SelectedIsNext == true) // Set shell as next cue if settings selectedIsNext
+		GD.Print(CueId);
+		// Need to validate cue here on selection
+		
+		if (CueList.FocusedCueId == -1) // -1 if no current focused cue
 		{
-			// Get existing next cue and reset style
-			var shellData = (Hashtable)_gd.Cuelist[_gd.NextCue];
-			var shellObj = (Node)_gd.CueShellObj[_gd.NextCue];
-			shellObj.GetChild<Panel>(0).RemoveThemeStyleboxOverride("panel");
-
-			// Set this shell as next cue
-			_gd.NextCue = CueId;
-			GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _nextStyle);
+			CueList.FocusedCueId = CueId;
 		}
-
+		else if (CueList.FocusedCueId != CueId) 
+		{
+			GD.Print("Here");
+			var previouslyFocusedCue = CueList.FetchCueFromId(CueList.FocusedCueId);
+			var previousCueShellBar = previouslyFocusedCue.ShellBar;
+			// Needs to remove focus style of previous Shell
+			previousCueShellBar.GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
+		}
+		
+		// Tell CueList the ID of a focused cue.
+		CueList.FocusedCueId = CueId;
+		
+		GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _focusedStyle);
 		// Emit signal that this shell has been selected
 		_globalSignals.EmitSignal(nameof(GlobalSignals.ShellSelected), CueId);
 	}
-	private void _on_focus_exited(){
+	private void _on_focus_exited()
+	{
 	}
 	
 	

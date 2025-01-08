@@ -69,6 +69,11 @@ public partial class Cue2Base : Control
 	{
 	}
 
+	private void _OnTreeExiting()
+	{
+		GD.Print("OnTreeExiting");
+		PrintOrphanNodes();
+	}
 	private void _on_settings_toggled(Boolean @toggle){
 		if (@toggle == true){
 			if (_setWin == null){

@@ -10,11 +10,15 @@ public class Cue : ICue
     public string Command { get; set; }
     public string CueNum { get; set; }
     
-    public object ShellBar { get; set; }
+    public Node ShellBar { get; set; }
 
+    // Maybe work out a way to remove below in future
+    public string FilePath { get; set; }
+    
+    public string Type { get; set; }
+    
     public Cue() // Cue Constructor
     {
-        GD.Print("Cue created");
         Id = _nextId++;
         Name = "New cue number " + Id.ToString();
         CueNum = Id.ToString();

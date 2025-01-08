@@ -1,26 +1,25 @@
 using Godot;
-using System;
 
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
+using Cue2.Base.Classes;
 
 // This script is attached to shell context tab
 
-
+namespace Cue2.Base;
 public partial class ShellContext : MarginContainer
 {
 	// Called when the node enters the scene tree for the first time.
 	private GlobalSignals _globalSignals;
-	private Cue2.Shared.GlobalData _globalData;
+	private Shared.GlobalData _globalData;
+	
+	private int _focusedCueId;
 
-	private Hashtable _selectedData;
-	private int _selectedCueId;
+	private Cue _focusedCue;
 
 	
 	public override void _Ready()
 	{
-		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		_globalData = GetNode<Shared.GlobalData>("/root/GlobalData");
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.ShellSelected += shell_selected;
@@ -34,18 +33,15 @@ public partial class ShellContext : MarginContainer
 
 	private void shell_selected(int cueId)
 	{
-		// Display shell insector
+		// Display shell options in PanelContainer
 		GetNode<ScrollContainer>("ShellScroll").Visible = true;
-
+		_focusedCue = CueList.FetchCueFromId(cueId);
 		// Init shell inspector and load relevant data
-		_selectedCueId = cueId;
-		Hashtable shellData = (Hashtable)_globalData.Cuelist[cueId];
-		_selectedData = shellData;
-		Node shellObj = (Node)_globalData.CueShellObj[cueId];
-		GD.Print(shellObj.GetChildren());
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = (string)_selectedData["filepath"];
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = (string)_selectedData["cueNum"];
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = (string)_selectedData["name"];
+		_focusedCueId = cueId;
+		
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = _focusedCue.FilePath;
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = _focusedCue.CueNum;
+		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = _focusedCue.Name;
 
 	}
 
@@ -54,59 +50,39 @@ public partial class ShellContext : MarginContainer
 		GetNode<FileDialog>("/root/Cue2_Base/FileDialog").Visible = true;
 	}
 
-	private void file_selected(string @path)
+	private void file_selected(string @path) // On Signal from file selection window
 	{
-		String newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
+		var newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
 		GD.Print(@path + "    :    " + newPath);
-		//DirAccess.CopyAbsolute((string)@path, (string)newPath);
 		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = @path;
 		
-
-		((Hashtable)_globalData.Cuelist[_selectedCueId])["filepath"] = @path;
-		var extention = Path.GetExtension(newPath);
-		if (extention == ".wav")
+		_focusedCue.FilePath = @path;
+		var fileExtension = Path.GetExtension(newPath);
+		_focusedCue.Type = fileExtension switch // Sets type based on extension
 		{
-			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Audio";
-		}
-		if (extention == ".mov")
-		{
-			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Video";
-		}
-		if (extention == ".mp4")
-		{
-			((Hashtable)_globalData.Cuelist[_selectedCueId])["type"] = "Video";
-		}
+			".wav" => "Audio",
+			".mp4" or ".mov" or ".avi" or ".mpg" => "Video",
+			_ => _focusedCue.Type
+		};
 
-		GD.Print(((Hashtable)_globalData.Cuelist[_selectedCueId])["filepath"]);
-		//GetNode<Label>("ScrollContainer/VBoxContainer/HBoxContainer/CurrentType").Text = (string)((Hashtable)_globalData.cuelist[selectedCueID])["type"];
-
+		GD.Print(_focusedCue.FilePath);
 	}
-
-	// Handling the updating of feilds
-	private void _onCueNumTextChanged(String data)
+	
+	// Handling the updating of fields
+	private void _onCueNumTextChanged(string data)
 	{
-		// Update GD
-		((Hashtable)_globalData.Cuelist[_selectedCueId])["cueNum"] = data;
-		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
-
+		_focusedCue.CueNum = data; // Updates Cue with user input
+		var shellObj = _focusedCue.ShellBar;
 		//Directly update shell bar (This might be a terrible way of doing it)
-		Hashtable shellData = (Hashtable)_globalData.Cuelist[_selectedCueId];
-		_selectedData = shellData;
-		Node shellObj = (Node)_globalData.CueShellObj[_selectedCueId];
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = data;
-
 	}
-	private void _onShellNameTextChanged(String data)
+	private void _onShellNameTextChanged(string data)
 	{
 		// Update GD
-		((Hashtable)_globalData.Cuelist[_selectedCueId])["name"] = data;
-		//_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), selectedCueID);
-
+		_focusedCue.Name = data;
+	
 		//Directly update shell bar (This might be a terrible way of doing it)
-		Hashtable shellData = (Hashtable)_globalData.Cuelist[_selectedCueId];
-		_selectedData = shellData;
-		Node shellObj = (Node)_globalData.CueShellObj[_selectedCueId];
+		var shellObj = _focusedCue.ShellBar;
 		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = data;
-
 	}
 }

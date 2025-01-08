@@ -6,7 +6,7 @@ public partial class GlobalStyles : Node
 {
 
 	public StyleBoxFlat HoverStyle = new StyleBoxFlat();
-	public StyleBoxFlat SelectedStyle = new StyleBoxFlat();
+	public StyleBoxFlat FocusedStyle = new StyleBoxFlat();
 	public StyleBoxFlat NextStyle = new StyleBoxFlat();
 	public StyleBoxFlat ActiveStyle = new StyleBoxFlat();
 	public StyleBoxFlat DefaultStyle = new StyleBoxFlat();
@@ -40,12 +40,12 @@ public partial class GlobalStyles : Node
 		NextStyle.BgColor = new Color((float)0.024,(float)0.329,(float)0.361,(float)0.2);
 
 		// Selected Style
-		SelectedStyle.BorderWidthBottom = 2;
-		SelectedStyle.BorderWidthRight = 2;
-		SelectedStyle.BorderWidthLeft = 2;
-		SelectedStyle.BorderWidthTop = 2;
-		SelectedStyle.BorderColor = new Color("#06545C");
-		SelectedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
+		FocusedStyle.BorderWidthBottom = 2;
+		FocusedStyle.BorderWidthRight = 2;
+		FocusedStyle.BorderWidthLeft = 2;
+		FocusedStyle.BorderWidthTop = 2;
+		FocusedStyle.BorderColor = new Color("#06545C");
+		FocusedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
 		// Ative Style
 		ActiveStyle.BorderWidthBottom = 2;
