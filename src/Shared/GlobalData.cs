@@ -66,6 +66,7 @@ public partial class GlobalData : Node
 			
 		}
 		else {_saveManager.SaveShow(ShowPath, ShowName);}
+		//_saveManager.SaveShow();
 	}
 	
 

@@ -1,4 +1,7 @@
+using System;
+using System.Runtime.Serialization;
 using Godot;
+using System.Collections.Generic;
 
 namespace Cue2.Base.Classes;
 
@@ -23,6 +26,19 @@ public class Cue : ICue
         Name = "New cue number " + Id.ToString();
         CueNum = Id.ToString();
         Command = "";
+        
+    }
+
+    public Dictionary<string, string> GetData()
+    {
+        var dict = new Dictionary<string, string>();
+        dict.Add("Id", Id.ToString());
+        dict.Add("Name", Name);
+        dict.Add("Command", Command);
+        dict.Add("CueNum", CueNum);
+        dict.Add("FilePath", FilePath);
+        dict.Add("Type", Type);
+        return dict;
         
     }
 }

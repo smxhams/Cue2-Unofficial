@@ -31,12 +31,11 @@ public partial class ErrorHandler : Node
 	private void error_event(String @error, int @type)
 	{
 		var printout = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error;
-		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/ErrorPrintout").Text = printout;
+		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer/ErrorPrintout").Text = printout;
 		ErrorLog.Add(_errorCount, printout);
 		_errorCount = _errorCount + 1;
-		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/Log").Text = "Log " + _errorCount;
-
-		/// TODO Type casts colour and urgency
+		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer/Log").Text = "Log " + _errorCount;
+		
 
 		GD.Print(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error);
 	}

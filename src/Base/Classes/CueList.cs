@@ -1,24 +1,29 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
+using System.IO;
 using Godot;
 using LibVLCSharp.Shared;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 // This script is attached to the cuelist in main UI
-
+// Originator
 namespace Cue2.Base.Classes;
 
 public partial class CueList : Control
 {
-	private List<ICue> Cuelist { get; set; }
-	public static Dictionary<int, Cue> CueIndex = new Dictionary<int, Cue>();
+	public static List<ICue> Cuelist { get; set; }
+	public static Dictionary<int, Cue> CueIndex;
 	public static int FocusedCueId = -1;
 	
-	private Cue2.Shared.GlobalData _globalData;
-	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
+	private Shared.GlobalData _globalData;
+
 	public CueList()
 	{
 		Cuelist = new List<ICue>();
+		CueIndex = new Dictionary<int, Cue>();
 	}
 
 	public void AddCue(Cue cue)
@@ -26,7 +31,7 @@ public partial class CueList : Control
 		Cuelist.Add(cue);
 		CueIndex.Add(cue.Id, cue);
 	}
-
+	
 	public void RemoveCue(Cue cue)
 	{
 		Cuelist.Remove(cue);
@@ -55,7 +60,18 @@ public partial class CueList : Control
 
 		}
 	}
+	
+	public CueListState CreateState()
+	{
+		return new CueListState(Cuelist, CueIndex);
+	}
 
+	public void Restore(CueListState state)
+	{
+		Cuelist = state.GetCuelist();
+		CueIndex = state.GetCueIndex();
+	}
+		
 	// Received Signal Handling
 	private void _on_add_shell_pressed()
 		// Signal from add shell button
@@ -66,6 +82,8 @@ public partial class CueList : Control
 		CreateNewShell(newCue);
 		
 	}
+	
+	
 	
 	// Functions
 	private void CreateNewShell(Cue newCue)

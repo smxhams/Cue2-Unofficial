@@ -1,10 +1,18 @@
+using System.Collections;
 using Godot;
 using System.IO;
-using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Cue2.Base.Classes;
 
+namespace Cue2.Shared;
 
 public partial class SaveManager : Node
 {
+	
+	
 	private GlobalSignals _globalSignals;
 	public Cue2.Shared.GlobalData Gd;
 
@@ -26,15 +34,13 @@ public partial class SaveManager : Node
 
 	public bool SaveShow(string url, string showName)
 	{
+		var cueSaveData = FormatCuelistForSave();
 		FolderCreator(url);
-		DirAccess.MakeDirRecursiveAbsolute(url.GetBaseDir());
-		DirAccess dir = DirAccess.Open(url);
-		
 		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
 
-		string saveJson = JsonConvert.SerializeObject(Gd.Cuelist);
-
+		string saveJson = JsonSerializer.Serialize(cueSaveData);
+		GD.Print(saveJson);
 
 		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName+".c2", Godot.FileAccess.ModeFlags.Write, _decodepass);
 		file.StoreString(saveJson);
@@ -43,6 +49,7 @@ public partial class SaveManager : Node
 
 
 		return true;
+		
 	}
 
 	public bool LoadShow(string url)
@@ -51,6 +58,20 @@ public partial class SaveManager : Node
 		return true;
 	}
 
+	private Dictionary<string, Dictionary<string, string>> FormatCuelistForSave()
+	{
+		var saveTable = new Dictionary<string, Dictionary<string, string>>();
+		var index = 0;
+		foreach (Cue cue in CueList.Cuelist)
+		{
+			Dictionary<string, string> cueData = cue.GetData();
+			
+			saveTable.Add(index.ToString(), cueData);
+			index++;
+		}
+		GD.Print(saveTable);
+		return saveTable;
+	}
 
 	public bool FolderCreator(string url)
 	{
@@ -63,6 +84,7 @@ public partial class SaveManager : Node
 			return true;
 		}
 		else {return false;}
-	}
+	} 
+	
 }
 
