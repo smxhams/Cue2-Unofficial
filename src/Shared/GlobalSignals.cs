@@ -3,6 +3,7 @@ using System;
 
 public partial class GlobalSignals : Node
 {
+
 	[Signal]
 	public delegate void CloseSettingsWindowEventHandler();
 
@@ -23,6 +24,12 @@ public partial class GlobalSignals : Node
 
 	[Signal]
 	public delegate void SaveEventHandler();
+
+	[Signal]
+	public delegate void OpenSessionEventHandler();
+	
+	[Signal]
+	public delegate void OpenSelectedSessionEventHandler(string path);
 
 	[Signal]
 	public delegate void SaveFileEventHandler(string url, string showName);

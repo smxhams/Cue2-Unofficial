@@ -33,4 +33,9 @@ public class CueListState
     {
         return _stateCreatedAt;
     }
+
+    public string GetName()
+    {
+        return $"{_stateCreatedAt} / {_cuelist}";
+    }
 }

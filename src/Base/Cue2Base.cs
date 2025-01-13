@@ -5,12 +5,15 @@ using System.Collections;
 using System.ComponentModel;
 using System.Linq;
 using Cue2.Base.Classes;
+using Cue2.Shared;
 using LibVLCSharp.Shared;
 
 // This script handles:
 // -Activation of cues
 // -Main window UI handling
 //
+
+namespace Cue2.Base;
 
 public partial class Cue2Base : Control
 {
@@ -22,6 +25,8 @@ public partial class Cue2Base : Control
 
 	private Window _newWindow;
 	private Window _uiWindow;
+	
+	public WorkspaceStates State { get; set; }
 
 	//public GlobalMediaPlayerManager mediaManager;
 
@@ -59,9 +64,6 @@ public partial class Cue2Base : Control
 		//Set both transparents to true for invisible window
 		_uiWindow.Transparent = true;
 		_uiWindow.TransparentBg = true;
-
-
-
 	}
 
 
@@ -69,12 +71,8 @@ public partial class Cue2Base : Control
 	public override void _Process(double delta)
 	{
 	}
-
-	private void _OnTreeExiting()
-	{
-		GD.Print("OnTreeExiting");
-		PrintOrphanNodes();
-	}
+	
+	
 	private void _on_settings_toggled(Boolean @toggle){
 		if (@toggle == true){
 			if (_setWin == null){

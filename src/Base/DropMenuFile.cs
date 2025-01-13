@@ -1,6 +1,7 @@
 using Godot;
 using System;
 
+namespace Cue2.Base;
 public partial class DropMenuFile : PanelContainer
 {
 	private GlobalSignals _globalSignals;
@@ -9,11 +10,6 @@ public partial class DropMenuFile : PanelContainer
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-	}
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
 	}
 
 	private void _onHeaderFileMenuPressed(){
@@ -25,8 +21,14 @@ public partial class DropMenuFile : PanelContainer
 
 	private void _onFileSavePressed()
 	{
+		GD.Print("Kia ora");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));
 
+	}
+	private void _onOpenSessionPressed()
+	{
+		GD.Print("Kia ora");
+		_globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));
 	}
 
 }

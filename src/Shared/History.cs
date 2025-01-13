@@ -1,9 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using Cue2.Base.Classes;
+using Godot;
 
 namespace Cue2.Shared;
 
-
+// See memento design pattern - this is still WIP
 // Undo / Redo
 public class History
 {
@@ -22,10 +24,20 @@ public class History
     
     public void Undo()
     {
-        if (_states.Count > 0)
+        if (_states.Count == 0) { return; }
+
+        CueListState prevState = _states.Last();
+        _states.Remove(prevState);
+        _cuelist.Restore(prevState);
+    }
+
+    public void ShowHistory()
+    {
+        GD.Print("/n History: Here's the list of mementos:");
+        foreach (var state in _states)
         {
-            _cuelist.Restore(_states[_states.Count - 1]);
-            _states.RemoveAt(_states.Count - 1);
+            GD.Print(state.GetName());
         }
     }
+    
 }

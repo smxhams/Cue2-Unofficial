@@ -7,16 +7,22 @@ using Godot;
 using LibVLCSharp.Shared;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Cue2.Shared;
 
 // This script is attached to the cuelist in main UI
 // Originator
 namespace Cue2.Base.Classes;
+
 
 public partial class CueList : Control
 {
 	public static List<ICue> Cuelist { get; set; }
 	public static Dictionary<int, Cue> CueIndex;
 	public static int FocusedCueId = -1;
+
+	
+	
+	
 	
 	private Shared.GlobalData _globalData;
 

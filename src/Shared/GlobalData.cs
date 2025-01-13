@@ -36,8 +36,8 @@ public partial class GlobalData : Node
 	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
 	public bool AutoloadOnStartup = true; // Loads last active show on startup
 	public string ActiveShowFile; // URL of current show file to save to
-	public string ShowName;
-	public string ShowPath;
+	public static string SessionName;
+	public static string SessionPath;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -47,7 +47,6 @@ public partial class GlobalData : Node
 		//if (autoloadOnStartup == true){loadShow("Last");}
 
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.Save += SaveShow;
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 	}
 
@@ -56,18 +55,6 @@ public partial class GlobalData : Node
 	{
 	}
 
-	private void SaveShow()
-	{
-		// First check if this is a first time save
-		if (ShowName == null)
-		{
-			GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
-			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
-			
-		}
-		else {_saveManager.SaveShow(ShowPath, ShowName);}
-		//_saveManager.SaveShow();
-	}
 	
 
 	public int GetCueCount()

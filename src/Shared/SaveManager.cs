@@ -11,11 +11,10 @@ namespace Cue2.Shared;
 
 public partial class SaveManager : Node
 {
-	
-	
 	private GlobalSignals _globalSignals;
-	public Cue2.Shared.GlobalData Gd;
 
+	
+	
 	//private Dictionary<string, string> saveData;
 
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
@@ -25,6 +24,10 @@ public partial class SaveManager : Node
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		
+		_globalSignals.Save += Save;
+		_globalSignals.OpenSession += OpenSession;
+		_globalSignals.OpenSelectedSession += OpenSelectedSession;
+		
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -32,31 +35,37 @@ public partial class SaveManager : Node
 	{
 	}
 
-	public bool SaveShow(string url, string showName)
+	// On "Save" signal opens save dialogue if session unnamed.
+	private void Save()
+	{
+		if (GlobalData.SessionName == null)
+		{
+			GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
+			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
+		}
+		else {SaveSession(GlobalData.SessionPath, GlobalData.SessionName);}
+	}
+	
+	private void SaveSession(string url, string showName)
 	{
 		var cueSaveData = FormatCuelistForSave();
 		FolderCreator(url);
-		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
-
-
 		string saveJson = JsonSerializer.Serialize(cueSaveData);
 		GD.Print(saveJson);
-
 		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName+".c2", Godot.FileAccess.ModeFlags.Write, _decodepass);
 		file.StoreString(saveJson);
 		file.Close();
 		_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Save working: " + url, 0);
 
-
-		return true;
-		
 	}
 
-	public bool LoadShow(string url)
+	private void OpenSession()
 	{
-		GD.Print("Loading show: " + url);
-		return true;
+		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
 	}
+	
+
+	
 
 	private Dictionary<string, Dictionary<string, string>> FormatCuelistForSave()
 	{
@@ -72,8 +81,36 @@ public partial class SaveManager : Node
 		GD.Print(saveTable);
 		return saveTable;
 	}
+	
+	private void OpenSelectedSession(string path)
+	{
+		GD.Print("Made it to the opening");
+		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
+		var json = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(file.GetAsText());
+		ResetSession();
+		LoadSession(json);
+		foreach (var cue in json)
+		{
+			GD.Print(cue);
+			foreach (var data in json[cue.Key])
+			{
+				GD.Print(data);
+			}
+		}
+	}
 
-	public bool FolderCreator(string url)
+	private static void ResetSession()
+	{
+		// Get rid of it all
+		
+	}
+
+	private static void LoadSession(Dictionary<string, Dictionary<string, string>> json)
+	{
+		// Load it in
+	}
+
+	private bool FolderCreator(string url)
 	{
 		string folderPath = url;
 
