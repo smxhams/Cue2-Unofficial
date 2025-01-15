@@ -7,8 +7,7 @@ public partial class LiveView : PanelContainer
 {
 	private GlobalSignals _globalSignals;
 	public Cue2.Shared.GlobalData Gd;
-
-	public GlobalMediaPlayerManager MediaManager;
+	
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -24,7 +23,7 @@ public partial class LiveView : PanelContainer
 		foreach (int cue in Gd.LiveCues)
 		{
 			ProgressBar progressBar = GetNode<ProgressBar>("VBoxContainer2/HBoxContainer/ProgressBar");
-			float progress = Gd.MediaManager.GetProgress(cue);
+			float progress = Gd.Playback.GetProgress(cue);
 			progressBar.Value = progress;
 		}
 	}
@@ -38,7 +37,7 @@ public partial class LiveView : PanelContainer
 	{
 		foreach (int cue in Gd.LiveCues)
 		{
-			bool success = Gd.MediaManager.SetProgress(cue, @value);		
+			bool success = Gd.Playback.SetProgress(cue, @value);		
 		}	
 
 	}

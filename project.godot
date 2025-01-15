@@ -20,12 +20,12 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GlobalSignals="*res://src/Shared/GlobalSignals.cs"
-SaveManager="*res://src/Shared/SaveManager.cs"
 GlobalData="*res://src/Shared/GlobalData.cs"
+GlobalSignals="*res://src/Shared/GlobalSignals.cs"
 Connections="*res://src/Shared/Connections.cs"
 GlobalStyles="*res://src/Shared/GlobalStyles.cs"
 ErrorHandler="*res://src/Shared/ErrorHandler.cs"
+SaveManager="*res://src/Shared/SaveManager.cs"
 
 [display]
 

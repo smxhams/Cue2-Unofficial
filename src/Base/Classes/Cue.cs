@@ -2,6 +2,7 @@ using System;
 using System.Runtime.Serialization;
 using Godot;
 using System.Collections.Generic;
+using System.Data.Common;
 
 namespace Cue2.Base.Classes;
 
@@ -28,6 +29,18 @@ public class Cue : ICue
         Command = "";
         
     }
+
+    public Cue (Dictionary<string, string> data) // Cue Constructor
+    {
+        // This is used when loading cue form file, I'm quite unhappy with it. 
+        Id = int.Parse(data.GetValueOrDefault("Id", "0"));
+        Name = data.GetValueOrDefault("Name", "New cue number " + Id.ToString());
+        CueNum = data.GetValueOrDefault("CueNum", Id.ToString());
+        Command = data.GetValueOrDefault("Command", "");
+        FilePath = data.GetValueOrDefault("FilePath", "");
+        Type = data.GetValueOrDefault("Type", "");
+    }
+    
 
     public Dictionary<string, string> GetData()
     {

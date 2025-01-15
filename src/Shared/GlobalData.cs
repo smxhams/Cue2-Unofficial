@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Cue2.Base.Classes;
 using Godot;
 using LibVLCSharp.Shared;
 
@@ -8,14 +9,14 @@ namespace Cue2.Shared;
 // This script manages global data it contains:
 // -Data management functions
 // -Manages saving and loading of shows
-// -Global media manager
 
 public partial class GlobalData : Node
 {
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
-
-	public Hashtable Cuelist = new Hashtable();
+	
+	public CueList Cuelist;
+	public Playback Playback = new Playback();
 	public int FocusedCue = -1;
 	public Dictionary<int, Node> CueShellObj = new Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
@@ -23,12 +24,10 @@ public partial class GlobalData : Node
 	public int CueTotal;
 	public int CueOrder;
 	public int NextCue = -1;
+	
 
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;
-
-	//Create a referencable global class for all media
-	public GlobalMediaPlayerManager MediaManager = new GlobalMediaPlayerManager();
 
 	public List<int> LiveCues = new List<int>();
 
@@ -43,125 +42,10 @@ public partial class GlobalData : Node
 	public override void _Ready()
 	{
 		// Init MediaManager class so can be referenced everywhere
-		MediaManager.Initialize();
 		//if (autoloadOnStartup == true){loadShow("Last");}
 
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 	}
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-
 	
-
-	public int GetCueCount()
-	{
-		return CueCount;
-	}
-}
-
-
-// Functions
-
-
-
-// Media manager
-public class GlobalMediaPlayerManager
-{
-	private Dictionary<int, MediaPlayer> _mediaPlayers = new Dictionary<int, MediaPlayer>();
-
-	public void Initialize()
-	{
-		Core.Initialize();
-	}
-
-	public void PlayAudio(int id, string mediaPath)
-	{
-		var libVlc = new LibVLC();
-		var mediaPlayer = new MediaPlayer(libVlc);
-		var media = new Media(libVlc, mediaPath);
-		mediaPlayer.Media = media;
-		mediaPlayer.Play();
-
-		_mediaPlayers[id] = mediaPlayer;
-	}
-
-	public void PlayVideo(int id, string mediaPath, int windowId)
-	{
-		var libVlc = new LibVLC();
-		var mediaPlayer = new MediaPlayer(libVlc);
-		var media = new Media(libVlc, mediaPath);
-		mediaPlayer.Media = media;
-
-		var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, windowId);
-		mediaPlayer.Hwnd = windowHandle;
-		mediaPlayer.Play();
-		_mediaPlayers[id] = mediaPlayer;
-	}
-
-	
-	public void StopMedia(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			mediaPlayer.Stop();
-			mediaPlayer.Dispose();
-			_mediaPlayers.Remove(id);
-		}
-	}
-
-	public void PauseMedia(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			mediaPlayer.Pause();
-		}
-	}
-
-	public void ResumeMedia(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			mediaPlayer.Play();
-		}
-	}
-
-	public float GetProgress(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			var totalTime = mediaPlayer.Length;
-			var currentTime = mediaPlayer.Time;
-			if (currentTime == (long)0)
-			{
-				return (float)0.0;
-			}
-			float progress = ((float)currentTime / (float)totalTime) * 100;
-			return (float)progress;
-		}
-		return (float)0.0;
-	}
-
-	public bool SetProgress(int id, float value)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			var totalTime = mediaPlayer.Length;
-			var currentTime = mediaPlayer.Time;
-			if (value == 0)
-			{
-				mediaPlayer.Time = 0;
-				return true;
-			}
-			float progress = ((float)totalTime / 100) * value;
-			mediaPlayer.Time = (long)progress;
-			return true;
-		}
-		return false;
-	}
-
-
 }

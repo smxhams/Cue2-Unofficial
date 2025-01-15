@@ -12,8 +12,7 @@ namespace Cue2.Shared;
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
-
-	
+	private Shared.GlobalData _globalData;
 	
 	//private Dictionary<string, string> saveData;
 
@@ -27,6 +26,8 @@ public partial class SaveManager : Node
 		_globalSignals.Save += Save;
 		_globalSignals.OpenSession += OpenSession;
 		_globalSignals.OpenSelectedSession += OpenSelectedSession;
+		
+		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		
 	}
 
@@ -89,25 +90,20 @@ public partial class SaveManager : Node
 		var json = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(file.GetAsText());
 		ResetSession();
 		LoadSession(json);
+	}
+
+	private void ResetSession()
+	{
+		_globalData.Cuelist.ResetCuelist();
+	}
+
+	private void LoadSession(Dictionary<string, Dictionary<string, string>> json)
+	{
 		foreach (var cue in json)
 		{
-			GD.Print(cue);
-			foreach (var data in json[cue.Key])
-			{
-				GD.Print(data);
-			}
+			_globalData.Cuelist.CreateCue(cue.Value);
 		}
-	}
 
-	private static void ResetSession()
-	{
-		// Get rid of it all
-		
-	}
-
-	private static void LoadSession(Dictionary<string, Dictionary<string, string>> json)
-	{
-		// Load it in
 	}
 
 	private bool FolderCreator(string url)

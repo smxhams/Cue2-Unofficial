@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 public partial class GlobalSignals : Node
 {
@@ -33,5 +34,6 @@ public partial class GlobalSignals : Node
 
 	[Signal]
 	public delegate void SaveFileEventHandler(string url, string showName);
+
 
 }

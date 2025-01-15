@@ -130,7 +130,7 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Audio")
 			{
 				var path = cueToGo.FilePath;
-				Gd.MediaManager.PlayAudio(cueIdToGo, path);
+				Gd.Playback.PlayAudio(cueIdToGo, path);
 				Gd.LiveCues.Add(cueIdToGo);
 			}
 
@@ -138,7 +138,7 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Video")
 			{
 				var path = cueToGo.FilePath;
-				Gd.MediaManager.PlayVideo(cueIdToGo, path, Gd.VideoOutputWinNum);
+				Gd.Playback.PlayVideo(cueIdToGo, path, Gd.VideoOutputWinNum);
 				Gd.LiveCues.Add(cueIdToGo);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueIdToGo);
 				Label testLabel2 = new Label();
@@ -169,7 +169,7 @@ public partial class Cue2Base : Control
 		foreach (int cue in Gd.LiveCues)
 		{
 			GD.Print("Cue num stopping: " + cue);
-			Gd.MediaManager.StopMedia(cue);
+			Gd.Playback.StopMedia(cue);
 			
 		}
 		Gd.LiveCues.Clear();
