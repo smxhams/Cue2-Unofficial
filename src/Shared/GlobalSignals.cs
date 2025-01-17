@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using Cue2.Base.Classes;
 
 public partial class GlobalSignals : Node
 {
@@ -9,7 +10,7 @@ public partial class GlobalSignals : Node
 	public delegate void CloseSettingsWindowEventHandler();
 
 	[Signal]
-	public delegate void ShellSelectedEventHandler(int cueId);
+	public delegate void ShellFocusedEventHandler(int cueId);
 
 	[Signal]
 	public delegate void ErrorLogEventHandler(string errorLog, int type);
@@ -18,7 +19,7 @@ public partial class GlobalSignals : Node
 	public delegate void FileSelectedEventHandler(string path);
 
 	[Signal]
-	public delegate void CueGoEventHandler(int cue);
+	public delegate void CueGoEventHandler(int playbackId, int cueId);
 
 	[Signal]
 	public delegate void UpdateShellBarEventHandler(int cue);

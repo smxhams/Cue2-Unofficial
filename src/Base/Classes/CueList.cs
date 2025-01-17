@@ -10,10 +10,13 @@ namespace Cue2.Base.Classes;
 
 public partial class CueList : Control
 {
+	private GlobalData _globalData;
+	private GlobalSignals _globalSignals;
+	
 	public static List<ICue> Cuelist { get; private set; }
 	public static Dictionary<int, Cue> CueIndex;
 	public static int FocusedCueId = -1;
-	private Shared.GlobalData _globalData;
+	private static int _index = -1;
 
 	public CueList()
 	{
@@ -24,30 +27,36 @@ public partial class CueList : Control
 
 	public override void _Ready()
 	{
-		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalData.Cuelist = this;
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	}
 
 	public void CreateCue(Dictionary<string, string> data)
 	{
+		GD.Print("Creating Cue from data");
 		var newCue = new Cue(data);
 		AddCue(newCue);
 	}
 	public void CreateCue()
 	{
+		GD.Print("Creating Cue from defaults");
 		var newCue = new Cue();
 		AddCue(newCue);
 	}
 	
-	
 	public void AddCue(Cue cue)
 	{
-		DisplayCues();
 		CreateNewShell(cue);
+		
 		Cuelist.Add(cue);
 		CueIndex.Add(cue.Id, cue);
+		// Will make new cues focused
+		FocusCue(cue);
 	}
 	
+	
+
 	public static void RemoveCue(Cue cue)
 	{
 		cue.ShellBar.Free();
@@ -66,18 +75,39 @@ public partial class CueList : Control
 			return null;
 		}
 	}
-	
-	
 
-	public static void DisplayCues()
+	// ITERATORS
+	public static ICue Current()
 	{
-		Console.WriteLine("Cue List:");
-		foreach (var cue in Cuelist)
+		return Cuelist[_index];
+	}
+
+	public static bool HasNext()
+	{
+		return _index < Cuelist.Count;
+	}
+	public ICue Next()
+	{
+		if (!HasNext()) throw new Exception("No more cues");
+		_index++;
+		FocusCue(Cuelist[_index]);
+		return Cuelist[_index];
+	}
+
+	public void FocusCue(ICue cue)
+	{
+		if (_index != -1) 
 		{
-
-			Console.WriteLine($"Cue: {cue.Name} (ID: {cue.Id})");
-
+			var currentCue = Current();
+			if (cue == currentCue) return;
+			currentCue.ShellBar.GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
 		}
+		cue.ShellBar.GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
+		_index = Cuelist.IndexOf(cue);
+		FocusedCueId = cue.Id;
+		_globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
+				
+		GD.Print("Focus Cue: " + cue.Name + " - Cuelist index is: " + _index);
 	}
 	
 	public CueListState CreateState()
@@ -127,79 +157,13 @@ public partial class CueList : Control
 		// Resets 
 		Cuelist = new List<ICue>();
 		CueIndex = new Dictionary<int, Cue>();
+		_index = -1;
+		FocusedCueId = -1;
 
-		
+
 	}
 }
 
-//
-// public partial class CueList : Control
-// {
-//
-// 	private Cue2.Shared.GlobalData _globalData;
-// 	private GlobalStyles _globalStyles;
-//
-// 	private Variant _cueCount;
-// 	private MediaPlayer _mediaPlayer;
-//
-// 	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
-// 	
-//
-//
-//
-// 	public override void _Ready()
-// 	{
-// 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
-// 		_cueCount = _globalData.cueCount;
-//
-// 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
-// 		_nextStyle = _globalStyles.nextStyle;
-// 	}
-//
-// 	// Received Signal Handling
-// 	private void _on_add_shell_pressed()
-// 		// Signal from add shell button
-// 	{
-// 		CreateNewShell();
-// 	}
-// 	
-// 	// Maybe hve int array (int[] cueOrder {cueID, cueID})
-// 	
-// 	// Functions
-// 	private void CreateNewShell()
-// 	{
-// 		// Create New Shell Data
-// 		var newShell = new Hashtable()
-// 		{
-// 			{"id", _globalData.cueCount},
-// 			{"name", (String)""},
-// 			{"cueNum", (String)""},
-// 			{"type", ""},
-// 			//{"shellObj", shellBar},
-// 			{"filepath", ""},
-// 			{"player", null},
-// 			{"media", null}
-// 		};
-// 		
-// 		// Load in a shell bar
-// 		var shellBarScene = GD.Load<PackedScene>("res://src/Base/shell_bar.tscn");
-// 		var shellBar = shellBarScene.Instantiate();
-// 		var container = GetNode<VBoxContainer>("CueContainer");
-// 		container.AddChild(shellBar);
-// 		shellBar.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = _globalData.getCueCount().ToString();
-// 		
-//
-// 		_globalData.cuelist[_globalData.cueCount] = (Hashtable)newShell;
-// 		_globalData.cueShellObj[(int)_globalData.cueCount] = (Node)shellBar;
-// 		//Shift Add bar to bottom of cue list
-// 		//container.MoveChild(shellBar, cueCount);
-//
-// 		//Check if added cue is next cue
-// 		NextCueCheck(_globalData.cueCount);
-//
-// 		_globalData.cueCount = _globalData.cueCount + 1;
-//
-// 	}
 //
 // 	private void NextCueCheck(int cueId)
 // 	{

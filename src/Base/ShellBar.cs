@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections;
 using Cue2.Base.Classes;
+using Cue2.Shared;
 
 // This script is attached to instanced shell bars in the cue list, it handles
 // -UI of itself
@@ -20,7 +21,7 @@ public partial class ShellBar : Control
 
 	private StyleBoxFlat _hoverStyle = new StyleBoxFlat();
 	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
-	private StyleBoxFlat _focusedStyle = new StyleBoxFlat();
+	private static StyleBoxFlat _focusedStyle = new StyleBoxFlat();
 	private StyleBoxFlat _activeStyle = new StyleBoxFlat();
 	private StyleBoxFlat _defaultStyle = new StyleBoxFlat();
 
@@ -36,7 +37,7 @@ public partial class ShellBar : Control
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
 		_hoverStyle = _globalStyles.HoverStyle;
 		_nextStyle = _globalStyles.NextStyle;
-		_focusedStyle = _globalStyles.FocusedStyle;
+		_focusedStyle = GlobalStyles.FocusedStyle();
 
 		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
@@ -61,27 +62,15 @@ public partial class ShellBar : Control
 		}
 
 	}
+
+	public void Focus()
+	{
+		GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _focusedStyle);
+	}
+	
 	private void _on_focus_entered(){
 		// Need to validate cue here on selection
-		
-		if (CueList.FocusedCueId == -1) // -1 if no current focused cue
-		{
-			CueList.FocusedCueId = CueId;
-		}
-		else if (CueList.FocusedCueId != CueId) 
-		{
-			var previouslyFocusedCue = CueList.FetchCueFromId(CueList.FocusedCueId);
-			var previousCueShellBar = previouslyFocusedCue.ShellBar;
-			// Needs to remove focus style of previous Shell
-			previousCueShellBar.GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
-		}
-		
-		// Tell CueList the ID of a focused cue.
-		CueList.FocusedCueId = CueId;
-		
-		GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _focusedStyle);
-		// Emit signal that this shell has been selected
-		_globalSignals.EmitSignal(nameof(GlobalSignals.ShellSelected), CueId);
+		_gd.Cuelist.FocusCue(CueList.FetchCueFromId(CueId));
 	}
 	private void _on_focus_exited()
 	{

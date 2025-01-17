@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Numerics;
 
+namespace Cue2.Base;
 public partial class OutputOverrides : GridContainer
 {
 	// Called when the node enters the scene tree for the first time.
@@ -14,6 +15,7 @@ public partial class OutputOverrides : GridContainer
 	{
 	}
 	private void _on_exit_pressed(){
+		GetTree().Root.PropagateNotification((int)NotificationWMCloseRequest);
 		GetTree().Quit();
 	}
 

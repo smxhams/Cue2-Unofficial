@@ -2,6 +2,8 @@ using Godot;
 using System;
 using System.IO;
 
+namespace Cue2.Base;
+
 public partial class FileDialogue : FileDialog
 {
 

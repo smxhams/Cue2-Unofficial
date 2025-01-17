@@ -29,7 +29,7 @@ public partial class GlobalData : Node
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;
 
-	public List<int> LiveCues = new List<int>();
+	
 
 	// Settings
 	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.

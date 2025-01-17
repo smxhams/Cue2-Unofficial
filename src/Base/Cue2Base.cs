@@ -21,10 +21,12 @@ public partial class Cue2Base : Control
 	public Cue2.Shared.GlobalData Gd;
 	private Connections _connections;
 
-	private Node _setWin;
+	private Node _settingsWindow;
 
-	private Window _newWindow;
-	private Window _uiWindow;
+	public Window VideoWindow = new Window();
+	//private Window _uiWindow;
+
+	private int _playbackIndex;
 	
 	public WorkspaceStates State { get; set; }
 
@@ -35,19 +37,17 @@ public partial class Cue2Base : Control
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CloseSettingsWindow += close_settings_window;
-		_globalSignals.ShellSelected += shell_selected;
 		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
 		// Test video output window
-		_newWindow = new Window();
-		AddChild(_newWindow);
-		_newWindow.Name = "Test Video Output";
-		Gd.VideoOutputWinNum = _newWindow.GetWindowId();
+		AddChild(VideoWindow);
+		VideoWindow.Name = "Test Video Output";
+		Gd.VideoOutputWinNum = VideoWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, Gd.VideoOutputWinNum);
 		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);	
 
-		// Test UI overlay
+		/*// Test UI overlay
 		// I reckon in future video outputs set else where, ui should be a viewport set up as .tscn and loaded into window above video
 		_uiWindow = new Window();
 		AddChild(_uiWindow);
@@ -58,12 +58,12 @@ public partial class Cue2Base : Control
 		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.UiOutputWinNum);	
 		Label testLabel = new Label();
 		_uiWindow.AddChild(testLabel);
-		testLabel.Text = "AHHHHHH";
+		testLabel.Text = "AHHHHHH";*/
 
 
-		//Set both transparents to true for invisible window
+		/*//Set both transparents to true for invisible window
 		_uiWindow.Transparent = true;
-		_uiWindow.TransparentBg = true;
+		_uiWindow.TransparentBg = true;*/
 	}
 
 
@@ -75,27 +75,23 @@ public partial class Cue2Base : Control
 	
 	private void _on_settings_toggled(Boolean @toggle){
 		if (@toggle == true){
-			if (_setWin == null){
+			if (_settingsWindow == null)
+			{
 				var settings = GD.Load<PackedScene>("res://src/Base/settings.tscn");
-				_setWin = settings.Instantiate();
-				AddChild(_setWin);
-				}
+				_settingsWindow = settings.Instantiate();
+				AddChild(_settingsWindow);
+			}
 			else {
-				_setWin.GetWindow().Show();
+				_settingsWindow.GetWindow().Show();
 			}
 			
 		}
 		if (@toggle == false){
-			_setWin.GetWindow().Hide();
+			_settingsWindow.GetWindow().Hide();
 		}
 	}
 	private void close_settings_window(){ //From global signal, emitted by close button of settings window.
 		GetNode<Button>("MarginContainer/BoxContainer/HeaderContainer/Settings").ButtonPressed = false;
-		
-	}
-	private void shell_selected(int cueId)
-	{ //From global signal, emitted by shell_bar
-		GD.Print("Shell Selected: " + cueId);
 		
 	}
 
@@ -109,7 +105,7 @@ public partial class Cue2Base : Control
 		Stop();
 	}
 
-	public void Go()
+	private void Go()
 	{
 		// In Future this should only pass the selected cue's command to interpreter which will instruct relevant workers what to do
 		
@@ -130,30 +126,20 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Audio")
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayAudio(cueIdToGo, path);
-				Gd.LiveCues.Add(cueIdToGo);
+				Gd.Playback.PlayAudio(_playbackIndex, path);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
+				_playbackIndex++;
 			}
 
 			// Play video
 			else if ((string)cueType == "Video")
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayVideo(cueIdToGo, path, Gd.VideoOutputWinNum);
-				Gd.LiveCues.Add(cueIdToGo);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cueIdToGo);
-				Label testLabel2 = new Label();
-				testLabel2.Text = "AHHHHHH2222";
-				_newWindow.AddChild(testLabel2);
+				Gd.Playback.PlayVideo(_playbackIndex, path, VideoWindow);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
+				_playbackIndex++;
 			}
 			
-
-			foreach (var item in Gd.LiveCues)
-			{
-				GD.Print(item);
-			}
-
-			
-
 		}
 		else
 		{
@@ -163,15 +149,8 @@ public partial class Cue2Base : Control
 
 	}
 
-
 	public void Stop()
 	{
-		foreach (int cue in Gd.LiveCues)
-		{
-			GD.Print("Cue num stopping: " + cue);
-			Gd.Playback.StopMedia(cue);
-			
-		}
-		Gd.LiveCues.Clear();
+		// Stop
 	}
 }

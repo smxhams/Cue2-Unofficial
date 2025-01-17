@@ -22,8 +22,8 @@ public partial class ShellContext : MarginContainer
 		_globalData = GetNode<Shared.GlobalData>("/root/GlobalData");
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.ShellSelected += shell_selected;
-		_globalSignals.FileSelected += file_selected;
+		_globalSignals.ShellFocused += ShellSelected;
+		_globalSignals.FileSelected += FileSelected;
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -31,7 +31,7 @@ public partial class ShellContext : MarginContainer
 	{
 	}
 
-	private void shell_selected(int cueId)
+	private void ShellSelected(int cueId)
 	{
 		// Display shell options in PanelContainer
 		GetNode<ScrollContainer>("ShellScroll").Visible = true;
@@ -50,7 +50,7 @@ public partial class ShellContext : MarginContainer
 		GetNode<FileDialog>("/root/Cue2Base/FileDialog").Visible = true;
 	}
 
-	private void file_selected(string @path) // On Signal from file selection window
+	private void FileSelected(string @path) // On Signal from file selection window
 	{
 		var newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
 		GD.Print(@path + "    :    " + newPath);

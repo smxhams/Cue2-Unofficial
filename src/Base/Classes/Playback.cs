@@ -7,16 +7,9 @@ namespace Cue2.Base.Classes;
 
 public class Playback : LibVLC
 {
-	private readonly Dictionary<int, MediaPlayer> _mediaPlayers;
-	private int _mediaPlayerId;
-    public Playback()
-    {
-		_mediaPlayers = new Dictionary<int, MediaPlayer>();
-		_mediaPlayerId = 0;
+	private static Dictionary<int, MediaPlayer> _mediaPlayers = new Dictionary<int, MediaPlayer>();
 
-    }
-    
-    public void PlayAudio(int id, string mediaPath)
+	public void PlayAudio(int id, string mediaPath)
     {
 	    var mediaPlayer = new MediaPlayer(this);
 	    var media = new Media(this, mediaPath);
@@ -26,13 +19,13 @@ public class Playback : LibVLC
 		_mediaPlayers.Add(id, mediaPlayer);
     }
     
-    public void PlayVideo(int id, string mediaPath, int windowId)
+    public void PlayVideo(int id, string mediaPath, Window window)
     {
 	    var mediaPlayer = new MediaPlayer(this);
 	    var media = new Media(this, mediaPath);
 	    mediaPlayer.Media = media;
 
-	    var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, windowId);
+	    var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetWindowId());
 	    mediaPlayer.Hwnd = windowHandle;
 	    mediaPlayer.Play();
 	    _mediaPlayers.Add(id, mediaPlayer);
@@ -47,8 +40,25 @@ public class Playback : LibVLC
 		    _mediaPlayers.Remove(id);
 	    }
     }
+
+    public static long GetMediaLength(int id)
+    {
+	    return _mediaPlayers[id].Length;
+    }
     
-    public float GetProgress(int id)
+
+    public static float GetMediaPosition(int id)
+    {
+	    return _mediaPlayers[id].Position;
+    }
+    
+    public static void SetMediaPosition(int id, float pos)
+    {
+	    
+	    _mediaPlayers[id].Position = pos;
+    }
+    
+    /*public float GetProgress(int id)
     {
 	    if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
 	    {
@@ -78,43 +88,5 @@ public class Playback : LibVLC
 		    mediaPlayer.Time = (long)progress;
 		    return true;
 	    }
-	    return false;
-    }
-    
-    
+	    return false;*/
 }
-
-/*// Media manager
-public class GlobalMediaPlayerManager
-{
-	private Dictionary<int, MediaPlayer> _mediaPlayers = new Dictionary<int, MediaPlayer>();
-
-	public void Initialize()
-	{
-		Core.Initialize();
-	}
-
-
-
-	
-
-
-	public void PauseMedia(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			mediaPlayer.Pause();
-		}
-	}
-
-	public void ResumeMedia(int id)
-	{
-		if (_mediaPlayers.TryGetValue(id, out var mediaPlayer))
-		{
-			mediaPlayer.Play();
-		}
-	}
-	*/
-
-
-

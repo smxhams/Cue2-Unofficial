@@ -21,13 +21,11 @@ public partial class DropMenuFile : PanelContainer
 
 	private void _onFileSavePressed()
 	{
-		GD.Print("Kia ora");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));
 
 	}
 	private void _onOpenSessionPressed()
 	{
-		GD.Print("Kia ora");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));
 	}
 

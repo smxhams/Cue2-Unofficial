@@ -2,11 +2,12 @@ using Godot;
 using System;
 using System.Collections;
 
+namespace Cue2.Shared;
 public partial class GlobalStyles : Node
 {
 
 	public StyleBoxFlat HoverStyle = new StyleBoxFlat();
-	public StyleBoxFlat FocusedStyle = new StyleBoxFlat();
+	private static StyleBoxFlat _focusedStyle = new StyleBoxFlat();
 	public StyleBoxFlat NextStyle = new StyleBoxFlat();
 	public StyleBoxFlat ActiveStyle = new StyleBoxFlat();
 	public StyleBoxFlat DefaultStyle = new StyleBoxFlat();
@@ -40,12 +41,12 @@ public partial class GlobalStyles : Node
 		NextStyle.BgColor = new Color((float)0.024,(float)0.329,(float)0.361,(float)0.2);
 
 		// Selected Style
-		FocusedStyle.BorderWidthBottom = 2;
-		FocusedStyle.BorderWidthRight = 2;
-		FocusedStyle.BorderWidthLeft = 2;
-		FocusedStyle.BorderWidthTop = 2;
-		FocusedStyle.BorderColor = new Color("#06545C");
-		FocusedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
+		_focusedStyle.BorderWidthBottom = 2;
+		_focusedStyle.BorderWidthRight = 2;
+		_focusedStyle.BorderWidthLeft = 2;
+		_focusedStyle.BorderWidthTop = 2;
+		_focusedStyle.BorderColor = new Color("#06545C");
+		_focusedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
 		// Ative Style
 		ActiveStyle.BorderWidthBottom = 2;
@@ -60,5 +61,10 @@ public partial class GlobalStyles : Node
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
+	}
+
+	public static StyleBoxFlat FocusedStyle()
+	{
+		return _focusedStyle;
 	}
 }
