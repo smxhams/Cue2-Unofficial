@@ -25,4 +25,7 @@ Global
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A96766DC-F4CD-4900-A268-5996491BF66F}
 	EndGlobalSection
+	GlobalSection(RiderSharedRunConfigurations) = postSolution
+		File = Cue2.run\Player.run.xml
+	EndGlobalSection
 EndGlobal

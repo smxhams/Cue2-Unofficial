@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Cue2.Base.Classes;
 
 namespace Cue2.Shared;
@@ -28,6 +29,11 @@ public partial class SaveManager : Node
 		_globalSignals.OpenSelectedSession += OpenSelectedSession;
 		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+
+		if (_globalData.LaunchLoadPath != null)
+		{
+			Task.Delay(300).ContinueWith(t => LoadOnLaunch(_globalData.LaunchLoadPath));
+		}
 		
 	}
 
@@ -36,6 +42,10 @@ public partial class SaveManager : Node
 	{
 	}
 
+	private void LoadOnLaunch(string path)
+	{
+		OpenSelectedSession(_globalData.LaunchLoadPath);
+	}
 	// On "Save" signal opens save dialogue if session unnamed.
 	private void Save()
 	{
@@ -60,10 +70,6 @@ public partial class SaveManager : Node
 
 	}
 
-	private void OpenSession()
-	{
-		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
-	}
 	
 
 	
@@ -82,12 +88,17 @@ public partial class SaveManager : Node
 		GD.Print(saveTable);
 		return saveTable;
 	}
+	private void OpenSession()
+	{
+		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
+	}
 	
 	private void OpenSelectedSession(string path)
 	{
 		GD.Print("Made it to the opening");
 		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
 		var json = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(file.GetAsText());
+		GD.Print("Hello?");
 		ResetSession();
 		LoadSession(json);
 	}
@@ -99,6 +110,7 @@ public partial class SaveManager : Node
 
 	private void LoadSession(Dictionary<string, Dictionary<string, string>> json)
 	{
+
 		foreach (var cue in json)
 		{
 			_globalData.Cuelist.CreateCue(cue.Value);

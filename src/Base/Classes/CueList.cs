@@ -130,14 +130,14 @@ public partial class CueList : Control
 	
 	
 	
-	// Functions
+	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
 	{
 		// Load in a shell bar
 		var shellBarScene = GD.Load<PackedScene>("res://src/Base/shell_bar.tscn");
 		var shellBar = shellBarScene.Instantiate();
 		var container = GetNode<VBoxContainer>("CueContainer");
-		container.AddChild(shellBar);
+		container.CallDeferred("add_child", shellBar);
 		shellBar.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = newCue.CueNum; // Cue Number
 		shellBar.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = newCue.Name; // Cue Name
 		

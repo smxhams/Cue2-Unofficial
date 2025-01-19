@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Cue2.Base.Classes;
 using Godot;
 using LibVLCSharp.Shared;
@@ -29,6 +31,8 @@ public partial class GlobalData : Node
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;
 
+	public string LaunchLoadPath;
+
 	
 
 	// Settings
@@ -43,9 +47,21 @@ public partial class GlobalData : Node
 	{
 		// Init MediaManager class so can be referenced everywhere
 		//if (autoloadOnStartup == true){loadShow("Last");}
-
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
+
+		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));
+		foreach (var arg in args)
+		{
+			GD.Print("Launch argument detected: " + arg);
+			if (arg == "--file")
+			{
+				GD.Print("Opening file: " + args.Last());
+				LaunchLoadPath = args.Last(); 
+				
+			}
+		}
+		
 	}
 	
 }
