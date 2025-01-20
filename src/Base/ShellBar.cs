@@ -35,7 +35,7 @@ public partial class ShellBar : Control
 		//cueID = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData").cueCount;
 
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
-		_hoverStyle = _globalStyles.HoverStyle;
+		_hoverStyle = GlobalStyles.HoverStyle();
 		_nextStyle = _globalStyles.NextStyle;
 		_focusedStyle = GlobalStyles.FocusedStyle();
 

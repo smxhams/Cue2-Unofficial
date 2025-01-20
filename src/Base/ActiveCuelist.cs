@@ -37,6 +37,13 @@ public partial class ActiveCuelist : PanelContainer
 		
 	}
 
+	public static void RemoveActiveCue(int playbackIndex)
+	{
+		_activeCues.Remove(playbackIndex);
+		_activeCueBars[playbackIndex].CallDeferred("queue_free");
+		_activeCueBars.Remove(playbackIndex);
+	}
+
 	private void LoadActiveCueBar(int playbackIndex, Cue cue)
 	{
 		// Load in a shell bar

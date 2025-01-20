@@ -41,13 +41,11 @@ public partial class ActiveCueProgressBar : ProgressBar
 	private void mouse_entered()
 	{
 		_mouseInSlider = true;
-		GD.Print("Mouse in slider");
 	}
 	
 	private void mouse_extied()
 	{
 		_mouseInSlider = false;
-		GD.Print("Mouse out of slider");
 	}
 
 }

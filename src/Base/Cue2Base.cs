@@ -123,10 +123,10 @@ public partial class Cue2Base : Control
 			}
 
 			// Play audio file
-			else if ((string)cueType == "Audio")
+			else if ((string)cueType == "Audio" )
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayAudio(_playbackIndex, path);
+				Gd.Playback.PlayMedia(_playbackIndex, path);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
 				_playbackIndex++;
 			}
@@ -135,7 +135,7 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Video")
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayVideo(_playbackIndex, path, VideoWindow);
+				Gd.Playback.PlayMedia(_playbackIndex, path, VideoWindow);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
 				_playbackIndex++;
 			}

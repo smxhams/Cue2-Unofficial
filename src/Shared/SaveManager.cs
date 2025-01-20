@@ -32,7 +32,7 @@ public partial class SaveManager : Node
 
 		if (_globalData.LaunchLoadPath != null)
 		{
-			Task.Delay(300).ContinueWith(t => LoadOnLaunch(_globalData.LaunchLoadPath));
+			Task.Delay(0).ContinueWith(t => LoadOnLaunch(_globalData.LaunchLoadPath));
 		}
 		
 	}
@@ -95,10 +95,8 @@ public partial class SaveManager : Node
 	
 	private void OpenSelectedSession(string path)
 	{
-		GD.Print("Made it to the opening");
 		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
 		var json = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(file.GetAsText());
-		GD.Print("Hello?");
 		ResetSession();
 		LoadSession(json);
 	}

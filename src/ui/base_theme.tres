@@ -1,6 +1,6 @@
 [gd_resource type="Theme" load_steps=10 format=4 uid="uid://vidokm2ilwtk"]
 
-[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/ui/ShellPanelStyleBox.tres" id="1_pvqx4"]
+[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/ShellPanelStyleBox.tres" id="1_pvqx4"]
 
 [sub_resource type="Image" id="Image_734wp"]
 data = {

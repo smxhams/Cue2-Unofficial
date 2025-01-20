@@ -6,7 +6,7 @@ namespace Cue2.Shared;
 public partial class GlobalStyles : Node
 {
 
-	public StyleBoxFlat HoverStyle = new StyleBoxFlat();
+	private static StyleBoxFlat _hoverStyle = new StyleBoxFlat();
 	private static StyleBoxFlat _focusedStyle = new StyleBoxFlat();
 	public StyleBoxFlat NextStyle = new StyleBoxFlat();
 	public StyleBoxFlat ActiveStyle = new StyleBoxFlat();
@@ -21,16 +21,16 @@ public partial class GlobalStyles : Node
 		ActiveStyle.BorderWidthLeft = 0;
 		ActiveStyle.BorderWidthTop = 0;
 		//activeStyle.BorderColor = new Color("#974B08");
-		HoverStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
+		//HoverStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
 
 		// Hover Style
-		HoverStyle.BorderWidthBottom = 2;
-		HoverStyle.BorderWidthRight = 2;
-		HoverStyle.BorderWidthLeft = 2;
-		HoverStyle.BorderWidthTop = 2;
-		HoverStyle.BorderColor = new Color("#002326");
-		HoverStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
+		_hoverStyle.BorderWidthBottom = 2;
+		_hoverStyle.BorderWidthRight = 2;
+		_hoverStyle.BorderWidthLeft = 2;
+		_hoverStyle.BorderWidthTop = 2;
+		_hoverStyle.BorderColor = new Color("#002326");
+		_hoverStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
 		// Next Style
 		NextStyle.BorderWidthBottom = 2;
@@ -67,4 +67,10 @@ public partial class GlobalStyles : Node
 	{
 		return _focusedStyle;
 	}
+
+	public static StyleBoxFlat HoverStyle()
+	{
+		return _hoverStyle;
+	}
+	
 }

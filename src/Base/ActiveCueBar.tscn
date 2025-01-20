@@ -18,6 +18,7 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1_yj65f")
+PlaybackId = null
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -43,6 +44,7 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_usfis")
 value = 20.0
 show_percentage = false
 script = ExtResource("2_jnntm")
+PlaybackId = null
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/ProgressBar"]
 layout_mode = 1
@@ -52,11 +54,12 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="AtivePause" type="Button" parent="Panel/MarginContainer/ProgressBar/HBoxContainer"]
+[node name="ActivePause" type="Button" parent="Panel/MarginContainer/ProgressBar/HBoxContainer"]
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
+focus_mode = 0
 text = "P"
 
 [node name="GridContainer" type="GridContainer" parent="Panel/MarginContainer/ProgressBar/HBoxContainer"]
@@ -98,7 +101,10 @@ custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
+focus_mode = 0
 text = "X"
 
 [connection signal="mouse_entered" from="Panel/MarginContainer/ProgressBar" to="Panel/MarginContainer/ProgressBar" method="mouse_entered"]
 [connection signal="mouse_exited" from="Panel/MarginContainer/ProgressBar" to="Panel/MarginContainer/ProgressBar" method="mouse_extied"]
+[connection signal="pressed" from="Panel/MarginContainer/ProgressBar/HBoxContainer/ActivePause" to="." method="_onActivePausePressed"]
+[connection signal="pressed" from="Panel/MarginContainer/ProgressBar/HBoxContainer/ActiveStop" to="." method="_onActiveStopPressed"]

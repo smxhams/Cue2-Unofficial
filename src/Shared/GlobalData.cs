@@ -33,6 +33,8 @@ public partial class GlobalData : Node
 
 	public string LaunchLoadPath;
 
+	public static double StopFadeTime = 2.0; // Fade time in seconds
+
 	
 
 	// Settings
