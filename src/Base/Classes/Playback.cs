@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Cue2.Shared;
 using Godot;
 using LibVLCSharp.Shared;
@@ -11,7 +12,11 @@ public class Playback : LibVLC
 {
 	private static Dictionary<int, MediaPlayerState> _mediaPlayers = new Dictionary<int, MediaPlayerState>();
 	
-
+	public Playback()
+	{
+		Core.Initialize();
+	}
+	
 	public void PlayMedia(int id, string mediaPath, Window window = null)
 	{
 		var mediaPlayer = new MediaPlayer(this);
@@ -32,8 +37,31 @@ public class Playback : LibVLC
 		mediaPlayer.Volume = 100;
 		mediaPlayer.Play();
 		_mediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+		
+		mediaPlayer.EndReached += MediaOnEndReached;
+		
+		media.Dispose();
 	}
 	
+	private void MediaOnEndReached(object? sender, EventArgs e)
+	{
+		foreach (var m in _mediaPlayers)
+		{
+			if (m.Value.MediaPlayer.State == VLCState.Ended)
+			{
+				Task.Delay(1).ContinueWith(action => StopMediaImmediately(m.Key));
+				return;
+			}
+		}
+		// In future need to check loop, note cant set time unless media is playing
+		// pseudo function:
+		/* loop?
+		 mediaplayer.media = media // I don't know yet if need to reassing media
+		 mediaplayer.play()
+		 await .isplaying()
+		 .setTime(long time of restart)
+		 */
+	}
 	
     public static void StopMedia(int id)
     {
@@ -69,10 +97,17 @@ public class Playback : LibVLC
 			    state.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Enable, 1);
 			    state.CurrentBrightness -= 0.01f;
 			    if (state.CurrentBrightness < 0) state.CurrentBrightness = 0;
-			    //state.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Brightness, state.CurrentBrightness);
-			    state.MediaPlayer.SetMarqueeInt(VideoMarqueeOption.Enable, 1);
-			    state.MediaPlayer.SetMarqueeInt(VideoMarqueeOption.Opacity, 50);
-			    state.MediaPlayer.SetMarqueeInt(VideoMarqueeOption.Size, 500);
+			    
+			    // Please for the love of God let the solution below only be temporary
+			    
+			    /*//state.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Brightness, state.CurrentBrightness);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Enable, 1);
+			    //state.MediaPlayer.SetLogoString(VideoLogoOption.File, "C:\\MyFiles\\Cue2_Home\\Cue2\\src\\UI\\BlackSquare.jpg");
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.X, 0);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Y, 0);
+			    //state.MediaPlayer.SetLogoInt(VideoLogoOption., 100);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Repeat, 1);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Opacity, Convert.ToInt32(state.CurrentBrightness * 255));*/
 			    
 		    }
 
@@ -87,18 +122,19 @@ public class Playback : LibVLC
 
     public static void StopMediaImmediately(int id)
     {
-	    if (!_mediaPlayers.ContainsKey(id)) return;
-	    GD.Print("Stopped: " + id + " : " + _mediaPlayers[id].MediaPlayer.Title);
+	    if (!_mediaPlayers.TryGetValue(id, out var player)) return;
+	    GD.Print("Stopped: " + id + " : " + player.MediaPlayer.Title);
 	    ActiveCuelist.RemoveActiveCue(id);
 	    
 
-	    _mediaPlayers[id].FadeOutTimer?.Stop();
-	    _mediaPlayers[id].FadeOutTimer?.Dispose();  // Dispose the timer properly
-	    _mediaPlayers[id].MediaPlayer.SetAdjustFloat(VideoAdjustOption.Enable, 0);
-	    _mediaPlayers[id].MediaPlayer.Stop();
-	    _mediaPlayers[id].MediaPlayer.Dispose();  // Free the MediaPlayer safely
-	    
-		_mediaPlayers.Remove(id);  // Remove from dictionary
+	    player.FadeOutTimer?.Stop();
+	    player.FadeOutTimer?.Dispose();  // Dispose the timer properly
+	    player.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Enable, 0);
+	    player.MediaPlayer.Stop();
+	    Task.Delay(10);
+	    //player.MediaPlayer.Dispose(); // Free the MediaPlayer safely
+	    player.MediaPlayer.Dispose();
+	    _mediaPlayers.Remove(id);  // Remove from dictionary
     }
 
 
@@ -162,3 +198,5 @@ class MediaPlayerState
 		HasAudio = hasAudio;
 	}
 }
+
+
