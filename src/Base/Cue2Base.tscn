@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=40 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -10,11 +10,13 @@
 [ext_resource type="Script" path="res://src/Base/Preview.cs" id="7_n83c7"]
 [ext_resource type="Script" path="res://src/Base/ActiveCuelist.cs" id="9_sqddi"]
 [ext_resource type="Script" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
+[ext_resource type="Script" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
 [ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" path="res://src/Base/DropMenuFile.cs" id="11_s3fp6"]
 [ext_resource type="Script" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
 [ext_resource type="Script" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
+[ext_resource type="Shader" path="res://src/Base/VideoPlayback.gdshader" id="16_oc7kn"]
 
 [sub_resource type="InputEventKey" id="InputEventKey_h6px0"]
 device = -1
@@ -30,6 +32,14 @@ events = [SubResource("InputEventKey_h6px0")]
 [sub_resource type="AtlasTexture" id="AtlasTexture_7ts3w"]
 atlas = ExtResource("6_j1fp5")
 region = Rect2(387, 258, 128, 128)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nxdu4"]
+shader = ExtResource("16_oc7kn")
+
+[sub_resource type="Gradient" id="Gradient_jx3xw"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_paorf"]
+gradient = SubResource("Gradient_jx3xw")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
 content_margin_left = 4.0
@@ -2580,7 +2590,6 @@ clip_contents = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_stretch_ratio = 3.0
 current_tab = 0
 tabs_visible = false
 drag_to_rearrange_enabled = true
@@ -2610,7 +2619,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="PreviewContainer" type="PanelContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer"]
-visible = false
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -2640,37 +2648,20 @@ focus_mode = 0
 text = "Go Live ->"
 clip_text = true
 
-[node name="PreViewportContainer" type="SubViewportContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2"]
-clip_contents = true
+[node name="TextureRect" type="TextureRect" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2"]
+material = SubResource("ShaderMaterial_nxdu4")
 layout_mode = 2
 size_flags_vertical = 3
-stretch = true
-
-[node name="PreViewport" type="SubViewport" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2/PreViewportContainer"]
-handle_input_locally = false
-size = Vector2i(2, 2)
-render_target_clear_mode = 1
-render_target_update_mode = 0
-
-[node name="Control" type="Control" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2/PreViewportContainer/PreViewport"]
-layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="Panel" type="Panel" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2/PreViewportContainer/PreViewport/Control"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+texture = SubResource("GradientTexture2D_paorf")
+expand_mode = 1
+stretch_mode = 4
+script = ExtResource("10_2xgyo")
 
 [node name="LiveViewContainer" type="PanelContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer"]
 clip_contents = true
+custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 script = ExtResource("9_sqddi")
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/LiveViewContainer"]

@@ -18,7 +18,7 @@ public partial class GlobalData : Node
 	private SaveManager _saveManager;
 	
 	public CueList Cuelist;
-	public Playback Playback = new Playback();
+	public Playback Playback;
 	public int FocusedCue = -1;
 	public Dictionary<int, Node> CueShellObj = new Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
@@ -51,6 +51,9 @@ public partial class GlobalData : Node
 		//if (autoloadOnStartup == true){loadShow("Last");}
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
+
+		Playback = new Playback();
+		AddChild(Playback);
 
 		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));
 		foreach (var arg in args)

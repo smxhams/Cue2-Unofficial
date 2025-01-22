@@ -1,6 +1,8 @@
 using Godot;
 using System;
 using System.Numerics;
+using System.Threading.Tasks;
+using Cue2.Base.Classes;
 
 namespace Cue2.Base;
 public partial class OutputOverrides : GridContainer
@@ -16,6 +18,7 @@ public partial class OutputOverrides : GridContainer
 	}
 	private void _on_exit_pressed(){
 		GetTree().Root.PropagateNotification((int)NotificationWMCloseRequest);
+		Task.Delay(100);
 		GetTree().Quit();
 	}
 

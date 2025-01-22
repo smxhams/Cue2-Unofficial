@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net.Mime;
 using System.Threading.Tasks;
 using Cue2.Shared;
 using Godot;
@@ -9,38 +8,19 @@ using Timer = System.Timers.Timer;
 
 namespace Cue2.Base.Classes;
 
-public partial class Playback : Node
+public class Playback : LibVLC
 {
 	private static Dictionary<int, MediaPlayerState> _mediaPlayers = new Dictionary<int, MediaPlayerState>();
-	
-	private LibVLC _libVLC;
-
-	private Window _window;
-
-	private GlobalData _globalData;
-
-	public TextureRect _testTextRect;
-	
 	
 	public Playback()
 	{
 		Core.Initialize();
-		_libVLC = new LibVLC();
-		
-	}
-
-	public override void _Ready()
-	{
-		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		_window = GetWindow();
-		_window.CloseRequested += WindowOnCloseRequested;
-
 	}
 	
 	public void PlayMedia(int id, string mediaPath, Window window = null)
 	{
-		var mediaPlayer = new MediaPlayer(_libVLC);
-		var media = new Media(_libVLC, mediaPath);
+		var mediaPlayer = new MediaPlayer(this);
+		var media = new Media(this, mediaPath);
 		media.Parse(MediaParseOptions.ParseLocal);
 		while (media.IsParsed != true) { }
 		
@@ -48,26 +28,17 @@ public partial class Playback : Node
 		
 		(bool hasVideo, bool hasAudio) = GetMediaType(media);
 
-		_mediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
 		if (hasVideo && window != null)
 		{
-			_mediaPlayers[id].TargetTextureRect = _testTextRect;
-
-			uint videoheight = 0;
-			uint videowidth = 0;
-			mediaPlayer.Size(0, ref videowidth, ref videoheight);
-			//TextureRect test = GlobalData.PassTESTTextRect();
+			var windowHandle = (IntPtr)DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle, window.GetWindowId());
+			mediaPlayer.Hwnd = windowHandle;
 			
-			_mediaPlayers[id].TargetTextureRect.Set("VideoAlpha", 255);
-			_testTextRect.CallDeferred("InitVideoTexture", id, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
-
-
 		}
+		mediaPlayer.Volume = 100;
+		mediaPlayer.Play();
+		_mediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
 		
-		_mediaPlayers[id].MediaPlayer.Volume = 100;
-		_mediaPlayers[id].MediaPlayer.Play();
-		
-		_mediaPlayers[id].MediaPlayer.EndReached += MediaOnEndReached;
+		mediaPlayer.EndReached += MediaOnEndReached;
 		
 		media.Dispose();
 	}
@@ -106,6 +77,7 @@ public partial class Playback : Node
 	    
 	    state.IsFading = true; // True if fading in progress
 	    state.CurrentVolume = state.MediaPlayer.Volume;
+	    state.CurrentBrightness = state.MediaPlayer.AdjustFloat(VideoAdjustOption.Brightness);
 	    var time = Convert.ToInt32(GlobalData.StopFadeTime * 10); // Stop fade time in second, to ms incremented by 100 (hence x10 (x1000/100))
 	    state.FadeOutTimer = new Timer(time);
 	    state.FadeOutTimer.Elapsed += (sender, e) =>
@@ -120,12 +92,24 @@ public partial class Playback : Node
 			    shouldStop = false;
 		    }
 
-		    if (state.HasVideo && state.CurrentAlpha > 0)
+		    if (state.HasVideo && state.CurrentBrightness > 0)
 		    {
-			    state.CurrentAlpha -= 4;
-			    if (state.CurrentAlpha < 0) state.CurrentAlpha = 0;
-			    state.TargetTextureRect.Set("VideoAlpha", state.CurrentAlpha);
-
+			    state.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Enable, 1);
+			    state.CurrentBrightness -= 0.01f;
+			    if (state.CurrentBrightness < 0) state.CurrentBrightness = 0;
+			    state.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Brightness, state.CurrentBrightness);
+			    
+			    // TODO Fade to black
+			    
+			    /*//
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Enable, 1);
+			    //state.MediaPlayer.SetLogoString(VideoLogoOption.File, "C:\\MyFiles\\Cue2_Home\\Cue2\\src\\UI\\BlackSquare.jpg");
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.X, 0);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Y, 0);
+			    //state.MediaPlayer.SetLogoInt(VideoLogoOption., 100);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Repeat, 1);
+			    state.MediaPlayer.SetLogoInt(VideoLogoOption.Opacity, Convert.ToInt32(state.CurrentBrightness * 255));*/
+			    
 		    }
 
 		    if (shouldStop)
@@ -195,35 +179,25 @@ public partial class Playback : Node
 	    
 	    _mediaPlayers[id].MediaPlayer.Position = pos;
     }
-    
-    public MediaPlayerState GetMediaPlayerState(int id)
-	{
-		return _mediaPlayers[id];
-	}
-    
-    private void WindowOnCloseRequested()
-	{
-		foreach (var player in _mediaPlayers)
-		{
-			if (player.Value.MediaPlayer.State == VLCState.Playing)
-			{
-				player.Value.MediaPlayer.Dispose();
-			}
-		}
-		_libVLC.Dispose();
-		// Thought on memory issues when quit while media playing - 
-		// This is all being disposed fine, however I think other scripts are sneaking in a final reference when these are disposed. 
-		// Might need to make a shutdown state
-	}
-	public override void _Notification(int what)
-	{
-		if (what == NotificationWMCloseRequest)
-		{
-			WindowOnCloseRequested();
-		}
-	}
+
 }
 
+class MediaPlayerState
+{
+	public MediaPlayer MediaPlayer { get; }
+	public Timer FadeOutTimer { get; set; }
+	public int CurrentVolume { get; set; } = 100;
+	public float CurrentBrightness { get; set; } = 1.0f;
+	public bool HasVideo { get; }
+	public bool HasAudio { get; }
+	public bool IsFading { get; set; } = false;
 
+	public MediaPlayerState(MediaPlayer mediaPlayer, bool hasVideo, bool hasAudio)
+	{
+		MediaPlayer = mediaPlayer;
+		HasVideo = hasVideo;
+		HasAudio = hasAudio;
+	}
+}
 
 

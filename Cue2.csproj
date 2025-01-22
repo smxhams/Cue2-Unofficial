@@ -12,8 +12,12 @@
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.18" />
     <PackageReference Update="Godot.SourceGenerators" Version="4.4.0-dev.5" />
     <PackageReference Update="GodotSharp" Version="4.4.0-dev.5" />
+    <PackageReference Include="VLC.Native" Version="3.0.8" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\Learning\Links.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="src\Base\Classes\PlaybackPRE_TEXTRECT_CHANGE.cs" />
   </ItemGroup>
 </Project>

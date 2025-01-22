@@ -14,7 +14,7 @@ config/name="Cue2"
 config/version="0.00.003"
 run/main_scene="res://src/Base/Cue2Base.tscn"
 config/features=PackedStringArray("4.3", "C#")
-boot_splash/bg_color=Color(0.141176, 0.141176, 0.141176, 0)
+boot_splash/bg_color=Color(0.018739, 0.148749, 0.243076, 1)
 boot_splash/show_image=false
 config/icon="res://icon.svg"
 

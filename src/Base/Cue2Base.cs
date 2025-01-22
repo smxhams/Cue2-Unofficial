@@ -45,7 +45,10 @@ public partial class Cue2Base : Control
 		VideoWindow.Name = "Test Video Output";
 		Gd.VideoOutputWinNum = VideoWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, Gd.VideoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);	
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);
+		
+		//var media = new Media(_libVLC, "C:\\MyFiles\\Cue2_Home\\TestCues\\sample_1280x720_surfing_with_audio.mov", FromType.FromPath);
+
 
 		/*// Test UI overlay
 		// I reckon in future video outputs set else where, ui should be a viewport set up as .tscn and loaded into window above video
@@ -55,7 +58,7 @@ public partial class Cue2Base : Control
 		Gd.UiOutputWinNum = _uiWindow.GetWindowId();
 		_uiWindow.AlwaysOnTop = true;
 		DisplayServer.WindowSetCurrentScreen(1, Gd.UiOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.UiOutputWinNum);	
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.UiOutputWinNum);
 		Label testLabel = new Label();
 		_uiWindow.AddChild(testLabel);
 		testLabel.Text = "AHHHHHH";*/
@@ -99,11 +102,7 @@ public partial class Cue2Base : Control
 	{
 		Go();
 	}
-
-	private void _on_stop_pressed()
-	{
-		Stop();
-	}
+	
 
 	private void Go()
 	{
@@ -148,9 +147,5 @@ public partial class Cue2Base : Control
 		}
 
 	}
-
-	public void Stop()
-	{
-		// Stop
-	}
+	
 }
