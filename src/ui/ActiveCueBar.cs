@@ -9,8 +9,19 @@ public partial class ActiveCueBar : Control
 	
 	public override void _Process(double delta)
 	{
-		var pos = Playback.GetMediaPosition(PlaybackId);
-		var length = Playback.GetMediaLength(PlaybackId);
+		float pos = 0f;
+		long length = 0;
+		try
+		{
+			pos = Playback.GetMediaPosition(PlaybackId);
+			length = Playback.GetMediaLength(PlaybackId);
+		}
+		catch (Exception e)
+		{
+			GD.Print("Can't get cue timing, possibly this script arrived earlier than cue loaded: ");
+		}
+		
+		
 
 		ParseTime(length);
 		GetNode<ProgressBar>("Panel/MarginContainer/ProgressBar").Value = pos * 100;

@@ -15,6 +15,7 @@ public partial class Playback : Node
 	private readonly LibVLC _libVLC;
 
 	private Window _window;
+	private static  Window _canvasWindow;
 
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
@@ -33,7 +34,7 @@ public partial class Playback : Node
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_window = GetWindow();
 		_window.CloseRequested += WindowOnCloseRequested;
-		
+		_canvasWindow = _globalData.VideoWindow;
 		_globalSignals.StopAll += StopAll;
 	}
 	
@@ -150,7 +151,11 @@ public partial class Playback : Node
 	    player.MediaPlayer.Stop();
 	    Task.Delay(10);
 	    player.MediaPlayer.Dispose();
-	    player.TargetTextureRect?.QueueFree();
+	    if (player.TargetTextureRect != null)
+	    {
+		    player.TargetTextureRect.GetParent().RemoveChild(player.TargetTextureRect);
+			player.TargetTextureRect.QueueFree();
+	    }
 
 	    MediaPlayers.Remove(id);  // Remove from dictionary
     }
@@ -237,14 +242,16 @@ public partial class Playback : Node
     
     private void WindowOnCloseRequested()
 	{
+		GD.Print("Window closing");
 		foreach (var player in MediaPlayers)
 		{
 			if (player.Value.MediaPlayer.State == VLCState.Playing)
 			{
-				StopMedia(player.Key);
+				StopMediaImmediately(player.Key);
 			}
 		}
 		_libVLC.Dispose();
+		
 		// Thought on memory issues when quit while media playing - 
 		// This is all being disposed fine, however I think other scripts are sneaking in a final reference when these are disposed. 
 		// Might need to make a shutdown state
