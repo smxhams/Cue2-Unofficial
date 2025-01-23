@@ -1,5 +1,6 @@
 using Godot;
 using System.IO;
+using Cue2.Shared;
 
 // This is a resource attached to:
 // -OpenDialog: FileDialog (Found in Cue2Base scene)

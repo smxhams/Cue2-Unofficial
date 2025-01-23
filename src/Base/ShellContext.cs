@@ -2,6 +2,7 @@ using Godot;
 
 using System.IO;
 using Cue2.Base.Classes;
+using Cue2.Shared;
 
 // This script is attached to shell context tab
 

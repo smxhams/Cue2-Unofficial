@@ -22,10 +22,9 @@ public partial class Cue2Base : Control
 	private Connections _connections;
 
 	private Node _settingsWindow;
-
-	public Window VideoWindow = new Window();
+	
 	//private Window _uiWindow;
-
+	private Window VideoWindow;
 	private int _playbackIndex;
 	
 	public WorkspaceStates State { get; set; }
@@ -40,13 +39,20 @@ public partial class Cue2Base : Control
 		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
-		// Test video output window
+		// Creation and assignment of test video output window - in future this will be created in settings
+		VideoWindow = new Window();
 		AddChild(VideoWindow);
 		VideoWindow.Name = "Test Video Output";
 		Gd.VideoOutputWinNum = VideoWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, Gd.VideoOutputWinNum);
 		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);
 		
+		// Load in a test canvas - In future this will be created in settings
+		var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
+		VideoWindow.AddChild(videoCanvas);
+		Gd.VideoCanvas = videoCanvas;
+		Gd.VideoWindow = VideoWindow;
+
 		//var media = new Media(_libVLC, "C:\\MyFiles\\Cue2_Home\\TestCues\\sample_1280x720_surfing_with_audio.mov", FromType.FromPath);
 
 

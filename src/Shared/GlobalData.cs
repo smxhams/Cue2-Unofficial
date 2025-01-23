@@ -26,7 +26,9 @@ public partial class GlobalData : Node
 	public int CueTotal;
 	public int CueOrder;
 	public int NextCue = -1;
-	
+
+	public Node VideoCanvas;
+	public Window VideoWindow;
 
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;

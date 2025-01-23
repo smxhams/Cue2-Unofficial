@@ -12,7 +12,6 @@ public partial class ActiveCueProgressBar : ProgressBar
 		if (_mouseInSlider == true && Input.IsMouseButtonPressed(MouseButton.Left))
 		{
 			SetValue(this);
-			GD.Print("Moving slider: " + PlaybackId);
 		}
 	}
 

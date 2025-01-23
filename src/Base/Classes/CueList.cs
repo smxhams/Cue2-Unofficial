@@ -32,16 +32,14 @@ public partial class CueList : Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	}
 
-	public void CreateCue(Dictionary<string, string> data)
+	public void CreateCue(Dictionary<string, string> data) // Create a cue from data
 	{
-		GD.Print("Creating Cue from data");
 		var newCue = new Cue(data);
 		AddCue(newCue);
 	}
 	public void CreateCue()
 	{
-		GD.Print("Creating Cue from defaults");
-		var newCue = new Cue();
+		var newCue = new Cue(); // Create a cue with default values
 		AddCue(newCue);
 	}
 	

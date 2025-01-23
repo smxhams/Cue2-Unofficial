@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Shared;
 using LibVLCSharp.Shared;
@@ -21,11 +22,12 @@ public partial class VideoToTextureRect : TextureRect
 	[Export]
 	public byte VideoAlpha = 255;
 	
+	
 	// Called when the node enters the scene tree for the first time.
-	public override void _Ready()
+	public bool Initialize()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		_globalData.Playback._testTextRect = this;
+		return true;
 	}
 	
 	public void InitVideoTexture(int id, int width, int height)
@@ -42,6 +44,8 @@ public partial class VideoToTextureRect : TextureRect
 		var mediaPlaterState = _globalData.Playback.GetMediaPlayerState(id);
 		mediaPlaterState.MediaPlayer.SetVideoFormatCallbacks(VideoFormat, null);
 		mediaPlaterState.MediaPlayer.SetVideoCallbacks(Lock, null, Display);
+		
+		//GD.Print(_globalData.VideoCanvas.);
 		
 	}
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=40 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=39 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://src/Base/Classes/CueList.cs" id="5_s37bb"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/icons.png" id="6_j1fp5"]
 [ext_resource type="Script" path="res://src/Base/Preview.cs" id="7_n83c7"]
+[ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="9_8xqi4"]
 [ext_resource type="Script" path="res://src/Base/ActiveCuelist.cs" id="9_sqddi"]
 [ext_resource type="Script" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
 [ext_resource type="Script" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
@@ -16,7 +17,6 @@
 [ext_resource type="Script" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
 [ext_resource type="Script" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
-[ext_resource type="Shader" path="res://src/Base/VideoPlayback.gdshader" id="16_oc7kn"]
 
 [sub_resource type="InputEventKey" id="InputEventKey_h6px0"]
 device = -1
@@ -33,13 +33,10 @@ events = [SubResource("InputEventKey_h6px0")]
 atlas = ExtResource("6_j1fp5")
 region = Rect2(387, 258, 128, 128)
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_nxdu4"]
-shader = ExtResource("16_oc7kn")
-
-[sub_resource type="Gradient" id="Gradient_jx3xw"]
+[sub_resource type="Gradient" id="Gradient_brprv"]
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_paorf"]
-gradient = SubResource("Gradient_jx3xw")
+gradient = SubResource("Gradient_brprv")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
 content_margin_left = 4.0
@@ -2617,8 +2614,10 @@ expand_icon = true
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.3
 
 [node name="PreviewContainer" type="PanelContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer"]
+visible = false
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -2649,7 +2648,7 @@ text = "Go Live ->"
 clip_text = true
 
 [node name="TextureRect" type="TextureRect" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2"]
-material = SubResource("ShaderMaterial_nxdu4")
+material = ExtResource("9_8xqi4")
 layout_mode = 2
 size_flags_vertical = 3
 texture = SubResource("GradientTexture2D_paorf")
@@ -2704,7 +2703,6 @@ script = ExtResource("9_y5hkk")
 metadata/_tab_index = 1
 
 [node name="ShellScroll" type="ScrollContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell"]
-visible = false
 layout_mode = 2
 
 [node name="ShellVBox" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll"]

@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.IO;
+using Cue2.Shared;
 
 namespace Cue2.Base;
 

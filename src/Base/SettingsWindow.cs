@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using Cue2.Shared;
 
 namespace Cue2.Base;
 public partial class SettingsWindow : Window

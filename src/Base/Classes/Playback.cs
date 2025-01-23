@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net.Mime;
 using System.Threading.Tasks;
 using Cue2.Shared;
 using Godot;
@@ -11,81 +10,83 @@ namespace Cue2.Base.Classes;
 
 public partial class Playback : Node
 {
-	private static Dictionary<int, MediaPlayerState> _mediaPlayers = new Dictionary<int, MediaPlayerState>();
+	private static readonly Dictionary<int, MediaPlayerState> MediaPlayers = new Dictionary<int, MediaPlayerState>();
 	
-	private LibVLC _libVLC;
+	private readonly LibVLC _libVLC;
 
 	private Window _window;
 
 	private GlobalData _globalData;
-
-	public TextureRect _testTextRect;
+	private GlobalSignals _globalSignals;
+	
 	
 	
 	public Playback()
 	{
 		Core.Initialize();
 		_libVLC = new LibVLC();
-		
 	}
 
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_window = GetWindow();
 		_window.CloseRequested += WindowOnCloseRequested;
-
+		
+		_globalSignals.StopAll += StopAll;
 	}
 	
-	public void PlayMedia(int id, string mediaPath, Window window = null)
+	public async void PlayMedia(int id, string mediaPath, Window window = null)
 	{
 		var mediaPlayer = new MediaPlayer(_libVLC);
 		var media = new Media(_libVLC, mediaPath);
-		media.Parse(MediaParseOptions.ParseLocal);
+		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
 		while (media.IsParsed != true) { }
 		
 		mediaPlayer.Media = media;
 		
-		(bool hasVideo, bool hasAudio) = GetMediaType(media);
+		var (hasVideo, hasAudio) = GetMediaType(media);
 
-		_mediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+		MediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+		
 		if (hasVideo && window != null)
 		{
-			_mediaPlayers[id].TargetTextureRect = _testTextRect;
+			var targetRect = CreateVideoTextureRect();
+			MediaPlayers[id].TargetTextureRect = targetRect;
 
 			uint videoheight = 0;
 			uint videowidth = 0;
 			mediaPlayer.Size(0, ref videowidth, ref videoheight);
-			//TextureRect test = GlobalData.PassTESTTextRect();
 			
-			_mediaPlayers[id].TargetTextureRect.Set("VideoAlpha", 255);
-			_testTextRect.CallDeferred("InitVideoTexture", id, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
-
-
+			targetRect.Set("VideoAlpha", 255);
+			targetRect.CallDeferred("InitVideoTexture", id, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
 		}
 		
-		_mediaPlayers[id].MediaPlayer.Volume = 100;
-		_mediaPlayers[id].MediaPlayer.Play();
+		MediaPlayers[id].MediaPlayer.Volume = 100;
+		MediaPlayers[id].MediaPlayer.Play();
 		
-		_mediaPlayers[id].MediaPlayer.EndReached += MediaOnEndReached;
+		MediaPlayers[id].MediaPlayer.EndReached += MediaOnEndReached;
 		
 		media.Dispose();
 	}
+
+
 	
-	private void MediaOnEndReached(object? sender, EventArgs e)
+	private static void MediaOnEndReached(object sender, EventArgs e)
 	{
-		foreach (var m in _mediaPlayers)
+		foreach (var m in MediaPlayers)
 		{
 			if (m.Value.MediaPlayer.State == VLCState.Ended)
 			{
-				Task.Delay(1).ContinueWith(action => StopMediaImmediately(m.Key));
+				Task.Delay(1).ContinueWith(_ => StopMediaImmediately(m.Key));
 				return;
 			}
 		}
 		// In future need to check loop, note cant set time unless media is playing
 		// pseudo function:
 		/* loop?
-		 mediaplayer.media = media // I don't know yet if need to reassing media
+		 mediaplayer.media = media
 		 mediaplayer.play()
 		 await .isplaying()
 		 .setTime(long time of restart)
@@ -95,10 +96,10 @@ public partial class Playback : Node
     public static void StopMedia(int id)
     {
 	    // Validate playback ID
-	    if (!_mediaPlayers.TryGetValue(id, out var state)) return;
+	    if (!MediaPlayers.TryGetValue(id, out var state)) return;
 	    
 	    // Checks if fade is already in progress
-	    if (state.IsFading == true)
+	    if (state.IsFading)
 	    {
 		    StopMediaImmediately(id);
 		    return;
@@ -108,9 +109,9 @@ public partial class Playback : Node
 	    state.CurrentVolume = state.MediaPlayer.Volume;
 	    var time = Convert.ToInt32(GlobalData.StopFadeTime * 10); // Stop fade time in second, to ms incremented by 100 (hence x10 (x1000/100))
 	    state.FadeOutTimer = new Timer(time);
-	    state.FadeOutTimer.Elapsed += (sender, e) =>
+	    state.FadeOutTimer.Elapsed += (_, _) =>
 	    {
-		    bool shouldStop = true;
+		    var shouldStop = true;
 
 		    if (state.HasAudio && state.CurrentVolume > 0)
 		    {
@@ -125,7 +126,7 @@ public partial class Playback : Node
 			    state.CurrentAlpha -= 4;
 			    if (state.CurrentAlpha < 0) state.CurrentAlpha = 0;
 			    state.TargetTextureRect.Set("VideoAlpha", state.CurrentAlpha);
-
+			    shouldStop = false;
 		    }
 
 		    if (shouldStop)
@@ -137,37 +138,37 @@ public partial class Playback : Node
 	    
     }
 
-    public static void StopMediaImmediately(int id)
+    private static void StopMediaImmediately(int id)
     {
-	    if (!_mediaPlayers.TryGetValue(id, out var player)) return;
+	    if (!MediaPlayers.TryGetValue(id, out var player)) return;
 	    GD.Print("Stopped: " + id + " : " + player.MediaPlayer.Title);
 	    ActiveCuelist.RemoveActiveCue(id);
 	    
 
 	    player.FadeOutTimer?.Stop();
-	    player.FadeOutTimer?.Dispose();  // Dispose the timer properly
-	    player.MediaPlayer.SetAdjustFloat(VideoAdjustOption.Enable, 0);
+	    player.FadeOutTimer?.Dispose();
 	    player.MediaPlayer.Stop();
 	    Task.Delay(10);
-	    //player.MediaPlayer.Dispose(); // Free the MediaPlayer safely
 	    player.MediaPlayer.Dispose();
-	    _mediaPlayers.Remove(id);  // Remove from dictionary
+	    player.TargetTextureRect?.QueueFree();
+
+	    MediaPlayers.Remove(id);  // Remove from dictionary
     }
 
 
 
     public static void Pause(int id)
     {
-	    _mediaPlayers[id].MediaPlayer.Pause();
+	    MediaPlayers[id].MediaPlayer.Pause();
     }
 
-    
-    static (bool hasVideo, bool hasAudio) GetMediaType(Media media)
+
+    private static (bool hasVideo, bool hasAudio) GetMediaType(Media media)
     {
-	    bool hasVideo = false;
-	    bool hasAudio = false;
+	    var hasVideo = false;
+	    var hasAudio = false;
 	    
-	    media.Parse(MediaParseOptions.ParseLocal);
+	    media.Parse();
 	    while (media.IsParsed != true) { }
 	    
 	    foreach (var track in media.Tracks)
@@ -182,32 +183,65 @@ public partial class Playback : Node
     
     public static long GetMediaLength(int id)
     {
-	    return _mediaPlayers[id].MediaPlayer.Length;
+	    return MediaPlayers[id].MediaPlayer.Length;
     }
     
     public static float GetMediaPosition(int id)
     {
-	    return _mediaPlayers[id].MediaPlayer.Position;
+	    return MediaPlayers[id].MediaPlayer.Position;
     }
     
     public static void SetMediaPosition(int id, float pos)
     {
 	    
-	    _mediaPlayers[id].MediaPlayer.Position = pos;
+	    MediaPlayers[id].MediaPlayer.Position = pos;
     }
     
     public MediaPlayerState GetMediaPlayerState(int id)
 	{
-		return _mediaPlayers[id];
+		return MediaPlayers[id];
+	}
+    
+    private void StopAll()
+	{
+		foreach (var player in MediaPlayers)
+		{
+			StopMedia(player.Key);
+		}
+	}
+    
+	private TextureRect CreateVideoTextureRect()
+	{
+		// Get target window and scene for TextureRect
+		var canvasScene = _globalData.VideoCanvas;
+		var canvasLayer = canvasScene.GetNode<Node>("Layer1");
+		
+		// Create TextureRect
+		var textureRect = new TextureRect();
+		canvasLayer.AddChild(textureRect);
+		
+		// Apply settings to TextureRect
+		textureRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+		textureRect.StretchMode = TextureRect.StretchModeEnum.KeepAspect;
+		textureRect.LayoutMode = 1; // Anchors
+		textureRect.AnchorsPreset = 15; // Full Rect
+		textureRect.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		textureRect.Material = GD.Load<ShaderMaterial>("res://src/Base/VideoTextureRectMaterial.tres");
+		var oldPath = textureRect.GetPath();
+		textureRect.SetScript(GD.Load<Script>("res://src/Base/VideoToTextureRect.cs"));
+		textureRect = canvasScene.GetNode<TextureRect>(oldPath);
+		textureRect.CallDeferred("Initialize");
+
+		return textureRect;
 	}
     
     private void WindowOnCloseRequested()
 	{
-		foreach (var player in _mediaPlayers)
+		foreach (var player in MediaPlayers)
 		{
 			if (player.Value.MediaPlayer.State == VLCState.Playing)
 			{
-				player.Value.MediaPlayer.Dispose();
+				StopMedia(player.Key);
 			}
 		}
 		_libVLC.Dispose();

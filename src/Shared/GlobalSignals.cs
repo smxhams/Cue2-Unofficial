@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Cue2.Base.Classes;
 
+namespace Cue2.Shared;
 public partial class GlobalSignals : Node
 {
 
@@ -23,18 +24,31 @@ public partial class GlobalSignals : Node
 
 	[Signal]
 	public delegate void UpdateShellBarEventHandler(int cue);
-
-	[Signal]
-	public delegate void SaveEventHandler();
-
-	[Signal]
-	public delegate void OpenSessionEventHandler();
+	
 	
 	[Signal]
 	public delegate void OpenSelectedSessionEventHandler(string path);
 
 	[Signal]
 	public delegate void SaveFileEventHandler(string url, string showName);
+	
+	
+	// Signals Associated with InputActions
+	[Signal]
+	public delegate void SaveEventHandler();
+
+	[Signal]
+	public delegate void OpenSessionEventHandler();
+	
+	
+	[Signal]
+	public delegate void StopAllEventHandler();
+
+	[Signal]
+	public delegate void GoEventHandler();
+	
+	
+	
 
 
 }
