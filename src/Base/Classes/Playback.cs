@@ -10,7 +10,7 @@ namespace Cue2.Base.Classes;
 
 public partial class Playback : Node
 {
-	private static readonly Dictionary<int, MediaPlayerState> MediaPlayers = new Dictionary<int, MediaPlayerState>();
+	private static readonly Dictionary<int, MediaPlayerState> MediaPlayers = new Dictionary<int, MediaPlayerState>(); // (CueID, State)
 	
 	private readonly LibVLC _libVLC;
 

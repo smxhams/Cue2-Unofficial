@@ -40,9 +40,9 @@ public partial class ShellContext : MarginContainer
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
 		
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = _focusedCue.FilePath;
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/CueNum").Text = _focusedCue.CueNum;
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow1/ShellName").Text = _focusedCue.Name;
+		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = _focusedCue.FilePath;
+		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum").Text = _focusedCue.CueNum;
+		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName").Text = _focusedCue.Name;
 
 	}
 

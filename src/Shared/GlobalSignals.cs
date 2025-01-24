@@ -47,6 +47,9 @@ public partial class GlobalSignals : Node
 	[Signal]
 	public delegate void GoEventHandler();
 	
+	[Signal]
+	public delegate void CreateCueEventHandler();
+	
 	
 	
 

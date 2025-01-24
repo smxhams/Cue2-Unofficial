@@ -48,8 +48,10 @@ layout_mode = 2
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
 focus_mode = 0
+mouse_filter = 1
 mouse_default_cursor_shape = 6
 theme_override_font_sizes/font_size = 10
+keep_pressed_outside = true
 text = "|"
 
 [node name="TypeIcon" type="Button" parent="MarginContainer/PanelContainer"]

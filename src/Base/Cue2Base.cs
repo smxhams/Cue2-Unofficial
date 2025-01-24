@@ -52,27 +52,7 @@ public partial class Cue2Base : Control
 		VideoWindow.AddChild(videoCanvas);
 		Gd.VideoCanvas = videoCanvas;
 		Gd.VideoWindow = VideoWindow;
-
-		//var media = new Media(_libVLC, "C:\\MyFiles\\Cue2_Home\\TestCues\\sample_1280x720_surfing_with_audio.mov", FromType.FromPath);
-
-
-		/*// Test UI overlay
-		// I reckon in future video outputs set else where, ui should be a viewport set up as .tscn and loaded into window above video
-		_uiWindow = new Window();
-		AddChild(_uiWindow);
-		_uiWindow.Name = "Top Layer";
-		Gd.UiOutputWinNum = _uiWindow.GetWindowId();
-		_uiWindow.AlwaysOnTop = true;
-		DisplayServer.WindowSetCurrentScreen(1, Gd.UiOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.UiOutputWinNum);
-		Label testLabel = new Label();
-		_uiWindow.AddChild(testLabel);
-		testLabel.Text = "AHHHHHH";*/
-
-
-		/*//Set both transparents to true for invisible window
-		_uiWindow.Transparent = true;
-		_uiWindow.TransparentBg = true;*/
+		
 	}
 
 
@@ -107,6 +87,11 @@ public partial class Cue2Base : Control
 	private void _on_go_pressed()
 	{
 		Go();
+	}
+	
+	private void _on_stop_pressed()
+	{
+		_globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
 	}
 	
 

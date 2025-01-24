@@ -16,14 +16,12 @@ public partial class ShellBar : Control
 	private GlobalStyles _globalStyles;
 
 	[Export] public int CueId { get; set; } = -1;
+	
 
+	private Panel _backPanel;
+	private Button _dragButton;
 
-
-	private StyleBoxFlat _hoverStyle = new StyleBoxFlat();
-	private StyleBoxFlat _nextStyle = new StyleBoxFlat();
-	private static StyleBoxFlat _focusedStyle = new StyleBoxFlat();
-	private StyleBoxFlat _activeStyle = new StyleBoxFlat();
-	private StyleBoxFlat _defaultStyle = new StyleBoxFlat();
+	private bool _isDragging = false;
 
 
 	// Called when the node enters the scene tree for the first time.
@@ -35,37 +33,50 @@ public partial class ShellBar : Control
 		//cueID = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData").cueCount;
 
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
-		_hoverStyle = GlobalStyles.HoverStyle();
-		_nextStyle = _globalStyles.NextStyle;
-		_focusedStyle = GlobalStyles.FocusedStyle();
 
 		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
-
+		
+		_backPanel = GetChild<Panel>(0);
+		_dragButton = GetChild(1).GetChild(0).GetChild<Button>(0);
+		_dragButton.ButtonDown += DragPressed;
+		_dragButton.ButtonUp += DragReleased;
 	}
 	
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
+		if (_isDragging)
+		{
+			
+			GD.Print(Position);
+			SetGlobalPosition(new Vector2(GetGlobalMousePosition().X + 5, GetGlobalMousePosition().Y));
+		}
 	}
 
 	private void _on_mouse_entered()
 	{
-		var panel = GetNode<Panel>("Panel");
+		if (_isDragging!) return;
+		if (CueList.ShellBeingDragged != -1)
+		{
+			_gd.Cuelist.ShellMouseOverByDraggedShell(CueId);
+		}
+
 		if (CueList.FocusedCueId != CueId){
-			GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _hoverStyle);
+			_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.HoverStyle());
 		}
 	}
 	private void _on_mouse_exited()
 	{
+		if (_isDragging!) return;
 		if (CueList.FocusedCueId != CueId){
-			GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
+			_backPanel.RemoveThemeStyleboxOverride("panel");
 		}
 
 	}
 
 	public void Focus()
 	{
-		GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", _focusedStyle);
+		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
 	}
 	
 	private void _on_focus_entered(){
@@ -75,8 +86,25 @@ public partial class ShellBar : Control
 	private void _on_focus_exited()
 	{
 	}
+
+	private void DragPressed()
+	{
+		_isDragging = true;
+		CueList.ShellBeingDragged = CueId;
+		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.DangerStyle());
+		_backPanel.SetMouseFilter(MouseFilterEnum.Ignore);
+	}
 	
-	
+	private void DragReleased()
+	{
+		_isDragging = false;
+		CueList.ShellBeingDragged = -1;
+		_backPanel.RemoveThemeStyleboxOverride("panel");
+		_backPanel.SetMouseFilter(MouseFilterEnum.Stop);
+		_gd.Cuelist.FocusCue(CueList.FetchCueFromId(CueId));
+		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
+	}
+
 
 
 }

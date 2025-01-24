@@ -11,10 +11,24 @@ public partial class GlobalStyles : Node
 	public StyleBoxFlat NextStyle = new StyleBoxFlat();
 	public StyleBoxFlat ActiveStyle = new StyleBoxFlat();
 	public StyleBoxFlat DefaultStyle = new StyleBoxFlat();
-	// Called when the node enters the scene tree for the first time.
+	
+	private static StyleBoxFlat _dangerStyle = new StyleBoxFlat();
+	
+	private static Color _highColor1 = new Color("#EB6F02");
+	private static Color _highColor2 = new Color("#BA5E0B");
+	private static Color _highColor3 = new Color("#974B08");
+	private static Color _highColor4 = new Color("#693200");
+	private static Color _highColor5 = new Color("#3E1D00");
+	private static Color _lowColor1 = new Color("#03838F");
+	private static Color _lowColor2 = new Color("#086871");
+	private static Color _lowColor3 = new Color("#06545C");
+	private static Color _lowColor4 = new Color("#013B40");
+	private static Color _lowColor5 = new Color("#002326");
+
 	
 	public override void _Ready()
 	{
+		SetProcess(false); // This class is only for statics - disable process
 		// Default Style
 		ActiveStyle.BorderWidthBottom = 0;
 		ActiveStyle.BorderWidthRight = 0;
@@ -55,13 +69,13 @@ public partial class GlobalStyles : Node
 		ActiveStyle.BorderWidthTop = 2;
 		ActiveStyle.BorderColor = new Color("#974B08");
 		ActiveStyle.BgColor = new Color((float)0.592,(float)0.294,(float)0.031,(float)0.6);
+		
+		//Danger Style
+		_highColor5.A = 0.5f;
+		_dangerStyle.BgColor = _highColor5;
 
 	}
 
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
 
 	public static StyleBoxFlat FocusedStyle()
 	{
@@ -71,6 +85,11 @@ public partial class GlobalStyles : Node
 	public static StyleBoxFlat HoverStyle()
 	{
 		return _hoverStyle;
+	}
+
+	public static StyleBoxFlat DangerStyle()
+	{
+		return _dangerStyle;
 	}
 	
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using Cue2.Shared;
 using Godot;
 
@@ -8,7 +9,7 @@ using Godot;
 namespace Cue2.Base.Classes;
 
 
-public partial class CueList : Control
+public partial class CueList : ScrollContainer
 {
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
@@ -17,12 +18,14 @@ public partial class CueList : Control
 	public static Dictionary<int, Cue> CueIndex;
 	public static int FocusedCueId = -1;
 	private static int _index = -1;
+	
+	public static int ShellBeingDragged = -1;
+	public static int ShellDraggedOver = -1;
 
 	public CueList()
 	{
 		Cuelist = new List<ICue>();
 		CueIndex = new Dictionary<int, Cue>();
-
 	}
 
 	public override void _Ready()
@@ -30,6 +33,13 @@ public partial class CueList : Control
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalData.Cuelist = this;
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		
+		_globalSignals.CreateCue += CreateCue;
+	}
+
+	public override void _Process(double delta)
+	{
+		
 	}
 
 	public void CreateCue(Dictionary<string, string> data) // Create a cue from data
@@ -128,6 +138,8 @@ public partial class CueList : Control
 	
 	
 	
+	
+	
 	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
 	{
@@ -142,6 +154,14 @@ public partial class CueList : Control
 		newCue.ShellBar = shellBar; // Adds shellbar scene to the cue object.
 		shellBar.Set("CueId", newCue.Id); // Sets shell_bar property CueId
 	}
+
+	public void ShellMouseOverByDraggedShell(int cueId)
+	{
+		GD.Print("Cue: " + ShellBeingDragged + " has moused over: " + cueId);
+		var targetIndex = Cuelist[cueId].ShellBar.GetIndex();
+		GetChild(0).MoveChild(Cuelist[ShellBeingDragged].ShellBar, targetIndex);
+	}
+	
 	
 	// Resets CueList
 	public void ResetCuelist()
@@ -162,17 +182,3 @@ public partial class CueList : Control
 	}
 }
 
-//
-// 	private void NextCueCheck(int cueId)
-// 	{
-// 		if (_globalData.nextCue == -1)
-// 		{
-// 			GD.Print("No Next Cue");
-// 			_globalData.nextCue = cueId;
-// 		}
-// 		var shellData = (Hashtable)_globalData.cuelist[_globalData.nextCue];
-// 		var shellObj = (Node)_globalData.cueShellObj[_globalData.nextCue];
-// 		shellObj.GetChild<Panel>(0).AddThemeStyleboxOverride("panel", _nextStyle);
-//
-// 	}
-// }

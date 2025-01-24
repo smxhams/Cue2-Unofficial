@@ -41,6 +41,12 @@ public partial class InputActionsListener : Node
             GD.Print("Stop All");
             _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
         }
+
+        if (Input.IsActionJustPressed("CreateCue"))
+        {
+            GD.Print("Input Action: Create Cue");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.CreateCue));
+        }
         
         
     }

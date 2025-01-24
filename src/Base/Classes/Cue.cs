@@ -23,7 +23,9 @@ public class Cue : ICue
     
     public Cue() // Cue Constructor
     {
+        GD.Print(_nextId);
         Id = _nextId++;
+        GD.Print(Id + " : " + _nextId);
         Name = "New cue number " + Id.ToString();
         CueNum = Id.ToString();
         Command = "";
@@ -33,7 +35,7 @@ public class Cue : ICue
     public Cue (Dictionary<string, string> data) // Cue Constructor
     {
         // This is used when loading cue form file, I'm quite unhappy with it. 
-        Id = int.Parse(data.GetValueOrDefault("Id", "0"));
+        Id = _nextId++;
         Name = data.GetValueOrDefault("Name", "New cue number " + Id.ToString());
         CueNum = data.GetValueOrDefault("CueNum", Id.ToString());
         Command = data.GetValueOrDefault("Command", "");
