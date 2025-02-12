@@ -50,8 +50,55 @@ public partial class GlobalSignals : Node
 	[Signal]
 	public delegate void CreateCueEventHandler();
 	
+	[Signal]
+	public delegate void CreateGroupEventHandler();
 	
 	
+	
+	// Text edit signal connector
+	[Signal]
+	public delegate void TextEditFocusEnteredEventHandler();
+	[Signal]
+	public delegate void TextEditFocusExitedEventHandler();
 
+	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
+	public override void _Ready()
+	{
+		// Scan for existing text fields at startup
+		ScanForTextFields(GetTree().Root);
 
+		// Listen for new nodes added dynamically
+		GetTree().NodeAdded += OnNodeAdded;
+	}
+
+	private void ScanForTextFields(Node node)
+	{
+		if (node is LineEdit || node is TextEdit)
+		{
+			ConnectFocusSignals(node);
+			GD.Print("Discovered");
+		}
+
+		foreach (Node child in node.GetChildren())
+		{
+			ScanForTextFields(child);
+		}
+	}
+
+	private void OnNodeAdded(Node node)
+	{
+		if (node is LineEdit || node is TextEdit)
+		{
+			ConnectFocusSignals(node);
+		}
+	}
+
+	private void ConnectFocusSignals(Node node)
+	{
+		if (node is Control textField)
+		{
+			textField.FocusEntered += () => EmitSignal(SignalName.TextEditFocusEntered);
+			textField.FocusExited += () => EmitSignal(SignalName.TextEditFocusExited);
+		}
+	}
 }

@@ -20,6 +20,8 @@ public partial class Playback : Node
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	
+	private int _playbackIndex = 0;
+	
 	
 	
 	public Playback()
@@ -38,7 +40,7 @@ public partial class Playback : Node
 		_globalSignals.StopAll += StopAll;
 	}
 	
-	public async void PlayMedia(int id, string mediaPath, Window window = null)
+	public async void PlayMedia(string mediaPath, Window window = null)
 	{
 		var mediaPlayer = new MediaPlayer(_libVLC);
 		var media = new Media(_libVLC, mediaPath);
@@ -49,25 +51,25 @@ public partial class Playback : Node
 		
 		var (hasVideo, hasAudio) = GetMediaType(media);
 
-		MediaPlayers.Add(id, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+		MediaPlayers.Add(_playbackIndex, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
 		
 		if (hasVideo && window != null)
 		{
 			var targetRect = CreateVideoTextureRect();
-			MediaPlayers[id].TargetTextureRect = targetRect;
+			MediaPlayers[_playbackIndex].TargetTextureRect = targetRect;
 
 			uint videoheight = 0;
 			uint videowidth = 0;
 			mediaPlayer.Size(0, ref videowidth, ref videoheight);
 			
 			targetRect.Set("VideoAlpha", 255);
-			targetRect.CallDeferred("InitVideoTexture", id, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
+			targetRect.CallDeferred("InitVideoTexture", _playbackIndex, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
 		}
 		
-		MediaPlayers[id].MediaPlayer.Volume = 100;
-		MediaPlayers[id].MediaPlayer.Play();
+		MediaPlayers[_playbackIndex].MediaPlayer.Volume = 100;
+		MediaPlayers[_playbackIndex].MediaPlayer.Play();
 		
-		MediaPlayers[id].MediaPlayer.EndReached += MediaOnEndReached;
+		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
 		
 		media.Dispose();
 	}
@@ -153,7 +155,7 @@ public partial class Playback : Node
 	    player.MediaPlayer.Dispose();
 	    if (player.TargetTextureRect != null)
 	    {
-		    player.TargetTextureRect.GetParent().RemoveChild(player.TargetTextureRect);
+		    player.TargetTextureRect.GetParent().CallDeferred("remove_child", player.TargetTextureRect);
 			player.TargetTextureRect.QueueFree();
 	    }
 

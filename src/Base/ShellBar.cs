@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections;
+using System.Configuration;
 using Cue2.Base.Classes;
 using Cue2.Shared;
 
@@ -22,6 +23,8 @@ public partial class ShellBar : Control
 	private Button _dragButton;
 
 	private bool _isDragging = false;
+	
+	[Export] public bool Selected = false;
 
 
 	// Called when the node enters the scene tree for the first time.
@@ -48,8 +51,8 @@ public partial class ShellBar : Control
 		if (_isDragging)
 		{
 			
-			GD.Print(Position);
-			SetGlobalPosition(new Vector2(GetGlobalMousePosition().X + 5, GetGlobalMousePosition().Y));
+			//GD.Print(Position);
+			SetGlobalPosition(new Vector2(GetGlobalMousePosition().X + 5, GetGlobalPosition().Y));
 		}
 	}
 
@@ -61,17 +64,39 @@ public partial class ShellBar : Control
 			_gd.Cuelist.ShellMouseOverByDraggedShell(CueId);
 		}
 
-		if (CueList.FocusedCueId != CueId){
+		if (Selected == false){
 			_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.HoverStyle());
 		}
 	}
 	private void _on_mouse_exited()
 	{
 		if (_isDragging!) return;
-		if (CueList.FocusedCueId != CueId){
+		if (Selected == false){
 			_backPanel.RemoveThemeStyleboxOverride("panel");
 		}
 
+	}
+
+	private void _OnInput(InputEvent @event)
+	{
+		// Gets if input is Left mouse button
+		if (@event is not InputEventMouseButton mouseEvent || !mouseEvent.Pressed || mouseEvent.ButtonIndex != MouseButton.Left)
+			return;
+		
+		if (Input.IsKeyPressed(Key.Shift))
+		{
+			_gd.ShellSelection.SelectThrough(CueList.FetchCueFromId(CueId));
+			return;
+		}
+
+		if (Input.IsKeyPressed(Key.Ctrl))
+		{
+			_gd.ShellSelection.AddSelection(CueList.FetchCueFromId(CueId));
+			return;
+		}
+		
+		//Select single shell
+		_gd.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
 	}
 
 	public void Focus()
@@ -79,20 +104,13 @@ public partial class ShellBar : Control
 		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
 	}
 	
-	private void _on_focus_entered(){
-		// Need to validate cue here on selection
-		_gd.Cuelist.FocusCue(CueList.FetchCueFromId(CueId));
-	}
-	private void _on_focus_exited()
-	{
-	}
-
 	private void DragPressed()
 	{
 		_isDragging = true;
 		CueList.ShellBeingDragged = CueId;
 		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.DangerStyle());
 		_backPanel.SetMouseFilter(MouseFilterEnum.Ignore);
+		GD.Print(Position);
 	}
 	
 	private void DragReleased()
@@ -101,8 +119,9 @@ public partial class ShellBar : Control
 		CueList.ShellBeingDragged = -1;
 		_backPanel.RemoveThemeStyleboxOverride("panel");
 		_backPanel.SetMouseFilter(MouseFilterEnum.Stop);
-		_gd.Cuelist.FocusCue(CueList.FetchCueFromId(CueId));
+		_gd.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
 		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
+		SetPosition(new Vector2(0, Position.Y));
 	}
 
 

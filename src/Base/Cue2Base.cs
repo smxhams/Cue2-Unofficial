@@ -5,6 +5,7 @@ using System.Collections;
 using System.ComponentModel;
 using System.Linq;
 using Cue2.Base.Classes;
+using Cue2.Base.CommandInterpreter;
 using Cue2.Shared;
 using LibVLCSharp.Shared;
 
@@ -18,7 +19,7 @@ namespace Cue2.Base;
 public partial class Cue2Base : Control
 {
 	private GlobalSignals _globalSignals;
-	public Cue2.Shared.GlobalData Gd;
+	private GlobalData _globalData;
 	private Connections _connections;
 
 	private Node _settingsWindow;
@@ -36,22 +37,22 @@ public partial class Cue2Base : Control
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CloseSettingsWindow += close_settings_window;
-		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
 		// Creation and assignment of test video output window - in future this will be created in settings
 		VideoWindow = new Window();
 		AddChild(VideoWindow);
 		VideoWindow.Name = "Test Video Output";
-		Gd.VideoOutputWinNum = VideoWindow.GetWindowId();
-		DisplayServer.WindowSetCurrentScreen(1, Gd.VideoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, Gd.VideoOutputWinNum);
+		_globalData.VideoOutputWinNum = VideoWindow.GetWindowId();
+		DisplayServer.WindowSetCurrentScreen(1, _globalData.VideoOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _globalData.VideoOutputWinNum);
 		
 		// Load in a test canvas - In future this will be created in settings
 		var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
 		VideoWindow.AddChild(videoCanvas);
-		Gd.VideoCanvas = videoCanvas;
-		Gd.VideoWindow = VideoWindow;
+		_globalData.VideoCanvas = videoCanvas;
+		_globalData.VideoWindow = VideoWindow;
 		
 	}
 
@@ -100,6 +101,14 @@ public partial class Cue2Base : Control
 		// In Future this should only pass the selected cue's command to interpreter which will instruct relevant workers what to do
 		
 		// Check for next cue
+		foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
+		{
+			var cue = (Cue)cue1;
+			_globalData.CueCommandInterpreter.CueCommandExectutor.ExecuteCommand(cue);
+		}
+		
+		
+		/*
 		if (CueList.FocusedCueId != -1)
 		{
 			var cueIdToGo = CueList.FocusedCueId;
@@ -116,7 +125,7 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Audio" )
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayMedia(_playbackIndex, path);
+				_globalData.Playback.PlayMedia(_playbackIndex, path);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
 				_playbackIndex++;
 			}
@@ -125,7 +134,7 @@ public partial class Cue2Base : Control
 			else if ((string)cueType == "Video")
 			{
 				var path = cueToGo.FilePath;
-				Gd.Playback.PlayMedia(_playbackIndex, path, VideoWindow);
+				_globalData.Playback.PlayMedia(_playbackIndex, path, VideoWindow);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
 				_playbackIndex++;
 			}
@@ -135,7 +144,7 @@ public partial class Cue2Base : Control
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");
 			GD.Print("Couldn't find a Cue to GO");
-		}
+		}*/
 
 	}
 	

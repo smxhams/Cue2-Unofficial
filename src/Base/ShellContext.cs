@@ -55,7 +55,7 @@ public partial class ShellContext : MarginContainer
 	{
 		var newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
 		GD.Print(@path + "    :    " + newPath);
-		GetNode<LineEdit>("ShellScroll/ShellVBox/ShellRow2/fileURL").Text = @path;
+		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = @path;
 		
 		_focusedCue.FilePath = @path;
 		var fileExtension = Path.GetExtension(newPath);

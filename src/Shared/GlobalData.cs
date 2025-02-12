@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Cue2.Base.Classes;
+using Cue2.Base.CommandInterpreter;
 using Godot;
 using LibVLCSharp.Shared;
 
@@ -19,6 +20,10 @@ public partial class GlobalData : Node
 	
 	public CueList Cuelist;
 	public Playback Playback;
+	public ShellSelection ShellSelection;
+	public CueCommandInterpreter CueCommandInterpreter;
+	
+	
 	public int FocusedCue = -1;
 	public Dictionary<int, Node> CueShellObj = new Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
@@ -56,6 +61,13 @@ public partial class GlobalData : Node
 
 		Playback = new Playback();
 		AddChild(Playback);
+		
+		ShellSelection = new ShellSelection();
+		AddChild(ShellSelection);
+		
+		CueCommandInterpreter = new CueCommandInterpreter();
+		AddChild(CueCommandInterpreter);
+		
 
 		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));
 		foreach (var arg in args)

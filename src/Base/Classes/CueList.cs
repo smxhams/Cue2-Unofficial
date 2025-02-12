@@ -14,10 +14,9 @@ public partial class CueList : ScrollContainer
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	
+	
 	public static List<ICue> Cuelist { get; private set; }
 	public static Dictionary<int, Cue> CueIndex;
-	public static int FocusedCueId = -1;
-	private static int _index = -1;
 	
 	public static int ShellBeingDragged = -1;
 	public static int ShellDraggedOver = -1;
@@ -26,6 +25,7 @@ public partial class CueList : ScrollContainer
 	{
 		Cuelist = new List<ICue>();
 		CueIndex = new Dictionary<int, Cue>();
+		
 	}
 
 	public override void _Ready()
@@ -34,7 +34,10 @@ public partial class CueList : ScrollContainer
 		_globalData.Cuelist = this;
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		
+		
+		
 		_globalSignals.CreateCue += CreateCue;
+		_globalSignals.CreateGroup += CreateGroup;
 	}
 
 	public override void _Process(double delta)
@@ -53,14 +56,21 @@ public partial class CueList : ScrollContainer
 		AddCue(newCue);
 	}
 	
-	public void AddCue(Cue cue)
+	private void AddCue(Cue cue)
 	{
 		CreateNewShell(cue);
 		
 		Cuelist.Add(cue);
 		CueIndex.Add(cue.Id, cue);
 		// Will make new cues focused
-		FocusCue(cue);
+		//FocusCue(cue); Readd select shell when finished
+		
+		
+	}
+
+	public void CreateGroup()
+	{
+		GD.Print("Creating Group");
 	}
 	
 	
@@ -85,7 +95,7 @@ public partial class CueList : ScrollContainer
 	}
 
 	// ITERATORS
-	public static ICue Current()
+	/*public static ICue Current()
 	{
 		return Cuelist[_index];
 	}
@@ -100,23 +110,9 @@ public partial class CueList : ScrollContainer
 		_index++;
 		FocusCue(Cuelist[_index]);
 		return Cuelist[_index];
-	}
+	}*/
 
-	public void FocusCue(ICue cue)
-	{
-		if (_index != -1) 
-		{
-			var currentCue = Current();
-			if (cue == currentCue) return;
-			currentCue.ShellBar.GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
-		}
-		cue.ShellBar.GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
-		_index = Cuelist.IndexOf(cue);
-		FocusedCueId = cue.Id;
-		_globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
-				
-		GD.Print("Focus Cue: " + cue.Name + " - Cuelist index is: " + _index);
-	}
+
 	
 	public CueListState CreateState()
 	{
@@ -134,6 +130,11 @@ public partial class CueList : ScrollContainer
 		// Signal from add shell button
 	{
 		CreateCue();
+	}
+
+	private void _onAddGroupPressed()
+	{
+		CreateGroup();
 	}
 	
 	
@@ -175,10 +176,10 @@ public partial class CueList : ScrollContainer
 		// Resets 
 		Cuelist = new List<ICue>();
 		CueIndex = new Dictionary<int, Cue>();
-		_index = -1;
-		FocusedCueId = -1;
+		_globalData.ShellSelection.SelectedShells = new List<ICue>();
 
 
 	}
+	
 }
 
