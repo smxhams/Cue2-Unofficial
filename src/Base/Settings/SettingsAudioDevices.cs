@@ -27,7 +27,7 @@ public partial class SettingsAudioDevices : ScrollContainer
 	private void LoadAvailibleDeviceDropMenu()
 	{
 		_globalData.Playback.GetAvailibleAudioDevices();
-
+		
 		// We check a repopulate all options each call - this empties prior options
 		_deviceOptionsDropMenu.Clear();
 		
@@ -36,6 +36,8 @@ public partial class SettingsAudioDevices : ScrollContainer
 		{
 			_deviceOptionsDropMenu.AddItem(device.Description);
 		}
+
+		
 	}
 	
 	

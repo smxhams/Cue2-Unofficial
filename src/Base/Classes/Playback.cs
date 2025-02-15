@@ -223,6 +223,7 @@ public partial class Playback : Node
 		var mediaplayer = new MediaPlayer(_libVLC);
 		var devices = mediaplayer.AudioOutputDeviceEnum;
 		mediaplayer.Dispose();
+		
 		return devices;
 	}
     

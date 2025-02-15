@@ -34,9 +34,12 @@ public partial class Devices : Node
             }
         }
 
+        GD.Print("Audio channels: " + AudioDeviceHelper.GetAudioOutputChannels());
+
         if (device.HasValue)
         {
             var newDevice = new AudioDevice();
+            
             newDevice.Name = device.Value.Description;
             newDevice.VLCIdentifier = device.Value.DeviceIdentifier;
             AudioDevices.Add(newDevice.DeviceId, newDevice);
