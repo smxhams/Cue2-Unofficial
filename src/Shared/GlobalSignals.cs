@@ -76,7 +76,6 @@ public partial class GlobalSignals : Node
 		if (node is LineEdit || node is TextEdit)
 		{
 			ConnectFocusSignals(node);
-			GD.Print("Discovered");
 		}
 
 		foreach (Node child in node.GetChildren())

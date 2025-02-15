@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Cue2.Shared;
 using Godot;
 using LibVLCSharp.Shared;
+using LibVLCSharp.Shared.Structures;
 using Timer = System.Timers.Timer;
 
 namespace Cue2.Base.Classes;
@@ -215,6 +216,14 @@ public partial class Playback : Node
 		{
 			StopMedia(player.Key);
 		}
+	}
+
+	public AudioOutputDevice[] GetAvailibleAudioDevices()
+	{
+		var mediaplayer = new MediaPlayer(_libVLC);
+		var devices = mediaplayer.AudioOutputDeviceEnum;
+		mediaplayer.Dispose();
+		return devices;
 	}
     
 	private TextureRect CreateVideoTextureRect()

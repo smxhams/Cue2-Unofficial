@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Cue2.Base;
 using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Godot;
@@ -22,6 +23,8 @@ public partial class GlobalData : Node
 	public Playback Playback;
 	public ShellSelection ShellSelection;
 	public CueCommandInterpreter CueCommandInterpreter;
+	public Settings Settings;
+	public Devices Devices;
 	
 	
 	public int FocusedCue = -1;
@@ -67,6 +70,12 @@ public partial class GlobalData : Node
 		
 		CueCommandInterpreter = new CueCommandInterpreter();
 		AddChild(CueCommandInterpreter);
+		
+		Settings = new Settings();
+		AddChild(Settings);
+
+		Devices = new Devices();
+		AddChild(Devices);
 		
 
 		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));

@@ -1,4 +1,4 @@
-[gd_scene load_steps=40 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=41 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -29,6 +29,9 @@ unicode = 32
 [sub_resource type="Shortcut" id="Shortcut_h2t1i"]
 resource_name = "Go"
 events = [SubResource("InputEventKey_h6px0")]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4s2rm"]
+bg_color = Color(0.658824, 0, 0, 1)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_7ts3w"]
 atlas = ExtResource("6_j1fp5")
@@ -2545,6 +2548,7 @@ focus_mode = 0
 custom_minimum_size = Vector2(10, 10)
 layout_mode = 2
 focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_4s2rm")
 
 [node name="AudioOut" type="Button" parent="MarginContainer/BoxContainer/HeaderContainer/OutputOverrides"]
 custom_minimum_size = Vector2(10, 10)

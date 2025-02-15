@@ -1,8 +1,18 @@
-[gd_scene load_steps=13 format=4 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=15 format=4 uid="uid://cfw3syjm11bd6"]
 
-[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/ui/base_theme.tres" id="1_5fbwj"]
+[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
 [ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="3_5ctfj"]
+[ext_resource type="Script" path="res://src/Base/Settings/SettingsAudioDevices.cs" id="3_pnmd8"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
+bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.398496, 0.398496, 0.398496, 1)
+corner_detail = 5
 
 [sub_resource type="Image" id="Image_68nut"]
 data = {
@@ -1861,6 +1871,14 @@ borderless = true
 theme = ExtResource("1_5fbwj")
 script = ExtResource("2_xuilu")
 
+[node name="Panel" type="Panel" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_hpi7s")
+
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
@@ -1903,34 +1921,76 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 text = "Close"
 
-[node name="RightSide" type="MarginContainer" parent="MarginContainer/HSplitContainer"]
+[node name="Panel" type="Panel" parent="MarginContainer/HSplitContainer"]
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/margin_left = 5
-theme_override_constants/margin_top = 5
-theme_override_constants/margin_right = 5
-theme_override_constants/margin_bottom = 5
 
-[node name="AudioDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/RightSide"]
+[node name="RightSide" type="MarginContainer" parent="MarginContainer/HSplitContainer/Panel"]
+layout_mode = 2
+offset_right = 610.0
+offset_bottom = 490.0
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="AudioDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
 visible = false
 layout_mode = 2
+script = ExtResource("3_pnmd8")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/RightSide/AudioDevices"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/RightSide/AudioDevices/VBoxContainer"]
+[node name="Label" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
+layout_mode = 2
+text = "Audio Devices"
+
+[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
 layout_mode = 2
 
-[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
+[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme = SubResource("Theme_k6x2l")
 
-[node name="Button" type="Button" parent="MarginContainer/HSplitContainer/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
+[node name="AddDevice" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
 layout_mode = 2
 text = "Add Device"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
+layout_mode = 2
+
+[node name="LabelDeviceQuantity" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
+layout_mode = 2
+text = "Hi"
+
+[node name="VideoDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
+visible = false
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
+layout_mode = 2
+text = "Video Devices"
+
+[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
+layout_mode = 2
+
+[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme = SubResource("Theme_k6x2l")
+
+[node name="Button" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
+layout_mode = 2
+text = "Add Device Video"
 
 [node name="launcherHandles" type="Control" parent="."]
 layout_mode = 3
@@ -1989,6 +2049,7 @@ mouse_default_cursor_shape = 12
 
 [connection signal="item_selected" from="MarginContainer/HSplitContainer/Container/ScrollContainer/Tree" to="." method="_on_tree_item_selected"]
 [connection signal="pressed" from="MarginContainer/HSplitContainer/Container/Close" to="." method="_on_close_pressed"]
+[connection signal="pressed" from="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer/AddDevice" to="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices" method="_onAddDevicePressed"]
 [connection signal="gui_input" from="launcherHandles/DragBar" to="launcherHandles" method="_on_drag_bar_gui_input"]
 [connection signal="gui_input" from="launcherHandles/Right" to="launcherHandles" method="_on_right_gui_input"]
 [connection signal="gui_input" from="launcherHandles/Bottom" to="launcherHandles" method="_on_bottom_gui_input"]
