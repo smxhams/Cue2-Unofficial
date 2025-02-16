@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=4 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=16 format=4 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
 [ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="3_5ctfj"]
 [ext_resource type="Script" path="res://src/Base/Settings/SettingsAudioDevices.cs" id="3_pnmd8"]
+[ext_resource type="PackedScene" uid="uid://dgy2bmmm4rjpt" path="res://src/UI/AudioDeviceToolbox.tscn" id="4_boogd"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -1935,7 +1936,6 @@ theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 15
 
 [node name="AudioDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
-visible = false
 layout_mode = 2
 script = ExtResource("3_pnmd8")
 
@@ -1948,15 +1948,15 @@ size_flags_vertical = 3
 layout_mode = 2
 text = "Audio Devices"
 
-[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
 layout_mode = 2
 
-[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
+[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme = SubResource("Theme_k6x2l")
 
-[node name="AddDevice" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer"]
+[node name="AddDevice" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/HBoxContainer"]
 layout_mode = 2
 text = "Add Device"
 
@@ -1966,6 +1966,12 @@ layout_mode = 2
 [node name="LabelDeviceQuantity" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
 layout_mode = 2
 text = "Hi"
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer"]
+layout_mode = 2
+
+[node name="AudioDeviceToolbox" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer" instance=ExtResource("4_boogd")]
+layout_mode = 2
 
 [node name="VideoDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
 visible = false
@@ -2049,7 +2055,7 @@ mouse_default_cursor_shape = 12
 
 [connection signal="item_selected" from="MarginContainer/HSplitContainer/Container/ScrollContainer/Tree" to="." method="_on_tree_item_selected"]
 [connection signal="pressed" from="MarginContainer/HSplitContainer/Container/Close" to="." method="_on_close_pressed"]
-[connection signal="pressed" from="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/VBoxContainer/AddDevice" to="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices" method="_onAddDevicePressed"]
+[connection signal="pressed" from="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices/VBoxContainer/HBoxContainer/AddDevice" to="MarginContainer/HSplitContainer/Panel/RightSide/AudioDevices" method="_onAddDevicePressed"]
 [connection signal="gui_input" from="launcherHandles/DragBar" to="launcherHandles" method="_on_drag_bar_gui_input"]
 [connection signal="gui_input" from="launcherHandles/Right" to="launcherHandles" method="_on_right_gui_input"]
 [connection signal="gui_input" from="launcherHandles/Bottom" to="launcherHandles" method="_on_bottom_gui_input"]

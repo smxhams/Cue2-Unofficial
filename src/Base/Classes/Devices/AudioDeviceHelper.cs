@@ -1,83 +1,98 @@
-namespace Cue2.Base.Classes.Devices;
+using System.Linq;
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi; // Requires NuGet: NAudio (only used on Windows)
+
+namespace Cue2.Base.Classes.Devices;
 
 public static class AudioDeviceHelper
 {
-    public static int GetAudioOutputChannels()
+    
+    public static AudioDevice? GetAudioDevice(string deviceName, string VlcIdentifier)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return GetWindowsAudioChannels();
+            return GetWindowsAudioDevice(deviceName, VlcIdentifier);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return GetLinuxAudioChannels();
+            return GetLinuxAudioDevice(deviceName, VlcIdentifier);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            return GetMacAudioChannels();
+            return GetMacAudioDevice(deviceName, VlcIdentifier);
         }
         else
         {
             Console.WriteLine("Unsupported OS");
-            return -1;
+            return null;
         }
     }
 
-    private static int GetWindowsAudioChannels()
+    private static AudioDevice? GetWindowsAudioDevice(string deviceName, string VlcIdentifier)
     {
         try
         {
             using var enumerator = new MMDeviceEnumerator();
-            using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            return device.AudioClient.MixFormat.Channels;
+            var device = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
+                .FirstOrDefault(d => d.FriendlyName.Contains(deviceName, StringComparison.OrdinalIgnoreCase));
+
+            if (device == null) return null;
+
+            AudioDevice newDevice = new AudioDevice(device.FriendlyName, device.AudioClient.MixFormat.Channels, VlcIdentifier)
+                {
+                    SampleRate = device.AudioClient.MixFormat.SampleRate,
+                    BitDepth = device.AudioClient.MixFormat.BitsPerSample
+                };
+
+            return newDevice;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Error retrieving Windows audio channels: {ex.Message}");
-            return -1;
+            return null;
         }
     }
 
-    private static int GetLinuxAudioChannels()
+    private static AudioDevice? GetLinuxAudioDevice(string deviceName, string VlcIdentifier)
     {
         try
         {
-            string output = ExecuteBashCommand("cat /proc/asound/card*/codec#* | grep 'Channels:' | head -n 1");
-            if (!string.IsNullOrEmpty(output) && int.TryParse(output.Split(':')[1].Trim(), out int channels))
-            {
-                return channels;
-            }
+            string name = ExecuteBashCommand($"aplay -l | grep '{deviceName}' | head -n 1");
+            string channelsOutput = ExecuteBashCommand("cat /proc/asound/card*/codec#* | grep 'Channels:' | head -n 1");
+            string sampleRateOutput = ExecuteBashCommand("cat /proc/asound/card*/codec#* | grep 'Rates:' | head -n 1");
+
+            int.TryParse(channelsOutput.Split(':')[1].Trim(), out int channels);
+            int.TryParse(sampleRateOutput.Split(':')[1].Trim().Split(' ')[0], out int sampleRate);
+
+            return new AudioDevice(name, channels, VlcIdentifier);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Error retrieving Linux audio channels: {ex.Message}");
+            return null;
         }
-        return -1;
     }
 
-    private static int GetMacAudioChannels()
+    private static AudioDevice? GetMacAudioDevice(string deviceName, string VlcIdentifier)
     {
         try
         {
-            string output = ExecuteBashCommand("system_profiler SPAudioDataType | grep 'Output Channels' | head -n 1");
-            if (!string.IsNullOrEmpty(output) && int.TryParse(output.Split(':')[1].Trim(), out int channels))
-            {
-                return channels;
-            }
+            string name = ExecuteBashCommand($"system_profiler SPAudioDataType | grep '{deviceName}' | head -n 1");
+            string channelsOutput =
+                ExecuteBashCommand("system_profiler SPAudioDataType | grep 'Output Channels' | head -n 1");
+            string sampleRateOutput =
+                ExecuteBashCommand("system_profiler SPAudioDataType | grep 'Sample Rate' | head -n 1");
+
+            int.TryParse(channelsOutput.Split(':')[1].Trim(), out int channels);
+            int.TryParse(sampleRateOutput.Split(':')[1].Trim().Replace(" Hz", ""), out int sampleRate);
+
+            return new AudioDevice(name, channels, VlcIdentifier);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Error retrieving Mac audio channels: {ex.Message}");
+            return null;
         }
-        return -1;
     }
 
     private static string ExecuteBashCommand(string command)
@@ -100,9 +115,8 @@ public static class AudioDeviceHelper
             process.WaitForExit();
             return output.Trim();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Error executing Bash command: {ex.Message}");
             return string.Empty;
         }
     }

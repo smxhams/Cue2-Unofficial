@@ -13,7 +13,7 @@ public partial class Devices : Node
     private int Index = 0;
     
     
-    private static readonly Dictionary<int, IDevice> AudioDevices = new Dictionary<int, IDevice>();
+    private static readonly Dictionary<int, AudioDevice> AudioDevices = new Dictionary<int, AudioDevice>();
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
@@ -22,10 +22,11 @@ public partial class Devices : Node
     public void CreateAudioDevice(string deviceName)
     {
         AudioOutputDevice? device = null;
+
+        var vlcDevices = _globalData.Playback.GetAvailibleAudioDevices(); // Get devices availible to VLC
         
-        // Check requested name against availible devices
-        var deviceList = _globalData.Playback.GetAvailibleAudioDevices();
-        foreach (var i in deviceList)
+        // Match vlc device to name
+        foreach (var i in vlcDevices)
         {
             if (i.Description == deviceName)
             {
@@ -34,24 +35,22 @@ public partial class Devices : Node
             }
         }
 
-        GD.Print("Audio channels: " + AudioDeviceHelper.GetAudioOutputChannels());
-
         if (device.HasValue)
         {
-            var newDevice = new AudioDevice();
+            // Gets system audio output device
+            AudioDevice newDevice = AudioDeviceHelper.GetAudioDevice(deviceName, device.Value.DeviceIdentifier);
+            if (newDevice != null) {AudioDevices.Add(newDevice.DeviceId, newDevice);}
+
+            GD.Print(newDevice.ToString());
             
-            newDevice.Name = device.Value.Description;
-            newDevice.VLCIdentifier = device.Value.DeviceIdentifier;
-            AudioDevices.Add(newDevice.DeviceId, newDevice);
         }
-        else GD.Print("Failed to create device");
         
-        
+        //GD.Print("Failed to create device");
     }
 
-    public List<IDevice> GetAudioDevices()
+    public List<AudioDevice> GetAudioDevices()
     {
-        var deviceList = new List<IDevice>();
+        var deviceList = new List<AudioDevice>();
         foreach (var device in AudioDevices)
         {
             deviceList.Add(device.Value);

@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 using Godot;
 using LibVLCSharp.Shared;
@@ -47,11 +49,19 @@ public partial class SettingsAudioDevices : ScrollContainer
 		var visible = Visible;
 
 
-		var deviceList = _globalData.Devices.GetAudioDevices();
+		List<AudioDevice> deviceList = _globalData.Devices.GetAudioDevices();
 		if (deviceList == null || !deviceList.Any())
 		{
 			GetNode<Label>("VBoxContainer/LabelDeviceQuantity").Text = "There are currently no audio devices";
 			return;
+		}
+
+		foreach (AudioDevice device in deviceList)
+		{
+			var deviceToolboxScene = GD.Load<PackedScene>("res://src/UI/AudioDeviceToolbox.tscn");
+			var deviceToolbox = deviceToolboxScene.Instantiate();
+			GetNode<VBoxContainer>("VBoxContainer/VBoxContainer").AddChild(deviceToolbox);
+			deviceToolbox.GetNode<Label>("Panel/VBoxContainer/HBoxContainer/Label").Text = device.Name;
 		}
 
 		GetNode<Label>("VBoxContainer/LabelDeviceQuantity").Text = "There are " + deviceList.Count + " devices";
@@ -64,7 +74,6 @@ public partial class SettingsAudioDevices : ScrollContainer
 	{
 		var deviceName = _deviceOptionsDropMenu.GetItemText(_deviceOptionsDropMenu.Selected);
 		_globalData.Devices.CreateAudioDevice(deviceName);
-		GD.Print("Button: " + deviceName);
 		DisplayExistingDevices();
 	}
 }
