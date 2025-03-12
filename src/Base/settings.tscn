@@ -1,9 +1,9 @@
 [gd_scene load_steps=16 format=4 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_5fbwj"]
-[ext_resource type="Script" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
-[ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="3_5ctfj"]
-[ext_resource type="Script" path="res://src/Base/Settings/SettingsAudioDevices.cs" id="3_pnmd8"]
+[ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
+[ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="3_5ctfj"]
+[ext_resource type="Script" uid="uid://cu1ujebi3h7vu" path="res://src/Base/Settings/SettingsAudioDevices.cs" id="3_pnmd8"]
 [ext_resource type="PackedScene" uid="uid://dgy2bmmm4rjpt" path="res://src/UI/AudioDeviceToolbox.tscn" id="4_boogd"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
@@ -1936,6 +1936,7 @@ theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 15
 
 [node name="AudioDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
+visible = false
 layout_mode = 2
 script = ExtResource("3_pnmd8")
 

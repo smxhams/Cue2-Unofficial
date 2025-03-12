@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://b03yr6xdtbbx1"]
 
-[ext_resource type="Script" path="res://src/launcher/LaunchManager.cs" id="1_bv1pb"]
-[ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="2_e3u3p"]
+[ext_resource type="Script" uid="uid://bmbs6kyrh6uq7" path="res://src/launcher/LaunchManager.cs" id="1_bv1pb"]
+[ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="2_e3u3p"]
 
 [sub_resource type="Gradient" id="Gradient_e57xn"]
 colors = PackedColorArray(0.169245, 0.169245, 0.169245, 1, 0.114897, 0.114897, 0.114897, 1)

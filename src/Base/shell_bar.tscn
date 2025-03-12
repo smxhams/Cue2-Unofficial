@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://d207a67e3ebww"]
 
-[ext_resource type="Script" path="res://src/Base/ShellBar.cs" id="1_bg36s"]
+[ext_resource type="Script" uid="uid://c5iiiivhxukfl" path="res://src/Base/ShellBar.cs" id="1_bg36s"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/icons.png" id="1_rmwen"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ag1hf"]

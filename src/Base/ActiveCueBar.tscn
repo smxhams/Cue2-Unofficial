@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://dt7rlfag7yr2c"]
 
-[ext_resource type="Script" path="res://src/UI/ActiveCueBar.cs" id="1_yj65f"]
-[ext_resource type="Script" path="res://src/UI/ActiveCueProgressBar.cs" id="2_jnntm"]
+[ext_resource type="Script" uid="uid://dbuleicnaxcs4" path="res://src/UI/ActiveCueBar.cs" id="1_yj65f"]
+[ext_resource type="Script" uid="uid://5cr30d8rmy3b" path="res://src/UI/ActiveCueProgressBar.cs" id="2_jnntm"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_usfis"]
 bg_color = Color(0.592157, 0.294118, 0.0313726, 1)

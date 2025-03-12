@@ -1,23 +1,23 @@
 [gd_scene load_steps=41 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
-[ext_resource type="Script" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
+[ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
 [ext_resource type="Theme" uid="uid://7h1277c0156g" path="res://src/UI/GO_theme.tres" id="2_isdoa"]
-[ext_resource type="Script" path="res://src/Base/Minor/CurrentTime.cs" id="3_x7rek"]
-[ext_resource type="Script" path="res://src/Base/OutputOverrides.cs" id="4_bc601"]
+[ext_resource type="Script" uid="uid://d20wrpbn8dhip" path="res://src/Base/Minor/CurrentTime.cs" id="3_x7rek"]
+[ext_resource type="Script" uid="uid://bnp31r0nxo3cv" path="res://src/Base/OutputOverrides.cs" id="4_bc601"]
 [ext_resource type="Texture2D" uid="uid://demy3167tq5n1" path="res://src/UI/g1.png" id="5_8ytkc"]
-[ext_resource type="Script" path="res://src/Base/Classes/CueList.cs" id="5_s37bb"]
+[ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="5_s37bb"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/icons.png" id="6_j1fp5"]
-[ext_resource type="Script" path="res://src/Base/Preview.cs" id="7_n83c7"]
+[ext_resource type="Script" uid="uid://dt5dcwbwscssc" path="res://src/Base/Preview.cs" id="7_n83c7"]
 [ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="9_8xqi4"]
-[ext_resource type="Script" path="res://src/Base/ActiveCuelist.cs" id="9_sqddi"]
-[ext_resource type="Script" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
-[ext_resource type="Script" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
-[ext_resource type="Script" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
-[ext_resource type="Script" path="res://src/Base/DropMenuFile.cs" id="11_s3fp6"]
-[ext_resource type="Script" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
-[ext_resource type="Script" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
-[ext_resource type="Script" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
+[ext_resource type="Script" uid="uid://kn4836ff80ga" path="res://src/Base/ActiveCuelist.cs" id="9_sqddi"]
+[ext_resource type="Script" uid="uid://chcl0xrao25cs" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
+[ext_resource type="Script" uid="uid://decsdgg8vwdwn" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
+[ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
+[ext_resource type="Script" uid="uid://dmlh3yawtqnqu" path="res://src/Base/DropMenuFile.cs" id="11_s3fp6"]
+[ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
+[ext_resource type="Script" uid="uid://crc7u0mdel1jo" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
+[ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
 
 [sub_resource type="InputEventKey" id="InputEventKey_h6px0"]
 device = -1
@@ -3022,7 +3022,6 @@ title = "Save Session"
 initial_position = 2
 size = Vector2i(600, 400)
 popup_window = true
-ok_button_text = "Save"
 access = 2
 use_native_dialog = true
 script = ExtResource("13_03w3m")
