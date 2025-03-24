@@ -16,6 +16,8 @@ public partial class SettingsWindow : Window
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		
 		_generateTree();
+		
+		
 	}
 
 
@@ -28,7 +30,19 @@ public partial class SettingsWindow : Window
 		if (_currentDisplay != "")
 		{
 			GetNode<ScrollContainer>("MarginContainer/HSplitContainer/Panel/RightSide/" + _currentDisplay).Hide();
+			
 		}
+		else
+		{
+			// Checks all settings displays incase one is already open
+			foreach (var node in GetNode<MarginContainer>("MarginContainer/HSplitContainer/Panel/RightSide")
+				         .GetChildren())
+			{
+				var child = (ScrollContainer)node;
+				if (child.IsVisible()) child.Hide();
+			}			
+		}
+		
 		var menuNode = GetSelectedMenu(_setTree.GetSelected().GetText(0));
 		GetNode<ScrollContainer>("MarginContainer/HSplitContainer/Panel/RightSide/" + menuNode).Show();
 		_currentDisplay = menuNode;
@@ -41,7 +55,7 @@ public partial class SettingsWindow : Window
 	private string GetSelectedMenu(string action) =>
 		action switch // Name corresponded to node name in UI.
 		{
-			"Audio Devices" => "AudioDevices",
+			"Audio Output Patch" => "AudioOutputPatch",
 			"Video Devices" => "VideoDevices",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};
@@ -56,9 +70,9 @@ public partial class SettingsWindow : Window
 		
 		// Output Devices
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);
-		tiOutputDevices.SetText(0, "Output Devices");
-		TreeItem tiAudioDevice = _setTree.CreateItem(tiOutputDevices);
-		tiAudioDevice.SetText(0, "Audio Devices");
+		tiOutputDevices.SetText(0, "Output Configuration");
+		TreeItem tiAudioOutputPatch = _setTree.CreateItem(tiOutputDevices);
+		tiAudioOutputPatch.SetText(0, "Audio Output Patch");
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
 		tiVideoDevice.SetText(0, "Video Devices");
 		

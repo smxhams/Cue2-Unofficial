@@ -1972,6 +1972,7 @@ grow_end = -5.0
 vertical = true
 
 [resource]
+default_base_scale = 1.0
 default_font_size = 10
 Fonts/font_sizes/FontSize = 10
 Fonts/fonts/large = SubResource("FontFile_52n5q")

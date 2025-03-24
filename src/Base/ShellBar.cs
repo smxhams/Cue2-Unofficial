@@ -12,7 +12,7 @@ namespace Cue2.Base;
 
 public partial class ShellBar : Control
 {
-	private Cue2.Shared.GlobalData _gd;
+	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	private GlobalStyles _globalStyles;
 
@@ -26,6 +26,14 @@ public partial class ShellBar : Control
 	
 	[Export] public bool Selected = false;
 
+	private Container _topHalf;
+	private Container _bottomHalf;
+
+	private Button _expanded;
+	private Button _collapsed;
+	
+	public int ShellOffset = 0;
+
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -37,14 +45,42 @@ public partial class ShellBar : Control
 
 		_globalStyles = GetNode<GlobalStyles>("/root/GlobalStyles");
 
-		_gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		
-		_backPanel = GetChild<Panel>(0);
-		_dragButton = GetChild(1).GetChild(0).GetChild<Button>(0);
+		_backPanel = GetNode<Panel>("%BackPanel");
+		_dragButton = GetNode<Button>("%DragBar");
 		_dragButton.ButtonDown += DragPressed;
 		_dragButton.ButtonUp += DragReleased;
+
+		_topHalf = GetNode<Container>("%TopHalfSensor");
+		_topHalf.MouseEntered += MouseEnteredTopHalf;
+		_topHalf.MouseExited += MouseExitedTopHalf;
+		_bottomHalf = GetNode<Container>("%BottomHalfSensor");
+		_bottomHalf.MouseEntered += MouseEnteredBottomHalf;
+		_bottomHalf.MouseExited += MouseExitedBottomHalf;
+
+		_expanded = GetNode<Button>("%ExpandedButton");
+		_expanded.Pressed += ExpandedPressed;
+		_collapsed = GetNode<Button>("%CollapsedButton");
+		_collapsed.Pressed += CollapsedPressed;
+
 	}
-	
+
+	private void CollapsedPressed()
+	{
+		_globalData.Cuelist.ExpandGroup(CueId);
+		GetNode<Container>("%Expanded").Visible = true;
+		GetNode<Container>("%Collapsed").Visible = false;
+	}
+
+	private void ExpandedPressed()
+	{
+		_globalData.Cuelist.CollapseGroup(CueId);
+		GetNode<Container>("%Expanded").Visible = false;
+		GetNode<Container>("%Collapsed").Visible = true;
+	}
+
+
 	// Called every frame. 'delta' is the elapsed time since the previous frame.
 	public override void _Process(double delta)
 	{
@@ -53,20 +89,20 @@ public partial class ShellBar : Control
 			
 			//GD.Print(Position);
 			SetGlobalPosition(new Vector2(GetGlobalMousePosition().X + 5, GetGlobalPosition().Y));
+			_globalData.Cuelist.MoveCueWithItsChildren(CueId);
 		}
 	}
 
 	private void _on_mouse_entered()
 	{
 		if (_isDragging!) return;
-		if (CueList.ShellBeingDragged != -1)
-		{
-			_gd.Cuelist.ShellMouseOverByDraggedShell(CueId);
-		}
-
 		if (Selected == false){
 			_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.HoverStyle());
 		}
+
+		if (_globalData.Cuelist.ShellBeingDragged != -1) GetNode<VBoxContainer>("%HoverSensors").Visible = true;
+
+		
 	}
 	private void _on_mouse_exited()
 	{
@@ -74,8 +110,10 @@ public partial class ShellBar : Control
 		if (Selected == false){
 			_backPanel.RemoveThemeStyleboxOverride("panel");
 		}
+		GetNode<VBoxContainer>("%HoverSensors").Visible = false;
 
 	}
+	
 
 	private void _OnInput(InputEvent @event)
 	{
@@ -85,18 +123,18 @@ public partial class ShellBar : Control
 		
 		if (Input.IsKeyPressed(Key.Shift))
 		{
-			_gd.ShellSelection.SelectThrough(CueList.FetchCueFromId(CueId));
+			_globalData.ShellSelection.SelectThrough(CueList.FetchCueFromId(CueId));
 			return;
 		}
 
 		if (Input.IsKeyPressed(Key.Ctrl))
 		{
-			_gd.ShellSelection.AddSelection(CueList.FetchCueFromId(CueId));
+			_globalData.ShellSelection.AddSelection(CueList.FetchCueFromId(CueId));
 			return;
 		}
 		
 		//Select single shell
-		_gd.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
+		_globalData.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
 	}
 
 	public void Focus()
@@ -107,23 +145,83 @@ public partial class ShellBar : Control
 	private void DragPressed()
 	{
 		_isDragging = true;
-		CueList.ShellBeingDragged = CueId;
+		_globalData.Cuelist.ShellBeingDragged = CueId;
 		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.DangerStyle());
-		_backPanel.SetMouseFilter(MouseFilterEnum.Ignore);
 		GD.Print(Position);
 	}
 	
 	private void DragReleased()
 	{
 		_isDragging = false;
-		CueList.ShellBeingDragged = -1;
+		if (GetNode<Container>("%OffSetWithLine").Visible == true)
+		{
+			//If this is visible, it means it was wanting to be grouped
+			_globalData.Cuelist.AddCueToGroup(CueId);
+		}
+		else
+		{
+			_globalData.Cuelist.CheckCuesNewPosition(CueId);
+		}
+		_globalData.Cuelist.ShellBeingDragged = -1;
 		_backPanel.RemoveThemeStyleboxOverride("panel");
-		_backPanel.SetMouseFilter(MouseFilterEnum.Stop);
-		_gd.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
+		GetNode<VBoxContainer>("%HoverSensors").Visible = false;
+		_globalData.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
 		_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
+
 		SetPosition(new Vector2(0, Position.Y));
+		_globalData.Cuelist.ResetCuePositionXWithChildren(CueId);
 	}
 
+	private void MouseEnteredTopHalf()
+	{
+		if (_isDragging!) return;
+		if (_globalData.Cuelist.ShellBeingDragged != -1)
+		{
+			_globalData.Cuelist.ShellMouseOverByDraggedShellTopHalf(CueId);
+			_backPanel.AddThemeStyleboxOverride("panel", GlobalStyles.DangerStyle());
+		}
+	}
+	private void MouseExitedTopHalf()
+	{
+		if (_isDragging!) return;
+		if (_globalData.Cuelist.ShellBeingDragged != -1)
+		{
+			_backPanel.RemoveThemeStyleboxOverride("panel");
+		}
+	}
+	private void MouseEnteredBottomHalf()
+	{
+		if (_isDragging!) return;
+		if (_globalData.Cuelist.ShellBeingDragged != -1)
+		{
+			_globalData.Cuelist.ShellMouseOverByDraggedShellBottomHalf(CueId);
+			GetNode<Line2D>("%LineBelow").Visible = true;
+			//_gd.Cuelist.ShellMouseOverByDraggedShell(CueId);
+		}
+	}
+	private void MouseExitedBottomHalf()
+	{
+		if (_isDragging!) return;
+		GetNode<Line2D>("%LineBelow").Visible = false;
+	}
+
+	public void SetShellOffset(int offset)
+	{
+		var offsetContainer = GetNode<HBoxContainer>("%OffsetContainer");
+		foreach (var child in offsetContainer.GetChildren())
+		{
+			child.QueueFree();
+		}
+
+		for (int i = 0; i < offset; i++)
+		{
+			var offsetNode = new Control();
+			offsetNode.SetCustomMinimumSize(new Vector2(18, 0));
+			offsetContainer.AddChild(offsetNode);
+		}
+
+		ShellOffset = offset;
+	}
 
 
 }

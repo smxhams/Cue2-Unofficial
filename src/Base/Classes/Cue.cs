@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Runtime.Serialization;
 using Godot;
 using System.Collections.Generic;
 using System.Data.Common;
+using Godot.Collections;
 
 namespace Cue2.Base.Classes;
 
@@ -16,6 +18,9 @@ public class Cue : ICue
     
     public Node ShellBar { get; set; }
 
+    public int ParentId = -1;
+
+    public List<int> ChildCues = new List<int>();
     // Maybe work out a way to remove below in future
     public string FilePath { get; set; }
     
@@ -23,36 +28,59 @@ public class Cue : ICue
     
     public Cue() // Cue Constructor
     {
-        GD.Print(_nextId);
         Id = _nextId++;
-        GD.Print(Id + " : " + _nextId);
         Name = "New cue number " + Id.ToString();
         CueNum = Id.ToString();
         Command = "";
         
     }
 
-    public Cue (Dictionary<string, string> data) // Cue Constructor
+    public Cue (Dictionary data) // Cue Constructor
     {
         // This is used when loading cue form file, I'm quite unhappy with it. 
-        Id = _nextId++;
-        Name = data.GetValueOrDefault("Name", "New cue number " + Id.ToString());
-        CueNum = data.GetValueOrDefault("CueNum", Id.ToString());
-        Command = data.GetValueOrDefault("Command", "");
-        FilePath = data.GetValueOrDefault("FilePath", "");
-        Type = data.GetValueOrDefault("Type", "");
+        Id = data["Id"].AsInt32();
+        if (Id >= _nextId) _nextId = Id + 1;
+        Name = (string)data["Name"];
+        CueNum = (string)data["CueNum"];
+        Command = (string)data["Command"];
+        FilePath = (string)data["FilePath"];
+        Type = (string)data["Type"];
+        ParentId = (int)data["ParentId"];
+        var childArray = data["ChildCues"].AsGodotArray();
+        foreach (var childInt in childArray)
+        {
+            ChildCues.Add(childInt.AsInt32());
+        }
     }
     
-
-    public Dictionary<string, string> GetData()
+    
+    
+    public void AddChildCue(int childId)
     {
-        var dict = new Dictionary<string, string>();
+        ChildCues.Add(childId);
+    }
+
+    public void RemoveChildCue(int childId)
+    {
+        ChildCues.Remove(childId);
+    }
+
+    public void SetParent(int parentId)
+    {
+        ParentId = parentId;
+    }
+
+    public Hashtable GetData()
+    {
+        var dict = new Hashtable();
         dict.Add("Id", Id.ToString());
         dict.Add("Name", Name);
         dict.Add("Command", Command);
         dict.Add("CueNum", CueNum);
         dict.Add("FilePath", FilePath);
         dict.Add("Type", Type);
+        dict.Add("ParentId", ParentId.ToString());
+        dict.Add("ChildCues", ChildCues);
         return dict;
         
     }

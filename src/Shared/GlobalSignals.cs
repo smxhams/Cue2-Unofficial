@@ -36,6 +36,8 @@ public partial class GlobalSignals : Node
 	// Signals Associated with InputActions
 	[Signal]
 	public delegate void SaveEventHandler();
+	[Signal]
+	public delegate void SaveAsEventHandler();
 
 	[Signal]
 	public delegate void OpenSessionEventHandler();

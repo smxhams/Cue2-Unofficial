@@ -41,18 +41,18 @@ public partial class Cue2Base : Control
 		_connections = GetNode<Connections>("/root/Connections");
 
 		// Creation and assignment of test video output window - in future this will be created in settings
-		VideoWindow = new Window();
+		/*VideoWindow = new Window();
 		AddChild(VideoWindow);
 		VideoWindow.Name = "Test Video Output";
 		_globalData.VideoOutputWinNum = VideoWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, _globalData.VideoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _globalData.VideoOutputWinNum);
+		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _globalData.VideoOutputWinNum);*/
 		
 		// Load in a test canvas - In future this will be created in settings
-		var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
+		/*var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
 		VideoWindow.AddChild(videoCanvas);
 		_globalData.VideoCanvas = videoCanvas;
-		_globalData.VideoWindow = VideoWindow;
+		_globalData.VideoWindow = VideoWindow;*/
 		
 	}
 
@@ -106,46 +106,6 @@ public partial class Cue2Base : Control
 			var cue = (Cue)cue1;
 			_globalData.CueCommandInterpreter.CueCommandExectutor.ExecuteCommand(cue);
 		}
-		
-		
-		/*
-		if (CueList.FocusedCueId != -1)
-		{
-			var cueIdToGo = CueList.FocusedCueId;
-			var cueToGo = CueList.FetchCueFromId(cueIdToGo);
-			var cueType = cueToGo.Type;
-
-			// Check cue type to determine how to play
-			if ((string)cueType == "")
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.", 1);
-			}
-
-			// Play audio file
-			else if ((string)cueType == "Audio" )
-			{
-				var path = cueToGo.FilePath;
-				_globalData.Playback.PlayMedia(_playbackIndex, path);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
-				_playbackIndex++;
-			}
-
-			// Play video
-			else if ((string)cueType == "Video")
-			{
-				var path = cueToGo.FilePath;
-				_globalData.Playback.PlayMedia(_playbackIndex, path, VideoWindow);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cueIdToGo);
-				_playbackIndex++;
-			}
-			
-		}
-		else
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Couldn't find a Cue to GO");
-			GD.Print("Couldn't find a Cue to GO");
-		}*/
-
 	}
 	
 }

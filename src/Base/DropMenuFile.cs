@@ -25,6 +25,11 @@ public partial class DropMenuFile : PanelContainer
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));
 
 	}
+
+	private void _onFileSaveAsPressed()
+	{
+		_globalSignals.EmitSignal(nameof(GlobalSignals.SaveAs));
+	}
 	private void _onOpenSessionPressed()
 	{
 		_globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));

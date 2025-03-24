@@ -28,7 +28,7 @@ public partial class ShellSelection : Node
             foreach (var shell in SelectedShells.ToList())
             {
                 SelectedShells.Remove(shell);
-                shell.ShellBar.GetNode<Panel>("Panel").RemoveThemeStyleboxOverride("panel");
+                shell.ShellBar.GetNode<Panel>("%BackPanel").RemoveThemeStyleboxOverride("panel");
                 shell.ShellBar.Set("Selected", false); // Tell shell bar it's no longer selected
             }
         }
@@ -38,7 +38,7 @@ public partial class ShellSelection : Node
     
     public void SelectThrough(ICue pressedCue)
     {
-        var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("CueContainer");
+        var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
         
         var startShell = SelectedShells.Last().ShellBar;
         int startShellPosition = startShell.GetIndex();
@@ -64,7 +64,7 @@ public partial class ShellSelection : Node
     
     public void AddSelection(ICue cue)
     {
-        cue.ShellBar.GetNode<Panel>("Panel").AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
+        cue.ShellBar.GetNode<Panel>("%BackPanel").AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
         SelectedShells.Add(cue);
         cue.ShellBar.Set("Selected", true);
         _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);

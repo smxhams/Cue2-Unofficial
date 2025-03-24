@@ -2606,16 +2606,15 @@ layout_mode = 2
 script = ExtResource("5_s37bb")
 metadata/_tab_index = 0
 
-[node name="CueContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List"]
-y_sort_enabled = true
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/CueContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer"]
 layout_mode = 2
 
-[node name="AddShell" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/CueContainer/HBoxContainer"]
+[node name="AddShell" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 focus_mode = 0
@@ -2623,13 +2622,20 @@ text = "Add Shell"
 icon = SubResource("AtlasTexture_7ts3w")
 expand_icon = true
 
-[node name="AddGroup" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/CueContainer/HBoxContainer"]
+[node name="AddGroup" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 focus_mode = 0
 text = "Add Group"
 icon = SubResource("AtlasTexture_7ts3w")
 expand_icon = true
+
+[node name="CueContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer"]
+unique_name_in_owner = true
+y_sort_enabled = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer"]
 clip_contents = true
@@ -2773,6 +2779,11 @@ text = "Shell Type:"
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 
+[node name="ParentCueLabel" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
 [node name="VSeparator" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
 layout_mode = 2
 
@@ -2806,20 +2817,27 @@ placeholder_text = "URL (Can drag and drop files here)"
 [node name="VSeparator2" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
 layout_mode = 2
 
-[node name="ShellRow3" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
+[node name="ShellRow3" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 size_flags_stretch_ratio = 0.21
 
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3/HBoxContainer"]
 layout_mode = 2
 text = "Cue Trigger:"
 
-[node name="Trigger" type="OptionButton" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+[node name="Trigger" type="OptionButton" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
+
+[node name="cueId" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+unique_name_in_owner = true
+layout_mode = 2
 
 [node name="Audio" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer"]
 visible = false
@@ -3033,8 +3051,8 @@ script = ExtResource("13_03w3m")
 [connection signal="toggled" from="MarginContainer/BoxContainer/HeaderContainer/Settings" to="." method="_on_settings_toggled"]
 [connection signal="pressed" from="MarginContainer/BoxContainer/HeaderContainer/OutputOverrides/Expand" to="MarginContainer/BoxContainer/HeaderContainer/OutputOverrides" method="_on_expand_pressed"]
 [connection signal="pressed" from="MarginContainer/BoxContainer/HeaderContainer/OutputOverrides/Exit" to="MarginContainer/BoxContainer/HeaderContainer/OutputOverrides" method="_on_exit_pressed"]
-[connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/CueContainer/HBoxContainer/AddShell" to="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List" method="_on_add_shell_pressed"]
-[connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/CueContainer/HBoxContainer/AddGroup" to="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List" method="_onAddGroupPressed"]
+[connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/HBoxContainer/AddShell" to="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List" method="_on_add_shell_pressed"]
+[connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/HBoxContainer/AddGroup" to="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List" method="_onAddGroupPressed"]
 [connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onCueNumTextChanged"]
 [connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onShellNameTextChanged"]
 [connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ButtonSelectFile" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_on_button_select_file_pressed"]
@@ -3044,5 +3062,6 @@ script = ExtResource("13_03w3m")
 [connection signal="gui_input" from="launcherHandles/Corner" to="launcherHandles" method="_on_corner_gui_input"]
 [connection signal="mouse_exited" from="DropMenuFile/MarginContainer" to="DropMenuFile" method="_onMarginContainerMouseExited"]
 [connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/FileSave" to="DropMenuFile" method="_onFileSavePressed"]
+[connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/FileSaveAs" to="DropMenuFile" method="_onFileSaveAsPressed"]
 [connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/OpenSession" to="DropMenuFile" method="_onOpenSessionPressed"]
 [connection signal="file_selected" from="FileDialog" to="FileDialog" method="_on_file_selected"]

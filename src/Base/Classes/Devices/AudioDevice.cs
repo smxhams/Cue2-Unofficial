@@ -15,9 +15,23 @@ public class AudioDevice : IDevice
     
     public string VLCIdentifier { get; set; }
 
-    public AudioDevice(string name, int channels, string vlcId)
+    public AudioDevice(string name, int channels, string vlcId, int forcedId = -1)
     {
-        DeviceId = _nextId++;
+        if (forcedId != -1)
+        {
+            // If Id provided, will set using that. For example, loading from a save.
+            DeviceId = forcedId;
+            if (forcedId >= _nextId)
+            {
+                // Set next ID to be highest ID, to avoid ID conflict.
+                _nextId = forcedId + 1;
+            }
+
+        }
+        else
+        {
+            DeviceId = _nextId++;
+        }
         Name = name;
         Channels = channels;
         VLCIdentifier = vlcId;

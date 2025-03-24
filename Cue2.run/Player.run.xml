@@ -1,8 +1,8 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Player" type="RunExe" factoryName=".NET Executable">
-    <option name="EXE_PATH" value="$PROJECT_DIR$/../Ext/Godot_v4.3-stable_mono_win64/Godot_v4.3-stable_mono_win64.exe" />
-    <option name="PROGRAM_PARAMETERS" value="--path &quot;./&quot; --file &quot;C:\MyFiles\Cue2_Home\TestSaves\11\11.c2&quot;" />
-    <option name="WORKING_DIRECTORY" value="C:\MyFiles\Cue2_Home\Cue2" />
+    <option name="EXE_PATH" value="$PROJECT_DIR$/../Ext/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe" />
+    <option name="PROGRAM_PARAMETERS" value="--path &quot;./&quot; --file &quot;C:\MyFiles\Cue2_Home\TestSaves\Madagascar V1\Madagascar V1.c2&quot;" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="PASS_PARENT_ENVS" value="1" />
     <option name="USE_EXTERNAL_CONSOLE" value="0" />
     <option name="USE_MONO" value="0" />

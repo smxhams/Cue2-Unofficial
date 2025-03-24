@@ -10,19 +10,19 @@ namespace Cue2.Base.Classes.Devices;
 public static class AudioDeviceHelper
 {
     
-    public static AudioDevice? GetAudioDevice(string deviceName, string VlcIdentifier)
+    public static AudioDevice? GetAudioDevice(string deviceName, string VlcIdentifier, int forcedId = -1)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return GetWindowsAudioDevice(deviceName, VlcIdentifier);
+            return GetWindowsAudioDevice(deviceName, VlcIdentifier, forcedId);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            return GetLinuxAudioDevice(deviceName, VlcIdentifier);
+            return GetLinuxAudioDevice(deviceName, VlcIdentifier, forcedId);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            return GetMacAudioDevice(deviceName, VlcIdentifier);
+            return GetMacAudioDevice(deviceName, VlcIdentifier, forcedId);
         }
         else
         {
@@ -31,7 +31,7 @@ public static class AudioDeviceHelper
         }
     }
 
-    private static AudioDevice? GetWindowsAudioDevice(string deviceName, string VlcIdentifier)
+    private static AudioDevice? GetWindowsAudioDevice(string deviceName, string VlcIdentifier, int forcedId = -1)
     {
         try
         {
@@ -41,7 +41,7 @@ public static class AudioDeviceHelper
 
             if (device == null) return null;
 
-            AudioDevice newDevice = new AudioDevice(device.FriendlyName, device.AudioClient.MixFormat.Channels, VlcIdentifier)
+            AudioDevice newDevice = new AudioDevice(device.FriendlyName, device.AudioClient.MixFormat.Channels, VlcIdentifier, forcedId)
                 {
                     SampleRate = device.AudioClient.MixFormat.SampleRate,
                     BitDepth = device.AudioClient.MixFormat.BitsPerSample
@@ -55,7 +55,7 @@ public static class AudioDeviceHelper
         }
     }
 
-    private static AudioDevice? GetLinuxAudioDevice(string deviceName, string VlcIdentifier)
+    private static AudioDevice? GetLinuxAudioDevice(string deviceName, string VlcIdentifier, int forcedId = -1)
     {
         try
         {
@@ -66,7 +66,7 @@ public static class AudioDeviceHelper
             int.TryParse(channelsOutput.Split(':')[1].Trim(), out int channels);
             int.TryParse(sampleRateOutput.Split(':')[1].Trim().Split(' ')[0], out int sampleRate);
 
-            return new AudioDevice(name, channels, VlcIdentifier);
+            return new AudioDevice(name, channels, VlcIdentifier, forcedId);
         }
         catch (Exception)
         {
@@ -74,7 +74,7 @@ public static class AudioDeviceHelper
         }
     }
 
-    private static AudioDevice? GetMacAudioDevice(string deviceName, string VlcIdentifier)
+    private static AudioDevice? GetMacAudioDevice(string deviceName, string VlcIdentifier, int forcedId = -1)
     {
         try
         {
@@ -87,7 +87,7 @@ public static class AudioDeviceHelper
             int.TryParse(channelsOutput.Split(':')[1].Trim(), out int channels);
             int.TryParse(sampleRateOutput.Split(':')[1].Trim().Replace(" Hz", ""), out int sampleRate);
 
-            return new AudioDevice(name, channels, VlcIdentifier);
+            return new AudioDevice(name, channels, VlcIdentifier, forcedId);
         }
         catch (Exception)
         {

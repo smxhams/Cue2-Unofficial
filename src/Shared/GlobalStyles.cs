@@ -71,6 +71,11 @@ public partial class GlobalStyles : Node
 		ActiveStyle.BgColor = new Color((float)0.592,(float)0.294,(float)0.031,(float)0.6);
 		
 		//Danger Style
+		_dangerStyle.BorderWidthBottom = 2;
+		_dangerStyle.BorderWidthRight = 2;
+		_dangerStyle.BorderWidthLeft = 2;
+		_dangerStyle.BorderWidthTop = 2;
+		_dangerStyle.BorderColor = _highColor2;
 		_highColor5.A = 0.5f;
 		_dangerStyle.BgColor = _highColor5;
 

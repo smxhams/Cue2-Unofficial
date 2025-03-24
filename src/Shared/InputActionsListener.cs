@@ -38,6 +38,7 @@ public partial class InputActionsListener : Node
         if (Input.IsActionJustPressed("SaveSession"))
         {
             GD.Print("Save");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Save));
         }
         
         if (Input.IsActionJustPressed("Go"))

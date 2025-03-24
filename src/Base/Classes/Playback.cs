@@ -41,18 +41,18 @@ public partial class Playback : Node
 		_globalSignals.StopAll += StopAll;
 	}
 	
-	public async void PlayMedia(string mediaPath, Window window = null)
+	public async void PlayMedia(Cue cue, Window window = null)
 	{
 		var mediaPlayer = new MediaPlayer(_libVLC);
-		var media = new Media(_libVLC, mediaPath);
+		var media = new Media(_libVLC, cue.FilePath);
 		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
 		while (media.IsParsed != true) { }
 		
 		mediaPlayer.Media = media;
 		
 		var (hasVideo, hasAudio) = GetMediaType(media);
-
 		MediaPlayers.Add(_playbackIndex, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+		
 		
 		if (hasVideo && window != null)
 		{
@@ -69,9 +69,10 @@ public partial class Playback : Node
 		
 		MediaPlayers[_playbackIndex].MediaPlayer.Volume = 100;
 		MediaPlayers[_playbackIndex].MediaPlayer.Play();
+		_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cue.Id);
 		
 		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
-		
+		_playbackIndex++;
 		media.Dispose();
 	}
 

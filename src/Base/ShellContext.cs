@@ -43,6 +43,13 @@ public partial class ShellContext : MarginContainer
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = _focusedCue.FilePath;
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum").Text = _focusedCue.CueNum;
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName").Text = _focusedCue.Name;
+		GetNode<Label>("%cueId").Text = _focusedCue.Id.ToString();
+		if (_focusedCue.ParentId != -1)
+		{
+			GetNode<Label>("%ParentCueLabel").Visible = true;
+			GetNode<Label>("%ParentCueLabel").Text = ("Parent: " + CueList.FetchCueFromId(_focusedCue.ParentId).Name);
+		}
+		else GetNode<Label>("%ParentCueLabel").Visible = false;
 
 	}
 
@@ -61,7 +68,7 @@ public partial class ShellContext : MarginContainer
 		var fileExtension = Path.GetExtension(newPath);
 		_focusedCue.Type = fileExtension switch // Sets type based on extension
 		{
-			".wav" => "Audio",
+			".wav" or ".mp3" => "Audio",
 			".mp4" or ".mov" or ".avi" or ".mpg" => "Video",
 			_ => _focusedCue.Type
 		};
@@ -75,7 +82,7 @@ public partial class ShellContext : MarginContainer
 		_focusedCue.CueNum = data; // Updates Cue with user input
 		var shellObj = _focusedCue.ShellBar;
 		//Directly update shell bar (This might be a terrible way of doing it)
-		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(2).Text = data;
+		shellObj.GetNode<LineEdit>("%CueNumber").Text = data;
 	}
 	private void _onShellNameTextChanged(string data)
 	{
@@ -84,6 +91,6 @@ public partial class ShellContext : MarginContainer
 	
 		//Directly update shell bar (This might be a terrible way of doing it)
 		var shellObj = _focusedCue.ShellBar;
-		shellObj.GetChild(1).GetChild(0).GetChild<LineEdit>(3).Text = data;
+		shellObj.GetNode<LineEdit>("%CueName").Text = data;
 	}
 }

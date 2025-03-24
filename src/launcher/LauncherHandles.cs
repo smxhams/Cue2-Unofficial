@@ -24,6 +24,7 @@ public partial class LauncherHandles : Control
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		_windowNumber = GetWindow().GetWindowId();
 	}
 
 	private void _on_right_gui_input(InputEvent @event){
