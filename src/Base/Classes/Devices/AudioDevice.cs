@@ -35,6 +35,7 @@ public class AudioDevice : IDevice
         Name = name;
         Channels = channels;
         VLCIdentifier = vlcId;
+        
 
     }
     

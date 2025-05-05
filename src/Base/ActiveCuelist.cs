@@ -47,8 +47,8 @@ public partial class ActiveCuelist : PanelContainer
 	private void LoadActiveCueBar(int playbackIndex, Cue cue)
 	{
 		// Load in a shell bar
-		var activeCueBarScene = GD.Load<PackedScene>("res://src/Base/ActiveCueBar.tscn");
-		var activeBar = activeCueBarScene.Instantiate();
+		string error;
+		var activeBar = SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out error);
 		var container = GetNode<VBoxContainer>("ScrollContainer/ActiveCueContainer");
 		container.AddChild(activeBar);
 		

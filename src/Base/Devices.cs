@@ -47,6 +47,7 @@ public partial class Devices : Node
 
         }
 
+        GD.Print("Device null return");
         return null;
     }
 

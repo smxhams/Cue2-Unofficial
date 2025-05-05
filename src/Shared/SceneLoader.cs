@@ -61,12 +61,12 @@ public static class SceneLoader
             if (ResourceLoader.HasCached(path))
             {
                 scene = (PackedScene)ResourceLoader.Load(path);
-                GD.Print($"Retrieved cached PackedScene: {path}");
+                //GD.Print($"Retrieved cached PackedScene: {path}");
             }
             else
             {
                 scene = GD.Load<PackedScene>(path);
-                GD.Print($"Loaded PackedScene freshly and cached it: {path}");
+                //GD.Print($"Loaded PackedScene freshly and cached it: {path}");
             }
 
             if (scene == null)

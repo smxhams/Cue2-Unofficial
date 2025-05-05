@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
@@ -39,7 +40,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         
-        _deviceOutputPatchMatrixScene = GD.Load<PackedScene>("uid://cisr40jsg2jgp");
+        _deviceOutputPatchMatrixScene = SceneLoader.LoadPackedScene("uid://cisr40jsg2jgp", out string error);
         _deviceContainer = GetNode<HBoxContainer>("%DeviceOutputsListHBoxContainer");
         
         GD.Print("Patch matrix loaded with id: " + PatchId + " and name: " + Patch.Name);
@@ -65,7 +66,7 @@ public partial class AudioOutputPatchMatrix : Control
     public int GetId() => PatchId;
 
 
-    public void SyncAudioDeviceDisplays()
+    public async void SyncAudioDeviceDisplays()
     {
         GD.Print("Syncing devices in audio output patch matrix");
         // For now we remove devices and start fresh while developing, in future match agaisnt info instead.
@@ -73,9 +74,10 @@ public partial class AudioOutputPatchMatrix : Control
         var children = _deviceContainer.GetChildren();
         foreach (var child in children)
         {
-            // There is a bug where the signal is emmited from use device button, which then deletes its immediately. This needs to be queuefree() once implemented not deleteing and recreating each sync.
-            child.Free();
+            child.QueueFree();
         }
+
+        await ToSignal(GetTree(), "process_frame");
         
         _availableDeviceList = _globalData.Playback.GetAvailibleAudioDevices();
         
@@ -145,11 +147,10 @@ public partial class AudioOutputPatchMatrix : Control
     }
     private void LoadEnabledDeviceChannels(AudioDevice device, Node parent)
     {
-        PackedScene deviceChannel = GD.Load<PackedScene>("uid://df7ig5m4ys00r"); // Device channel ui (DeviceOutputChannel.tscn)
         var parentIndex = parent.GetIndex();
         for (int i = 0; i < device.Channels; i++)
         {
-            Node instance = deviceChannel.Instantiate();
+            Node instance = SceneLoader.LoadScene("uid://df7ig5m4ys00r", out string error);
             instance.Set("DeviceCId", device.DeviceId);
             instance.Set("DeviceChannel", i);
             _deviceContainer.AddChild(instance);
@@ -177,7 +178,7 @@ public partial class AudioOutputPatchMatrix : Control
         return _currentDeivceList.Count;
     }
 
-    private void BuildPatchMatrix()
+    private async void BuildPatchMatrix()
     {
         // For now remove everything and start over on each build - eventauly should build once and update
         var children = _patchMatrix.GetChildren();
@@ -185,20 +186,19 @@ public partial class AudioOutputPatchMatrix : Control
         {
             foreach (var cb in child.GetChildren())
             {
-                cb.Free();
+                cb.QueueFree();
             }
         }
-        
-        PackedScene checkBoxScene = GD.Load<PackedScene>("uid://cbdaknpeq3im1"); // Checkbox
+        await ToSignal(GetTree(), "process_frame");
         children = _patchMatrix.GetChildren(); // Should be HboxContainers for each channel
         var devicesArray = _deviceContainer.GetChildren();
         
         // Loops all channels and availible devices and gives it a disabled checkbox.
         for (int channel = 0; channel < Patch.Channels.Count; channel++) // 0 - 6 until add/remove channel functionality added.
         {
-            for (int i = 0; i < devicesArray.Count(); i++)  
+            for (int i = 0; i < devicesArray.Count(); i++)
             {
-                Node checkBoxInstance = checkBoxScene.Instantiate<AudioMatrixCheckBox>();
+                Node checkBoxInstance = SceneLoader.LoadScene("uid://cbdaknpeq3im1", out string error);
                 
                 var hasId = devicesArray[i].Get("DeviceCId");
                 var hasChannel =  devicesArray[i].Get("DeviceChannel");

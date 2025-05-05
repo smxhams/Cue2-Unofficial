@@ -156,17 +156,12 @@ public partial class SaveManager : Node
 			GD.PrintErr($"JSON parse error: {parseResult}");
 			return;
 		}
-
-		GD.Print("1");
+		
 		var data = json.Data.AsGodotDictionary();
-		GD.Print("2");
 		ResetSession();
 		_globalData.SessionName = Path.GetFileName(path);
 		_globalData.SessionPath = path;
-		GD.Print("3");
-		
 		LoadSession(data);
-		GD.Print("4");
 	}
 
 	private void ResetSession()
@@ -178,8 +173,7 @@ public partial class SaveManager : Node
 
 	private void LoadSession(Godot.Collections.Dictionary data)
 	{
-		GD.Print("5");
-		GD.Print(data);
+		//GD.Print(data);
 
 		//GD.Print("This here: " + data["Settings"]);
 		
@@ -278,11 +272,11 @@ public partial class SaveManager : Node
 			if ((string)saveType.Key == "cuelist")
 			{
 				foundCuelist = true;
-				GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
+				//GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
 				foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
 				{
 					cuelistOrder.Add((int)cue.Key, (int)cue.Value);
-					GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
+					//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
 				}
 
 			}

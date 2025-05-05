@@ -49,7 +49,7 @@ custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
 
 [node name="Line2D" type="Line2D" parent="BackPanel/HBoxContainer/OffSetWithLine"]
-points = PackedVector2Array(30, 12, 12, 12, 12, 0)
+points = PackedVector2Array(30, 12, 12, 12, 12, -12)
 width = 1.0
 default_color = Color(0.340659, 0.340659, 0.340659, 1)
 
