@@ -57,7 +57,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
 
         public Channel()
         {
-            
+             
         }
         
         public Channel(Godot.Collections.Dictionary<string, bool> data = null)

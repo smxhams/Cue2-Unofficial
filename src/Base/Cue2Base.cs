@@ -36,7 +36,7 @@ public partial class Cue2Base : Control
 	{
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.CloseSettingsWindow += close_settings_window;
+		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_connections = GetNode<Connections>("/root/Connections");
 
@@ -55,57 +55,7 @@ public partial class Cue2Base : Control
 		_globalData.VideoWindow = VideoWindow;*/
 		
 	}
-
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-	
-	
-	private void _on_settings_toggled(Boolean @toggle){
-		if (@toggle == true){
-			if (_settingsWindow == null)
-			{
-				var settings = GD.Load<PackedScene>("res://src/Base/settings.tscn");
-				_settingsWindow = settings.Instantiate();
-				AddChild(_settingsWindow);
-			}
-			else {
-				_settingsWindow.GetWindow().Show();
-			}
-			
-		}
-		if (@toggle == false){
-			_settingsWindow.GetWindow().Hide();
-		}
-	}
-	private void close_settings_window(){ //From global signal, emitted by close button of settings window.
-		GetNode<Button>("MarginContainer/BoxContainer/HeaderContainer/Settings").ButtonPressed = false;
-		
-	}
-
-	private void _on_go_pressed()
-	{
-		Go();
-	}
-	
-	private void _on_stop_pressed()
-	{
-		_globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
-	}
 	
 
-	private void Go()
-	{
-		// In Future this should only pass the selected cue's command to interpreter which will instruct relevant workers what to do
-		
-		// Check for next cue
-		foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
-		{
-			var cue = (Cue)cue1;
-			_globalData.CueCommandInterpreter.CueCommandExectutor.ExecuteCommand(cue);
-		}
-	}
 	
 }

@@ -43,7 +43,8 @@ public partial class InputActionsListener : Node
         
         if (Input.IsActionJustPressed("Go"))
         {
-            GD.Print("Go");
+            GD.Print("Inpout Action: Go");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Go));
         }
         
         if (Input.IsActionJustPressed("StopAll")) 

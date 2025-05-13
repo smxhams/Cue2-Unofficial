@@ -5,6 +5,7 @@ using System.Collections;
 namespace Cue2.Shared;
 public partial class GlobalStyles : Node
 {
+	private Theme _theme;
 
 	private static StyleBoxFlat _hoverStyle = new StyleBoxFlat();
 	private static StyleBoxFlat _focusedStyle = new StyleBoxFlat();
@@ -28,6 +29,8 @@ public partial class GlobalStyles : Node
 	
 	public override void _Ready()
 	{
+		_theme = GetTree().Root.GetTheme();
+		
 		SetProcess(false); // This class is only for statics - disable process
 		// Default Style
 		ActiveStyle.BorderWidthBottom = 0;

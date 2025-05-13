@@ -34,26 +34,20 @@ public partial class GlobalSignals : Node
 	
 	
 	// Signals Associated with InputActions
-	[Signal]
-	public delegate void SaveEventHandler();
-	[Signal]
-	public delegate void SaveAsEventHandler();
+	[Signal] public delegate void SaveEventHandler();
+	[Signal] public delegate void SaveAsEventHandler();
 
-	[Signal]
-	public delegate void OpenSessionEventHandler();
-	
-	
-	[Signal]
-	public delegate void StopAllEventHandler();
+	[Signal] public delegate void OpenSessionEventHandler();
 
-	[Signal]
-	public delegate void GoEventHandler();
+	[Signal] public delegate void GoEventHandler();
 	
-	[Signal]
-	public delegate void CreateCueEventHandler();
+	[Signal] public delegate void StopAllEventHandler();
 	
-	[Signal]
-	public delegate void CreateGroupEventHandler();
+	[Signal] public delegate void PauseAllEventHandler();
+	
+	[Signal] public delegate void CreateCueEventHandler();
+	
+	[Signal] public delegate void CreateGroupEventHandler();
 	
 	
 	

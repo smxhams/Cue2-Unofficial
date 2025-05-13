@@ -133,6 +133,8 @@ public partial class CueList : ScrollContainer
 		CueIndex = state.GetCueIndex();
 	}
 		
+	/*
+	 // Old UI for add shell and group buttons - removed from UI 10/05/25
 	// Received Signal Handling
 	private void _on_add_shell_pressed()
 		// Signal from add shell button
@@ -144,6 +146,7 @@ public partial class CueList : ScrollContainer
 	{
 		CreateGroup();
 	}
+	*/
 	
 	
 	

@@ -15,7 +15,7 @@ config/version="0.00.003"
 run/main_scene="res://src/Base/Cue2Base.tscn"
 config/features=PackedStringArray("4.4", "C#")
 boot_splash/fullsize=false
-boot_splash/image="uid://dy4yf406ogmju"
+boot_splash/image="uid://da3ic4ewddkb"
 config/icon="res://icon.svg"
 
 [autoload]

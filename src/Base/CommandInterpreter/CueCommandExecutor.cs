@@ -1,7 +1,9 @@
 using System.Linq;
+using System.Runtime.InteropServices;
 using Cue2.Base.Classes;
 using Cue2.Shared;
 using Godot;
+using Hardware.Info;
 
 namespace Cue2.Base.CommandInterpreter;
 
@@ -14,8 +16,23 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         GD.Print("Cue Command Executor Successfully added");
+        
+        _globalSignals.Go += GoCommand;
     }
 
+    public void GoCommand()
+    {
+        if (!_globalData.ShellSelection.SelectedShells.Any())
+        {
+            GD.Print("No Shells Selected");
+            return;
+        }
+        foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
+        {
+            var cue = (Cue)cue1;
+            _globalData.CueCommandInterpreter.CueCommandExectutor.ExecuteCommand(cue);
+        } 
+    }
 
     public void ExecuteCommand(Cue cue)
     {
@@ -48,3 +65,4 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     }
 
 }
+
