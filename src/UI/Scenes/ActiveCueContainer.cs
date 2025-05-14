@@ -49,7 +49,7 @@ public partial class ActiveCuelist : PanelContainer
 		// Load in a shell bar
 		string error;
 		var activeBar = SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out error);
-		var container = GetNode<VBoxContainer>("ScrollContainer/ActiveCueContainer");
+		var container = GetNode<VBoxContainer>("%ActiveCueContainer");
 		container.AddChild(activeBar);
 		
 		activeBar.GetChild(0).GetChild(0).GetChild(0).GetChild(0).GetChild(1).GetChild<Label>(0).Text = cue.CueNum; // Cue Number
