@@ -147,7 +147,7 @@ public partial class Playback : Node
     {
 	    if (!MediaPlayers.TryGetValue(id, out var player)) return;
 	    GD.Print("Stopped: " + id + " : " + player.MediaPlayer.Title);
-	    ActiveCuelist.RemoveActiveCue(id);
+	    ActiveCueContainer.RemoveActiveCue(id);
 	    
 
 	    player.FadeOutTimer?.Stop();

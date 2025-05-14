@@ -1,0 +1,96 @@
+[gd_scene load_steps=2 format=3 uid="uid://bya2tf86xcdn6"]
+
+[ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="1_sahw6"]
+
+[node name="Cue List" type="ScrollContainer"]
+script = ExtResource("1_sahw6")
+metadata/_tab_index = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CueListHeader" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Container" type="Container" parent="VBoxContainer/CueListHeader"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+size_flags_stretch_ratio = 0.0
+
+[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader"]
+custom_minimum_size = Vector2(10, 15)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 60
+
+[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader/HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.3
+text = "Number"
+horizontal_alignment = 1
+
+[node name="Label2" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Name"
+horizontal_alignment = 1
+
+[node name="HSplitContainer2" type="HSplitContainer" parent="VBoxContainer/CueListHeader/HSplitContainer"]
+custom_minimum_size = Vector2(10, 15)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label3" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer2"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Target"
+horizontal_alignment = 1
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/CueListHeader"]
+layout_mode = 2
+
+[node name="Label4" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+text = "Pre-Wait"
+horizontal_alignment = 1
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+
+[node name="Label5" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+text = "Diration"
+horizontal_alignment = 1
+
+[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+
+[node name="Label6" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+text = "Post-Wait"
+horizontal_alignment = 1
+
+[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+
+[node name="Label7" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+text = "Follow"
+horizontal_alignment = 1
+
+[node name="VSeparator4" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+layout_mode = 2
+
+[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
+y_sort_enabled = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3

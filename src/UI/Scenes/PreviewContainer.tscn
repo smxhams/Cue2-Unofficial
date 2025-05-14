@@ -1,0 +1,49 @@
+[gd_scene load_steps=6 format=3 uid="uid://b1hhiqmg2m3c"]
+
+[ext_resource type="Script" uid="uid://dt5dcwbwscssc" path="res://src/Base/Preview.cs" id="1_c65rc"]
+[ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="2_avyjy"]
+[ext_resource type="Script" uid="uid://decsdgg8vwdwn" path="res://src/Base/VideoToTextureRect.cs" id="3_dmlci"]
+
+[sub_resource type="Gradient" id="Gradient_brprv"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_paorf"]
+gradient = SubResource("Gradient_brprv")
+
+[node name="PreviewContainer" type="PanelContainer"]
+visible = false
+clip_contents = true
+size_flags_horizontal = 3
+script = ExtResource("1_c65rc")
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="."]
+clip_contents = true
+layout_mode = 2
+
+[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer2"]
+clip_contents = true
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer2/HBoxContainer2"]
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Preview"
+clip_text = true
+
+[node name="GoLive" type="Button" parent="VBoxContainer2/HBoxContainer2"]
+clip_contents = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+focus_mode = 0
+text = "Go Live ->"
+clip_text = true
+
+[node name="TextureRect" type="TextureRect" parent="VBoxContainer2"]
+material = ExtResource("2_avyjy")
+layout_mode = 2
+size_flags_vertical = 3
+texture = SubResource("GradientTexture2D_paorf")
+expand_mode = 1
+stretch_mode = 4
+script = ExtResource("3_dmlci")

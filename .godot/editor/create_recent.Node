@@ -1,8 +1,10 @@
+HSeparator
+HBoxContainer
 VBoxContainer
+MarginContainer
 GridContainer
 Label
 Button
-HBoxContainer
 BoxContainer
 Container
 TextureButton
@@ -11,4 +13,3 @@ Panel
 VSeparator
 HSplitContainer
 Line2D
-PanelContainer

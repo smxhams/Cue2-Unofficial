@@ -16,6 +16,8 @@ namespace Cue2.Shared;
 
 public partial class GlobalData : Node
 {
+	public static string Version { get; } = "0.0.1-alpha";
+
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
 	
@@ -127,6 +129,11 @@ public partial class GlobalData : Node
 		}
 		return "";
 	}
+
+	/*public string Version()
+	{
+		return Version();
+	}*/
 
 
 }

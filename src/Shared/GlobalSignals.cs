@@ -41,9 +41,9 @@ public partial class GlobalSignals : Node
 
 	[Signal] public delegate void GoEventHandler();
 	
-	[Signal] public delegate void StopAllEventHandler();
-	
+	[Signal] public delegate void ResumeAllEventHandler();
 	[Signal] public delegate void PauseAllEventHandler();
+	[Signal] public delegate void StopAllEventHandler();
 	
 	[Signal] public delegate void CreateCueEventHandler();
 	

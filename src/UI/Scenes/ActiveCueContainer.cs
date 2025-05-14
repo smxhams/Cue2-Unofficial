@@ -6,13 +6,15 @@ using Cue2.Shared;
 
 namespace Cue2.Base;
 
-public partial class ActiveCuelist : PanelContainer
+public partial class ActiveCueContainer : PanelContainer
 {
 	private GlobalSignals _globalSignals;
 	private GlobalData Gd;
 	
 	private static Dictionary<int, ICue> _activeCues = new Dictionary<int, ICue>();
 	private static Dictionary<int, Node> _activeCueBars = new Dictionary<int, Node>();
+	
+	
 	
 
 	// Called when the node enters the scene tree for the first time.
@@ -21,6 +23,10 @@ public partial class ActiveCuelist : PanelContainer
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalSignals.CueGo += AddActiveCue;
 		Gd = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
+		
+		GetNode<Button>("%ResumeAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.ResumeAll));
+		GetNode<Button>("%PauseAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.PauseAll));
+		GetNode<Button>("%StopAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.

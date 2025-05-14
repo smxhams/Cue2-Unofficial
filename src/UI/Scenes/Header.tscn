@@ -1,8 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://cd4xfma7ijlpi"]
+[gd_scene load_steps=4 format=3 uid="uid://cd4xfma7ijlpi"]
 
-[ext_resource type="Script" uid="uid://bm26sjwgtda8d" path="res://src/UI/HeaderUI.cs" id="1_hgo6x"]
-[ext_resource type="Theme" uid="uid://7h1277c0156g" path="res://src/UI/GO_theme.tres" id="1_yk0o2"]
-[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="2_hgo6x"]
+[ext_resource type="Script" uid="uid://bm26sjwgtda8d" path="res://src/UI/Scenes/HeaderUI.cs" id="1_hgo6x"]
+[ext_resource type="Theme" uid="uid://7h1277c0156g" path="res://src/UI/Assets/GO_theme.tres" id="1_yk0o2"]
 [ext_resource type="Script" uid="uid://d20wrpbn8dhip" path="res://src/Base/Minor/CurrentTime.cs" id="3_s4p5t"]
 
 [node name="HeaderContainer" type="Control"]
@@ -47,32 +46,6 @@ layout_mode = 2
 focus_mode = 0
 placeholder_text = "Notes"
 editable = false
-
-[node name="StopAllButton" type="Button" parent="HBoxContainer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 50)
-layout_mode = 2
-focus_mode = 0
-theme = ExtResource("2_hgo6x")
-text = "Stop
-All"
-
-[node name="PauseAllButton" type="Button" parent="HBoxContainer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 50)
-layout_mode = 2
-focus_mode = 0
-theme = ExtResource("2_hgo6x")
-text = "Pause
-All"
-
-[node name="EDIT" type="Button" parent="HBoxContainer"]
-custom_minimum_size = Vector2(50, 50)
-layout_mode = 2
-toggle_mode = true
-text = "Edit
-Mode
-"
 
 [node name="CurrentTime" type="Label" parent="HBoxContainer"]
 layout_mode = 2

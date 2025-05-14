@@ -1,6 +1,6 @@
-[gd_resource type="Theme" load_steps=29 format=4 uid="uid://vidokm2ilwtk"]
+[gd_resource type="Theme" load_steps=30 format=4 uid="uid://vidokm2ilwtk"]
 
-[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/ShellPanelStyleBox.tres" id="1_pvqx4"]
+[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_pvqx4"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fcguj"]
 content_margin_left = 4.0
@@ -2038,6 +2038,18 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hdr5q"]
+content_margin_left = 8.0
+content_margin_top = 2.0
+content_margin_right = 8.0
+content_margin_bottom = 2.0
+bg_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 5
+
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_eyqo8"]
 grow_begin = -5.0
 grow_end = -5.0
@@ -2079,4 +2091,5 @@ TextEdit/colors/selection_color = Color(0.00392157, 0.231373, 0.25098, 1)
 TextEdit/styles/focus = SubResource("StyleBoxFlat_10v7r")
 TextEdit/styles/normal = SubResource("StyleBoxFlat_ih3n2")
 TextEdit/styles/read_only = SubResource("StyleBoxFlat_momij")
+TooltipPanel/styles/panel = SubResource("StyleBoxFlat_hdr5q")
 VSeparator/styles/separator = SubResource("StyleBoxLine_eyqo8")

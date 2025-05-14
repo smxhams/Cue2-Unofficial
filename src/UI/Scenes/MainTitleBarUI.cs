@@ -64,6 +64,8 @@ public partial class MainTitleBarUI : Control
         GetNode<PanelContainer>("%DropMenuEdit").MouseExited += () => _mouseInUi = false;
         GetNode<PanelContainer>("%DropMenuView").MouseEntered += () => _mouseInUi = true;
         GetNode<PanelContainer>("%DropMenuView").MouseExited += () => _mouseInUi = false;
+
+        GetNode<Button>("%TitleHelpMenu").TooltipText += GlobalData.Version;
         
         _syncHotkeys();
     }

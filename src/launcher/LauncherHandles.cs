@@ -4,7 +4,6 @@ namespace Cue2.launcher;
 public partial class LauncherHandles : Control
 {
 	//Variables
-
 	private bool _dragging;
 	private bool _resizing;
 	private Vector2I _initialMouse;

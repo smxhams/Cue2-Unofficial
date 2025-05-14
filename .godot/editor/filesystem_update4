@@ -50,3 +50,15 @@ res://src/Base/Cue2Base.tscn
 res://src/UI/MainTitleBar.tscn
 res://src/UI/ShellPanelStyleBox.tres
 res://src/UI/Header.tscn
+res://src/Base/shell_bar.tscn
+res://src/Base/ActiveCueBar.tscn
+res://src/UI/Scenes/MainTitleBar.tscn
+res://src/UI/Scenes/MainTitleBarUI.cs
+res://src/UI/Scenes/ActiveCueProgressBar.cs
+res://src/UI/Scenes/ButtonStyles.cs
+res://src/UI/Scenes/ActiveCueBar.cs
+res://src/UI/Scenes/HeaderUI.cs
+res://src/UI/Scenes/Header.tscn
+res://src/UI/Scenes/LiveViewContainer.tscn
+res://src/UI/Scenes/ActiveCueContainer.tscn
+res://src/UI/Scenes/ActiveCueContainer.cs

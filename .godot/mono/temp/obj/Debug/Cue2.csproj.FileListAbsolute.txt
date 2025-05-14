@@ -2319,3 +2319,4 @@ C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win\lib\net8.0\Sys
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win\lib\net8.0\System.Diagnostics.EventLog.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win\lib\net8.0\System.Diagnostics.PerformanceCounter.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win\lib\net8.0\System.Management.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\SDL3-CS.dll

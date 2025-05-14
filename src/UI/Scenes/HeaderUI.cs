@@ -16,8 +16,6 @@ public partial class HeaderUI : Control
         _goButton = GetNode<Button>("%GoButton");
         
         _goButton.Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Go));
-        GetNode<Button>("%StopAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
-        GetNode<Button>("%PauseAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.PauseAll));
         
         _syncHotkeys();
 

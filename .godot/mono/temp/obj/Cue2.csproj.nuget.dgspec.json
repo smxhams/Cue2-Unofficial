@@ -71,6 +71,10 @@
               "target": "Package",
               "version": "[13.0.3, )"
             },
+            "SDL3-CS": {
+              "target": "Package",
+              "version": "[3.2.12.3, )"
+            },
             "VLC.Native": {
               "target": "Package",
               "version": "[3.0.8, )"

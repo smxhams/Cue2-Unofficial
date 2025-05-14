@@ -1,0 +1,55 @@
+[gd_scene format=3 uid="uid://b6v72f8k5o0oy"]
+
+[node name="Footer" type="HBoxContainer"]
+
+[node name="BottomLeftContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+alignment = 2
+
+[node name="Version" type="Label" parent="BottomLeftContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "Version 0.01.000"
+
+[node name="VSeparator" type="VSeparator" parent="BottomLeftContainer"]
+layout_mode = 2
+
+[node name="Log" type="Label" parent="BottomLeftContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "Log 0"
+
+[node name="VSeparator2" type="VSeparator" parent="BottomLeftContainer"]
+layout_mode = 2
+
+[node name="Connections" type="Label" parent="BottomLeftContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
+theme_override_font_sizes/font_size = 9
+text = "Connections"
+
+[node name="VSeparator3" type="VSeparator" parent="BottomLeftContainer"]
+layout_mode = 2
+
+[node name="ErrorPrintout" type="Label" parent="BottomLeftContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "Attention Printout"
+
+[node name="BottomRightContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 2
+
+[node name="RAMUsage" type="Label" parent="BottomRightContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "Ram:"
+
+[node name="VSeparator3" type="VSeparator" parent="BottomRightContainer"]
+layout_mode = 2
+
+[node name="CPUUsage" type="Label" parent="BottomRightContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "CPU"

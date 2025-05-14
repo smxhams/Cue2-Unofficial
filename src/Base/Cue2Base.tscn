@@ -1,24 +1,18 @@
-[gd_scene load_steps=32 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=29 format=4 uid="uid://df4ulfsdrorsq"]
 
-[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
+[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
-[ext_resource type="PackedScene" uid="uid://cd4xfma7ijlpi" path="res://src/UI/Header.tscn" id="3_7gle1"]
-[ext_resource type="PackedScene" uid="uid://db8fxhod3yfo6" path="res://src/UI/MainTitleBar.tscn" id="3_7xm62"]
-[ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="5_s37bb"]
-[ext_resource type="Script" uid="uid://dt5dcwbwscssc" path="res://src/Base/Preview.cs" id="7_n83c7"]
-[ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="9_8xqi4"]
-[ext_resource type="Script" uid="uid://kn4836ff80ga" path="res://src/Base/ActiveCuelist.cs" id="9_sqddi"]
-[ext_resource type="Script" uid="uid://chcl0xrao25cs" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
-[ext_resource type="Script" uid="uid://decsdgg8vwdwn" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
+[ext_resource type="PackedScene" uid="uid://cd4xfma7ijlpi" path="res://src/UI/Scenes/Header.tscn" id="3_7gle1"]
+[ext_resource type="PackedScene" uid="uid://db8fxhod3yfo6" path="res://src/UI/Scenes/MainTitleBar.tscn" id="3_7xm62"]
+[ext_resource type="PackedScene" uid="uid://bya2tf86xcdn6" path="res://src/UI/Scenes/CueListUI.tscn" id="4_7gle1"]
+[ext_resource type="PackedScene" uid="uid://b1hhiqmg2m3c" path="res://src/UI/Scenes/PreviewContainer.tscn" id="5_lfhyt"]
+[ext_resource type="PackedScene" uid="uid://c7uaftlqmt1qj" path="res://src/UI/Scenes/ActiveCueContainer.tscn" id="6_jn5cm"]
+[ext_resource type="PackedScene" uid="uid://cm5s0bi03612d" path="res://src/UI/Scenes/ShellInspector.tscn" id="7_7gle1"]
+[ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
 [ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://crc7u0mdel1jo" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
-
-[sub_resource type="Gradient" id="Gradient_brprv"]
-
-[sub_resource type="GradientTexture2D" id="GradientTexture2D_paorf"]
-gradient = SubResource("Gradient_brprv")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
 content_margin_left = 4.0
@@ -2425,99 +2419,13 @@ current_tab = 0
 tabs_visible = false
 drag_to_rearrange_enabled = true
 
-[node name="Cue List" type="ScrollContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer"]
-layout_mode = 2
-script = ExtResource("5_s37bb")
-metadata/_tab_index = 0
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="CueListHeader" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer"]
+[node name="Cue List" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer" instance=ExtResource("4_7gle1")]
 layout_mode = 2
 
-[node name="Container" type="Container" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader"]
-custom_minimum_size = Vector2(50, 0)
+[node name="Passive Cues" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer"]
+visible = false
 layout_mode = 2
-size_flags_stretch_ratio = 0.0
-
-[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader"]
-custom_minimum_size = Vector2(10, 15)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 60
-
-[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HSplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 0.3
-text = "Number"
-horizontal_alignment = 1
-
-[node name="Label2" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Name"
-horizontal_alignment = 1
-
-[node name="HSplitContainer2" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HSplitContainer"]
-custom_minimum_size = Vector2(10, 15)
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="Label3" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer2"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Target"
-horizontal_alignment = 1
-
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader"]
-layout_mode = 2
-
-[node name="Label4" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-text = "Pre-Wait"
-horizontal_alignment = 1
-
-[node name="VSeparator" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-
-[node name="Label5" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-text = "Diration"
-horizontal_alignment = 1
-
-[node name="VSeparator2" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-
-[node name="Label6" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-text = "Post-Wait"
-horizontal_alignment = 1
-
-[node name="VSeparator3" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-
-[node name="Label7" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-text = "Follow"
-horizontal_alignment = 1
-
-[node name="VSeparator4" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer/CueListHeader/HBoxContainer"]
-layout_mode = 2
-
-[node name="CueContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer/Cue List/VBoxContainer"]
-unique_name_in_owner = true
-y_sort_enabled = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+metadata/_tab_index = 1
 
 [node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer"]
 clip_contents = true
@@ -2525,266 +2433,65 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
 
-[node name="PreviewContainer" type="PanelContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer"]
-visible = false
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-script = ExtResource("7_n83c7")
-
-[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer"]
-clip_contents = true
+[node name="PreviewContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("5_lfhyt")]
 layout_mode = 2
 
-[node name="HBoxContainer2" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2"]
-clip_contents = true
+[node name="LiveViewContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("6_jn5cm")]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2/HBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Preview"
-clip_text = true
-
-[node name="GoLive" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2/HBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-focus_mode = 0
-text = "Go Live ->"
-clip_text = true
-
-[node name="TextureRect" type="TextureRect" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/PreviewContainer/VBoxContainer2"]
-material = ExtResource("9_8xqi4")
-layout_mode = 2
-size_flags_vertical = 3
-texture = SubResource("GradientTexture2D_paorf")
-expand_mode = 1
-stretch_mode = 4
-script = ExtResource("10_2xgyo")
-
-[node name="LiveViewContainer" type="PanelContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer"]
-clip_contents = true
-custom_minimum_size = Vector2(200, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-script = ExtResource("9_sqddi")
-
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/LiveViewContainer"]
-layout_mode = 2
-
-[node name="ActiveCueContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/LiveViewContainer/ScrollContainer"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="HBoxContainer2" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/LiveViewContainer/ScrollContainer/ActiveCueContainer"]
-clip_contents = true
-layout_mode = 2
-
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer/LiveViewContainer/ScrollContainer/ActiveCueContainer/HBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Live Output"
-clip_text = true
-
-[node name="PanelContainer" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
+[node name="InspectorTabs" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 current_tab = 1
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
 
-[node name="Library" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer"]
+[node name="Library" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 0
 
-[node name="Shell" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer"]
-layout_mode = 2
-theme_override_constants/margin_left = 5
-theme_override_constants/margin_top = 5
-theme_override_constants/margin_right = 5
-theme_override_constants/margin_bottom = 5
-script = ExtResource("9_y5hkk")
-metadata/_tab_index = 1
-
-[node name="ShellScroll" type="ScrollContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell"]
+[node name="Shell" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs" instance=ExtResource("7_7gle1")]
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="TextEdit" type="LineEdit" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer"]
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 2
-placeholder_text = "Command Line"
-
-[node name="ShellVBox" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="ShellRow1" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 0.4
-
-[node name="GridContainer" type="GridContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1"]
-layout_mode = 2
-columns = 2
-
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 0
-text = "Number:"
-
-[node name="CueNum" type="LineEdit" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
-custom_minimum_size = Vector2(80, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "Cue numbers  can be any symbol. Max length of 4 characters."
-placeholder_text = "Cue Num"
-alignment = 1
-max_length = 4
-
-[node name="CurrentType" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
-layout_mode = 2
-text = "Shell Type:"
-
-[node name="TypeOption" type="OptionButton" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
-custom_minimum_size = Vector2(100, 0)
-layout_mode = 2
-
-[node name="ParentCueLabel" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
-unique_name_in_owner = true
+[node name="Audio" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
 visible = false
 layout_mode = 2
-
-[node name="VSeparator" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
-layout_mode = 2
-
-[node name="ShellRow2" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="GridContainer" type="GridContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2"]
-layout_mode = 2
-columns = 2
-
-[node name="Label2" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 0
-text = "Name:"
-
-[node name="ShellName" type="LineEdit" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
-custom_minimum_size = Vector2(300, 0)
-layout_mode = 2
-placeholder_text = "Shell Name"
-
-[node name="ButtonSelectFile" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
-layout_mode = 2
-text = "Select File"
-
-[node name="fileURL" type="LineEdit" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "URL (Can drag and drop files here)"
-
-[node name="VSeparator2" type="VSeparator" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
-layout_mode = 2
-
-[node name="ShellRow3" type="VBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 0
-size_flags_stretch_ratio = 0.21
-
-[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3/HBoxContainer"]
-layout_mode = 2
-text = "Cue Trigger:"
-
-[node name="Trigger" type="OptionButton" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-
-[node name="cueId" type="Label" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="Audio" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer"]
-visible = false
-layout_mode = 2
+tooltip_text = "A shells audio content and parameters."
 metadata/_tab_index = 2
 
-[node name="Video" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/PanelContainer"]
+[node name="Video" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
 visible = false
 layout_mode = 2
+tooltip_text = "A shells video content and parameters."
 metadata/_tab_index = 3
 
-[node name="BottomContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer"]
+[node name="Timeline" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
+visible = false
 layout_mode = 2
+tooltip_text = "Timeline of this shells playback and it's children."
+metadata/_tab_index = 4
 
-[node name="BottomLeftContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/BottomContainer"]
+[node name="Connection" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
+visible = false
 layout_mode = 2
-alignment = 2
+tooltip_text = "Connection controls"
+metadata/_tab_index = 5
 
-[node name="Version" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
+[node name="Network" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
+visible = false
 layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "Version 0.01.000"
+tooltip_text = "Network commands"
+metadata/_tab_index = 6
 
-[node name="VSeparator" type="VSeparator" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
+[node name="Control" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
+visible = false
 layout_mode = 2
+tooltip_text = "Control commands to itself or other cues."
+metadata/_tab_index = 7
 
-[node name="Log" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
+[node name="Footer" parent="MarginContainer/BoxContainer" instance=ExtResource("8_jn5cm")]
 layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "Log 0"
-
-[node name="VSeparator2" type="VSeparator" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
-layout_mode = 2
-
-[node name="Connections" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
-theme_override_font_sizes/font_size = 9
-text = "Connections"
-
-[node name="VSeparator3" type="VSeparator" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
-layout_mode = 2
-
-[node name="ErrorPrintout" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "Attention Printout"
-
-[node name="BottomRightContainer" type="HBoxContainer" parent="MarginContainer/BoxContainer/BottomContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-alignment = 2
-
-[node name="RAMUsage" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomRightContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "Ram:"
-
-[node name="VSeparator3" type="VSeparator" parent="MarginContainer/BoxContainer/BottomContainer/BottomRightContainer"]
-layout_mode = 2
-
-[node name="CPUUsage" type="Label" parent="MarginContainer/BoxContainer/BottomContainer/BottomRightContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-text = "CPU"
 
 [node name="MainWindowHandles" type="Control" parent="."]
 layout_mode = 1
@@ -2893,9 +2600,6 @@ access = 2
 use_native_dialog = true
 script = ExtResource("13_03w3m")
 
-[connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onCueNumTextChanged"]
-[connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onShellNameTextChanged"]
-[connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ButtonSelectFile" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_on_button_select_file_pressed"]
 [connection signal="gui_input" from="MainWindowHandles/DragBar" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
 [connection signal="gui_input" from="MainWindowHandles/Right" to="MainWindowHandles" method="_on_right_gui_input"]
 [connection signal="gui_input" from="MainWindowHandles/Bottom" to="MainWindowHandles" method="_on_bottom_gui_input"]
