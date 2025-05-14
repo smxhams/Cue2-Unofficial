@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <Import Project="$(NuGetPackageRoot)vlc.native\3.0.8\build\VLC.Native.targets" Condition="Exists('$(NuGetPackageRoot)vlc.native\3.0.8\build\VLC.Native.targets')" />
+    <Import Project="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.18\build\VideoLAN.LibVLC.Windows.targets" Condition="Exists('$(NuGetPackageRoot)videolan.libvlc.windows\3.0.18\build\VideoLAN.LibVLC.Windows.targets')" />
+  </ImportGroup>
+</Project>
