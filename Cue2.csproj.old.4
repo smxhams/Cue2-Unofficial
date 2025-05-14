@@ -1,0 +1,24 @@
+<Project Sdk="Godot.NET.Sdk/4.3.0">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'android' ">net7.0</TargetFramework>
+    <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'ios' ">net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Hardware.Info" Version="101.0.0" />
+    <PackageReference Include="LibVLCSharp" Version="3.7.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.18" />
+    <PackageReference Update="Godot.SourceGenerators" Version="4.4.0-dev.5" />
+    <PackageReference Update="GodotSharp" Version="4.4.0-dev.5" />
+    <PackageReference Include="VLC.Native" Version="3.0.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="src\Learning\Links.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="src\Base\Classes\PlaybackPRE_TEXTRECT_CHANGE.cs" />
+  </ItemGroup>
+</Project>
