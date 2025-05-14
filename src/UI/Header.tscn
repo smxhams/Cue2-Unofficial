@@ -1,20 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://cd4xfma7ijlpi"]
+[gd_scene load_steps=5 format=3 uid="uid://cd4xfma7ijlpi"]
 
 [ext_resource type="Script" uid="uid://bm26sjwgtda8d" path="res://src/UI/HeaderUI.cs" id="1_hgo6x"]
 [ext_resource type="Theme" uid="uid://7h1277c0156g" path="res://src/UI/GO_theme.tres" id="1_yk0o2"]
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="2_hgo6x"]
 [ext_resource type="Script" uid="uid://d20wrpbn8dhip" path="res://src/Base/Minor/CurrentTime.cs" id="3_s4p5t"]
-
-[sub_resource type="InputEventKey" id="InputEventKey_h6px0"]
-device = -1
-keycode = 32
-physical_keycode = 32
-key_label = 32
-unicode = 32
-
-[sub_resource type="Shortcut" id="Shortcut_h2t1i"]
-resource_name = "Go"
-events = [SubResource("InputEventKey_h6px0")]
 
 [node name="HeaderContainer" type="Control"]
 custom_minimum_size = Vector2(0, 50)
@@ -41,7 +30,6 @@ custom_minimum_size = Vector2(50, 50)
 layout_mode = 2
 focus_mode = 0
 theme = ExtResource("1_yk0o2")
-shortcut = SubResource("Shortcut_h2t1i")
 text = "GO"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HBoxContainer"]
