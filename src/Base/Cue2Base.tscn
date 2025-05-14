@@ -1,9 +1,9 @@
-[gd_scene load_steps=34 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=32 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
 [ext_resource type="PackedScene" uid="uid://cd4xfma7ijlpi" path="res://src/UI/Header.tscn" id="3_7gle1"]
-[ext_resource type="PackedScene" uid="uid://db8fxhod3yfo6" path="res://src/UI/TitleBar.tscn" id="3_7xm62"]
+[ext_resource type="PackedScene" uid="uid://db8fxhod3yfo6" path="res://src/UI/MainTitleBar.tscn" id="3_7xm62"]
 [ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="5_s37bb"]
 [ext_resource type="Script" uid="uid://dt5dcwbwscssc" path="res://src/Base/Preview.cs" id="7_n83c7"]
 [ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="9_8xqi4"]
@@ -11,7 +11,6 @@
 [ext_resource type="Script" uid="uid://chcl0xrao25cs" path="res://src/Base/ShellContext.cs" id="9_y5hkk"]
 [ext_resource type="Script" uid="uid://decsdgg8vwdwn" path="res://src/Base/VideoToTextureRect.cs" id="10_2xgyo"]
 [ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
-[ext_resource type="Script" uid="uid://dmlh3yawtqnqu" path="res://src/Base/DropMenuFile.cs" id="11_s3fp6"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://crc7u0mdel1jo" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
@@ -2363,9 +2362,6 @@ border_width_right = 1
 border_width_bottom = 1
 border_color = Color(0.00392157, 0.231373, 0.25098, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xe5ey"]
-bg_color = Color(0.0588235, 0.0588235, 0.0588235, 1)
-
 [node name="Cue2Base" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -2401,7 +2397,8 @@ theme_override_constants/margin_bottom = 5
 layout_mode = 2
 vertical = true
 
-[node name="TitleBar" parent="MarginContainer/BoxContainer" instance=ExtResource("3_7xm62")]
+[node name="TitleBarSpacer" type="BoxContainer" parent="MarginContainer/BoxContainer"]
+custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
 [node name="Header" parent="MarginContainer/BoxContainer" instance=ExtResource("3_7gle1")]
@@ -2789,7 +2786,7 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "CPU"
 
-[node name="launcherHandles" type="Control" parent="."]
+[node name="MainWindowHandles" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -2797,22 +2794,28 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme = SubResource("Theme_5ouab")
 script = ExtResource("11_bmgx0")
 
-[node name="DragBar" type="Control" parent="launcherHandles"]
+[node name="DragBar" type="Control" parent="MainWindowHandles"]
 custom_minimum_size = Vector2(10, 22)
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 97.0
-offset_right = -184.0
+offset_left = 5.0
+offset_right = -6.0
 offset_bottom = 22.0
 grow_horizontal = 2
 mouse_default_cursor_shape = 6
 theme = SubResource("Theme_5ouab")
 
-[node name="Right" type="Control" parent="launcherHandles"]
+[node name="MainTitleBar" parent="MainWindowHandles" instance=ExtResource("3_7xm62")]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 1
+anchors_preset = 10
+anchor_bottom = 0.0
+grow_vertical = 1
+
+[node name="Right" type="Control" parent="MainWindowHandles"]
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 11
@@ -2823,7 +2826,7 @@ grow_horizontal = 0
 grow_vertical = 2
 mouse_default_cursor_shape = 10
 
-[node name="Bottom" type="Control" parent="launcherHandles"]
+[node name="Bottom" type="Control" parent="MainWindowHandles"]
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 12
@@ -2834,7 +2837,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_default_cursor_shape = 9
 
-[node name="Corner" type="Control" parent="launcherHandles"]
+[node name="Corner" type="Control" parent="MainWindowHandles"]
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 3
@@ -2848,7 +2851,7 @@ grow_horizontal = 0
 grow_vertical = 0
 mouse_default_cursor_shape = 12
 
-[node name="Border" type="Panel" parent="launcherHandles"]
+[node name="Border" type="Panel" parent="MainWindowHandles"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -2857,46 +2860,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_e2apv")
-
-[node name="DropMenuFile" type="PanelContainer" parent="."]
-visible = false
-custom_minimum_size = Vector2(100, 78)
-layout_mode = 1
-offset_left = 58.0
-offset_top = 22.0
-offset_right = 158.0
-offset_bottom = 100.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_xe5ey")
-script = ExtResource("11_s3fp6")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuFile"]
-layout_mode = 2
-mouse_filter = 0
-theme_override_constants/margin_left = 2
-theme_override_constants/margin_top = 2
-theme_override_constants/margin_right = 2
-theme_override_constants/margin_bottom = 2
-
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuFile/MarginContainer"]
-layout_mode = 2
-
-[node name="FileSave" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
-layout_mode = 2
-mouse_filter = 1
-text = "Save"
-alignment = 0
-
-[node name="FileSaveAs" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
-layout_mode = 2
-mouse_filter = 1
-text = "Save As"
-alignment = 0
-
-[node name="OpenSession" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
-layout_mode = 2
-mouse_filter = 1
-text = "Open"
-alignment = 0
 
 [node name="FileDialog" type="FileDialog" parent="."]
 title = "Open a File"
@@ -2933,12 +2896,8 @@ script = ExtResource("13_03w3m")
 [connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onCueNumTextChanged"]
 [connection signal="text_changed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_onShellNameTextChanged"]
 [connection signal="pressed" from="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell/ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ButtonSelectFile" to="MarginContainer/BoxContainer/VSplitContainer/PanelContainer/Shell" method="_on_button_select_file_pressed"]
-[connection signal="gui_input" from="launcherHandles/DragBar" to="launcherHandles" method="_on_drag_bar_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Right" to="launcherHandles" method="_on_right_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Bottom" to="launcherHandles" method="_on_bottom_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Corner" to="launcherHandles" method="_on_corner_gui_input"]
-[connection signal="mouse_exited" from="DropMenuFile/MarginContainer" to="DropMenuFile" method="_onMarginContainerMouseExited"]
-[connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/FileSave" to="DropMenuFile" method="_onFileSavePressed"]
-[connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/FileSaveAs" to="DropMenuFile" method="_onFileSaveAsPressed"]
-[connection signal="pressed" from="DropMenuFile/MarginContainer/dmFileContainer/OpenSession" to="DropMenuFile" method="_onOpenSessionPressed"]
+[connection signal="gui_input" from="MainWindowHandles/DragBar" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
+[connection signal="gui_input" from="MainWindowHandles/Right" to="MainWindowHandles" method="_on_right_gui_input"]
+[connection signal="gui_input" from="MainWindowHandles/Bottom" to="MainWindowHandles" method="_on_bottom_gui_input"]
+[connection signal="gui_input" from="MainWindowHandles/Corner" to="MainWindowHandles" method="_on_corner_gui_input"]
 [connection signal="file_selected" from="FileDialog" to="FileDialog" method="_on_file_selected"]

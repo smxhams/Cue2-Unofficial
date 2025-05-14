@@ -32,24 +32,30 @@ public partial class InputActionsListener : Node
     {
         if (Input.IsActionJustPressed("OpenSession"))
         {
-            GD.Print("Open Session");
+            GD.Print("Input Action: Open Session");
         }
         
         if (Input.IsActionJustPressed("SaveSession"))
         {
-            GD.Print("Save");
+            GD.Print("Input Action: Save");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Save));
+        }
+        
+        if (Input.IsActionJustPressed("SaveAsSession"))
+        {
+            GD.Print("Input Action: Save As");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.SaveAs));
         }
         
         if (Input.IsActionJustPressed("Go"))
         {
-            GD.Print("Inpout Action: Go");
+            GD.Print("Input Action: Go");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Go));
         }
         
         if (Input.IsActionJustPressed("StopAll")) 
         {
-            GD.Print("Stop All");
+            GD.Print("Input Action: Stop All");
             _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
         }
 

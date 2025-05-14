@@ -91,6 +91,42 @@ public partial class GlobalData : Node
 		}
 		
 	}
+	
+	public static string ParseHotkey(string action)
+	// Parse Hotkey will retyurn simple text representation of an input action.
+	// Currently used to display hotkeys in UI
+	{
+		// Check if the action exists in the Input Map
+		if (InputMap.HasAction(action))
+		{
+			// Get the list of input events for the action
+			var events = InputMap.ActionGetEvents(action);
+
+			foreach (InputEvent @event in events)
+			{
+				if (@event is InputEventKey keyEvent)
+				{
+					// Get the key and modifiers
+					string keyName = OS.GetKeycodeString(keyEvent.Keycode);
+					bool ctrlPressed = keyEvent.CtrlPressed;
+					bool shiftPressed = keyEvent.ShiftPressed;
+					bool altPressed = keyEvent.AltPressed;
+					bool metaPressed = keyEvent.MetaPressed;
+
+					// Build the hotkey string
+					string hotkey = "";
+					if (ctrlPressed) hotkey += "Ctrl + ";
+					if (shiftPressed) hotkey += "Shift + ";
+					if (altPressed) hotkey += "Alt + ";
+					if (metaPressed) hotkey += "Meta + ";
+					hotkey += keyName;
+
+					return hotkey;
+				}
+			}
+		}
+		return "";
+	}
 
 
 }
