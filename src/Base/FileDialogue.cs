@@ -24,7 +24,7 @@ public partial class FileDialogue : FileDialog
 
 		if (String.IsNullOrEmpty(extention))
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "File select failed: " + extention + " Invalid File Type");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "File select failed: " + extention + " Invalid File Type");
 			return;
 		}
 		else

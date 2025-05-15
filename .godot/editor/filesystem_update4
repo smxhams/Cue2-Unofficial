@@ -62,3 +62,4 @@ res://src/UI/Scenes/Header.tscn
 res://src/UI/Scenes/LiveViewContainer.tscn
 res://src/UI/Scenes/ActiveCueContainer.tscn
 res://src/UI/Scenes/ActiveCueContainer.cs
+res://src/UI/Scenes/Footer.tscn

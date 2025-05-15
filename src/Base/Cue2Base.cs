@@ -20,7 +20,6 @@ public partial class Cue2Base : Control
 {
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
-	private Connections _connections;
 
 	private Node _settingsWindow;
 	
@@ -38,7 +37,6 @@ public partial class Cue2Base : Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
-		_connections = GetNode<Connections>("/root/Connections");
 
 		// Creation and assignment of test video output window - in future this will be created in settings
 		/*VideoWindow = new Window();

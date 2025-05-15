@@ -7,30 +7,22 @@ namespace Cue2.Shared;
 public partial class GlobalSignals : Node
 {
 
-	[Signal]
-	public delegate void CloseSettingsWindowEventHandler();
+	[Signal]  public delegate void CloseSettingsWindowEventHandler();
 
-	[Signal]
-	public delegate void ShellFocusedEventHandler(int cueId);
+	[Signal]  public delegate void ShellFocusedEventHandler(int cueId);
 
-	[Signal]
-	public delegate void ErrorLogEventHandler(string errorLog, int type);
+	[Signal]  public delegate void LogEventHandler(string log, int type);
 
-	[Signal]
-	public delegate void FileSelectedEventHandler(string path);
+	[Signal]  public delegate void FileSelectedEventHandler(string path);
 
-	[Signal]
-	public delegate void CueGoEventHandler(int playbackId, int cueId);
+	[Signal]  public delegate void CueGoEventHandler(int playbackId, int cueId);
 
-	[Signal]
-	public delegate void UpdateShellBarEventHandler(int cue);
+	[Signal]  public delegate void UpdateShellBarEventHandler(int cue);
 	
 	
-	[Signal]
-	public delegate void OpenSelectedSessionEventHandler(string path);
+	[Signal]  public delegate void OpenSelectedSessionEventHandler(string path);
 
-	[Signal]
-	public delegate void SaveFileEventHandler(string url, string showName);
+	[Signal]  public delegate void SaveFileEventHandler(string url, string showName);
 	
 	
 	// Signals Associated with InputActions
@@ -52,10 +44,8 @@ public partial class GlobalSignals : Node
 	
 	
 	// Text edit signal connector
-	[Signal]
-	public delegate void TextEditFocusEnteredEventHandler();
-	[Signal]
-	public delegate void TextEditFocusExitedEventHandler();
+	[Signal]  public delegate void TextEditFocusEnteredEventHandler();
+	[Signal]  public delegate void TextEditFocusExitedEventHandler();
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
 	public override void _Ready()

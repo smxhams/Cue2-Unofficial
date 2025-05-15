@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Cue2.Shared;
 
-public partial class ErrorHandler : Node
+public partial class EventLogger : Node
 {
 
 	private GlobalSignals _globalSignals;

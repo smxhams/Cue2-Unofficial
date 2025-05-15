@@ -42,7 +42,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         // Check cue type to determine how to play
         if (cue.Type == "")
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Nothing in the Cue.", 1);
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Nothing in the Cue.", 1);
         }
         
         else

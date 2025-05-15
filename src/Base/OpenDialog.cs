@@ -22,7 +22,7 @@ public partial class OpenDialog : FileDialog
 
 		if (extention != ".c2")
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Not a valid extention: " + extention, 0);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Not a valid extention: " + extention, 0);
 			return;
 		}
 		_globalSignals.EmitSignal(nameof(GlobalSignals.OpenSelectedSession), @path);

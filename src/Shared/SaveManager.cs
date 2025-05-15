@@ -62,7 +62,7 @@ public partial class SaveManager : Node
 	private void SaveAs()
 	{
 		GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
-		_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Waiting on save directory and show name to continue save", 0);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
 	}
 	
 	private void SaveSession(string url, string showName)
@@ -92,7 +92,7 @@ public partial class SaveManager : Node
 		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName, Godot.FileAccess.ModeFlags.Write, _decodepass);
 		file.StoreString(saveJson);
 		file.Close();
-		_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Save working: " + url, 0);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Save working: " + url, 0);
 
 	}
 	
@@ -292,7 +292,7 @@ public partial class SaveManager : Node
 		{
 			GD.Print("Saving into folder");
 			Directory.CreateDirectory(folderPath);
-			_globalSignals.EmitSignal(nameof(GlobalSignals.ErrorLog), "Directory created: " + url, 0);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Directory created: " + url, 0);
 			return true;
 		}
 		else
