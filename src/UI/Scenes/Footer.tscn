@@ -1,8 +1,9 @@
-[gd_scene load_steps=2 format=3 uid="uid://b6v72f8k5o0oy"]
+[gd_scene load_steps=3 format=3 uid="uid://b6v72f8k5o0oy"]
 
+[ext_resource type="Script" uid="uid://521cf2c4d6w8" path="res://src/UI/Scenes/Footer.cs" id="1_48urq"]
 [ext_resource type="Script" uid="uid://d20wrpbn8dhip" path="res://src/Base/Minor/CurrentTime.cs" id="1_xxxho"]
 
-[node name="Footer" type="HBoxContainer"]
+[node name="Footer" type="BoxContainer"]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -11,52 +12,66 @@ offset_top = -23.0
 grow_horizontal = 2
 grow_vertical = 0
 size_flags_horizontal = 3
+script = ExtResource("1_48urq")
 
-[node name="BottomLeftContainer" type="HBoxContainer" parent="."]
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BottomLeftContainer" type="HBoxContainer" parent="HBoxContainer"]
 layout_mode = 2
 alignment = 2
 
-[node name="DevicesFooterButton" type="Button" parent="BottomLeftContainer"]
+[node name="DevicesFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+unique_name_in_owner = true
 layout_mode = 2
+focus_mode = 0
 theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
 theme_override_font_sizes/font_size = 9
 text = "Devices"
 
-[node name="VSeparator" type="VSeparator" parent="BottomLeftContainer"]
+[node name="VSeparator" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="ConnectionsFooterButton" type="Button" parent="BottomLeftContainer"]
+[node name="ConnectionsFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
+focus_mode = 0
 theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
 theme_override_font_sizes/font_size = 9
 text = "Connections"
 
-[node name="VSeparator2" type="VSeparator" parent="BottomLeftContainer"]
+[node name="VSeparator2" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="Log" type="Label" parent="BottomLeftContainer"]
+[node name="LogCount" type="Label" parent="HBoxContainer/BottomLeftContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "Log 0"
 
-[node name="VSeparator3" type="VSeparator" parent="BottomLeftContainer"]
+[node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="LogPrintout" type="Label" parent="BottomLeftContainer"]
+[node name="LogPrintout" type="Label" parent="HBoxContainer/BottomLeftContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
-text = "Attention Printout"
+text = "Log Printout"
 
-[node name="BottomRightContainer" type="HBoxContainer" parent="."]
+[node name="BottomRightContainer" type="HBoxContainer" parent="HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 alignment = 2
 
-[node name="VSeparator3" type="VSeparator" parent="BottomRightContainer"]
+[node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
 layout_mode = 2
 
-[node name="CurrentTime" type="Label" parent="BottomRightContainer"]
+[node name="CurrentTime" type="Label" parent="HBoxContainer/BottomRightContainer"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 horizontal_alignment = 1
 script = ExtResource("1_xxxho")
+
+[node name="PanelContainer" type="PanelContainer" parent="HBoxContainer"]
+visible = false
+layout_mode = 2

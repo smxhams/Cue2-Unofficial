@@ -63,3 +63,6 @@ res://src/UI/Scenes/LiveViewContainer.tscn
 res://src/UI/Scenes/ActiveCueContainer.tscn
 res://src/UI/Scenes/ActiveCueContainer.cs
 res://src/UI/Scenes/Footer.tscn
+res://src/UI/Scenes/Footer.cs
+res://src/Shared/EventLogger.cs
+res://src/Shared/AudioDeviceManager.cs

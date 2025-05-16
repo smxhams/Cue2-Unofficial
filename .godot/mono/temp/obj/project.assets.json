@@ -212,7 +212,7 @@
           }
         }
       },
-      "SDL3-CS/3.2.12.3": {
+      "SDL3-CS/3.2.12.4": {
         "type": "package",
         "compile": {
           "lib/net8.0/SDL3-CS.dll": {
@@ -222,6 +222,33 @@
         "runtime": {
           "lib/net8.0/SDL3-CS.dll": {
             "related": ".xml"
+          }
+        }
+      },
+      "SDL3-CS.Native/3.2.12": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/SDL3-CS.Native.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/SDL3-CS.Native.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/win-arm64/native/SDL3.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-x64/native/SDL3.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x86/native/SDL3.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
           }
         }
       },
@@ -701,10 +728,10 @@
         "packageIcon.png"
       ]
     },
-    "SDL3-CS/3.2.12.3": {
-      "sha512": "n8NHeMpdkQ81pdKBz7+3+qjYO721YQh7m+PaQyaZwGDZYhBCN82tUQkNIIDEqTPVXW57O1FpjbGuOaNPtH952Q==",
+    "SDL3-CS/3.2.12.4": {
+      "sha512": "IKqJIZkdZNiaQRyHOD0b9seDAiJtGTlIhzf1R4kn5QwbrwgWbIZbykex5Nvbkzbp+SnLXelzBz80TW4vpOraMA==",
       "type": "package",
-      "path": "sdl3-cs/3.2.12.3",
+      "path": "sdl3-cs/3.2.12.4",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -720,8 +747,31 @@
         "lib/net9.0/SDL3-CS.dll",
         "lib/net9.0/SDL3-CS.xml",
         "logo.png",
-        "sdl3-cs.3.2.12.3.nupkg.sha512",
+        "sdl3-cs.3.2.12.4.nupkg.sha512",
         "sdl3-cs.nuspec"
+      ]
+    },
+    "SDL3-CS.Native/3.2.12": {
+      "sha512": "stNkflz3CqlYddVGBkDcvCsETWd2ljjuvqAKIewCwH86DPmTDCm93kuV7O21R/PblUpe7i3fVrrS2OOHTq9p2w==",
+      "type": "package",
+      "path": "sdl3-cs.native/3.2.12",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE",
+        "README.md",
+        "lib/net7.0/SDL3-CS.Native.dll",
+        "lib/net7.0/SDL3-CS.Native.xml",
+        "lib/net8.0/SDL3-CS.Native.dll",
+        "lib/net8.0/SDL3-CS.Native.xml",
+        "lib/net9.0/SDL3-CS.Native.dll",
+        "lib/net9.0/SDL3-CS.Native.xml",
+        "logo.png",
+        "runtimes/win-arm64/native/SDL3.dll",
+        "runtimes/win-x64/native/SDL3.dll",
+        "runtimes/win-x86/native/SDL3.dll",
+        "sdl3-cs.native.3.2.12.nupkg.sha512",
+        "sdl3-cs.native.nuspec"
       ]
     },
     "System.CodeDom/8.0.0": {
@@ -3550,7 +3600,8 @@
       "LibVLCSharp >= 3.7.0",
       "NAudio >= 2.2.1",
       "Newtonsoft.Json >= 13.0.3",
-      "SDL3-CS >= 3.2.12.3",
+      "SDL3-CS >= 3.2.12.4",
+      "SDL3-CS.Native >= 3.2.12",
       "VLC.Native >= 3.0.8",
       "VideoLAN.LibVLC.Windows >= 3.0.18"
     ]
@@ -3627,7 +3678,11 @@
           },
           "SDL3-CS": {
             "target": "Package",
-            "version": "[3.2.12.3, )"
+            "version": "[3.2.12.4, )"
+          },
+          "SDL3-CS.Native": {
+            "target": "Package",
+            "version": "[3.2.12, )"
           },
           "VLC.Native": {
             "target": "Package",

@@ -8,6 +8,7 @@ using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Godot;
 using LibVLCSharp.Shared;
+using SDL3;
 
 namespace Cue2.Shared;
 // This script manages global data it contains:
@@ -27,6 +28,7 @@ public partial class GlobalData : Node
 	public CueCommandInterpreter CueCommandInterpreter;
 	public Settings Settings;
 	public Devices Devices;
+	public AudioDeviceManager AudioDeviceManager;
 	
 	
 	public int FocusedCue = -1;
@@ -79,6 +81,12 @@ public partial class GlobalData : Node
 		Devices = new Devices();
 		AddChild(Devices);
 		
+		AudioDeviceManager = new AudioDeviceManager();
+		AddChild(AudioDeviceManager);
+		
+		
+
+
 
 		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));
 		foreach (var arg in args)

@@ -3,41 +3,54 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Cue2.Shared;
+using SDL3;
 
 public partial class EventLogger : Node
 {
 
 	private GlobalSignals _globalSignals;
 
-	public SortedList<int, string> ErrorLog = new SortedList<int, string>();
-	private int _errorCount;
+	private List<string> _logList = new List<string>();
+	private static int _logCount;
 
-
-	// Called when the node enters the scene tree for the first time.
+	/*
+	 * Receives log signals to register in log list. Each logged event has a "type" refering to what it indicates. See LogType enum.
+	 * 0 = Information (white text and default)
+	 * 1 = Warning (yellow text)
+	 * 2 = System error (red text)
+	 * 3 = Alert (red text, flash window border red) This is to only be called for issues that may effect playback. Ie Devices disconnecting, network dropout etc.
+	 */
+	
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.ErrorLog += error_event;
+		_globalSignals.Log += _logEvent;
 
-		_errorCount = 0;
-
+		_logCount = 0;
+	}
 	
+
+	private void _logEvent(String @logString, int @type)
+	{
+		var typeString = _getLogTypeName(@type);
+		var printout = typeString + "  :  " + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @logString;
+		_logList.Add(printout);
+		_logCount++;
+		_globalSignals.EmitSignal(nameof(GlobalSignals.LogUpdated), printout, @type);
+		GD.Print(printout);
 	}
 
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
+	private string _getLogTypeName(int type)
 	{
+		if (Enum.IsDefined(typeof(LogType), type))
+		{
+			return ((LogType)type).ToString();
+		}
+		return "Unknown";
 	}
-
-	private void error_event(String @error, int @type)
+	
+	public static int GetLogCount()
 	{
-		var printout = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error;
-		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer/ErrorPrintout").Text = printout;
-		ErrorLog.Add(_errorCount, printout);
-		_errorCount = _errorCount + 1;
-		GetNode<Label>("/root/Cue2Base/MarginContainer/BoxContainer/BottomContainer/BottomLeftContainer/Log").Text = "Log " + _errorCount;
-		
-
-		GD.Print(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @error);
+		return _logCount;
 	}
 }
