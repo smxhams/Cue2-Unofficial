@@ -18,36 +18,34 @@ public partial class AudioDeviceManager : Node
 		    Console.WriteLine($"Found {count} playback devices:");
 
 		    // Enumerate playback devices
-		    foreach (var deviceID in devices)
+		    if (devices == null) return;
+		    foreach (var deviceId in devices)
 		    {
-			    var deviceUintID = Convert.ToUInt32(deviceID);
-			    string deviceName = SDL.GetAudioDeviceName(deviceUintID);
+			    var deviceUintId = Convert.ToUInt32(deviceId);
+			    string deviceName = SDL.GetAudioDeviceName(deviceUintId);
 			    if (deviceName != null)
 			    {
-				    Console.WriteLine($"  Playback Device {deviceID}: {deviceName}");
-				    SDL.AudioSpec spec;
-				    if (SDL.GetAudioDeviceFormat(deviceUintID, out spec, out int _) == true)
+				    Console.WriteLine($"  Playback Device {deviceId}: {deviceName}");
+				    if (SDL.GetAudioDeviceFormat(deviceUintId, out var spec, out int _) == true)
 				    {
 					    int channels = spec.Channels;
 					    int sampleRate = spec.Freq;
 					    int bitDepth = GetBitDepth(spec.Format);
 
-					    Console.WriteLine($"  Playback Device {deviceUintID}: {deviceName}");
+					    Console.WriteLine($"  Playback Device {deviceUintId}: {deviceName}");
 					    Console.WriteLine($"    Channels: {channels}");
 					    Console.WriteLine($"    Sample Rate: {sampleRate} Hz");
 					    Console.WriteLine($"    Bit Depth: {bitDepth}-bit");
 				    }
 				    else
 				    {
-					    Console.WriteLine($"  Playback Device {deviceUintID}: {deviceName}");
+					    Console.WriteLine($"  Playback Device {deviceUintId}: {deviceName}");
 					    Console.WriteLine($"    [Failed to get audio spec: {SDL.GetError()}]");
 				    }
-				    
-
 			    }
 			    else
 			    {
-				    Console.WriteLine($"  Playback Device {deviceID}: [Unknown]");
+				    Console.WriteLine($"  Playback Device {deviceId}: [Unknown]");
 			    }
 		    }
 	    }

@@ -9,7 +9,11 @@ namespace Cue2.UI.Scenes;
 public partial class Footer : Control
 {
     private GlobalSignals _globalSignals;
+    
     private List<string> _last5Logs = new List<string>();
+    private Node _logWindow;
+    
+    
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
@@ -17,12 +21,14 @@ public partial class Footer : Control
         _globalSignals.LogUpdated += _updateLog;
         
         GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", 0);
+        GetNode<Button>("%LogCount").Toggled += _onLogCountToggled;
     } 
 
     private void _updateLog(String @printout, int @type)
     {
-        GetNode<Label>("%LogPrintout").Text = @printout;
-        GetNode<Label>("%LogCount").Text = "Log " + EventLogger.GetLogCount().ToString();
+        var logPrintout = GetNode<Button>("%LogPrintout");
+        logPrintout.Text = @printout;
+        GetNode<Button>("%LogCount").Text = "Log " + EventLogger.GetLogCount().ToString();
         
         _last5Logs.Add(@printout);
         if (_last5Logs.Count > 5)
@@ -30,10 +36,39 @@ public partial class Footer : Control
             _last5Logs.RemoveAt(0);
         }
         
-        GetNode<Label>("%LogPrintout2").Text = _last5Logs[0];
-        GetNode<Label>("%LogPrintout3").Text = _last5Logs[1];
-        GetNode<Label>("%LogPrintout4").Text = _last5Logs[2];
-        GetNode<Label>("%LogPrintout5").Text = _last5Logs[3];
-        GetNode<Label>("%LogPrintout6").Text = _last5Logs[4];
+        //Update log tooltip to show last 5 logs
+        logPrintout.TooltipText = "Last 5 logs:\n";
+        foreach (var log in _last5Logs)
+        {    
+            logPrintout.TooltipText += log + "\n";
+        }
+    }
+    
+    
+    private void _onLogCountToggled(Boolean @toggle)
+    {
+        if (@toggle == true){
+            if (_logWindow == null)
+            {
+                GD.Print("Loading settings window scene");
+                _logWindow = SceneLoader.LoadScene("uid://cg8mrxu40hjf", out string error); // Loads settings window
+                _logWindow.TreeExiting += _onLogWindowClosed;
+                AddChild(_logWindow);
+            }
+            else {
+                _logWindow.GetWindow().Show();
+            }
+        }
+        if (@toggle == false)
+        {
+            _logWindow?.QueueFree();
+        }
+    }
+
+    private void _onLogWindowClosed()
+    {
+        _logWindow = null;
+        GetNode<Button>("%LogCount").ButtonPressed = false;
+        GD.Print("Captured it's closing");
     }
 }

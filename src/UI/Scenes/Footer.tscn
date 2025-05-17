@@ -43,20 +43,25 @@ text = "Connections"
 [node name="VSeparator2" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="LogCount" type="Label" parent="HBoxContainer/BottomLeftContainer"]
+[node name="LogCount" type="Button" parent="HBoxContainer/BottomLeftContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Log, click to open full log"
+focus_mode = 0
 theme_override_font_sizes/font_size = 9
+toggle_mode = true
 text = "Log 0"
 
 [node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="LogPrintout" type="Label" parent="HBoxContainer/BottomLeftContainer"]
+[node name="LogPrintout" type="Button" parent="HBoxContainer/BottomLeftContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Log"
+focus_mode = 0
 theme_override_font_sizes/font_size = 9
-text = "Log Printout"
+disabled = true
 
 [node name="BottomRightContainer" type="HBoxContainer" parent="HBoxContainer"]
 layout_mode = 2
