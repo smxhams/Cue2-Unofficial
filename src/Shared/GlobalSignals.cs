@@ -13,6 +13,8 @@ public partial class GlobalSignals : Node
 
 	[Signal]  public delegate void LogEventHandler(string log, int type);
 	[Signal]  public delegate void LogUpdatedEventHandler(string printout, int type);
+	
+	[Signal] public delegate void LogAlertEventHandler();
 
 	[Signal]  public delegate void FileSelectedEventHandler(string path);
 

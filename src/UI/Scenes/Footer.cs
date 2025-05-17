@@ -20,7 +20,7 @@ public partial class Footer : Control
 
         _globalSignals.LogUpdated += _updateLog;
         
-        GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", 0);
+        GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
         GetNode<Button>("%LogCount").Toggled += _onLogCountToggled;
     } 
 
@@ -28,6 +28,10 @@ public partial class Footer : Control
     {
         var logPrintout = GetNode<Button>("%LogPrintout");
         logPrintout.Text = @printout;
+        if (type == 0) logPrintout.RemoveThemeColorOverride("font_color");
+        if (type == 1) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Warning);
+        if (type == 2) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+        if (type == 3) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
         GetNode<Button>("%LogCount").Text = "Log " + EventLogger.GetLogCount().ToString();
         
         _last5Logs.Add(@printout);

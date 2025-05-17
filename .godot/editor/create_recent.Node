@@ -1,5 +1,6 @@
-Label
 VBoxContainer
+ScrollContainer
+Label
 BoxContainer
 MarginContainer
 Panel
@@ -11,4 +12,3 @@ Control
 HSeparator
 GridContainer
 Container
-TextureButton

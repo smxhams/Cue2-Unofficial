@@ -25,6 +25,9 @@ public partial class GlobalStyles : Node
 	private static Color _lowColor3 = new Color("#06545C");
 	private static Color _lowColor4 = new Color("#013B40");
 	private static Color _lowColor5 = new Color("#002326");
+	
+	public static Color Danger = new Color("#ff806f"); 
+	public static Color Warning = new Color("#ffb45d");
 
 	
 	public override void _Ready()

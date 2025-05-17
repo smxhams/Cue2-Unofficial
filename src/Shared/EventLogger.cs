@@ -3,14 +3,14 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Cue2.Shared;
-using SDL3;
 
+namespace Cue2.Shared;
 public partial class EventLogger : Node
 {
 
 	private GlobalSignals _globalSignals;
 
-	private List<string> _logList = new List<string>();
+	private static List<string> _logList = new List<string>();
 	private static int _logCount;
 
 	/*
@@ -37,6 +37,7 @@ public partial class EventLogger : Node
 		_logList.Add(printout);
 		_logCount++;
 		_globalSignals.EmitSignal(nameof(GlobalSignals.LogUpdated), printout, @type);
+		if (@type == 3) _globalSignals.EmitSignal(nameof(GlobalSignals.LogAlert));
 		GD.Print(printout);
 	}
 
@@ -52,5 +53,10 @@ public partial class EventLogger : Node
 	public static int GetLogCount()
 	{
 		return _logCount;
+	}
+	
+	public List<string> GetLogList()
+	{
+		return _logList;
 	}
 }
