@@ -1,6 +1,6 @@
 [gd_resource type="Theme" load_steps=30 format=4 uid="uid://vidokm2ilwtk"]
 
-[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_pvqx4"]
+[ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_vt8rd"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fcguj"]
 content_margin_left = 4.0
@@ -2074,7 +2074,7 @@ LineEdit/colors/selection_color = Color(0.00392157, 0.231373, 0.25098, 1)
 LineEdit/styles/focus = SubResource("StyleBoxFlat_j1m5s")
 LineEdit/styles/normal = SubResource("StyleBoxFlat_v8fuq")
 LineEdit/styles/read_only = SubResource("StyleBoxFlat_ecmxo")
-Panel/styles/panel = ExtResource("1_pvqx4")
+Panel/styles/panel = ExtResource("1_vt8rd")
 TabContainer/colors/drop_mark_color = Color(0.272892, 0.484657, 0.769951, 1)
 TabContainer/colors/font_hovered_color = Color(0.786274, 0.786274, 0.786274, 1)
 TabContainer/colors/font_outline_color = Color(0, 0, 0, 0)

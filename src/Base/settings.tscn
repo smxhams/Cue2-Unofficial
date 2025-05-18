@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=4 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=16 format=4 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
-[ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="3_5ctfj"]
+[ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/Base/Settings/SettingsGeneral.cs" id="3_jdmuw"]
 [ext_resource type="Script" uid="uid://cu1ujebi3h7vu" path="res://src/Base/Settings/SettingsAudioOutputPatch.cs" id="3_pnmd8"]
+[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/ui/Scenes/SubWindowHandles.tscn" id="4_r2cu3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -1881,7 +1882,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_hpi7s")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -1889,48 +1890,52 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+text = "Settings"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/margin_left = 5
 theme_override_constants/margin_top = 5
 theme_override_constants/margin_right = 5
 theme_override_constants/margin_bottom = 5
 
-[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/MarginContainer"]
 clip_contents = true
 layout_mode = 2
 split_offset = 20
 
-[node name="Container" type="VBoxContainer" parent="MarginContainer/HSplitContainer"]
+[node name="Container" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Header" type="Button" parent="MarginContainer/HSplitContainer/Container"]
-layout_mode = 2
-text = "Settings"
-
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Container"]
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Container"]
 clip_contents = false
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="Tree" type="Tree" parent="MarginContainer/HSplitContainer/Container/ScrollContainer"]
+[node name="SettingsTree" type="Tree" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
 
-[node name="Close" type="Button" parent="MarginContainer/HSplitContainer/Container"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-text = "Close"
-
-[node name="Panel" type="Panel" parent="MarginContainer/HSplitContainer"]
+[node name="Panel" type="Panel" parent="VBoxContainer/MarginContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RightSide" type="MarginContainer" parent="MarginContainer/HSplitContainer/Panel"]
+[node name="RightSide" type="MarginContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -1943,130 +1948,132 @@ theme_override_constants/margin_top = 15
 theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 15
 
-[node name="AudioOutputPatch" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
+[node name="SettingsGeneral" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
 layout_mode = 2
-script = ExtResource("3_pnmd8")
+script = ExtResource("3_jdmuw")
 
-[node name="HeaderContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch"]
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="AudioPatchTitle" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="Header" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "General Settings"
+vertical_alignment = 1
+uppercase = true
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+layout_mode = 2
+
+[node name="Row1" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row1"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Interface"
+
+[node name="Row2" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+layout_mode = 2
+
+[node name="UiScaling" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "UI Scaling"
+vertical_alignment = 1
+
+[node name="UiScaleNum" type="LineEdit" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Scales whole UI,.
+Caution: Will apply immediately"
+text = "100%"
+alignment = 1
+max_length = 4
+
+[node name="UiScaleSlider" type="HSlider" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+size_flags_stretch_ratio = 3.0
+tooltip_text = "Scales whole UI,.
+Caution: Will apply on mouse release."
+min_value = 50.0
+max_value = 200.0
+value = 100.0
+rounded = true
+
+[node name="AudioOutputPatch" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
+visible = false
+layout_mode = 2
+script = ExtResource("3_pnmd8")
+
+[node name="HeaderContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="AudioPatchTitle" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 text = "Audio Output Patch"
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 
-[node name="DeviceQuantityLabel" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="DeviceQuantityLabel" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Audio devices not checked"
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PatchesVBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
+[node name="PatchesVBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="NewPatchButton" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
+[node name="NewPatchButton" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 text = "New Patch"
 
-[node name="VideoDevices" type="ScrollContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide"]
+[node name="VideoDevices" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
 visible = false
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices"]
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Label" type="Label" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
+[node name="Label" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
 layout_mode = 2
 text = "Video Devices"
 
-[node name="VBoxContainer" type="HBoxContainer" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
+[node name="VBoxContainer" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer"]
 layout_mode = 2
 
-[node name="AudioOutputOptions" type="OptionButton" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
+[node name="AudioOutputOptions" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme = SubResource("Theme_k6x2l")
 
-[node name="Button" type="Button" parent="MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
+[node name="Button" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
 layout_mode = 2
 text = "Add Device Video"
 
-[node name="launcherHandles" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-script = ExtResource("3_5ctfj")
+[node name="SubWindowHandles" parent="." instance=ExtResource("4_r2cu3")]
 
-[node name="DragBar" type="Control" parent="launcherHandles"]
-custom_minimum_size = Vector2(5, 10)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-grow_horizontal = 2
-mouse_default_cursor_shape = 6
-theme = SubResource("Theme_k6x2l")
-
-[node name="Right" type="Control" parent="launcherHandles"]
-custom_minimum_size = Vector2(5, 5)
-layout_mode = 1
-anchors_preset = 11
-anchor_left = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 0
-grow_vertical = 2
-mouse_default_cursor_shape = 10
-
-[node name="Bottom" type="Control" parent="launcherHandles"]
-custom_minimum_size = Vector2(5, 5)
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 0
-mouse_default_cursor_shape = 9
-
-[node name="Corner" type="Control" parent="launcherHandles"]
-custom_minimum_size = Vector2(5, 5)
-layout_mode = 1
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -5.0
-offset_top = -5.0
-grow_horizontal = 0
-grow_vertical = 0
-mouse_default_cursor_shape = 12
-
-[connection signal="item_selected" from="MarginContainer/HSplitContainer/Container/ScrollContainer/Tree" to="." method="_on_tree_item_selected"]
-[connection signal="pressed" from="MarginContainer/HSplitContainer/Container/Close" to="." method="_on_close_pressed"]
-[connection signal="gui_input" from="launcherHandles/DragBar" to="launcherHandles" method="_on_drag_bar_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Right" to="launcherHandles" method="_on_right_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Bottom" to="launcherHandles" method="_on_bottom_gui_input"]
-[connection signal="gui_input" from="launcherHandles/Corner" to="launcherHandles" method="_on_corner_gui_input"]
+[connection signal="item_selected" from="VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer/SettingsTree" to="." method="_on_tree_item_selected"]

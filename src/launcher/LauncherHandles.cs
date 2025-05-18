@@ -4,6 +4,7 @@ using Godot;
 namespace Cue2.launcher;
 public partial class LauncherHandles : Control
 {
+	private GlobalData _globalData;
 	//Variables
 	private bool _dragging;
 	private bool _resizing;
@@ -31,6 +32,8 @@ public partial class LauncherHandles : Control
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		
+		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_windowNumber = GetWindow().GetWindowId();
 
@@ -52,7 +55,6 @@ public partial class LauncherHandles : Control
 		await ToSignal(GetTree().CreateTimer(0.5), "timeout");
 		_fadeProgress = 0.0f;
 		_isFading = true;  
-
 	}
 
 	private void _on_right_gui_input(InputEvent @event){
@@ -108,13 +110,15 @@ public partial class LauncherHandles : Control
 		if (_resizing)
 		{
 			if (_resizeNode == GetNode<Node>("Right")){
-				DisplayServer.WindowSetSize(new Vector2I((int)GetLocalMousePosition()[0], DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0]*_globalData.Settings.UiScale), DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
 			}
 			if (_resizeNode == GetNode<Node>("Bottom")){
-				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)GetLocalMousePosition()[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)(GetLocalMousePosition()[1]*_globalData.Settings.UiScale)), _windowNumber);
 			}
 			if (_resizeNode == GetNode<Node>("Corner")){
-				DisplayServer.WindowSetSize(new Vector2I((int)GetLocalMousePosition()[0], (int)GetLocalMousePosition()[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0] *
+				                                               _globalData.Settings.UiScale), (int)
+					(GetLocalMousePosition()[1] * _globalData.Settings.UiScale)), _windowNumber);
 			}
 			if (DisplayServer.WindowGetSize()[0] < _minWindowSize[0]){
 				DisplayServer.WindowSetSize(new Vector2I(_minWindowSize[0], DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);

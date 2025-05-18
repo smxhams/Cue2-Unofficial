@@ -6,6 +6,7 @@ namespace Cue2.Base;
 public partial class SettingsWindow : Window
 {
 	private GlobalSignals _globalSignals;
+	private GlobalData _globalData;
 	private Godot.Tree _setTree;
 	private String _currentDisplay = "";
 	//private Tree setTree;
@@ -14,10 +15,23 @@ public partial class SettingsWindow : Window
 	{
 		//Global Signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		_globalData = GetNode<GlobalData>("/root/GlobalData");
+		
+		_scaleUI(_globalData.Settings.UiScale);
+		
+		_globalSignals.UiScaleChanged += _scaleUI;
 		
 		_generateTree();
 		
 		
+	}
+	
+	private void _scaleUI(float value)
+	{
+		
+		GetWindow().WrapControls = true;
+		GetWindow().ContentScaleFactor = value;
+		GetWindow().ChildControlsChanged();
 	}
 
 
@@ -64,9 +78,13 @@ public partial class SettingsWindow : Window
 	private void _generateTree()
 	{
 		// Settings Tree
-		_setTree = GetNode<Godot.Tree>("MarginContainer/HSplitContainer/Container/ScrollContainer/Tree");
+		_setTree = GetNode<Godot.Tree>("%SettingsTree");
 		TreeItem root = _setTree.CreateItem();
 		_setTree.HideRoot = true;
+		
+		//General
+		TreeItem tiGeneral = _setTree.CreateItem(root);
+		tiGeneral.SetText(0, "General");
 		
 		// Output Devices
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);

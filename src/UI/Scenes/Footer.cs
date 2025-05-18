@@ -41,7 +41,7 @@ public partial class Footer : Control
         }
         
         //Update log tooltip to show last 5 logs
-        logPrintout.TooltipText = "Last 5 logs:\n";
+        logPrintout.TooltipText = "Last 5 log messages:\n";
         foreach (var log in _last5Logs)
         {    
             logPrintout.TooltipText += log + "\n";
@@ -73,6 +73,5 @@ public partial class Footer : Control
     {
         _logWindow = null;
         GetNode<Button>("%LogCount").ButtonPressed = false;
-        GD.Print("Captured it's closing");
     }
 }

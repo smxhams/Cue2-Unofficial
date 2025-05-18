@@ -155,19 +155,27 @@ public partial class MainTitleBarUI : Control
             {
                 GD.Print("Loading settings window scene");
                 _settingsWindow = SceneLoader.LoadScene("uid://cfw3syjm11bd6", out string error); // Loads settings window
+                _settingsWindow.TreeExiting += _onSettingsWindowClose;
                 AddChild(_settingsWindow);
             }
             else {
                 _settingsWindow.GetWindow().Show();
             }
         }
-        if (@toggle == false){
-            _settingsWindow.GetWindow().Hide();
+        if (@toggle == false)
+        {
+            _settingsWindow?.QueueFree();
         }
     }
+
+    private void _onSettingsWindowClose()
+    {
+        _settingsWindow = null; 
+        GetNode<Button>("%SettingsButton").ButtonPressed = false;
+    }
+
     private void _closeSettingsWindow()
     {
-        GetNode<Button>("%SettingsButton").ButtonPressed = false;
     }
     
     private void _onWindowMinimizeButtonPressed()

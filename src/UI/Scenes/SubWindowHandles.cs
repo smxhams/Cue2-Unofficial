@@ -1,10 +1,12 @@
 using Godot;
 using System;
+using Cue2.Shared;
 
 namespace Cue2.UI.Scenes;
 
 public partial class SubWindowHandles : Control
 {
+	private GlobalData _globalData;
     	//Variables
 	private bool _dragging;
 	private bool _resizing;
@@ -32,6 +34,8 @@ public partial class SubWindowHandles : Control
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		_globalData = GetNode<GlobalData>("/root/GlobalData");
+		
 		_windowNumber = GetWindow().GetWindowId();
 
 		_rightHandle = GetNode<Control>("%RightHandle"); 
@@ -107,13 +111,16 @@ public partial class SubWindowHandles : Control
 		if (_resizing)
 		{
 			if (_resizeNode == _rightHandle){
-				DisplayServer.WindowSetSize(new Vector2I((int)GetLocalMousePosition()[0], DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0]*_globalData.Settings.UiScale), DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
 			}
 			if (_resizeNode == _bottomHandle){
-				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)GetLocalMousePosition()[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)
+					(GetLocalMousePosition()[1] * _globalData.Settings.UiScale)), _windowNumber);
 			}
 			if (_resizeNode == _cornerHandle){
-				DisplayServer.WindowSetSize(new Vector2I((int)GetLocalMousePosition()[0], (int)GetLocalMousePosition()[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0] *
+				                                               _globalData.Settings.UiScale), (int)
+					(GetLocalMousePosition()[1] * _globalData.Settings.UiScale)), _windowNumber);
 			}
 			if (DisplayServer.WindowGetSize()[0] < _minWindowSize[0]){
 				DisplayServer.WindowSetSize(new Vector2I(_minWindowSize[0], DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);

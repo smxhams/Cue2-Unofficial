@@ -6,7 +6,6 @@ using Cue2.Base.Classes;
 namespace Cue2.Shared;
 public partial class GlobalSignals : Node
 {
-
 	[Signal]  public delegate void CloseSettingsWindowEventHandler();
 
 	[Signal]  public delegate void ShellFocusedEventHandler(int cueId);
@@ -49,6 +48,11 @@ public partial class GlobalSignals : Node
 	// Text edit signal connector
 	[Signal]  public delegate void TextEditFocusEnteredEventHandler();
 	[Signal]  public delegate void TextEditFocusExitedEventHandler();
+	
+	
+	// Singals assaciated with settings
+	[Signal] public delegate void UiScaleChangedEventHandler(float value);
+	
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
 	public override void _Ready()

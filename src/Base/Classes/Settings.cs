@@ -1,16 +1,23 @@
 using System.Collections.Generic;
+using Cue2.Shared;
 using Godot;
 
 namespace Cue2.Base.Classes;
 
 public partial class Settings : Node
 {
+    private GlobalSignals _globalSignals;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
+
+    public float UiScale = 1.0f;
     public override void _Ready()
     {
+        _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         //Adds a default audio out patch at startup - this is only for debug
         //AudioOutputPatch newPatch = new AudioOutputPatch("Default patch");
         //_audioOutputPatches.Add(newPatch.Id, newPatch);
+        
+        
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;

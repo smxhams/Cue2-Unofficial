@@ -38,6 +38,11 @@ public partial class Cue2Base : Control
 		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
+		_globalSignals.UiScaleChanged += _scaleUI;
+		
+		GD.Print("Main Window ID is: " + GetWindow().GetWindowId());
+
+
 		// Creation and assignment of test video output window - in future this will be created in settings
 		/*VideoWindow = new Window();
 		AddChild(VideoWindow);
@@ -45,13 +50,20 @@ public partial class Cue2Base : Control
 		_globalData.VideoOutputWinNum = VideoWindow.GetWindowId();
 		DisplayServer.WindowSetCurrentScreen(1, _globalData.VideoOutputWinNum);
 		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _globalData.VideoOutputWinNum);*/
-		
+
 		// Load in a test canvas - In future this will be created in settings
 		/*var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
 		VideoWindow.AddChild(videoCanvas);
 		_globalData.VideoCanvas = videoCanvas;
 		_globalData.VideoWindow = VideoWindow;*/
-		
+
+	}
+
+	private void _scaleUI(float value)
+	{
+		GetWindow().WrapControls = true;
+		GetWindow().ContentScaleFactor = value;
+		GetWindow().ChildControlsChanged();
 	}
 	
 
