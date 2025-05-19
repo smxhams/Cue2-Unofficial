@@ -52,6 +52,7 @@ public partial class GlobalSignals : Node
 	
 	// Singals assaciated with settings
 	[Signal] public delegate void UiScaleChangedEventHandler(float value);
+	[Signal] public delegate void GoScaleChangedEventHandler(float value);
 	
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing

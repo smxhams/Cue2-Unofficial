@@ -18,8 +18,35 @@ public partial class SettingsGeneral : ScrollContainer
         GetNode<HSlider>("%UiScaleSlider").ValueChanged += _onUiScaleSliderValueChanged;
         GetNode<HSlider>("%UiScaleSlider").DragEnded += _ApplyUiScaleFromSlider;
         GetNode<LineEdit>("%UiScaleNum").TextSubmitted += _ApplyUiScaleFromText;
+        
+        GetNode<OptionButton>("%GoScaleOptionButton").ItemSelected += _scaleGoButton;
+        
+        //GetNode<OptionButton>("%SaveFilterOptionButton").selec
+        _syncSettings();
+    }
+    
+    private void _syncSettings()
+    {
+        GetNode<LineEdit>("%UiScaleNum").Text = _globalData.Settings.UiScale*100 + "%";
+        GetNode<HSlider>("%UiScaleSlider").Value = _globalData.Settings.UiScale * 100f;
+        GetNode<OptionButton>("%GoScaleOptionButton").Selected = (int)_globalData.Settings.GoScale;
+    }
+    
+    private void _scaleGoButton(long index)
+    {
+        index = (int)index;
+        switch (index)
+        {
+            case 0: _globalData.Settings.GoScale = 0.5f; break;
+            case 1: _globalData.Settings.GoScale = 1.0f; break;
+            case 2: _globalData.Settings.GoScale = 2.0f; break;
+            case 3: _globalData.Settings.GoScale = 4.0f; break;
+            case 4: _globalData.Settings.GoScale = 8.0f; break;
+            case 5: _globalData.Settings.GoScale = 32.0f; break;
+            default: _globalData.Settings.GoScale = 1.0f; break;
+        }
 
-
+        _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), _globalData.Settings.GoScale);
     }
 
     private void _ApplyUiScaleFromText(string input)

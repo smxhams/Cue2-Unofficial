@@ -10,6 +10,7 @@ public partial class Settings : Node
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
 
     public float UiScale = 1.0f;
+    public float GoScale = 1.0f;
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
@@ -18,10 +19,12 @@ public partial class Settings : Node
         //_audioOutputPatches.Add(newPatch.Id, newPatch);
         
         
+        
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;
-
+    
+    
     public void UpdatePatch(AudioOutputPatch patch)
     {
         _audioOutputPatches[patch.Id] = patch;

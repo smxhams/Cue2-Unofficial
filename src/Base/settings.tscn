@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
 [ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/Base/Settings/SettingsGeneral.cs" id="3_jdmuw"]
 [ext_resource type="Script" uid="uid://cu1ujebi3h7vu" path="res://src/Base/Settings/SettingsAudioOutputPatch.cs" id="3_pnmd8"]
-[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/ui/Scenes/SubWindowHandles.tscn" id="4_r2cu3"]
+[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindowHandles.tscn" id="4_r2cu3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -1931,6 +1931,43 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
 
+[node name="SaveOptionsContainer" type="GridContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Container"]
+layout_mode = 2
+columns = 2
+
+[node name="SaveFilterLabel" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+layout_mode = 2
+text = "Save filter:"
+horizontal_alignment = 1
+
+[node name="SaveFilterOptionButton" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 1
+popup/item_0/id = 0
+
+[node name="SettingsSaveAs" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Save a settings.conf file in a chosen location"
+text = "Save As"
+
+[node name="SaveWithShow" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Saves settings with show data and overrides settings "
+text = "Save with Show"
+
+[node name="Button3" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Save for All"
+
+[node name="Button4" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Load"
+
 [node name="Panel" type="Panel" parent="VBoxContainer/MarginContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -1979,17 +2016,18 @@ text = "Interface"
 layout_mode = 2
 
 [node name="UiScaling" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 text = "UI Scaling"
 vertical_alignment = 1
 
 [node name="UiScaleNum" type="LineEdit" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 tooltip_text = "Scales whole UI,.
 Caution: Will apply immediately"
+focus_mode = 0
 text = "100%"
 alignment = 1
 max_length = 4
@@ -2002,10 +2040,41 @@ size_flags_vertical = 4
 size_flags_stretch_ratio = 3.0
 tooltip_text = "Scales whole UI,.
 Caution: Will apply on mouse release."
+focus_mode = 0
 min_value = 50.0
 max_value = 200.0
 value = 100.0
 rounded = true
+
+[node name="Row3" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+layout_mode = 2
+
+[node name="Go Button Scale" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Go Button Scale"
+vertical_alignment = 1
+
+[node name="GoScaleOptionButton" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+tooltip_text = "Go button size."
+focus_mode = 0
+selected = 1
+item_count = 6
+popup/item_0/text = "Half Go"
+popup/item_0/id = 1
+popup/item_1/text = "Base Scale Go"
+popup/item_1/id = 2
+popup/item_2/text = "Big Go"
+popup/item_2/id = 3
+popup/item_3/text = "Very Big Go"
+popup/item_3/id = 4
+popup/item_4/text = "Wow, that's a big go"
+popup/item_4/id = 5
+popup/item_5/text = "Nothing but Go"
+popup/item_5/id = 6
 
 [node name="AudioOutputPatch" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
 visible = false

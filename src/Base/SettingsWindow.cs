@@ -9,6 +9,7 @@ public partial class SettingsWindow : Window
 	private GlobalData _globalData;
 	private Godot.Tree _setTree;
 	private String _currentDisplay = "";
+
 	//private Tree setTree;
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -17,18 +18,21 @@ public partial class SettingsWindow : Window
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		
+		
 		_scaleUI(_globalData.Settings.UiScale);
+		GD.Print("UI Scale: " + _globalData.Settings.UiScale);
 		
 		_globalSignals.UiScaleChanged += _scaleUI;
 		
+		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
+		
 		_generateTree();
-		
-		
 	}
+
+	
 	
 	private void _scaleUI(float value)
 	{
-		
 		GetWindow().WrapControls = true;
 		GetWindow().ContentScaleFactor = value;
 		GetWindow().ChildControlsChanged();

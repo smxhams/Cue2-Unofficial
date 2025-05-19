@@ -154,11 +154,14 @@ public partial class MainTitleBarUI : Control
             if (_settingsWindow == null)
             {
                 GD.Print("Loading settings window scene");
-                _settingsWindow = SceneLoader.LoadScene("uid://cfw3syjm11bd6", out string error); // Loads settings window
+                _settingsWindow = GD.Load<PackedScene>("uid://cfw3syjm11bd6").Instantiate();
+                //_settingsWindow = SceneLoader.LoadScene("uid://cfw3syjm11bd6", out string error); // Loads settings window
                 _settingsWindow.TreeExiting += _onSettingsWindowClose;
                 AddChild(_settingsWindow);
             }
-            else {
+            else
+            {
+                GD.Print("OOOOOOOOOH MANNNNNN");
                 _settingsWindow.GetWindow().Show();
             }
         }
