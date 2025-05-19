@@ -22,14 +22,30 @@ public partial class SettingsWindow : Window
 		_scaleUI(_globalData.Settings.UiScale);
 		GD.Print("UI Scale: " + _globalData.Settings.UiScale);
 		
-		_globalSignals.UiScaleChanged += _scaleUI;
-		
-		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
+
 		
 		_generateTree();
+		_connectSignals();
 	}
 
-	
+	private void _connectSignals()
+	{
+		_globalSignals.UiScaleChanged += _scaleUI;
+		GetNode<Button>("%SaveFilterOptionButton").Pressed += () =>
+		{
+			GetNode<PanelContainer>("%DropMenuFilter").Visible = true;
+			GetNode<Button>("%SaveFilterOptionButton").Disabled = true;
+		};
+		GetNode<PanelContainer>("%DropMenuFilter").MouseExited += () =>
+		{
+			GetNode<PanelContainer>("%DropMenuFilter").Visible = false;
+			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
+		};
+		
+		
+		
+		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
+	}
 	
 	private void _scaleUI(float value)
 	{

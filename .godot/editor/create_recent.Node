@@ -1,7 +1,10 @@
+Button
+MenuButton
+Panel
+CheckBox
 OptionButton
 Label
 HBoxContainer
-Button
 GridContainer
 LineEdit
 HSlider
@@ -9,6 +12,3 @@ HSeparator
 VBoxContainer
 ScrollContainer
 BoxContainer
-MarginContainer
-Panel
-Window

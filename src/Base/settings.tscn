@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=4 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=18 format=4 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
@@ -14,6 +14,9 @@ border_width_right = 1
 border_width_bottom = 1
 border_color = Color(0.398496, 0.398496, 0.398496, 1)
 corner_detail = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gmb81"]
+bg_color = Color(0.130575, 0.130575, 0.130575, 1)
 
 [sub_resource type="Image" id="Image_68nut"]
 data = {
@@ -1863,6 +1866,14 @@ Fonts/font_sizes/FontSize = 10
 Fonts/fonts/large = SubResource("FontFile_52n5q")
 Fonts/fonts/normal = SubResource("FontFile_52n5q")
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jdmuw"]
+bg_color = Color(0.0588235, 0.0588235, 0.0588235, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.00392157, 0.231373, 0.25098, 1)
+
 [node name="Settings" type="Window"]
 disable_3d = true
 title = "Cue2 Settings"
@@ -1940,11 +1951,12 @@ layout_mode = 2
 text = "Save filter:"
 horizontal_alignment = 1
 
-[node name="SaveFilterOptionButton" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="SaveFilterOptionButton" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-item_count = 1
-popup/item_0/id = 0
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxFlat_gmb81")
+text = "Select Here"
 
 [node name="SettingsSaveAs" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 layout_mode = 2
@@ -2142,6 +2154,52 @@ theme = SubResource("Theme_k6x2l")
 [node name="Button" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/VideoDevices/VBoxContainer/VBoxContainer"]
 layout_mode = 2
 text = "Add Device Video"
+
+[node name="DropMenuFilter" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(100, 78)
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 25.0
+offset_top = -165.0
+offset_right = 165.0
+offset_bottom = -81.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_jdmuw")
+
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuFilter"]
+layout_mode = 2
+theme_override_constants/margin_left = 1
+theme_override_constants/margin_top = 1
+theme_override_constants/margin_right = 1
+theme_override_constants/margin_bottom = 1
+
+[node name="dmSaveFilterContainer" type="VBoxContainer" parent="DropMenuFilter/MarginContainer"]
+layout_mode = 2
+
+[node name="FilterAllCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+button_pressed = true
+text = "All"
+
+[node name="FilterGeneralSettingsCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "General Settings"
+
+[node name="FilterAudioPatchCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Audio Patch"
 
 [node name="SubWindowHandles" parent="." instance=ExtResource("4_r2cu3")]
 
