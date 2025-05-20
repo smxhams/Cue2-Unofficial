@@ -43,11 +43,3 @@ res://src/Base/Classes/AudioOutputPatch.cs
 res://src/Base/CommandInterpreter/CueCommandInterpreter.cs
 res://src/Base/Settings/DeviceOutputChannelUI.cs
 res://src/Base/Classes/MediaPlayerState.cs
-res://src/Base/settings.tscn
-res://src/UI/Assets/base_theme.tres
-res://src/UI/Assets/GO_theme.tres
-res://src/Base/VideoPlayback.gdshader
-res://src/Base/VideoTextureRectMaterial.tres
-res://src/UI/Scenes/Header.tscn
-res://src/Base/Cue2Base.tscn
-res://src/UI/Scenes/Footer.tscn
