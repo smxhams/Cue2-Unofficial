@@ -81,8 +81,8 @@ public partial class GlobalData : Node
 		Devices = new Devices();
 		AddChild(Devices);
 		
-		AudioDeviceManager = new AudioDeviceManager();
-		AddChild(AudioDeviceManager);
+		//AudioDeviceManager = new AudioDeviceManager();
+		//AddChild(AudioDeviceManager);
 		
 		
 

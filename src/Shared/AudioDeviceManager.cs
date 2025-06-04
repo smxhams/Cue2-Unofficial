@@ -56,7 +56,7 @@ public partial class AudioDeviceManager : Node
 	    finally
 	    {
 		    // Clean up SDL
-		    SDL.Quit();
+		    //SDL.Quit();
 	    }
     }
 
