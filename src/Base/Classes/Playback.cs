@@ -28,14 +28,19 @@ public partial class Playback : Node
 	
 	
 	// For test SDL implementation
-	private static uint audioDevice;
-	private static nint audioStream;
-	private static MediaPlayer mediaPlayer;
-	private static List<byte> audioBuffer = new List<byte>(); // Buffer for audio data
-	private static int bytesPerSampleFrame = 4;
-	
-	
-	
+	private static uint _audioDevice;
+	private static nint _audioStream;
+	private static MediaPlayer _mediaPlayer;
+	private static List<byte> _audioBuffer = new List<byte>(); // Buffer for audio data
+	private static int _sourceBytesPerSampleFrame;
+	private static int _outputBytesPerSampleFrame;
+	private static double _sourceSampleRate;
+	private static double _targetBufferSeconds = 1.0;
+	private static long _maxBufferBytesTime;
+	private static long _maxBufferBytesMemory = 100 * 1024 * 1024;
+	private static long _maxBufferBytes;
+	private static double _mediaDurationSeconds;
+	//private static int bytesPerSampleFrame = 4;
 	
 	public Playback()
 	{
@@ -51,52 +56,15 @@ public partial class Playback : Node
 		_window.CloseRequested += WindowOnCloseRequested;
 		_canvasWindow = _globalData.VideoWindow;
 		_globalSignals.StopAll += StopAll;
-
+		
+		
+		// For test SDL Implementation
 		if (SDL.Init(SDL.InitFlags.Audio) == false)
 		{
 			Console.WriteLine($"SDL_Init failed: {SDL.GetError()}");
 			return;
 		}
-		GD.Print("INT PASSED");
 	}
-
-	
-	// See below for test SDL implementation
-	/*public async void PlayMedia(Cue cue, Window window = null)
-	{
-		GD.Print("PLAYTING MEDIA HERE");
-		var mediaPlayer = new MediaPlayer(_libVLC);
-		var media = new Media(_libVLC, cue.FilePath);
-		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
-		while (media.IsParsed != true) { }
-		
-		mediaPlayer.Media = media;
-		
-		var (hasVideo, hasAudio) = GetMediaType(media);
-		MediaPlayers.Add(_playbackIndex, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
-		
-		
-		if (hasVideo && window != null)
-		{
-			var targetRect = CreateVideoTextureRect();
-			MediaPlayers[_playbackIndex].TargetTextureRect = targetRect;
-
-			uint videoheight = 0;
-			uint videowidth = 0;
-			mediaPlayer.Size(0, ref videowidth, ref videoheight);
-			
-			targetRect.Set("VideoAlpha", 255);
-			targetRect.CallDeferred("InitVideoTexture", _playbackIndex, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
-		}
-		
-		MediaPlayers[_playbackIndex].MediaPlayer.Volume = 100;
-		MediaPlayers[_playbackIndex].MediaPlayer.Play();
-		_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cue.Id);
-		
-		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
-		_playbackIndex++;
-		media.Dispose();
-	}*/
 
 	// The following is a test implementation with SDL
 	public async void PlayMedia(Cue cue, Window window = null)
@@ -104,8 +72,8 @@ public partial class Playback : Node
 		GD.Print("Starting audio playback with test implementation of SDL");
 		var mediaPlayer = new MediaPlayer(_libVLC);
 		var media = new Media(_libVLC, cue.FilePath);
-		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
-		while (media.IsParsed != true) { }
+		media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
+		// while (media.IsParsed != true) { } // No longer needed now that .Wasit is added to parse.
 		
 		mediaPlayer.Media = media;
 		
@@ -118,12 +86,12 @@ public partial class Playback : Node
 		};
 		// Open SDL3 audio device
 		var devices = SDL.GetAudioPlaybackDevices(out int deviceCount);
-		var deviceId = devices[0];
+		var deviceId = SDL.AudioDeviceDefaultPlayback;
 		SDL.GetAudioDeviceFormat(deviceId, out var format, out _);
 		var formatName = SDL.GetAudioFormatName(format.Format);
 		GD.Print("Chosen device name: " + SDL.GetAudioDeviceName(deviceId) + " and format: " + formatName);
-		if (devices != null) audioDevice = SDL.OpenAudioDevice(deviceId, System.IntPtr.Zero); // Zero is a null, this means device will open with its own settings
-		if (audioDevice == 0)
+		if (devices != null) _audioDevice = SDL.OpenAudioDevice(deviceId, System.IntPtr.Zero); // Zero is a null, this means device will open with its own settings
+		if (_audioDevice == 0)
 		{
 			Console.WriteLine($"Failed to open audio device: {SDL.GetError()}");
 			SDL.Quit();
@@ -131,25 +99,25 @@ public partial class Playback : Node
 		}
 		// Create SDL3 audio stream
 		SDL.GetAudioDeviceFormat(deviceId, out var deviceSpec, out int _);
-		audioStream = SDL.CreateAudioStream(spec, deviceSpec);
-		if (audioStream == System.IntPtr.Zero)
+		_audioStream = SDL.CreateAudioStream(spec, deviceSpec);
+		if (_audioStream == System.IntPtr.Zero)
 		{
 			Console.WriteLine($"Failed to create audio stream: {SDL.GetError()}");
-			SDL.CloseAudioDevice(audioDevice);
+			SDL.CloseAudioDevice(_audioDevice);
 			SDL.Quit();
 			return;
 		}
 		// Bind audio stream to SDL3 audio device
 		GD.Print("Device ID: " + deviceId);
-		GD.Print("Device ID: " + audioDevice);
+		GD.Print("Device ID: " + _audioDevice);
 		Task.Delay(1000).Wait();
-		var streams = new[] { audioStream };
-		bool bindResult = SDL.BindAudioStreams(audioDevice, streams, streams.Length);
+		var streams = new[] { _audioStream };
+		bool bindResult = SDL.BindAudioStreams(_audioDevice, streams, streams.Length);
 		if (bindResult == false)
 		{
 			Console.WriteLine($"Failed to bind audio stream: {SDL.GetError()}");
-			SDL.DestroyAudioStream(audioStream);
-			SDL.CloseAudioDevice(audioDevice);
+			SDL.DestroyAudioStream(_audioStream);
+			SDL.CloseAudioDevice(_audioDevice);
 			SDL.Quit();
 			return;
 		}
@@ -175,7 +143,7 @@ public partial class Playback : Node
 
 		GD.Print("llalalala");
 
-		SDL.ResumeAudioDevice(audioDevice);
+		SDL.ResumeAudioDevice(_audioDevice);
 
 		GD.Print("vivivivivivivivi");
 
@@ -183,7 +151,7 @@ public partial class Playback : Node
 	int AudioSetup(ref IntPtr opaque, ref nint format, ref uint rate, ref uint channels)
 	{
 		GD.Print("In the audio setup");
-		GD.Print( FourCCToInt("S16N"));
+		GD.Print( FourCcToInt("S16N"));
 		//format = FourCCToInt("S16N");
 		rate = 44100; // 44.1 kHz
 		channels = 2; // Stereo
@@ -192,7 +160,7 @@ public partial class Playback : Node
 		return 0;
 	}
 	
-	static nint FourCCToInt(string fourcc)
+	static nint FourCcToInt(string fourcc)
 	{
 		if (fourcc.Length != 4)
 			throw new ArgumentException("FourCC code must be 4 characters");
@@ -202,15 +170,15 @@ public partial class Playback : Node
 	static void Cleanup()
 	{
 		GD.Print("ohhh no");
-		mediaPlayer?.Stop();
-		mediaPlayer?.Dispose();
-		if (audioStream != null)
+		_mediaPlayer?.Stop();
+		_mediaPlayer?.Dispose();
+		if (_audioStream != null)
 		{
-			SDL.DestroyAudioStream(audioStream);
+			SDL.DestroyAudioStream(_audioStream);
 		}
-		if (audioDevice != 0)
+		if (_audioDevice != 0)
 		{
-			SDL.CloseAudioDevice(audioDevice);
+			SDL.CloseAudioDevice(_audioDevice);
 		}
 		SDL.Quit();
 	}
@@ -222,7 +190,7 @@ public partial class Playback : Node
 		GD.Print("Samples: " + samples);
 		byte[] tempBuffer = new byte[count];
 		Marshal.Copy(samples, tempBuffer, 0, (int)count);
-		audioBuffer.AddRange(tempBuffer);
+		_audioBuffer.AddRange(tempBuffer);
 		Console.WriteLine($"AudioPlay: received {count} bytes");
 		GD.Print("");
 		SubmitAudioBuffer();
@@ -230,7 +198,7 @@ public partial class Playback : Node
 	static void SubmitAudioBuffer()
 	{
 		// Calculate how many complete sample frames we have
-		int completeFrameBytes = (audioBuffer.Count / bytesPerSampleFrame) * bytesPerSampleFrame;
+		int completeFrameBytes = (_audioBuffer.Count / bytesPerSampleFrame) * bytesPerSampleFrame;
 		if (completeFrameBytes == 0)
 		{
 			GD.Print("Not enough data for a comnplete frame");
@@ -238,8 +206,8 @@ public partial class Playback : Node
 		}
 
 		// Copy complete frames to a new array
-		byte[] frameData = audioBuffer.GetRange(0, completeFrameBytes).ToArray();
-		bool result = SDL.PutAudioStreamData(audioStream, frameData, frameData.Length);
+		byte[] frameData = _audioBuffer.GetRange(0, completeFrameBytes).ToArray();
+		bool result = SDL.PutAudioStreamData(_audioStream, frameData, frameData.Length);
 		if (result == false)
 		{
 			Console.WriteLine($"Failed to put audio stream data: {SDL.GetError()}");
@@ -250,7 +218,8 @@ public partial class Playback : Node
 		}
 
 		// Remove the submitted data from the buffer
-		audioBuffer.RemoveRange(0, completeFrameBytes);
+		_audioBuffer.RemoveRange(0, completeFrameBytes);
+		GD.Print("Survive to play");
 	}	
 
 	
