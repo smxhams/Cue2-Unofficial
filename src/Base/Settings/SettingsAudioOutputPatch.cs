@@ -38,6 +38,8 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		VisibilityChanged += DisplayExistingDevices;
 		VisibilityChanged += DisplayPatchMatrix;
 		
+		
+		
 	}
 
 	private void NewPatchButtonPressed()

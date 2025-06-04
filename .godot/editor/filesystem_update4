@@ -1,3 +1,10 @@
+res://src/Base/settings.tscn
+res://src/UI/Assets/base_theme.tres
+res://src/UI/Assets/GO_theme.tres
+res://src/Base/Classes/CueList.cs
+res://src/Base/VideoPlayback.gdshader
+res://src/Base/VideoTextureRectMaterial.tres
+res://src/Base/SettingsWindow.cs
 res://src/UI/Scenes/ActiveCueProgressBar.cs
 res://src/Base/Classes/Settings.cs
 res://src/Base/ShellBar.cs
@@ -7,7 +14,6 @@ res://src/Shared/GlobalData.cs
 res://src/Base/OpenDialog.cs
 res://src/Shared/GlobalSignals.cs
 res://src/Base/Preview.cs
-res://src/Base/Classes/CueList.cs
 res://src/Base/Cue2Base.cs
 res://src/Shared/InputActionsListener.cs
 res://src/Base/Settings/AudioOutputPatchMatrix.cs
@@ -36,7 +42,6 @@ res://src/Shared/AudioDeviceManager.cs
 res://src/Base/Settings/SettingsGeneral.cs
 res://src/UI/Scenes/HeaderUI.cs
 res://src/UI/Scenes/LogWindow.cs
-res://src/Base/SettingsWindow.cs
 res://src/Shared/EventLogger.cs
 res://src/Shared/GlobalStyles.cs
 res://src/Base/Classes/AudioOutputPatch.cs

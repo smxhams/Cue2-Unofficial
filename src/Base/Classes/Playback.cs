@@ -25,6 +25,14 @@ public partial class Playback : Node
 	private int _playbackIndex = 0;
 	
 	
+	// For test SDL implementation
+	private static float LeftVolume = 1.0f;
+	private static float RightVolume = 0.5f;
+	private static  uint LeftDeviceID;
+	private static  uint RightDeviceID;
+	private static readonly object AudioLock = new object();
+	
+	
 	
 	public Playback()
 	{
@@ -40,10 +48,15 @@ public partial class Playback : Node
 		_window.CloseRequested += WindowOnCloseRequested;
 		_canvasWindow = _globalData.VideoWindow;
 		_globalSignals.StopAll += StopAll;
+		
+		SDL.Init(SDL.InitFlags.Audio);
 	}
+
 	
-	public async void PlayMedia(Cue cue, Window window = null)
+	// See below for test SDL implementation
+	/*public async void PlayMedia(Cue cue, Window window = null)
 	{
+		GD.Print("PLAYTING MEDIA HERE");
 		var mediaPlayer = new MediaPlayer(_libVLC);
 		var media = new Media(_libVLC, cue.FilePath);
 		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
@@ -75,10 +88,46 @@ public partial class Playback : Node
 		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
 		_playbackIndex++;
 		media.Dispose();
+	}*/
+
+	// The following is a test implementation with SDL
+	public async void PlayMedia(Cue cue, Window window = null)
+	{
+		GD.Print("This may break");
+		try
+		{
+			var mediaPlayer = new MediaPlayer(_libVLC);
+			var media = new Media(_libVLC, cue.FilePath);
+			await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
+			while (media.IsParsed != true)
+			{
+			}
+
+			GD.Print("Media loaded");
+
+			if (!SetupSDLAudioDevices(out LeftDeviceID, out RightDeviceID))
+			{
+
+			}
+
+		}
+		catch (Exception e)
+		{
+			GD.Print($"Error: {e.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 1, e.Message);
+		}
+		finally
+		{
+			
+		}
 	}
 
+	private static bool SetupSDLAudioDevices(out uint leftDeviceId, out uint rightDeviceId)
+	{
+		leftDeviceId = 0;
+		rightDeviceId = 0;
+	}
 
-	
 	private static void MediaOnEndReached(object sender, EventArgs e)
 	{
 		foreach (var m in MediaPlayers)
@@ -277,6 +326,8 @@ public partial class Playback : Node
 			WindowOnCloseRequested();
 		}
 	}
+	
+
 }
 
 

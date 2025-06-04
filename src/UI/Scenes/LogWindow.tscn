@@ -2,7 +2,7 @@
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_6ks4u"]
 [ext_resource type="Script" uid="uid://cdui0e054gao7" path="res://src/UI/Scenes/LogWindow.cs" id="2_mkhum"]
-[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/ui/Scenes/SubWindowHandles.tscn" id="3_a310e"]
+[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindowHandles.tscn" id="3_a310e"]
 
 [node name="LogWindow" type="Window"]
 disable_3d = true

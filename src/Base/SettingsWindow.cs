@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using Cue2.Shared;
 
 namespace Cue2.Base;
@@ -22,7 +23,7 @@ public partial class SettingsWindow : Window
 		_scaleUI(_globalData.Settings.UiScale);
 		GD.Print("UI Scale: " + _globalData.Settings.UiScale);
 		
-
+		GetNode<Button>("%SaveWithShow").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.SettingsSaveUserDir), _getFilters());
 		
 		_generateTree();
 		_connectSignals();
@@ -41,10 +42,17 @@ public partial class SettingsWindow : Window
 			GetNode<PanelContainer>("%DropMenuFilter").Visible = false;
 			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
 		};
+		//GetNode<Button>("%SettingSaveAs").pressed += 
 		
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
 		
 		
 		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
+	}
+
+	private string _getFilters()
+	{
+		return "";
 	}
 	
 	private void _scaleUI(float value)
@@ -63,13 +71,13 @@ public partial class SettingsWindow : Window
 	private void _on_tree_item_selected(){
 		if (_currentDisplay != "")
 		{
-			GetNode<ScrollContainer>("MarginContainer/HSplitContainer/Panel/RightSide/" + _currentDisplay).Hide();
+			GetNode<ScrollContainer>("%" + _currentDisplay).Hide();
 			
 		}
 		else
 		{
 			// Checks all settings displays incase one is already open
-			foreach (var node in GetNode<MarginContainer>("MarginContainer/HSplitContainer/Panel/RightSide")
+			foreach (var node in GetNode<MarginContainer>("%RightSide")
 				         .GetChildren())
 			{
 				var child = (ScrollContainer)node;
@@ -78,7 +86,7 @@ public partial class SettingsWindow : Window
 		}
 		
 		var menuNode = GetSelectedMenu(_setTree.GetSelected().GetText(0));
-		GetNode<ScrollContainer>("MarginContainer/HSplitContainer/Panel/RightSide/" + menuNode).Show();
+		GetNode<ScrollContainer>("%" + menuNode).Show();
 		_currentDisplay = menuNode;
 		
 
@@ -91,6 +99,7 @@ public partial class SettingsWindow : Window
 		{
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Video Devices" => "VideoDevices",
+			"General" => "SettingsGeneral",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};
 	
@@ -105,12 +114,19 @@ public partial class SettingsWindow : Window
 		//General
 		TreeItem tiGeneral = _setTree.CreateItem(root);
 		tiGeneral.SetText(0, "General");
+		TreeItem tiInputMap = _setTree.CreateItem(tiGeneral);
+		tiInputMap.SetText(0, "Input Map");
+		
+		// Audio
+		TreeItem tiAudio = _setTree.CreateItem(root);
+		tiAudio.SetText(0, "Audio");
+		TreeItem tiAudioOutputPatch = _setTree.CreateItem(tiAudio);
+		tiAudioOutputPatch.SetText(0, "Audio Output Patch");
+
 		
 		// Output Devices
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);
 		tiOutputDevices.SetText(0, "Output Configuration");
-		TreeItem tiAudioOutputPatch = _setTree.CreateItem(tiOutputDevices);
-		tiAudioOutputPatch.SetText(0, "Audio Output Patch");
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
 		tiVideoDevice.SetText(0, "Video Devices");
 		
