@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Shared;
 using Godot;
@@ -26,26 +28,15 @@ public partial class Playback : Node
 	
 	private int _playbackIndex = 0;
 	
-	
-	// For test SDL implementation
-	private static uint _audioDevice;
-	private static nint _audioStream;
-	private static MediaPlayer _mediaPlayer;
-	private static List<byte> _audioBuffer = new List<byte>(); // Buffer for audio data
-	private static int _sourceBytesPerSampleFrame;
-	private static int _outputBytesPerSampleFrame;
-	private static double _sourceSampleRate;
-	private static double _targetBufferSeconds = 1.0;
-	private static long _maxBufferBytesTime;
-	private static long _maxBufferBytesMemory = 100 * 1024 * 1024;
-	private static long _maxBufferBytes;
-	private static double _mediaDurationSeconds;
-	//private static int bytesPerSampleFrame = 4;
+	private Dictionary<string, MediaPlayer> _activePlayers = new Dictionary<string, MediaPlayer>();
 	
 	public Playback()
 	{
 		Core.Initialize();
 		_libVLC = new LibVLC();
+		//_libVLC = new LibVLC(["-H"]);
+		//_libVLC = new LibVLC(["--audio-filter=remap", "--audio-filter=pan", "--aout-remap-channel-left=0", "--aout-remap-channel-right=0"]);
+		//_libVLC.Log += (sender, e) => Console.WriteLine($"[LibVLC] {e.Level}: {e.Message}");
 	}
 
 	public override void _Ready()
@@ -56,49 +47,134 @@ public partial class Playback : Node
 		_window.CloseRequested += WindowOnCloseRequested;
 		_canvasWindow = _globalData.VideoWindow;
 		_globalSignals.StopAll += StopAll;
-		
-		
-		// For test SDL Implementation
-		if (SDL.Init(SDL.InitFlags.Audio) == false)
-		{
-			Console.WriteLine($"SDL_Init failed: {SDL.GetError()}");
-			return;
-		}
 	}
 
-	// The following is a test implementation with SDL
 	public async void PlayMedia(Cue cue, Window window = null)
 	{
-		GD.Print("Starting audio playback with test implementation of SDL");
+		var test = new SdlTest();
+		test.PlayAudio(cue.FilePath, _libVLC);
+		return;
+		
+		if (!File.Exists(cue.FilePath))
+		{
+			GD.PrintErr($"Error: File not found at {cue.FilePath}");
+			return;
+		}
+
+		var availableDevices = GetAvailibleAudioDevices();
+
+		if (availableDevices.Length < 2)
+		{
+			GD.PrintErr("Not enough audio output devices found for demonstration.");
+			return;
+		}
+		
+		GD.Print("PLAYING MEDIA HERE");
 		var mediaPlayer = new MediaPlayer(_libVLC);
 		var media = new Media(_libVLC, cue.FilePath);
-		media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
-		// while (media.IsParsed != true) { } // No longer needed now that .Wasit is added to parse.
+		media.Parse().Wait(); 
 		
+		mediaPlayer.SetAudioFormat("f32le", 48000, 2);
+		//mediaPlayer.SetAudioFormatCallback();
+		mediaPlayer.SetAudioCallbacks(playAudio, null, null, null, null);
 		mediaPlayer.Media = media;
 		
+
+		var (hasVideo, hasAudio) = GetMediaType(media);
+		MediaPlayers.Add(_playbackIndex, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+
+
+		if (hasVideo && window != null)
+		{
+			var targetRect = CreateVideoTextureRect();
+			MediaPlayers[_playbackIndex].TargetTextureRect = targetRect;
+
+			uint videoheight = 0;
+			uint videowidth = 0;
+			mediaPlayer.Size(0, ref videowidth, ref videoheight);
+
+			targetRect.Set("VideoAlpha", 255);
+			targetRect.CallDeferred("InitVideoTexture", _playbackIndex, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
+		}
+
+		MediaPlayers[_playbackIndex].MediaPlayer.Volume = 100;
+		MediaPlayers[_playbackIndex].MediaPlayer.Play();
+		_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cue.Id);
+
+		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
+		_playbackIndex++;
+		media.Dispose();
+
+	}
+	static void playAudio(nint opaque, nint samples, uint count, long pts)
+	{
+		GD.Print("Count: " + count);
+		GD.Print("Samples: " + samples);
+		float[] tempBuffer = new float[count*2];
+		Marshal.Copy(samples, tempBuffer, 0, (int)count);
+		//_audioBuffer.AddRange(tempBuffer);
+		Console.WriteLine($"AudioPlay: received {count} bytes");
+	}
+	
+
+	
+
+
+
+	//Try 2
+	/*public async void PlayMedia(Cue cue, Window window = null)
+	{
+		GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
+		var mediaPlayer = new MediaPlayer(_libVLC);
+		//var media = new Media(_libVLC, cue.FilePath);
+		//media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
 		
+		// Check for audio Devices
+		var devices = SDL.GetAudioPlaybackDevices(out int deviceCount);
+		if (deviceCount == 0 || devices == null)
+		{
+			GD.Print("No audio devices found");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "No audio devices found", 1);
+			SDL.Quit();
+			return;
+		}
+
+		GD.Print("Availible audio devices:");
+		for (int i = 0; i < deviceCount; i++)
+		{
+			GD.Print($"   {i}: {SDL.GetAudioDeviceName(devices[i])}");
+		}
+		
+		// Default spec
 		var spec = new SDL.AudioSpec()
 		{
 			Freq = 41000,
 			Format = SDL.AudioFormat.AudioS16LE,
-			Channels = 2, // Mono for single channel
+			Channels = 2
 		};
+		
+		
 		// Open SDL3 audio device
-		var devices = SDL.GetAudioPlaybackDevices(out int deviceCount);
-		var deviceId = SDL.AudioDeviceDefaultPlayback;
-		SDL.GetAudioDeviceFormat(deviceId, out var format, out _);
-		var formatName = SDL.GetAudioFormatName(format.Format);
-		GD.Print("Chosen device name: " + SDL.GetAudioDeviceName(deviceId) + " and format: " + formatName);
-		if (devices != null) _audioDevice = SDL.OpenAudioDevice(deviceId, System.IntPtr.Zero); // Zero is a null, this means device will open with its own settings
+		var deviceId = devices[1]; // Using first availble device for now
+		GD.Print($"Using device: {SDL.GetAudioDeviceName(deviceId)} for this test.");
+
+		_audioDevice = SDL.OpenAudioDevice(deviceId, System.IntPtr.Zero); // Zero is a null, this means device will open with its own settings
 		if (_audioDevice == 0)
 		{
 			Console.WriteLine($"Failed to open audio device: {SDL.GetError()}");
 			SDL.Quit();
 			return;
 		}
+
+		SDL.GetAudioDeviceFormat(_audioDevice, out var deviceSpec, out var sampleFrames);
+		var formatName = SDL.GetAudioFormatName(deviceSpec.Format);
+		GD.Print($"Chosen device name: {SDL.GetAudioDeviceName(deviceId)} and format: {formatName} and sample frames: {sampleFrames}");
+		var bytesPerSample = SDL.AudioBitSize((uint)sampleFrames) / 8;
+		_outputBytesPerSampleFrame = (int)bytesPerSample * deviceSpec.Channels;
+		GD.Print($"Output device bytes per sample frame: {_outputBytesPerSampleFrame}");
+		
+		
 		// Create SDL3 audio stream
-		SDL.GetAudioDeviceFormat(deviceId, out var deviceSpec, out int _);
 		_audioStream = SDL.CreateAudioStream(spec, deviceSpec);
 		if (_audioStream == System.IntPtr.Zero)
 		{
@@ -107,10 +183,8 @@ public partial class Playback : Node
 			SDL.Quit();
 			return;
 		}
+		
 		// Bind audio stream to SDL3 audio device
-		GD.Print("Device ID: " + deviceId);
-		GD.Print("Device ID: " + _audioDevice);
-		Task.Delay(1000).Wait();
 		var streams = new[] { _audioStream };
 		bool bindResult = SDL.BindAudioStreams(_audioDevice, streams, streams.Length);
 		if (bindResult == false)
@@ -121,15 +195,21 @@ public partial class Playback : Node
 			SDL.Quit();
 			return;
 		}
+		
 		Console.WriteLine("Audio stream bound successfully.");
 
-		//mediaPlayer.SetAudioFormat("S16N", 44100, 2);
-		mediaPlayer.SetAudioFormatCallback(AudioSetup, null);
+		Task.Delay(1000).Wait();
+		using var testMedia = new Media(_libVLC, cue.FilePath);
+		testMedia.Parse().Wait();
+		_mediaDurationSeconds = testMedia.Duration / 1000.0;
+		GD.Print($"Loaded media: {testMedia.Mrl} with duration: {_mediaDurationSeconds} seconds");
+		
+		mediaPlayer.SetAudioFormat("S16N", 44100, 2);
+		//mediaPlayer.SetAudioFormatCallback(AudioSetup, AudioCleanup);
 		mediaPlayer.SetAudioCallbacks(AudioPlay, null, null, null, null);
 
 		GD.Print("hihihihihi");
 		// Load media
-		using var testMedia = new Media(_libVLC, cue.FilePath);
 		mediaPlayer.Media = testMedia;
 
 		// Start playback
@@ -144,15 +224,19 @@ public partial class Playback : Node
 		GD.Print("llalalala");
 
 		SDL.ResumeAudioDevice(_audioDevice);
-
+		while (true)
+		{
+			SDL.Delay(10); // Tighter loop to check buffer
+			SubmitAudioBuffer(); 
+		}
 		GD.Print("vivivivivivivivi");
 
 	}
 	int AudioSetup(ref IntPtr opaque, ref nint format, ref uint rate, ref uint channels)
 	{
 		GD.Print("In the audio setup");
-		GD.Print( FourCcToInt("S16N"));
-		//format = FourCCToInt("S16N");
+		GD.Print($"Current format: {format}");
+		GD.Print( FourCCToInt("S16N"));
 		rate = 44100; // 44.1 kHz
 		channels = 2; // Stereo
 		//bytesPerSampleFrame = 2 * channels; // 2 bytes per sample * number of channels
@@ -160,32 +244,17 @@ public partial class Playback : Node
 		return 0;
 	}
 	
-	static nint FourCcToInt(string fourcc)
+	static nint FourCCToInt(string fourcc)
 	{
 		if (fourcc.Length != 4)
 			throw new ArgumentException("FourCC code must be 4 characters");
 		byte[] bytes = System.Text.Encoding.ASCII.GetBytes(fourcc);
 		return (nint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
 	}
-	static void Cleanup()
-	{
-		GD.Print("ohhh no");
-		_mediaPlayer?.Stop();
-		_mediaPlayer?.Dispose();
-		if (_audioStream != null)
-		{
-			SDL.DestroyAudioStream(_audioStream);
-		}
-		if (_audioDevice != 0)
-		{
-			SDL.CloseAudioDevice(_audioDevice);
-		}
-		SDL.Quit();
-	}
+
 	
 	static void AudioPlay(nint opaque, nint samples, uint count, long pts)
 	{
-		GD.Print("Made it here?");
 		GD.Print("Count: " + count);
 		GD.Print("Samples: " + samples);
 		byte[] tempBuffer = new byte[count];
@@ -193,12 +262,11 @@ public partial class Playback : Node
 		_audioBuffer.AddRange(tempBuffer);
 		Console.WriteLine($"AudioPlay: received {count} bytes");
 		GD.Print("");
-		SubmitAudioBuffer();
 	}
 	static void SubmitAudioBuffer()
 	{
 		// Calculate how many complete sample frames we have
-		int completeFrameBytes = (_audioBuffer.Count / bytesPerSampleFrame) * bytesPerSampleFrame;
+		int completeFrameBytes = (_audioBuffer.Count / _outputBytesPerSampleFrame) * _outputBytesPerSampleFrame;
 		if (completeFrameBytes == 0)
 		{
 			GD.Print("Not enough data for a comnplete frame");
@@ -221,6 +289,31 @@ public partial class Playback : Node
 		_audioBuffer.RemoveRange(0, completeFrameBytes);
 		GD.Print("Survive to play");
 	}	
+	
+	static void AudioCleanup(IntPtr opaque)
+	{
+		// Flush remaining buffer data
+		if (_audioBuffer.Count > 0)
+		{
+			SubmitAudioBuffer();
+		}
+	}
+	
+	static void Cleanup()
+	{
+		GD.Print("ohhh no");
+		_mediaPlayer?.Stop();
+		_mediaPlayer?.Dispose();
+		if (_audioStream != null)
+		{
+			SDL.DestroyAudioStream(_audioStream);
+		}
+		if (_audioDevice != 0)
+		{
+			SDL.CloseAudioDevice(_audioDevice);
+		}
+		SDL.Quit();
+	}*/
 
 	
 	/*try
@@ -350,7 +443,50 @@ private static unsafe void ProcessAudioSamples(nint samples, uint count)
 	
 	
 	//End test SDL implementation
+/*public async void PlayMedia(Cue cue, Window window = null)
+	{
+		GD.Print("PLAYTING MEDIA HERE");
+		var mediaPlayer = new MediaPlayer(_libVLC);
+		var media = new Media(_libVLC, cue.FilePath);
+		media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
+		GD.Print("Before");
+		media.AddOption(":audio-filter=remap");
+		media.AddOption(":remap=0:1");
+		media.AddOption(":remap=1:1");
+		media.AddOption(":remap=2:1");
+		media.AddOption(":volume=10");
+		media.AddOption(":aout=2");
+		
+		GD.Print("After");
 
+		mediaPlayer.Media = media;
+		
+
+		var (hasVideo, hasAudio) = GetMediaType(media);
+		MediaPlayers.Add(_playbackIndex, new MediaPlayerState(mediaPlayer, hasVideo, hasAudio));
+
+
+		if (hasVideo && window != null)
+		{
+			var targetRect = CreateVideoTextureRect();
+			MediaPlayers[_playbackIndex].TargetTextureRect = targetRect;
+
+			uint videoheight = 0;
+			uint videowidth = 0;
+			mediaPlayer.Size(0, ref videowidth, ref videoheight);
+
+			targetRect.Set("VideoAlpha", 255);
+			targetRect.CallDeferred("InitVideoTexture", _playbackIndex, Convert.ToInt32(videowidth), Convert.ToInt32(videoheight));
+		}
+
+		MediaPlayers[_playbackIndex].MediaPlayer.Volume = 100;
+		MediaPlayers[_playbackIndex].MediaPlayer.Play();
+		_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), _playbackIndex, cue.Id);
+
+		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
+		_playbackIndex++;
+		media.Dispose();
+	}*/
 	private static void MediaOnEndReached(object sender, EventArgs e)
 	{
 		foreach (var m in MediaPlayers)
