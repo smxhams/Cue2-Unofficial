@@ -17,6 +17,7 @@ public class SdlTest
 	private static uint _audioDevice;
 	private static IntPtr _audioStream;
 	private bool _isPlaying = false;
+	private int _bytesPerFrame;
 	
 
     public void PlayAudio(string filePath, LibVLC libVLC)
@@ -142,6 +143,16 @@ public class SdlTest
 			sourceSpec.Channels = 2; // Stereo
 			sourceSpec.Format = SDL.AudioFormat.AudioS16LE; // Default
 		}
+
+		int bytesPerSample = sourceSpec.Format switch
+		{
+			SDL.AudioFormat.AudioS16LE or SDL.AudioFormat.AudioS16BE => 2,
+			SDL.AudioFormat.AudioS32LE or SDL.AudioFormat.AudioS32BE => 4,
+			SDL.AudioFormat.AudioF32LE or SDL.AudioFormat.AudioF32BE => 4,
+			SDL.AudioFormat.AudioU8 or SDL.AudioFormat.AudioS8 => 1,
+			_ => 2
+		};
+		_bytesPerFrame = bytesPerSample * sourceSpec.Channels;
 		
 		SDL.GetAudioDeviceFormat(_audioDevice, out var obtainedSpec, out var sampleFrames);
 		var formatName = SDL.GetAudioFormatName(obtainedSpec.Format);
@@ -220,28 +231,27 @@ public class SdlTest
 	private void PlayAudioCB(nint opaque, nint samples, uint count, long pts)
 	{
 		if (!_isPlaying) return;
-		unsafe
+		int byteCount = (int)count * _bytesPerFrame;
+		
+		if (SDL.PutAudioStreamData(_audioStream, samples, byteCount) == false)
 		{
-			if (SDL.PutAudioStreamData(_audioStream, samples, (int)count*4) == false)
-			{
-				GD.Print($"Failed to put audio stream data: {SDL.GetError()}");
-			}
-			else
-			{
-				GD.Print($"Queued {count} bytes to SDL audio stream.");
-			}
+			GD.Print($"Failed to put audio stream data: {SDL.GetError()}");
+		}
+		else
+		{
+			GD.Print($"Queued {count} bytes to SDL audio stream.");
+		}
 
-			// Check queue status to avoid underflow or overflow
-			int queued = SDL.GetAudioStreamQueued(_audioStream);
-			if (queued < 4096) // Adjust threshold based on your needs (e.g., 4KB)
-			{
-				GD.Print("Warning: Audio queue running low, potential underflow!");
-			}
-			else if (queued > 65536) // Adjust threshold (e.g., 64KB)
-			{
-				GD.Print("Warning: Audio queue growing large, potential overflow!");
-				SDL.ClearAudioStream(_audioStream); // Clear to prevent latency
-			}
+		// Check queue status to avoid underflow or overflow
+		int queued = SDL.GetAudioStreamQueued(_audioStream);
+		if (queued < 4096) // Adjust threshold based on your needs (e.g., 4KB)
+		{
+			GD.Print("Warning: Audio queue running low, potential underflow!");
+		}
+		else if (queued > 65536) // Adjust threshold (e.g., 64KB)
+		{
+			GD.Print("Warning: Audio queue growing large, potential overflow!");
+			SDL.ClearAudioStream(_audioStream); // Clear to prevent latency
 		}
 	}
 	
