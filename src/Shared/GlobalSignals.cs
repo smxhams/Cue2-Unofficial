@@ -11,6 +11,7 @@ public partial class GlobalSignals : Node
 	[Signal]  public delegate void ShellFocusedEventHandler(int cueId);
 
 	[Signal]  public delegate void LogEventHandler(string log, int type);
+	// 0 = info, 1 = warning, 2 = error, 3 = alert
 	[Signal]  public delegate void LogUpdatedEventHandler(string printout, int type);
 	
 	[Signal] public delegate void LogAlertEventHandler();

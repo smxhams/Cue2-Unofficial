@@ -43,3 +43,4 @@ res://src/Base/Classes/AudioOutputPatch.cs
 res://src/Base/CommandInterpreter/CueCommandInterpreter.cs
 res://src/Base/Settings/DeviceOutputChannelUI.cs
 res://src/Base/Classes/MediaPlayerState.cs
+res://src/Shared/AudioDevices.cs

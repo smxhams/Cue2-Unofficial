@@ -51,8 +51,9 @@ public partial class Playback : Node
 
 	public async void PlayMedia(Cue cue, Window window = null)
 	{
-		var test = new SdlTest();
-		test.PlayAudio(cue.FilePath, _libVLC);
+		//TODO: THIS RUNS SDL TEST, CURRENTLY WORKING ON FULL IMPLEMENTATION
+		//var test = new SdlTest();
+		//test.PlayAudio(cue.FilePath, _libVLC);
 		return;
 		
 		if (!File.Exists(cue.FilePath))
@@ -60,14 +61,7 @@ public partial class Playback : Node
 			GD.PrintErr($"Error: File not found at {cue.FilePath}");
 			return;
 		}
-
-		var availableDevices = GetAvailibleAudioDevices();
-
-		if (availableDevices.Length < 2)
-		{
-			GD.PrintErr("Not enough audio output devices found for demonstration.");
-			return;
-		}
+		
 		
 		GD.Print("PLAYING MEDIA HERE");
 		var mediaPlayer = new MediaPlayer(_libVLC);
@@ -118,330 +112,6 @@ public partial class Playback : Node
 	
 
 	
-
-
-
-	//Try 2
-	/*public async void PlayMedia(Cue cue, Window window = null)
-	{
-		GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
-		var mediaPlayer = new MediaPlayer(_libVLC);
-		//var media = new Media(_libVLC, cue.FilePath);
-		//media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
-		
-		// Check for audio Devices
-		var devices = SDL.GetAudioPlaybackDevices(out int deviceCount);
-		if (deviceCount == 0 || devices == null)
-		{
-			GD.Print("No audio devices found");
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "No audio devices found", 1);
-			SDL.Quit();
-			return;
-		}
-
-		GD.Print("Availible audio devices:");
-		for (int i = 0; i < deviceCount; i++)
-		{
-			GD.Print($"   {i}: {SDL.GetAudioDeviceName(devices[i])}");
-		}
-		
-		// Default spec
-		var spec = new SDL.AudioSpec()
-		{
-			Freq = 41000,
-			Format = SDL.AudioFormat.AudioS16LE,
-			Channels = 2
-		};
-		
-		
-		// Open SDL3 audio device
-		var deviceId = devices[1]; // Using first availble device for now
-		GD.Print($"Using device: {SDL.GetAudioDeviceName(deviceId)} for this test.");
-
-		_audioDevice = SDL.OpenAudioDevice(deviceId, System.IntPtr.Zero); // Zero is a null, this means device will open with its own settings
-		if (_audioDevice == 0)
-		{
-			Console.WriteLine($"Failed to open audio device: {SDL.GetError()}");
-			SDL.Quit();
-			return;
-		}
-
-		SDL.GetAudioDeviceFormat(_audioDevice, out var deviceSpec, out var sampleFrames);
-		var formatName = SDL.GetAudioFormatName(deviceSpec.Format);
-		GD.Print($"Chosen device name: {SDL.GetAudioDeviceName(deviceId)} and format: {formatName} and sample frames: {sampleFrames}");
-		var bytesPerSample = SDL.AudioBitSize((uint)sampleFrames) / 8;
-		_outputBytesPerSampleFrame = (int)bytesPerSample * deviceSpec.Channels;
-		GD.Print($"Output device bytes per sample frame: {_outputBytesPerSampleFrame}");
-		
-		
-		// Create SDL3 audio stream
-		_audioStream = SDL.CreateAudioStream(spec, deviceSpec);
-		if (_audioStream == System.IntPtr.Zero)
-		{
-			Console.WriteLine($"Failed to create audio stream: {SDL.GetError()}");
-			SDL.CloseAudioDevice(_audioDevice);
-			SDL.Quit();
-			return;
-		}
-		
-		// Bind audio stream to SDL3 audio device
-		var streams = new[] { _audioStream };
-		bool bindResult = SDL.BindAudioStreams(_audioDevice, streams, streams.Length);
-		if (bindResult == false)
-		{
-			Console.WriteLine($"Failed to bind audio stream: {SDL.GetError()}");
-			SDL.DestroyAudioStream(_audioStream);
-			SDL.CloseAudioDevice(_audioDevice);
-			SDL.Quit();
-			return;
-		}
-		
-		Console.WriteLine("Audio stream bound successfully.");
-
-		Task.Delay(1000).Wait();
-		using var testMedia = new Media(_libVLC, cue.FilePath);
-		testMedia.Parse().Wait();
-		_mediaDurationSeconds = testMedia.Duration / 1000.0;
-		GD.Print($"Loaded media: {testMedia.Mrl} with duration: {_mediaDurationSeconds} seconds");
-		
-		mediaPlayer.SetAudioFormat("S16N", 44100, 2);
-		//mediaPlayer.SetAudioFormatCallback(AudioSetup, AudioCleanup);
-		mediaPlayer.SetAudioCallbacks(AudioPlay, null, null, null, null);
-
-		GD.Print("hihihihihi");
-		// Load media
-		mediaPlayer.Media = testMedia;
-
-		// Start playback
-		if (!mediaPlayer.Play())
-		{
-			Console.WriteLine("Failed to start VLC media playback.");
-			Cleanup();
-			return;
-		}
-
-
-		GD.Print("llalalala");
-
-		SDL.ResumeAudioDevice(_audioDevice);
-		while (true)
-		{
-			SDL.Delay(10); // Tighter loop to check buffer
-			SubmitAudioBuffer(); 
-		}
-		GD.Print("vivivivivivivivi");
-
-	}
-	int AudioSetup(ref IntPtr opaque, ref nint format, ref uint rate, ref uint channels)
-	{
-		GD.Print("In the audio setup");
-		GD.Print($"Current format: {format}");
-		GD.Print( FourCCToInt("S16N"));
-		rate = 44100; // 44.1 kHz
-		channels = 2; // Stereo
-		//bytesPerSampleFrame = 2 * channels; // 2 bytes per sample * number of channels
-		opaque = 0;
-		return 0;
-	}
-	
-	static nint FourCCToInt(string fourcc)
-	{
-		if (fourcc.Length != 4)
-			throw new ArgumentException("FourCC code must be 4 characters");
-		byte[] bytes = System.Text.Encoding.ASCII.GetBytes(fourcc);
-		return (nint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
-	}
-
-	
-	static void AudioPlay(nint opaque, nint samples, uint count, long pts)
-	{
-		GD.Print("Count: " + count);
-		GD.Print("Samples: " + samples);
-		byte[] tempBuffer = new byte[count];
-		Marshal.Copy(samples, tempBuffer, 0, (int)count);
-		_audioBuffer.AddRange(tempBuffer);
-		Console.WriteLine($"AudioPlay: received {count} bytes");
-		GD.Print("");
-	}
-	static void SubmitAudioBuffer()
-	{
-		// Calculate how many complete sample frames we have
-		int completeFrameBytes = (_audioBuffer.Count / _outputBytesPerSampleFrame) * _outputBytesPerSampleFrame;
-		if (completeFrameBytes == 0)
-		{
-			GD.Print("Not enough data for a comnplete frame");
-			return; // Not enough data for a complete frame yet
-		}
-
-		// Copy complete frames to a new array
-		byte[] frameData = _audioBuffer.GetRange(0, completeFrameBytes).ToArray();
-		bool result = SDL.PutAudioStreamData(_audioStream, frameData, frameData.Length);
-		if (result == false)
-		{
-			Console.WriteLine($"Failed to put audio stream data: {SDL.GetError()}");
-		}
-		else
-		{
-			Console.WriteLine($"Submitted {frameData.Length} bytes to SDL audio stream");
-		}
-
-		// Remove the submitted data from the buffer
-		_audioBuffer.RemoveRange(0, completeFrameBytes);
-		GD.Print("Survive to play");
-	}	
-	
-	static void AudioCleanup(IntPtr opaque)
-	{
-		// Flush remaining buffer data
-		if (_audioBuffer.Count > 0)
-		{
-			SubmitAudioBuffer();
-		}
-	}
-	
-	static void Cleanup()
-	{
-		GD.Print("ohhh no");
-		_mediaPlayer?.Stop();
-		_mediaPlayer?.Dispose();
-		if (_audioStream != null)
-		{
-			SDL.DestroyAudioStream(_audioStream);
-		}
-		if (_audioDevice != 0)
-		{
-			SDL.CloseAudioDevice(_audioDevice);
-		}
-		SDL.Quit();
-	}*/
-
-	
-	/*try
-	{
-		var mediaPlayer = new MediaPlayer(_libVLC);
-		var media = new Media(_libVLC, cue.FilePath);
-		await media.Parse(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
-		while (media.IsParsed != true)
-		{
-		}
-
-		GD.Print("Media loaded");
-
-		if (!SetupSDLAudioDevices(out LeftDeviceId, out RightDeviceId))
-		{
-			Console.WriteLine("Failed to set up SDL audio devices.");
-			return;
-		}
-
-		mediaPlayer.SetAudioFormat("S16N", 44100, 2);
-		mediaPlayer.SetAudioCallbacks(
-			playCb: (nint data, nint samples, uint count, long pts) =>
-			{
-				ProcessAudioSamples(samples, count);
-			},
-			pauseCb: null,
-			resumeCb: null,
-			flushCb: null,
-			drainCb: null);
-
-	}
-	catch (Exception e)
-	{
-		GD.Print($"Error: {e.Message}");
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), e.Message, 1);
-	}
-	finally
-	{
-
-	}
-}
-
-
-
-private static bool SetupSDLAudioDevices(out uint LeftDeviceId, out uint RightDeviceId)
-{
-	LeftDeviceId = Convert.ToUInt32(0);
-	RightDeviceId = Convert.ToUInt32(0);
-
-	// Get available playback devices
-	var devices = SDL.GetAudioPlaybackDevices(out int deviceCount);//SDL_GetNumAudioDevices(SDL_FALSE);
-	if (devices == null) return false;
-	if (deviceCount < 2)
-	{
-		Console.WriteLine("Need at least two audio devices.");
-		return false;
-	}
-
-	// Open first device for left channel
-	SDL.AudioSpec desiredSpec = new SDL.AudioSpec()
-	{
-		Freq = 44100,
-		Format = SDL.AudioFormat.AudioS16LE,
-		Channels = 1, // Mono for single channel
-	};
-
-
-	// First device setup
-	Console.WriteLine($"Opening device 0: {SDL.GetAudioDeviceName(devices[0])} for left channel");
-	LeftDeviceId = SDL.OpenAudioDevice(devices[0], in desiredSpec);
-	if (LeftDeviceId == UIntPtr.Zero)
-	{
-		Console.WriteLine($"Failed to open left audio device: {SDL.GetError()}");
-		return false;
-	}
-
-	SDL.GetAudioDeviceFormat(LeftDeviceId, out SDL.AudioSpec obtainedSpec, out int sampleFrames);
-	LeftAudioStream = SDL.CreateAudioStream(in desiredSpec, in obtainedSpec);
-	if (LeftAudioStream == nint.Zero)
-	{
-		Console.WriteLine($"Failed to create left audio stream: {SDL.GetError()}");
-		SDL.CloseAudioDevice(LeftDeviceId);
-		return false;
-	}
-	if (SDL.BindAudioStream(LeftDeviceId, LeftAudioStream) != false)
-	{
-		Console.WriteLine($"Failed to bind left audio stream: {SDL.GetError()}");
-		SDL.DestroyAudioStream(LeftAudioStream);
-		SDL.CloseAudioDevice(LeftDeviceId);
-		return false;
-	}
-
-	SDL.ResumeAudioDevice(LeftDeviceId); // Unpause
-	GD.Print("MADE IT HERE");
-
-	// Open second device for right channel
-	Console.WriteLine($"Opening device 1: {SDL.GetAudioDeviceName(devices[1])} for right channel");
-	RightDeviceId = SDL.OpenAudioDevice(devices[1], in desiredSpec);
-	if (RightDeviceId == 0)
-	{
-		Console.WriteLine($"Failed to open right audio device: {SDL.GetError()}");
-		SDL.CloseAudioDevice(LeftDeviceId);
-		return false;
-	}
-	SDL.ResumeAudioDevice(RightDeviceId); // Unpause
-
-	return true;
-}
-
-private static unsafe void ProcessAudioSamples(nint samples, uint count)
-{
-	int sampleCount = (int)count / 4;
-	short[] leftSamples = new short[sampleCount];
-	short[] rightSamples = new short[sampleCount];
-
-	short* samplePtr = (short*)samples;
-	for (int i = 0; i < sampleCount; i++)
-	{
-		leftSamples[i] = (short)(samplePtr[i * 2] * LeftVolume);     // Left channel
-		rightSamples[i] = (short)(samplePtr[i * 2 + 1] * RightVolume); // Right channel
-	}
-
-	lock (AudioLock)
-	{
-	}
-}*/
-	
-	
 	//End test SDL implementation
 /*public async void PlayMedia(Cue cue, Window window = null)
 	{
@@ -487,6 +157,7 @@ private static unsafe void ProcessAudioSamples(nint samples, uint count)
 		_playbackIndex++;
 		media.Dispose();
 	}*/
+
 	private static void MediaOnEndReached(object sender, EventArgs e)
 	{
 		foreach (var m in MediaPlayers)
@@ -626,15 +297,6 @@ private static unsafe void ProcessAudioSamples(nint samples, uint count)
 		{
 			StopMedia(player.Key);
 		}
-	}
-
-	public AudioOutputDevice[] GetAvailibleAudioDevices()
-	{
-		var mediaplayer = new MediaPlayer(_libVLC);
-		var devices = mediaplayer.AudioOutputDeviceEnum;
-		mediaplayer.Dispose();
-		
-		return devices;
 	}
     
 	private TextureRect CreateVideoTextureRect()

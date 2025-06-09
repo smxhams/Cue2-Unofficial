@@ -22,28 +22,28 @@ public partial class Devices : Node
 
     private AudioDevice CreateAudioDevice(string deviceName, int deviceId = -1)
     {
-        AudioOutputDevice? device = null;
+        string? device = null;
 
-        var vlcDevices = _globalData.Playback.GetAvailibleAudioDevices(); // Get devices availible to VLC
+        var vlcDevices = _globalData.AudioDevices.GetAudioDeviceNames(); // Get devices availible to VLC
         
         // Match vlc device to name
         foreach (var i in vlcDevices)
         {
-            if (i.Description == deviceName)
+            if (i == deviceName)
             {
-                GD.Print("Selected device is: " + i.Description);
+                GD.Print("Selected device is: " + i);
                 device = i;
             }
         }
 
-        if (device.HasValue)
+        if (device != null)
         {
             // Gets system audio output device
-            AudioDevice newDevice = AudioDeviceHelper.GetAudioDevice(deviceName, device.Value.DeviceIdentifier, deviceId);
-            if (newDevice != null) {AudioDevices.Add(newDevice.DeviceId, newDevice);}
+            //AudioDevice newDevice = AudioDeviceHelper.GetAudioDevice(deviceName, device.Value.DeviceIdentifier, deviceId);
+            //if (newDevice != null) {AudioDevices.Add(newDevice.DeviceId, newDevice);}
 
-            GD.Print(newDevice.ToString());
-            return newDevice;
+            //GD.Print(newDevice.ToString());
+            return null; //newDevice;
 
         }
 

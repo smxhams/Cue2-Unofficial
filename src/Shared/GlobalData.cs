@@ -28,7 +28,7 @@ public partial class GlobalData : Node
 	public CueCommandInterpreter CueCommandInterpreter;
 	public Settings Settings;
 	public Devices Devices;
-	public AudioDeviceManager AudioDeviceManager;
+	public AudioDevices AudioDevices;
 	
 	
 	public int FocusedCue = -1;
@@ -81,8 +81,8 @@ public partial class GlobalData : Node
 		Devices = new Devices();
 		AddChild(Devices);
 		
-		//AudioDeviceManager = new AudioDeviceManager();
-		//AddChild(AudioDeviceManager);
+		AudioDevices = new AudioDevices();
+		AddChild(AudioDevices);
 		
 		
 

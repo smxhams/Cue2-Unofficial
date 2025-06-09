@@ -28,18 +28,12 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		
 		_deviceQuantityLabel = GetNode<Label>("%DeviceQuantityLabel");
 
-		//_audioOutputPatchMatrix = GetNode<AudioOutputPatchMatrix>("%AudioOutputPatchMatrix");
-
 		_newPatchButton = GetNode<Button>("%NewPatchButton");
 		_newPatchButton.Pressed += NewPatchButtonPressed;
-		
 		
 		DisplayPatchMatrix();
 		VisibilityChanged += DisplayExistingDevices;
 		VisibilityChanged += DisplayPatchMatrix;
-		
-		
-		
 	}
 
 	private void NewPatchButtonPressed()
@@ -55,7 +49,8 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		var patches = _globalData.Settings.GetAudioOutputPatches();
 
 		VBoxContainer patchMatrixContainer = GetNode<VBoxContainer>("%PatchesVBoxContainer");
-		PackedScene patchMatrixScene = GD.Load<PackedScene>("uid://dgy2bmmm4rjpt");
+		PackedScene patchMatrixScene = SceneLoader.LoadPackedScene("uid://dgy2bmmm4rjpt", out _);
+		
 		if (patchMatrixContainer.GetChildCount() > 0) {GD.Print("Has child, lets see if it finds a match"); }
 
 		var childList = patchMatrixContainer.GetChildren();
@@ -66,13 +61,11 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 			bool matchedPatch = false;
 			foreach (var child in childList)
 			{
-
 				if (child.Get("PatchId").AsInt16() == patch.Key)
 				{
 					GD.Print("Found existing patch matrix with id: " + patch.Key + " and name: " + patch.Value.Name);
 					matchedPatch = true;
 				}
-
 			}
 			if (!matchedPatch)
 			{
@@ -82,7 +75,6 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 				instance.Set("PatchId", patch.Key);
 				patchMatrixContainer.AddChild(instance);
 			}
-			
 		}
 		
 		// Removes patch scenes if not in patch list
@@ -110,8 +102,7 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 	{
 		var visible = Visible;
 		if (!Visible) return;  
-
-
+		
 		List<AudioDevice> deviceList = _globalData.Devices.GetAudioDevices();
 		if (deviceList == null || !deviceList.Any())
 		{
@@ -120,9 +111,6 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		}
 		
 		_deviceQuantityLabel.Text = "There are " + deviceList.Count + " devices in use";
-
-
-
 	}
 	
 }

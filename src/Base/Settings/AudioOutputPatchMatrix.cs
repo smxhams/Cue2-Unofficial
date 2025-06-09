@@ -23,7 +23,7 @@ public partial class AudioOutputPatchMatrix : Control
     //[Export] private NodePath patchMatrixPath;
     
     private List<Node> _currentDeivceList = new List<Node>();
-    private AudioOutputDevice[] _availableDeviceList;
+    private List<string> _availableDeviceList;
     
     private PackedScene _deviceOutputPatchMatrixScene;
     private HBoxContainer _deviceContainer;
@@ -62,7 +62,6 @@ public partial class AudioOutputPatchMatrix : Control
         QueueFree();
     }
 
-
     public int GetId() => PatchId;
 
 
@@ -78,8 +77,8 @@ public partial class AudioOutputPatchMatrix : Control
         }
 
         await ToSignal(GetTree(), "process_frame");
-        
-        _availableDeviceList = _globalData.Playback.GetAvailibleAudioDevices();
+
+        _availableDeviceList = _globalData.AudioDevices.GetAudioDeviceNames();
         
         _currentDeivceList.Clear();
         
@@ -91,21 +90,20 @@ public partial class AudioOutputPatchMatrix : Control
             var usedDevice = _globalData.Devices.GetAudioDeviceFromId(i);
             var createdHeader = LoadDeviceOutputPatchHeader(usedDevice.Name, true);
             LoadEnabledDeviceChannels(usedDevice, createdHeader);
-             
             
         }
         
         // Then load all availible unused devices.
-        foreach (AudioOutputDevice device in _availableDeviceList)
+        foreach (string device in _availableDeviceList)
         {
-            bool alreadyExistsInList = _currentDeivceList.Any(node => node.Name == device.Description);
+            bool alreadyExistsInList = _currentDeivceList.Any(node => node.Name == device);
             if (!alreadyExistsInList)
             {
-                LoadDeviceOutputPatchHeader(device.Description, false);
+                LoadDeviceOutputPatchHeader(device, false);
             }
         }
 
-        _deviceCount = _availableDeviceList.Length;
+        _deviceCount = _availableDeviceList.Count;
         
         // Then build all check boxs between cue output channels and devices/devicechannels.
         BuildPatchMatrix();
@@ -120,7 +118,13 @@ public partial class AudioOutputPatchMatrix : Control
         _currentDeivceList.Add(instance);
 
         instance.Name = name;
+        var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(name);
         instance.GetChild<Label>(1).TooltipText = name;
+        foreach (var spec in specs)
+        {
+            instance.GetChild<Label>(1).TooltipText += "\n" + spec;
+        }
+
         _currentDeivceList.Add(instance);
                 
         CheckButton useDeviceButton = instance.GetNode<CheckButton>("UseDeviceButton");
