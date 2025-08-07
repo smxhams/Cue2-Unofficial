@@ -50,3 +50,5 @@ res://src/Base/Settings/DeviceOutputChannelUI.cs
 res://src/Base/Classes/MediaPlayerState.cs
 res://src/Base/Settings/PatchMatrixDeviceHeader.tscn
 res://src/Base/Settings/AudioOutputPatchMatrix.tscn
+res://src/Base/Settings/PatchMatrixDeviceOutputHeader.tscn
+res://src/Base/Settings/AudioPatchMatrixCheckBox.tscn

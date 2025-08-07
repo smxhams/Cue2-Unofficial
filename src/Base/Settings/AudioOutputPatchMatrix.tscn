@@ -40,6 +40,8 @@ size_flags_vertical = 3
 
 [node name="VBoxContainer" type="GridContainer" parent="VBoxContainer2/ScrollContainer"]
 layout_mode = 2
+theme_override_constants/h_separation = 5
+theme_override_constants/v_separation = 5
 columns = 2
 
 [node name="TopLeftContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
@@ -151,33 +153,16 @@ layout_mode = 2
 focus_mode = 0
 text = "Add Channel +"
 
-[node name="PatchMatrixContainer" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PatchMatrixContainer" type="GridContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PanelContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
-
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="HBoxContainer3" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="HBoxContainer4" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="HBoxContainer5" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
-
-[node name="HBoxContainer6" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PatchMatrixContainer"]
-custom_minimum_size = Vector2(32, 0)
-layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
 
 [connection signal="pressed" from="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/RefreshButton" to="." method="_onRefreshButtonPressed"]

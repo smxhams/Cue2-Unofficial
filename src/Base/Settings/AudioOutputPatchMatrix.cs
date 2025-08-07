@@ -28,9 +28,10 @@ public partial class AudioOutputPatchMatrix : Control
     private List<string> _availableDeviceList;
     
     private PackedScene _deviceHeaderScene;
+    private PackedScene _deviceOutputHeaderScene;
     private HBoxContainer _deviceContainer;
     private VBoxContainer _channelList;
-    private VBoxContainer _patchMatrix;
+    private GridContainer _patchMatrix;
     private LineEdit _patchName;
     private Button _deletePatchButton;
     private Button _addChannelButton;
@@ -43,10 +44,13 @@ public partial class AudioOutputPatchMatrix : Control
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals"); // Global
         
         // This is "PatchMatrixDeviceHeader" header
-        _deviceHeaderScene = SceneLoader.LoadPackedScene("uid://cisr40jsg2jgp", out string error);
+        _deviceHeaderScene = SceneLoader.LoadPackedScene("uid://cisr40jsg2jgp", out string _);
+        
+        // This is "PatchMatrixDeviceOutputHeader"
+        _deviceOutputHeaderScene = SceneLoader.LoadPackedScene("uid://bmi0eibnauemp", out string _);
         
         _deviceContainer = GetNode<HBoxContainer>("%DeviceOutputsListHBoxContainer");
-        _patchMatrix = GetNode<VBoxContainer>("%PatchMatrixContainer");
+        _patchMatrix = GetNode<GridContainer>("%PatchMatrixContainer");
         _channelList = GetNode<VBoxContainer>("%ChannelList"); 
         
         
@@ -131,7 +135,7 @@ public partial class AudioOutputPatchMatrix : Control
         _deviceCount = _availableDeviceList.Count;
         
         // Then build all check boxs between cue output channels and devices/devicechannels.
-        //BuildPatchMatrix();
+        BuildPatchMatrix();
     }
 
     private async void NewChannelRow(KeyValuePair<int, string> channel)
@@ -169,21 +173,38 @@ public partial class AudioOutputPatchMatrix : Control
         };
     }
     
-    private async void NewUsedDeviceColumn(string deviceName, Dictionary<int, List<int>> outPutChannels)
+    private async void NewUsedDeviceColumn(string deviceName, Dictionary<string, List<int>> outputChannels)
     {
         GD.Print($"Add device {deviceName} column as USED");
-        LoadDeviceOutputPatchHeader(deviceName, true);
+        var header = LoadDeviceOutputDeviceHeader(deviceName, true);
+        
+        var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(deviceName);
+        header.GetChild<Label>(1).TooltipText = deviceName;
+        foreach (var spec in specs)
+        {
+            header.GetChild<Label>(1).TooltipText += "\n" + spec;
+        }
+        
+        // Add device outputs
+        foreach (var patch in outputChannels)
+        {
+            var outHeader = _deviceOutputHeaderScene.Instantiate();
+            _deviceContainer.AddChild(outHeader);
+            outHeader.GetNode<LineEdit>("Label").Text = $"{patch.Key}";
+            outHeader.Set("parentDevice", deviceName);
+        }
     }
     
-    private async void NewUsedButNotFoundDeviceColumn(string deviceName, Dictionary<int, List<int>> outPutChannels)
+    private async void NewUsedButNotFoundDeviceColumn(string deviceName, Dictionary<string, List<int>> outputChannels)
     {
         GD.Print($"Add device {deviceName} column as USED BUT NOT FOUND");
+        var header = LoadDeviceOutputDeviceHeader(deviceName);
     }
     
     private async void NewUnusedDeviceColumn(string deviceName)
     {
         GD.Print($"Add device {deviceName} column as UNUSED");
-        LoadDeviceOutputPatchHeader(deviceName, false);
+        var header = LoadDeviceOutputDeviceHeader(deviceName);
     }
     
     private void AddChannelButtonPressed()
@@ -193,33 +214,20 @@ public partial class AudioOutputPatchMatrix : Control
     }
 
 
-    private Node LoadDeviceOutputPatchHeader(string name, bool enabled)
+    private Node LoadDeviceOutputDeviceHeader(string name, bool state = false)
     {
-        var header = new Panel();
-        header.Name = name;
-        header.Set("", name);
-        
-        /*Node instance = _deviceHeaderScene.Instantiate();
+        Node instance = _deviceHeaderScene.Instantiate();
         instance.Set("DeviceName", name);
         _deviceContainer.AddChild(instance);
         instance.GetNode<Label>("Label").Text = name;
         _currentDeivceList.Add(instance);
-
         instance.Name = name; 
-        var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(name);
-        instance.GetChild<Label>(1).TooltipText = name;
-        foreach (var spec in specs)
-        {
-            instance.GetChild<Label>(1).TooltipText += "\n" + spec;
-        }
-
-        _currentDeivceList.Add(instance);
-                
-        CheckButton useDeviceButton = instance.GetNode<CheckButton>("UseDeviceButton");
-        useDeviceButton.SetPressed(enabled);
+        
+        CheckButton toggleDeviceButton = instance.GetNode<CheckButton>("ToggleDeviceButton");
+        toggleDeviceButton.SetPressed(state);
         
         // Connect functions to the use device check button. 
-        useDeviceButton.Toggled += (bool presssed) =>
+        toggleDeviceButton.Toggled += (bool presssed) =>
         {
             if (presssed)
             {
@@ -230,60 +238,64 @@ public partial class AudioOutputPatchMatrix : Control
                     GD.Print("ERROR WHEN ENABLING DEVICE");
                     return;
                 }
-                AddDeviceToPatch(enabledDevice); 
+
+                int outputCount = enabledDevice.Channels;
+                Patch.AddOutputDevice(name, outputCount);
                 instance.Set("DeviceId", enabledDevice.DeviceId);
 
             }
             else
             {
-                RemoveDeviceFromPatch((int)instance.Get("DeviceId"));
-                _globalData.Devices.DisableAudioDevice((int)instance.Get("DeviceId")); // TODO: This needs to be in AudioDevices
+                Patch.RemoveOutputDevice(name);
             }
             SyncAudioDeviceDisplays();
-        };*/
-        return ;
+        };
+        return instance;
     }
-    
-    
-    
-    private void AddDeviceToPatch(AudioDevice device)
-    {
-        // Loop # of channels and # of channels the device has.
-        for (int cueChannel = 0; cueChannel < Patch.Channels.Count; cueChannel++)
-        {
-            for (int deviceChannel = 0; deviceChannel < device.Channels; deviceChannel++)
-            {
-                Patch.SetChannel(cueChannel, (device.DeviceId + ":" + deviceChannel), false);
-            }
-        }
-        //_globalData.Settings.UpdatePatch(Patch);
-    }
-    
+
     private async void BuildPatchMatrix()
-    // This loads checkboxs between channels and devices.
+        // This loads checkboxs between channels and devices.
     {
         // For now remove everything and start over on each build - eventauly should build once and update
         var children = _patchMatrix.GetChildren();
         foreach (var child in children)
         {
-            foreach (var cb in child.GetChildren())
+            child.QueueFree();
+        }
+
+        await ToSignal(GetTree(), "process_frame");
+
+        var deviceHeaders = _deviceContainer.GetChildren();
+        
+        // Calculate column count
+        var culumnCount = 0;
+        foreach (var deviceName in Patch.OutputDevices.Keys)
+        {
+            culumnCount++;
+            foreach (var deviceOutput in Patch.OutputDevices[deviceName])
             {
-                cb.QueueFree();
+                culumnCount++;
             }
         }
-        await ToSignal(GetTree(), "process_frame");
-        children = _patchMatrix.GetChildren(); // Should be HboxContainers for each channel
-        var devicesArray = _deviceContainer.GetChildren();
-        
+        _patchMatrix.Columns = culumnCount;
+        var rowCount = Patch.Channels.Count;
+        var cellCount = culumnCount * rowCount;
+
+        for (int i = 0; i < cellCount; i++)
+        {
+            Node checkBoxInstance = SceneLoader.LoadScene("uid://cbdaknpeq3im1", out string error); // Check box
+            _patchMatrix.AddChild(checkBoxInstance);
+        }
+
         // Loops all channels and availible devices and gives it a disabled checkbox.
-        for (int channel = 0; channel < Patch.Channels.Count; channel++) // 0 - 6 until add/remove channel functionality added.
+        /*for (int channel = 0; channel < Patch.Channels.Count; channel++) // 0 - 6 until add/remove channel functionality added.
         {
             for (int i = 0; i < devicesArray.Count(); i++)
             {
                 var hasId = devicesArray[i].Get("DeviceCId");
                 var hasChannel =  devicesArray[i].Get("DeviceChannel");
                 string idch = hasId.ToString() + ":" + ((int)hasChannel).ToString();
-                
+
                 if (idch != ":-1")
                 {
                     bool existsInPatch = Patch.Channels[channel].Outputs.ContainsKey(idch);
@@ -317,11 +329,10 @@ public partial class AudioOutputPatchMatrix : Control
                     }
                 }
                 //GD.Print("Made Check box for Channel #: " + channel + " and Device: " + devicesArray[i].Get("DeviceName"));
-            }
-        }
+            }*/
     }
 
-    private void PatchCheckBoxToggled(CheckBox checkBox, bool buttonPressed)
+    /*private void PatchCheckBoxToggled(CheckBox checkBox, bool buttonPressed)
     {
         var hasId = checkBox.Get("DeviceId");
         var hasChannel =  checkBox.Get("Channel");
@@ -330,9 +341,9 @@ public partial class AudioOutputPatchMatrix : Control
         Patch.SetChannel((int)hasChannel, idch, buttonPressed);
         _globalData.Settings.UpdatePatch(Patch);
         GD.Print((int)hasChannel + " : " +idch + Patch.Channels[(int)hasChannel].Outputs[idch]);
-    }
+    }*/
 
-    private void RemoveDeviceFromPatch(int deviceId)
+    /*private void RemoveDeviceFromPatch(int deviceId)
     {
         for (int channel = 0; channel < Patch.Channels.Count; channel++)
         {
@@ -351,7 +362,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         SyncAudioDeviceDisplays();
         BuildPatchMatrix();
-    }
+    }*/
     
     private void PatchNameOnTextChanged(string newtext)
     {

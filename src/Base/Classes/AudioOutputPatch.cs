@@ -13,8 +13,8 @@ public partial class AudioOutputPatch : Godot.GodotObject
     
     public int Id { get; set; }
     public string Name { get; set; }
-    public Dictionary<string, Dictionary<int, List<int>>> OutputDevices { get; set; }
-    // <Device name, <device output channnel, list of audio channel ID's>>
+    public Dictionary<string, Dictionary<string, List<int>>> OutputDevices { get; set; }
+    // <Device name, device output channnel, list of audio channel ID's>>
     public Dictionary<int, string> Channels { get; set; } // List of audio channels>
     private int _channelId { get; set; } = 0;
     
@@ -24,7 +24,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
     {
         Id = _nextId++;
         Name = "Unnamed";
-        OutputDevices = new Dictionary<string, Dictionary<int, List<int>>>();
+        OutputDevices = new Dictionary<string, Dictionary<string, List<int>>>();
         Channels = new Dictionary<int, string>();
         
         // Add some default blank channels.
@@ -36,7 +36,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
     {
         Id = _nextId++;
         Name = name;
-        OutputDevices = new Dictionary<string, Dictionary<int, List<int>>>();
+        OutputDevices = new Dictionary<string, Dictionary<string, List<int>>>();
         Channels = new Dictionary<int, string>();
         
         // Add some default blank channels.
@@ -58,7 +58,24 @@ public partial class AudioOutputPatch : Godot.GodotObject
         Channels.Add(_channelId++, name);
     }
 
+    public void AddOutputDevice(string deviceName, int outputCount)
+    {
+        OutputDevices.Add(deviceName, new Dictionary<string, List<int>>());
+        for (int i = 0; i < outputCount; i++)
+        {
+            OutputDevices[deviceName].Add($"Output {i}", new List<int>());
+        }
+    }
 
+    public void RemoveOutputDevice(string deviceName)
+    {
+        if (OutputDevices.ContainsKey(deviceName))
+        {
+            OutputDevices.Remove(deviceName);
+            return;
+        }
+        GD.Print($"Could not remove device: {deviceName} from patch: {Name}");
+    }
     /*
 
     public AudioOutputPatch(string name, int id, Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>> channelData)
