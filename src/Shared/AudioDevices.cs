@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection.Metadata;
+using Cue2.Base.Classes.Devices;
 using Godot;
 using SDL3;
 
@@ -9,6 +13,7 @@ public partial class AudioDevices : Node
 {
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
+	private Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>(); 
 	
 	//private static Dictionary<> OpenDevices;
 	
@@ -25,8 +30,56 @@ public partial class AudioDevices : Node
 		    return;
 	    }
     }
+
+    public AudioDevice OpenAudioDevice(string name, out string error)
+    {
+	    // Check if audio device already opened
+	    foreach (var dev in _openDevices.Values)
+	    {
+		    if (dev.Name == name)
+		    {
+				error = "Device already opened, returned existing device";
+				return dev;
+			    
+		    }
+	    }
+	    var physicalDeviceId = GetAudioDevicePhysicalIdFromName(name);
+	    if (physicalDeviceId == null)
+	    {
+		    error = "No availible device found with name given";
+		    return null; 
+	    }
+	    //Open audio device
+	    var audioDevice = SDL.OpenAudioDevice((uint)physicalDeviceId, (nint)0); // Zero is a null, this means device will open with its own settings
+	    if (audioDevice == 0)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open audio device: {SDL.GetError()}", 3);
+		    error = "Failed to open audio device: " + SDL.GetError();
+		    return null;
+	    }
+	    
+	    //Register Device
+	    var device = new AudioDevice(name, audioDevice, out string adError);
+	    if (adError != "")
+	    {
+		    error = adError;
+		    return null;
+	    }
+	    var specs = GetAudioDeviceSpec(name);
+
+	    device.PhysicalId = (uint)physicalDeviceId;
+	    device.Channels = specs.Channels;
+	    device.Format = specs.Format;
+	    device.SampleRate = specs.Freq;
+	    device.BitDepth = GetBitDepth(specs.Format);
+	    
+	    _openDevices.Add(device.DeviceId, device);
+
+	    error = "";
+	    return device;
+    }
     
-    public List<string> GetAudioDeviceNames()
+    public List<string> GetAvailibleAudioDevicseNames()
     {
 	    try
 	    {
@@ -57,14 +110,23 @@ public partial class AudioDevices : Node
 		    return null;
 	    }
 	    
+	    
     }
+
+    public SDL.AudioSpec GetAudioDeviceSpec(string name)
+    {
+	    var device = GetAudioDevicePhysicalIdFromName(name);
+	    Debug.Assert(device != null, nameof(device) + " != null");
+	    SDL.GetAudioDeviceFormat((uint)device, out SDL.AudioSpec spec, out _);
+	    return spec; // Return SDL_AudioSpec structu
+    } 
 
     public List<string> GetReadableAudioDeviceSpecs(string name)
     {
 	    var specs = new List<string>();
 	    var device = GetAudioDevicePhysicalIdFromName(name);
-	    if (device == 0) return null;
-	    SDL.GetAudioDeviceFormat(device, out SDL.AudioSpec spec, out _);
+	    if (device == null) return null;
+	    SDL.GetAudioDeviceFormat((uint)device, out SDL.AudioSpec spec, out _);
 	    var format = spec.Format.ToString().Substring(5);
 	    specs.Add($"Bit Depth: {GetBitDepth(spec.Format)} ({format})");
 	    specs.Add($"Bit Rate: {spec.Freq}");
@@ -75,17 +137,42 @@ public partial class AudioDevices : Node
     public uint GetAudioDevicePhysicalIdFromName(string name)
     {
 	    var devices = SDL.GetAudioPlaybackDevices(out int count);
-	    foreach (var deviceId in devices)
+
+	    if (devices != null)
 	    {
-			var deviceName = SDL.GetAudioDeviceName(deviceId);
-			if (deviceName == name) return deviceId;
+		    foreach (var deviceId in devices)
+		    {
+			    var deviceName = SDL.GetAudioDeviceName(deviceId);
+			    if (deviceName == name) return deviceId;
+		    }
 	    }
+
 	    return 0;
+    }
+
+    public int? GetAudioDeviceIdFromName(string name)
+    {
+	    foreach (var device in _openDevices.Where(device => name == device.Value.Name))
+	    {
+		    return device.Key;
+	    }
+		
+	    return null;
+    }
+
+    public AudioDevice GetAudioDevice(int deviceId)
+    {
+	    if (_openDevices.ContainsKey(deviceId))
+	    {
+		    return _openDevices[deviceId];
+	    }
+
+	    return null;
     }
 
 
 // Helper function to map SDL_AudioFormat to bit depth
-	static int GetBitDepth(SDL.AudioFormat format)
+	public static int GetBitDepth(SDL.AudioFormat format)
 	{
 		switch (format)
 		{

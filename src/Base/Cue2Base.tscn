@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=4 uid="uid://df4ulfsdrorsq"]
+[gd_scene load_steps=30 format=4 uid="uid://df4ulfsdrorsq"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://b1hhiqmg2m3c" path="res://src/UI/Scenes/PreviewContainer.tscn" id="5_lfhyt"]
 [ext_resource type="PackedScene" uid="uid://c7uaftlqmt1qj" path="res://src/UI/Scenes/ActiveCueContainer.tscn" id="6_jn5cm"]
 [ext_resource type="PackedScene" uid="uid://cm5s0bi03612d" path="res://src/UI/Scenes/ShellInspector.tscn" id="7_7gle1"]
+[ext_resource type="PackedScene" uid="uid://c2oerlmq8wmp7" path="res://src/UI/Scenes/AudioInspector.tscn" id="8_7gle1"]
 [ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
 [ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
@@ -2445,7 +2446,7 @@ layout_mode = 2
 [node name="InspectorTabs" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-current_tab = 1
+current_tab = 2
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
 
@@ -2455,12 +2456,11 @@ layout_mode = 2
 metadata/_tab_index = 0
 
 [node name="Shell" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs" instance=ExtResource("7_7gle1")]
-layout_mode = 2
-
-[node name="Audio" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]
 visible = false
 layout_mode = 2
-tooltip_text = "A shells audio content and parameters."
+
+[node name="Audio" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs" instance=ExtResource("8_7gle1")]
+layout_mode = 2
 metadata/_tab_index = 2
 
 [node name="Video" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/InspectorTabs"]

@@ -47,12 +47,28 @@ public partial class Settings : Node
     }
 
 
-    public void CreatePatchFromData(string name, int id, Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>> channelData)
+    public void CreatePatchFromData(string name, int id, 
+        Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>> channelData)
     {
         GD.Print("Creating Patch from data  " + name + " " + id);
-        AudioOutputPatch newPatch = new AudioOutputPatch(name, id, channelData);
-        _audioOutputPatches.Add(newPatch.Id, newPatch);
+        // TODO: Reinstate this with new patch format
+        /*AudioOutputPatch newPatch = new AudioOutputPatch(name, id, channelData);
+        _audioOutputPatches.Add(newPatch.Id, newPatch);*/
     }
+
+    public void PrintPatches()
+    {
+        foreach (var patch in _audioOutputPatches)
+        {
+            foreach (var channels in patch.Value.Channels)
+            {
+                GD.Print($"ID: {patch.Key} Name: {patch.Value.Name} Channel: {channels.Key} Name: {channels.Value}");
+
+            }
+        }
+    }
+    
+
 
     public void ResetSettings()
     {

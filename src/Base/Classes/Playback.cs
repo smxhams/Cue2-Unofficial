@@ -120,12 +120,6 @@ public partial class Playback : Node
 		var media = new Media(_libVLC, cue.FilePath);
 		media.Parse().Wait(); // MediaParseOptions.ParseLocal - this will need to change when refencing online URLS
 		GD.Print("Before");
-		media.AddOption(":audio-filter=remap");
-		media.AddOption(":remap=0:1");
-		media.AddOption(":remap=1:1");
-		media.AddOption(":remap=2:1");
-		media.AddOption(":volume=10");
-		media.AddOption(":aout=2");
 		
 		GD.Print("After");
 

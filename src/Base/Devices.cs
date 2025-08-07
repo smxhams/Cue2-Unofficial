@@ -24,7 +24,7 @@ public partial class Devices : Node
     {
         string? device = null;
 
-        var vlcDevices = _globalData.AudioDevices.GetAudioDeviceNames(); // Get devices availible to VLC
+        var vlcDevices = _globalData.AudioDevices.GetAvailibleAudioDevicseNames(); // Get devices availible to VLC
         
         // Match vlc device to name
         foreach (var i in vlcDevices)

@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://7blngcdj0grc" path="res://src/Base/Settings/AudioOutputPatchMatrix.cs" id="1_ntaie"]
 
 [node name="AudioOutputPatchMatrix" type="Control"]
-custom_minimum_size = Vector2(400, 400)
+custom_minimum_size = Vector2(400, 300)
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,7 +11,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 script = ExtResource("1_ntaie")
 
 [node name="Panel" type="Panel" parent="."]
@@ -25,6 +25,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="VBoxContainer2" type="VBoxContainer" parent="."]
+custom_minimum_size = Vector2(0, 140)
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -66,6 +67,45 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Delete Patch"
 
+[node name="Expanded" type="BoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 2
+
+[node name="ExpandedButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Expanded"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 0
+
+[node name="Line2D" type="Line2D" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Expanded"]
+position = Vector2(0, 2)
+points = PackedVector2Array(8, 8, 12, 13, 16, 8)
+width = 2.0
+default_color = Color(0.340659, 0.340659, 0.340659, 1)
+
+[node name="Collapsed" type="BoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CollapsedButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Collapsed"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 22)
+layout_mode = 2
+focus_mode = 0
+
+[node name="Line2D" type="Line2D" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Collapsed"]
+points = PackedVector2Array(5, 6, 10, 10, 5, 14)
+width = 2.0
+default_color = Color(0.340659, 0.340659, 0.340659, 1)
+
 [node name="TopContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
 clip_contents = true
 custom_minimum_size = Vector2(40, 150)
@@ -84,89 +124,32 @@ custom_minimum_size = Vector2(150, 40)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer"]
+[node name="ChannelList" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
+[node name="TestingExampleChannel" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList"]
+visible = false
 layout_mode = 2
 
-[node name="Panel" type="Panel" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-
-[node name="Channel1Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer"]
+[node name="Channel1Label" type="LineEdit" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList/TestingExampleChannel"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
 mouse_filter = 1
 text = "Channel 1"
-horizontal_alignment = 2
-vertical_alignment = 1
+alignment = 2
+max_length = 24
+emoji_menu_enabled = false
+virtual_keyboard_enabled = false
 
-[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Channel2Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer2"]
+[node name="AddChannelButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
-mouse_filter = 1
-text = "Channel 2"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="HBoxContainer3" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Channel3Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer3"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
-mouse_filter = 1
-text = "Channel 3"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="HBoxContainer4" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Channel4Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer4"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
-mouse_filter = 1
-text = "Channel 4"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="HBoxContainer5" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Channel5Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer5"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
-mouse_filter = 1
-text = "Channel 5"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="HBoxContainer6" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Channel6Label" type="Label" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/VBoxContainer/HBoxContainer6"]
-custom_minimum_size = Vector2(0, 32)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
-mouse_filter = 1
-text = "Channel 6"
-horizontal_alignment = 2
-vertical_alignment = 1
+focus_mode = 0
+text = "Add Channel +"
 
 [node name="PatchMatrixContainer" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
 unique_name_in_owner = true

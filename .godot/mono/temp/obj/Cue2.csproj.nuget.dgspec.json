@@ -61,7 +61,7 @@
             },
             "LibVLCSharp": {
               "target": "Package",
-              "version": "[3.7.0, )"
+              "version": "[3.9.3, )"
             },
             "NAudio": {
               "target": "Package",
@@ -73,7 +73,7 @@
             },
             "SDL3-CS": {
               "target": "Package",
-              "version": "[3.2.12.4, )"
+              "version": "[3.2.18, )"
             },
             "SDL3-CS.Native": {
               "target": "Package",

@@ -2133,11 +2133,6 @@ text = "Audio Output Patch"
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 
-[node name="DeviceQuantityLabel" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Audio devices not checked"
-
 [node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -2156,6 +2151,7 @@ size_flags_vertical = 3
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
+focus_mode = 0
 text = "New Patch"
 
 [node name="VideoDevices" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]

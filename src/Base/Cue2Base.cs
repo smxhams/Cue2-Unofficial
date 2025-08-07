@@ -8,7 +8,7 @@ using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Cue2.Shared;
 using LibVLCSharp.Shared;
-
+// DOES THIS UPDATE?
 // This script handles:
 // -Activation of cues
 // -Main window UI handling
@@ -18,6 +18,7 @@ namespace Cue2.Base;
 
 public partial class Cue2Base : Control
 {
+	
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
 
@@ -58,6 +59,9 @@ public partial class Cue2Base : Control
 		_globalData.VideoWindow = VideoWindow;*/
 
 	}
+	
+	
+	
 
 	private void _scaleUI(float value)
 	{

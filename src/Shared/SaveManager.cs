@@ -122,10 +122,12 @@ public partial class SaveManager : Node
 		var saveTable = new Hashtable();
 		// Audio patch
 		var patchTable = new Hashtable();
-		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+		
+		// TODO: Reinstate below with new patch format
+		/*foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
 		{
 			patchTable.Add(patch.Key, patch.Value.GetData());
-		}
+		}*/
 		var devices = new Hashtable();
 		foreach (var device in _globalData.Devices.GetAudioDevices())
 		{
