@@ -37,7 +37,7 @@ public partial class Settings : Node
     {
         _audioOutputPatches[patchId].Free();
         _audioOutputPatches.Remove(patchId);
-    }
+    } 
     
     public AudioOutputPatch CreateNewPatch()
     {
@@ -47,13 +47,16 @@ public partial class Settings : Node
     }
 
 
-    public void CreatePatchFromData(string name, int id, 
-        Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>> channelData)
+    public void AddPatch(AudioOutputPatch patch)
     {
-        GD.Print("Creating Patch from data  " + name + " " + id);
-        // TODO: Reinstate this with new patch format
-        /*AudioOutputPatch newPatch = new AudioOutputPatch(name, id, channelData);
-        _audioOutputPatches.Add(newPatch.Id, newPatch);*/
+        if (_audioOutputPatches.ContainsKey(patch.Id))
+        {
+            GD.PrintErr("Settings:AddPatch - Patch ID already exists: " + patch.Id);
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to add patch due to duplicate ID: " + patch.Id, 2);
+            return;
+        }
+        _audioOutputPatches.Add(patch.Id, patch);
+        GD.Print("Settings:AddPatch - Added patch with ID: " + patch.Id + " and name: " + patch.Name);
     }
 
     public void PrintPatches()

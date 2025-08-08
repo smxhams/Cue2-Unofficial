@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://ctv46gxu5v3od" path="res://src/Base/Settings/AudioMatrixCheckBox.cs" id="1_1i3t0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1i3t0"]
+bg_color = Color(0.228197, 0.228197, 0.228197, 1)
 draw_center = false
 border_width_left = 1
 border_width_top = 1
@@ -12,13 +13,21 @@ border_color = Color(0.327472, 0.327472, 0.327472, 1)
 
 [node name="AudioPatchMatrixCheckBox" type="CheckBox"]
 custom_minimum_size = Vector2(32, 32)
-offset_left = 4.0
-offset_right = 36.0
-offset_bottom = 32.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+grow_horizontal = 2
+grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
-disabled = true
+icon_alignment = 1
 script = ExtResource("1_1i3t0")
 
 [node name="Panel" type="Panel" parent="."]

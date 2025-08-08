@@ -165,4 +165,9 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PanelContainer"]
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+size_flags_horizontal = 0
+
 [connection signal="pressed" from="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/RefreshButton" to="." method="_onRefreshButtonPressed"]

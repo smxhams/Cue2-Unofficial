@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
@@ -29,6 +30,9 @@ public partial class AudioOutputPatchMatrix : Control
     
     private PackedScene _deviceHeaderScene;
     private PackedScene _deviceOutputHeaderScene;
+    private PackedScene _checkBoxScene;
+    
+    
     private HBoxContainer _deviceContainer;
     private VBoxContainer _channelList;
     private GridContainer _patchMatrix;
@@ -37,6 +41,7 @@ public partial class AudioOutputPatchMatrix : Control
     private Button _addChannelButton;
     
     private int _deviceCount = 0;
+    
     
     public override void _Ready()
     {
@@ -49,6 +54,10 @@ public partial class AudioOutputPatchMatrix : Control
         // This is "PatchMatrixDeviceOutputHeader"
         _deviceOutputHeaderScene = SceneLoader.LoadPackedScene("uid://bmi0eibnauemp", out string _);
         
+        // This is "AudioPatchMatrixCheckBox"
+        _checkBoxScene = SceneLoader.LoadPackedScene("uid://cbdaknpeq3im1", out string _); // Check box
+            
+            
         _deviceContainer = GetNode<HBoxContainer>("%DeviceOutputsListHBoxContainer");
         _patchMatrix = GetNode<GridContainer>("%PatchMatrixContainer");
         _channelList = GetNode<VBoxContainer>("%ChannelList"); 
@@ -103,7 +112,8 @@ public partial class AudioOutputPatchMatrix : Control
         _availableDeviceList = _globalData.AudioDevices.GetAvailibleAudioDevicseNames();
         
         // CHANNELS (ROWS)
-        foreach (var channel in Patch.Channels)
+        var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
+        foreach (var channel in sortedChannels)
         {
             NewChannelRow(channel);
         }
@@ -121,7 +131,7 @@ public partial class AudioOutputPatchMatrix : Control
                 
             else
             {
-                NewUsedButNotFoundDeviceColumn(device.Key, device.Value);
+                NewUsedButNotFoundDeviceColumn(device.Key, new Dictionary<string, List<int>>());
                 unusedDeviceList.Remove(device.Key);
             }
         }
@@ -173,11 +183,11 @@ public partial class AudioOutputPatchMatrix : Control
         };
     }
     
-    private async void NewUsedDeviceColumn(string deviceName, Dictionary<string, List<int>> outputChannels)
+    private async void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
-        GD.Print($"Add device {deviceName} column as USED");
+        GD.Print($"AudioOutputPatchMatrix:NewUsedDeviceColumn - Add device {deviceName} column as USED");
         var header = LoadDeviceOutputDeviceHeader(deviceName, true);
-        
+    
         var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(deviceName);
         header.GetChild<Label>(1).TooltipText = deviceName;
         foreach (var spec in specs)
@@ -186,12 +196,33 @@ public partial class AudioOutputPatchMatrix : Control
         }
         
         // Add device outputs
-        foreach (var patch in outputChannels)
+        for (int outputIndex = 0; outputIndex < outputChannels.Count; outputIndex++)
         {
             var outHeader = _deviceOutputHeaderScene.Instantiate();
             _deviceContainer.AddChild(outHeader);
-            outHeader.GetNode<LineEdit>("Label").Text = $"{patch.Key}";
-            outHeader.Set("parentDevice", deviceName);
+        
+            var outputNameEdit = outHeader.GetNode<LineEdit>("OutputName");
+            outputNameEdit.Text = outputChannels[outputIndex].Name;
+            outHeader.Set("ParentDevice", deviceName);
+            outHeader.Set("OutputIndex", outputIndex);
+        
+            outputNameEdit.TextChanged += (string newText) =>
+            {
+                int idx = (int)outHeader.Get("OutputIndex");
+                if (!Patch.RenameDeviceChannel(deviceName, idx, newText))
+                {
+                    // Revert to current (unchanged) name on failure
+                    string currentName = Patch.GetDeviceOutputName(deviceName, idx);
+                    if (currentName != null)
+                    {
+                        outputNameEdit.Text = currentName;
+                    }
+                    else
+                    {
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to revert output name for device '{deviceName}' at index {idx}", 2);
+                    }
+                }
+            };
         }
     }
     
@@ -205,6 +236,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         GD.Print($"Add device {deviceName} column as UNUSED");
         var header = LoadDeviceOutputDeviceHeader(deviceName);
+        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled";
     }
     
     private void AddChannelButtonPressed()
@@ -240,7 +272,7 @@ public partial class AudioOutputPatchMatrix : Control
                 }
 
                 int outputCount = enabledDevice.Channels;
-                Patch.AddOutputDevice(name, outputCount);
+                Patch.AddDeviceOutputs(name, outputCount);
                 instance.Set("DeviceId", enabledDevice.DeviceId);
 
             }
@@ -266,108 +298,108 @@ public partial class AudioOutputPatchMatrix : Control
         await ToSignal(GetTree(), "process_frame");
 
         var deviceHeaders = _deviceContainer.GetChildren();
-        
+
         // Calculate column count
-        var culumnCount = 0;
-        foreach (var deviceName in Patch.OutputDevices.Keys)
-        {
-            culumnCount++;
-            foreach (var deviceOutput in Patch.OutputDevices[deviceName])
-            {
-                culumnCount++;
-            }
-        }
+        var culumnCount = deviceHeaders.Count;
         _patchMatrix.Columns = culumnCount;
-        var rowCount = Patch.Channels.Count;
-        var cellCount = culumnCount * rowCount;
 
-        for (int i = 0; i < cellCount; i++)
-        {
-            Node checkBoxInstance = SceneLoader.LoadScene("uid://cbdaknpeq3im1", out string error); // Check box
-            _patchMatrix.AddChild(checkBoxInstance);
-        }
+        var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
 
-        // Loops all channels and availible devices and gives it a disabled checkbox.
-        /*for (int channel = 0; channel < Patch.Channels.Count; channel++) // 0 - 6 until add/remove channel functionality added.
+        foreach (var channel in sortedChannels)
         {
-            for (int i = 0; i < devicesArray.Count(); i++)
+            int channelId = channel.Key;
+            GD.Print($"{channel.Key} : {channel.Value}");
+
+            for (int col = 0; col < culumnCount; col++)
             {
-                var hasId = devicesArray[i].Get("DeviceCId");
-                var hasChannel =  devicesArray[i].Get("DeviceChannel");
-                string idch = hasId.ToString() + ":" + ((int)hasChannel).ToString();
+                var header = deviceHeaders[col];
 
-                if (idch != ":-1")
+                // Determine if this is an output header (has "ParentDevice" property set)
+                var parentDeviceVar = header.Get("ParentDevice");
+                if (parentDeviceVar.VariantType != Variant.Type.Nil)
                 {
-                    bool existsInPatch = Patch.Channels[channel].Outputs.ContainsKey(idch);
-                    if (existsInPatch)
+                    string deviceName = parentDeviceVar.ToString();
+                    GD.Print($"{header.Name} has parent {deviceName}");
+                    var outputIndexVar = header.Get("OutputIndex");
+                    int outputIndex = outputIndexVar.AsInt32();
+
+                    CheckBox checkBox = _checkBoxScene.Instantiate<CheckBox>();
+
+                    // Check if this channel is already routed to this output
+                    if (Patch.OutputDevices.TryGetValue(deviceName, out var outputs) &&
+                        outputIndex >= 0 && outputIndex < outputs.Count)
                     {
-                        Node checkBoxInstance = SceneLoader.LoadScene("uid://cbdaknpeq3im1", out string error); // Check box
-                        //GD.Print(channel + " : " +idch + Patch.Channels[channel].Outputs[idch]);
-                        checkBoxInstance.Set("Channel", channel);
-                        //GD.Print("Deivce channel being set: "+ devicesArray[i].Get("DeviceChannel"));
-                        checkBoxInstance.Set("DeviceChannel", devicesArray[i].Get("DeviceChannel"));
-                        checkBoxInstance.Set("DeviceId", devicesArray[i].Get("DeviceCId"));
-                        children[channel].AddChild(checkBoxInstance);
-                        if (checkBoxInstance is CheckBox checkBox)
-                        {
-                            checkBox.Disabled = false;
-                            if (Patch.Channels[channel].Outputs[idch])
-                            {
-                                checkBox.ButtonPressed = true;
-                            }
-                            checkBox.Toggled += (buttonPressed) =>
-                            {
-                                PatchCheckBoxToggled(checkBox, buttonPressed);
-                            };
-                        }
+                        var channelList = outputs[outputIndex].RoutedChannels;
+                        checkBox.ButtonPressed = channelList.Contains(channelId);
                     }
                     else
                     {
-                        var  blank = new BoxContainer();
-                        children[channel].AddChild(blank);
-                        blank.SetCustomMinimumSize(new Vector2(32,32));
+                        checkBox.ButtonPressed = false;
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                            $"Output at index {outputIndex} not found for device {deviceName} during matrix build", 1);
                     }
+
+                    checkBox.Toggled += (bool pressed) =>
+                    {
+                        try
+                        {
+                            if (Patch.OutputDevices.TryGetValue(deviceName, out var outputsInner) &&
+                                outputIndex >= 0 && outputIndex < outputsInner.Count)
+                            {
+                                var channelListInner = outputsInner[outputIndex].RoutedChannels;
+                                if (pressed)
+                                {
+                                    if (!channelListInner.Contains(channelId))
+                                    {
+                                        channelListInner.Add(channelId);
+                                        GD.Print($"Routed channel {channelId} to {deviceName}:index {outputIndex}");
+                                    }
+                                }
+                                else
+                                {
+                                    channelListInner.Remove(channelId);
+                                    GD.Print($"Unrouted channel {channelId} from {deviceName}:index {outputIndex}");
+                                }
+                                // Optional: Save or update settings after change
+                                //_globalData.Settings.UpdatePatch(Patch);
+                            }
+                            else
+                            {
+                                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                                    $"Failed to update routing for {deviceName}:index {outputIndex}", 2);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                                $"Error updating channel routing: {ex.Message}", 2);
+                        }
+                    };
+
+
+                    _patchMatrix.AddChild(checkBox);
                 }
-                //GD.Print("Made Check box for Channel #: " + channel + " and Device: " + devicesArray[i].Get("DeviceName"));
-            }*/
-    }
-
-    /*private void PatchCheckBoxToggled(CheckBox checkBox, bool buttonPressed)
-    {
-        var hasId = checkBox.Get("DeviceId");
-        var hasChannel =  checkBox.Get("Channel");
-        var hasDeviceChannel =  checkBox.Get("DeviceChannel");
-        string idch = hasId.ToString() + ":" + ((int)hasDeviceChannel).ToString();
-        Patch.SetChannel((int)hasChannel, idch, buttonPressed);
-        _globalData.Settings.UpdatePatch(Patch);
-        GD.Print((int)hasChannel + " : " +idch + Patch.Channels[(int)hasChannel].Outputs[idch]);
-    }*/
-
-    /*private void RemoveDeviceFromPatch(int deviceId)
-    {
-        for (int channel = 0; channel < Patch.Channels.Count; channel++)
-        {
-            var keys = Patch.Channels[channel].Outputs.Keys
-                .Where(key => int.Parse(key.Split(':')[0]) == deviceId)
-                .ToList();
-            foreach (var key in keys)
-            {
-                Patch.Channels[channel].Outputs.Remove(key);
+                else
+                {
+                    Control empty = new Control();
+                    empty.CustomMinimumSize = new Vector2(32, 32);
+                    _patchMatrix.AddChild(empty);
+                }
             }
         }
-        _globalData.Settings.UpdatePatch(Patch);
     }
-
-    private void _onRefreshButtonPressed()
-    {
-        SyncAudioDeviceDisplays();
-        BuildPatchMatrix();
-    }*/
+        
     
+
     private void PatchNameOnTextChanged(string newtext)
     {
         Patch.Name = newtext;
         _globalData.Settings.UpdatePatch(Patch);
+    }
+    
+    private void _onRefreshButtonPressed()
+    {
+        SyncAudioDeviceDisplays();
     }
     
     

@@ -1,6 +1,7 @@
+VSeparator
+LineEdit
 PanelContainer
 Line2D
-LineEdit
 Button
 GridContainer
 OptionButton
@@ -12,4 +13,3 @@ MenuButton
 Panel
 HSlider
 HSeparator
-VBoxContainer

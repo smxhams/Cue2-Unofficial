@@ -123,11 +123,10 @@ public partial class SaveManager : Node
 		// Audio patch
 		var patchTable = new Hashtable();
 		
-		// TODO: Reinstate below with new patch format
-		/*foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
 		{
 			patchTable.Add(patch.Key, patch.Value.GetData());
-		}*/
+		}
 		var devices = new Hashtable();
 		foreach (var device in _globalData.Devices.GetAudioDevices())
 		{
@@ -205,48 +204,9 @@ public partial class SaveManager : Node
 						GD.Print("Found audio patch");
 						foreach (var patch in (Dictionary)setting.Value)
 						{
-							// Convert to dictionary
 							var patchAsDict = patch.Value.AsGodotDictionary();
-							var patchName = "";
-							var patchId = -1;
-							var channelData = new Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>>();
-							foreach (var key in patchAsDict.Keys)
-							{
-								var value = patchAsDict[key];
-								string keyStr = key.ToString();
-								string valueStr = value.ToString();
-								if (keyStr == "Name") {patchName = valueStr;}
-								if (keyStr == "Id") {patchId = value.AsInt32();}
-								if (keyStr == "Channels")
-								{
-									GD.Print("Formatting channels");
-									
-									var channelsAsDict = value.AsGodotDictionary();
-									//var channelData = new Dictionary<int, Dictionary<string, bool>>();
-									
-									foreach (var channel in channelsAsDict.Keys) // 1 thorugh 6 of the channels
-									{
-										var channelValue = channelsAsDict[channel];
-										int channelKeyInt = channel.AsInt32();
-										//string channelValueStr = channelValue.ToString();
-										
-										//GD.Print("Channel Looop " + channelValueStr + " " + channelKeyStr);
-										
-										var outputAsDict = channelValue.AsGodotDictionary();
-										var outputData = new Godot.Collections.Dictionary<string, bool>();
-										foreach (var output in outputAsDict.Keys) // all the output routes of the channel
-										{
-											var outputValue = outputAsDict[output];
-											string outputKeyStr = output.ToString();
-											bool outputValueBool = outputValue.AsBool();
-											//GD.Print(outputKeyStr + " " + outputValueBool);
-											outputData[outputKeyStr] = outputValueBool;
-										}
-										channelData[channelKeyInt] = outputData;
-									}
-								}
-							}
-							_globalData.Settings.CreatePatchFromData(patchName, patchId, channelData);
+							var patchObj = AudioOutputPatch.FromData(patchAsDict);
+							_globalData.Settings.AddPatch(patchObj);
 						}
 					}
 				}

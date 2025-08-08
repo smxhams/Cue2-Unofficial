@@ -2,7 +2,7 @@
   <configuration default="false" name="Player" type="RunExe" factoryName=".NET Executable">
     <option name="EXE_PATH" value="$PROJECT_DIR$/../Ext/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe" />
     <option name="PROGRAM_PARAMETERS" value="" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="WORKING_DIRECTORY" value="C:\MyFiles\Cue2_Home\Cue2" />
     <option name="PASS_PARENT_ENVS" value="1" />
     <option name="USE_EXTERNAL_CONSOLE" value="0" />
     <option name="USE_MONO" value="0" />
