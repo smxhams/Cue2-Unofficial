@@ -12,14 +12,18 @@ public partial class SaveDialog : FileDialog
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		FileSelected += _onFileSelected;
+
+		FileMode = FileModeEnum.SaveFile;
+		AddFilter("*.c2 ; Cue2 Session");
 	}
 	
 	private void _onFileSelected(String @path)
 	{
-		string showName = Path.GetFileName(@path);
-		GD.Print(@path + " and filename : "+ showName);
-		_globalData.SessionName = showName;
-		_globalData.SessionPath = @path;
+		string sessionName = Path.GetFileNameWithoutExtension(@path);
+		string sessionPath = Path.GetDirectoryName(@path) + "\\" + Path.GetFileNameWithoutExtension(@path);
+		GD.Print(sessionPath + " and filename : "+ sessionName);
+		_globalData.SessionName = sessionName;
+		_globalData.SessionPath = @sessionPath;
 
 		// URL and showname made to continue Save process		
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));

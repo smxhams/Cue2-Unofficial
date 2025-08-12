@@ -415,7 +415,6 @@ public partial class CueList : ScrollContainer
 		var cueOrder = new Godot.Collections.Dictionary<int, int>();
 		for (int i = 0; i < _cueContainer.GetChildren().Count; i++)
 		{
-			GD.Print("Should be a fair few");
 			var cueId = _cueContainer.GetChild(i).Get("CueId");
 			cueOrder.Add(i, (int)cueId);
 		}

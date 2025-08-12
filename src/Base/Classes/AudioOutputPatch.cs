@@ -54,19 +54,24 @@ public partial class AudioOutputPatch : Godot.GodotObject
     
     public static AudioOutputPatch FromData(Godot.Collections.Dictionary dataDict)
     {
+        GD.Print("Attempting to create patch from save data:");
         try
         {
             int id = dataDict["Id"].AsInt32();
             string name = dataDict["Name"].AsString();
+            GD.Print("Got ID and Name");
 
             var channels = new Dictionary<int, string>();
             var channelsDict = dataDict["Channels"].AsGodotDictionary();
+            GD.Print("Created variables for channels");
             foreach (var channelKey in channelsDict.Keys)
             {
                 int key = channelKey.AsInt32();
                 string value = channelsDict[channelKey].AsString();
                 channels.Add(key, value);
             }
+
+            GD.Print("Added channel data");
 
             var outputDevices = new Dictionary<string, List<OutputChannel>>();
             var outputDevicesDict = dataDict["OutputDevices"].AsGodotDictionary();
@@ -225,66 +230,4 @@ public partial class AudioOutputPatch : Godot.GodotObject
 
         return data;
     }
-    /*
-
-    public AudioOutputPatch(string name, int id, Godot.Collections.Dictionary<int, Godot.Collections.Dictionary<string, bool>> channelData)
-    {
-        GD.Print("Patch name is: " + name);
-        Id = id;
-        if (id >= _nextId) _nextId = id + 1;
-        Name = name;
-        Channels = new Dictionary<int, Channel>(); // Initialises with 6 channels by default
-        foreach (var channel in channelData)
-        {
-            Channels[channel.Key] = new Channel(channel.Value);
-            //Channels[i] = new Channel(); // Default "unassigned" state
-        }
-    }
-
-    public class DeviceChannelState
-    {
-        public int DeviceId { get; set; }
-        public int DeviceChannel { get; set; }
-        public bool IsActive { get; set; }
-
-        // TOMORROW SAM, changing data structure to use this.
-    }
-
-    public void SetChannel(int channelIndex, string key, bool value)
-    {
-        if (!Channels.ContainsKey(channelIndex))
-        {
-            Channels.Add(channelIndex, new Channel());
-        }
-        if (!Channels[channelIndex].Outputs.ContainsKey(key))
-        {
-            Channels[channelIndex].Outputs.Add(key, value);
-            //GD.Print("Created new patch on Ch: "  + channelIndex + " at: " + key);
-            return;
-        }
-        Channels[channelIndex].Outputs[key] = value;
-        //GD.Print("Updated patch on Ch: "  + channelIndex + " at: " + key);
-
-    }
-
-    public Channel GetChannel(int channelNumber)
-    {
-        return Channels[channelNumber];
-    }
-
-    public Hashtable GetData()
-    {
-        var dict = new Hashtable();
-        dict.Add("Id", Id.ToString());
-        dict.Add("Name", Name);
-        var formattedChannels = new Hashtable();
-        foreach (var channel in Channels)
-        {
-            formattedChannels.Add(channel.Key, channel.Value.Outputs);
-        }
-        dict.Add("Channels", formattedChannels);
-        return dict;
-
-    }*/
-
 }

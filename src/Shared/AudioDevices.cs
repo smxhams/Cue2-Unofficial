@@ -113,6 +113,17 @@ public partial class AudioDevices : Node
 	    
     }
 
+    public List<string> GetOpenAudioDevicesNames()
+    {
+	    var deviceNames = new List<string>();
+	    foreach (var device in _openDevices.Values)
+	    {
+		    deviceNames.Add(device.Name);
+	    }
+
+	    return deviceNames;
+    }
+
     public SDL.AudioSpec GetAudioDeviceSpec(string name)
     {
 	    var device = GetAudioDevicePhysicalIdFromName(name);

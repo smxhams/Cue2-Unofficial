@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Godot;
@@ -38,12 +39,7 @@ public partial class SaveManager : Node
 		}
 		
 	}
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-	}
-
+	
 	private void LoadOnLaunch(string path)
 	{
 		GD.Print("Load On Launch");
@@ -56,7 +52,12 @@ public partial class SaveManager : Node
 		{
 			SaveAs();
 		}
-		else {SaveSession(_globalData.SessionPath, _globalData.SessionName);}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+				$"Saving session to: {_globalData.SessionPath} with name: {_globalData.SessionName}:", 0);
+			SaveSession(_globalData.SessionPath, _globalData.SessionName);
+		}
 	}
 
 	private void SaveAs()
@@ -65,7 +66,7 @@ public partial class SaveManager : Node
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
 	}
 	
-	private void SaveSession(string url, string showName)
+	private void SaveSession(string selectedPath, string sessionName)
 	{
 		var saveData = new Hashtable(); // Save type (cues, cue data)
 		
@@ -78,22 +79,52 @@ public partial class SaveManager : Node
 		var settingsData = FormatSettingsForSave();
 		saveData.Add("settings", settingsData);
 		
-		int lastSlachIndex = url.LastIndexOfAny(new char[] { '/', '\\' });
-		if (lastSlachIndex != -1)
+		string baseDir = Path.GetDirectoryName(selectedPath);
+		if (string.IsNullOrEmpty(baseDir))
 		{
-			url = url.Substr(0, lastSlachIndex);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Invalid save path provided.", 2);
+			GD.PrintErr("SaveManager:SaveSession - Invalid save path: " + selectedPath);
+			return;
+		}
+
+		string sessionFolder = Path.Combine(baseDir, sessionName);
+		if (!FolderCreator(sessionFolder))
+		{
+			// Folder already exists; proceed.
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Show folder already exists: {sessionFolder}", 1);
+			GD.Print($"SaveManager:SaveSession - Show folder already exists: {sessionFolder}");
 		}
 		
-		
-		PrintHashtable(saveData);
-		FolderCreator(url);
-		string saveJson = JsonSerializer.Serialize(saveData);
-		//GD.Print("This: " +saveJson);
-		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(url+"/" + showName, Godot.FileAccess.ModeFlags.Write, _decodepass);
-		file.StoreString(saveJson);
-		file.Close();
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Save working: " + url, 0);
+		// Define the full save path: /path/to/sessionName/sessionName.c2
+		string savePath = Path.Combine(sessionFolder, sessionName + ".c2");
 
+		try
+		{
+			string saveJson = JsonSerializer.Serialize(saveData);
+			Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(savePath, Godot.FileAccess.ModeFlags.Write, _decodepass);
+			if (file == null)
+			{
+				Error err = Godot.FileAccess.GetOpenError();
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for writing: {savePath} with error: {err}", 2);
+				GD.PrintErr("SaveManager:SaveSession - Failed to open file: " + savePath + " Error: " + err);
+				return;
+			}
+
+			file.StoreString(saveJson);
+			file.Close();
+
+			_globalData.SessionName = sessionName;
+			_globalData.SessionPath = savePath;
+			
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to: {savePath}", 0);
+			GD.Print($"SaveManager:SaveSession - Session saved to: {savePath}");
+
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error saving session: {ex.Message}", 2);
+			GD.PrintErr($"SaveManager:SaveSession - Error saving: {ex.Message}");
+		}
 	}
 	
 
@@ -127,16 +158,11 @@ public partial class SaveManager : Node
 		{
 			patchTable.Add(patch.Key, patch.Value.GetData());
 		}
-		var devices = new Hashtable();
-		foreach (var device in _globalData.Devices.GetAudioDevices())
-		{
-			devices.Add(device.DeviceId, device.Name);
-			GD.Print(device.DeviceId + " " + device.Name);
-		}
-		
-		saveTable.Add("AudioDevices", devices);
+
+		var devices = _globalData.AudioDevices.GetOpenAudioDevicesNames();
+
 		saveTable.Add("AudioPatch", patchTable);
-		//saveTable.Add("AudioPatch", _globalData.Settings.GetAudioOutputPatches());
+		saveTable.Add("AudioDevices", devices);
 		return saveTable;
 	}
 	
@@ -246,20 +272,27 @@ public partial class SaveManager : Node
 		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end
 	}
 
-	private bool FolderCreator(string url)
+	private bool FolderCreator(string folderPath)
 	{
-		string folderPath = url;
-		GD.Print(url);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Attempting to create folder: {folderPath}", 0);
 		if (!Directory.Exists(folderPath))
 		{
-			GD.Print("Saving into folder");
-			Directory.CreateDirectory(folderPath);
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Directory created: " + url, 0);
-			return true;
+			try
+			{
+				GD.Print($"THIS IS THE FOLDER PATH!!!!: {folderPath}");
+				Directory.CreateDirectory(folderPath);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory created: {folderPath}", 0);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to create directory: {folderPath} Error: {ex.Message}", 2);
+				return false;
+			}
 		}
 		else
 		{
-			GD.Print("Save folder is existing: " + folderPath);
+			GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
 			return false;
 		}
 	} 
