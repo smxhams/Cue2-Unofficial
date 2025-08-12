@@ -40,8 +40,9 @@ public partial class SaveManager : Node
 		
 	}
 	
-	private void LoadOnLaunch(string path)
+	private async void LoadOnLaunch(string path)
 	{
+		await ToSignal(GetTree(), "process_frame");
 		GD.Print("Load On Launch");
 		OpenSelectedSession(_globalData.LaunchLoadPath);
 	}
@@ -68,6 +69,8 @@ public partial class SaveManager : Node
 	
 	private void SaveSession(string selectedPath, string sessionName)
 	{
+		GD.Print("IN SAVE SESSION");
+		GD.Print($" SessionFolder: {selectedPath}, SessionName: {sessionName}");
 		var saveData = new Hashtable(); // Save type (cues, cue data)
 		
 		var cueSaveData = FormatCuesForSave();
@@ -87,7 +90,7 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		string sessionFolder = Path.Combine(baseDir, sessionName);
+		string sessionFolder = selectedPath;//Path.Combine(baseDir, sessionName);
 		if (!FolderCreator(sessionFolder))
 		{
 			// Folder already exists; proceed.
@@ -97,7 +100,7 @@ public partial class SaveManager : Node
 		
 		// Define the full save path: /path/to/sessionName/sessionName.c2
 		string savePath = Path.Combine(sessionFolder, sessionName + ".c2");
-
+		GD.Print($"SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
 		try
 		{
 			string saveJson = JsonSerializer.Serialize(saveData);
@@ -114,7 +117,7 @@ public partial class SaveManager : Node
 			file.Close();
 
 			_globalData.SessionName = sessionName;
-			_globalData.SessionPath = savePath;
+			_globalData.SessionPath = sessionFolder;
 			
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to: {savePath}", 0);
 			GD.Print($"SaveManager:SaveSession - Session saved to: {savePath}");
@@ -186,8 +189,9 @@ public partial class SaveManager : Node
 		
 		var data = json.Data.AsGodotDictionary();
 		ResetSession();
-		_globalData.SessionName = Path.GetFileName(path);
-		_globalData.SessionPath = path;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(@path);
+		_globalData.SessionPath = Path.GetDirectoryName(@path);
+		GD.Print($"WHEN OPENING I SET PATH AS: {_globalData.SessionPath} and NAME AS: {_globalData.SessionName}");
 		LoadSession(data);
 	}
 
@@ -279,22 +283,19 @@ public partial class SaveManager : Node
 		{
 			try
 			{
-				GD.Print($"THIS IS THE FOLDER PATH!!!!: {folderPath}");
 				Directory.CreateDirectory(folderPath);
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory created: {folderPath}", 0);
 				return true;
 			}
 			catch (Exception ex)
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to create directory: {folderPath} Error: {ex.Message}", 2);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory existing: {folderPath}", 0);
 				return false;
 			}
 		}
-		else
-		{
-			GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
-			return false;
-		}
+
+		GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
+		return false;
 	} 
 	
 	public void PrintHashtable(Hashtable table, string indent = "")

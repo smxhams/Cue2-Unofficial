@@ -69,7 +69,8 @@ public partial class AudioOutputPatchMatrix : Control
         
         _patchName = GetNode<LineEdit>("%PatchName");
         _patchName.Text = Patch.Name;
-        //_patchName.TextChanged += PatchNameOnTextChanged;
+        GD.Print($"Patch name: {Patch.Name}");
+        _patchName.TextChanged += PatchNameOnTextChanged;
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
         _deletePatchButton.Pressed += DeletePatchButtonPressed;

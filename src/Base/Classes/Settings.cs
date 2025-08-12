@@ -59,7 +59,7 @@ public partial class Settings : Node
         GD.Print("Settings:AddPatch - Added patch with ID: " + patch.Id + " and name: " + patch.Name);
     }
 
-    public void PrintPatches()
+    private void PrintPatches()
     {
         foreach (var patch in _audioOutputPatches)
         {
