@@ -1,6 +1,15 @@
-[gd_resource type="Theme" load_steps=30 format=4 uid="uid://vidokm2ilwtk"]
+[gd_resource type="Theme" load_steps=34 format=4 uid="uid://vidokm2ilwtk"]
 
+[ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="1_hh4k7"]
 [ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_vt8rd"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jxm3t"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(0, 96, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fd6x7"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(0, 96, 32, 32)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fcguj"]
 content_margin_left = 4.0
@@ -67,6 +76,10 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 corner_detail = 5
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hh4k7"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(0, 96, 32, 32)
 
 [sub_resource type="Image" id="Image_734wp"]
 data = {
@@ -2058,12 +2071,15 @@ vertical = true
 [resource]
 default_base_scale = 1.0
 default_font_size = 10
+AtlasIcons/icons/DeleteBin = SubResource("AtlasTexture_jxm3t")
 Button/colors/icon_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
+Button/icons/Delete = SubResource("AtlasTexture_fd6x7")
 Button/styles/disabled = SubResource("StyleBoxFlat_fcguj")
 Button/styles/focus = SubResource("StyleBoxFlat_tojog")
 Button/styles/hover = SubResource("StyleBoxFlat_ft43w")
 Button/styles/normal = SubResource("StyleBoxFlat_e8j8a")
 Button/styles/pressed = SubResource("StyleBoxFlat_ajrfy")
+CustomIcons/icons/Delete = SubResource("AtlasTexture_hh4k7")
 Fonts/font_sizes/FontSize = 10
 Fonts/fonts/large = SubResource("FontFile_52n5q")
 Fonts/fonts/normal = SubResource("FontFile_52n5q")

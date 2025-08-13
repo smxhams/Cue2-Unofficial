@@ -2,12 +2,12 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Channels;
 using Cue2.Base.Classes.Devices;
+using Cue2.Shared;
 using Godot;
 
 namespace Cue2.Base.Classes;
-
-// Class representing a patch, stored inside is each audio output channel - Channel as class. Which contains informtation of where each channel should output. 
 
 public class OutputChannel
 {
@@ -15,9 +15,17 @@ public class OutputChannel
     public List<int> RoutedChannels { get; set; }
 }
 
+/// <summary>
+/// Represents an audio output patch, managing channels and device outputs for routing audio signals.
+/// </summary>
+/// <remarks>
+/// Stores patch metadata, channels, and per-device output configurations. Supports serialization for session save/load.
+/// </remarks>
 public partial class AudioOutputPatch : Godot.GodotObject
 {
     private static int _nextId = 0;
+
+    private const int MaxChannels = 16;
     
     public int Id { get; set; }
     public string Name { get; set; }
@@ -27,7 +35,12 @@ public partial class AudioOutputPatch : Godot.GodotObject
     private int _channelId { get; set; } = 0;
 
 
-
+    /// <summary>
+    /// Initializes a new unnamed audio output patch with default stereo channels.
+    /// </summary>
+    /// <remarks>
+    /// Automatically assigns a unique ID and adds "Left" and "Right" channels. Use for new patches.
+    /// </remarks>
     public AudioOutputPatch()
     {
         Id = _nextId++;
@@ -40,6 +53,13 @@ public partial class AudioOutputPatch : Godot.GodotObject
         Channels.Add(_channelId++, "Right");
     }
 
+    /// <summary>
+    /// Initializes a named audio output patch with default stereo channels.
+    /// </summary>
+    /// <param name="name">The name of the patch.</param>
+    /// <remarks>
+    /// Automatically assigns a unique ID. Ideal for user-created patches.
+    /// </remarks>
     public AudioOutputPatch(string name) 
     {
         Id = _nextId++;
@@ -52,6 +72,15 @@ public partial class AudioOutputPatch : Godot.GodotObject
         Channels.Add(_channelId++, "Right");
     }
     
+    /// <summary>
+    /// Creates an AudioOutputPatch instance from serialized data.
+    /// </summary>
+    /// <param name="dataDict">Godot dictionary containing patch data (Id, Name, Channels, OutputDevices).</param>
+    /// <returns>A new AudioOutputPatch instance, or null on deserialization error.</returns>
+    /// <remarks>
+    /// Logs errors via GD.PrintErr. Ensure dataDict is validated before calling.
+    /// Updates global _nextId if loaded ID is higher.
+    /// </remarks>
     public static AudioOutputPatch FromData(Godot.Collections.Dictionary dataDict)
     {
         GD.Print("Attempting to create patch from save data:");
@@ -110,7 +139,6 @@ public partial class AudioOutputPatch : Godot.GodotObject
         catch (Exception ex)
         {
             GD.PrintErr("AudioOutputPatch:FromData - Error loading patch data: " + ex.Message);
-            // Assuming globalSignals is accessible or handle logging appropriately
             return null;
         }
     }
@@ -124,9 +152,44 @@ public partial class AudioOutputPatch : Godot.GodotObject
         }
     }
 
-    public void NewChannel(string name)
+    /// <summary>
+    /// Adds a new channel to the patch with the given name.
+    /// </summary>
+    /// <param name="name">The name of the new channel.</param>
+    /// <param name="error">Output error string if channel limit is reached.</param>
+    /// <remarks>
+    /// Enforces a maximum of 16 channels for performance. Logs a warning if limit is reached.
+    /// </remarks>
+    public void NewChannel(string name, out string error)
     {
+        if (Channels.Count >= MaxChannels)
+        {
+            GD.Print("AudioOutputPatch:NewChannel - Maximum channel limit (24) reached; cannot add more.");
+            // Assuming globalSignals accessible; inject if needed
+            error = $"Patch '{Name}' channel limit (16) reached; '{name}' not added.";
+            return;
+        }
         Channels.Add(_channelId++, name);
+        error = null;
+    }
+
+    public void RemoveChannel(int channelId)
+    {
+        if (!Channels.ContainsKey(channelId))
+        {
+            GD.Print("AudioOutputPatch:RemoveChannel - Channel ID not found: " + channelId);
+            return;
+        }
+        string removedName = Channels[channelId];
+        Channels.Remove(channelId);
+        foreach (var device in OutputDevices.Values)
+        {
+            foreach (var output in device)
+            {
+                output.RoutedChannels.RemoveAll(id => id == channelId);
+            }
+        }
+        GD.Print("AudioOutputPatch:RemoveChannel - Successfully removed channel " + channelId + " (" + removedName + ") and cleaned routes.");
     }
 
     public void AddDeviceOutputs(string deviceName, int outputCount)
@@ -198,7 +261,13 @@ public partial class AudioOutputPatch : Godot.GodotObject
         return true;
     }
 
-
+    /// <summary>
+    /// Serializes the patch data into a Hashtable for saving.
+    /// </summary>
+    /// <returns>A Hashtable with keys: Id, Name, Channels, OutputDevices.</returns>
+    /// <remarks>
+    /// Uses ArrayList for nested collections to match Godot's serialization needs.
+    /// </remarks>
     public Hashtable GetData()
     {
         var data = new Hashtable();

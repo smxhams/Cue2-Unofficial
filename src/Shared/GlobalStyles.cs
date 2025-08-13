@@ -29,6 +29,10 @@ public partial class GlobalStyles : Node
 	public static Color Danger = new Color("#ff806f"); 
 	public static Color Warning = new Color("#ffb45d");
 
+	// List zebra styles
+	private StyleBoxFlat _evenRowStyle;
+	private StyleBoxFlat _oddRowStyle;
+
 	
 	public override void _Ready()
 	{
@@ -84,6 +88,14 @@ public partial class GlobalStyles : Node
 		_dangerStyle.BorderColor = _highColor2;
 		_highColor5.A = 0.5f;
 		_dangerStyle.BgColor = _highColor5;
+		
+		
+		// Zerbra rows
+		_evenRowStyle = new StyleBoxFlat();
+		_evenRowStyle.BgColor = new Color(1f, 1f, 1f, 0.05f); // Soft lightening
+		
+		_oddRowStyle = new StyleBoxFlat();
+		_oddRowStyle.BgColor = new Color(0f, 0f, 0f, 0.05f); // Soft darkening
 
 	}
 

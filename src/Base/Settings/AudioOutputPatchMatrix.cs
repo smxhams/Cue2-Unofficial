@@ -22,8 +22,7 @@ public partial class AudioOutputPatchMatrix : Control
     public int PatchId { get; set; }
     
     private GlobalData _globalData;
-    private GlobalSignals _globalSignals; 
-    //[Export] private NodePath patchMatrixPath;
+    private GlobalSignals _globalSignals;
     
     private List<Node> _currentDeivceList = new List<Node>();
     private List<string> _availableDeviceList;
@@ -47,6 +46,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals"); // Global
+        
         
         // This is "PatchMatrixDeviceHeader" header
         _deviceHeaderScene = SceneLoader.LoadPackedScene("uid://cisr40jsg2jgp", out string _);
@@ -161,6 +161,22 @@ public partial class AudioOutputPatchMatrix : Control
         _channelList.AddChild(channelHBox);
         int currentIndex = channelHBox.GetIndex();
         if (currentIndex > 0) _channelList.MoveChild(channelHBox, currentIndex - 1);
+        Button deleteChannelButton = new Button();
+        deleteChannelButton.CustomMinimumSize = new Vector2(32, 32);
+        deleteChannelButton.SetMouseFilter(MouseFilterEnum.Pass);
+        deleteChannelButton.TooltipText = "Delete this channel";
+        deleteChannelButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        deleteChannelButton.ExpandIcon = true;
+        deleteChannelButton.AddThemeConstantOverride("icon_max_width", 13);
+        deleteChannelButton.IconAlignment = HorizontalAlignment.Center;
+        
+        channelHBox.AddChild(deleteChannelButton);
+        deleteChannelButton.Pressed += () =>
+        {
+            Patch.RemoveChannel(channel.Key);
+            SyncAudioDeviceDisplays();
+        };
+        
         LineEdit channelLabel = new LineEdit();
         channelLabel.Text = channel.Value;
         channelHBox.AddChild(channelLabel);
@@ -273,7 +289,12 @@ public partial class AudioOutputPatchMatrix : Control
     
     private void AddChannelButtonPressed()
     {
-        Patch.NewChannel("New Channel");
+        Patch.NewChannel("New Channel", out var error);
+        if (error != null)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"{error}", 2);
+            return;
+        }
         SyncAudioDeviceDisplays();
     }
 

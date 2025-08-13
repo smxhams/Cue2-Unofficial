@@ -1,6 +1,15 @@
-[gd_scene load_steps=3 format=3 uid="uid://cbdaknpeq3im1"]
+[gd_scene load_steps=6 format=3 uid="uid://cbdaknpeq3im1"]
 
 [ext_resource type="Script" uid="uid://ctv46gxu5v3od" path="res://src/Base/Settings/AudioMatrixCheckBox.cs" id="1_1i3t0"]
+[ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="1_wye6v"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_gghgi"]
+atlas = ExtResource("1_wye6v")
+region = Rect2(224, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2tq30"]
+atlas = ExtResource("1_wye6v")
+region = Rect2(192, 0, 32, 32)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1i3t0"]
 bg_color = Color(0.228197, 0.228197, 0.228197, 1)
@@ -18,16 +27,18 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -16.0
-offset_top = -16.0
-offset_right = 16.0
-offset_bottom = 16.0
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 12.0
+offset_bottom = 12.0
 grow_horizontal = 2
 grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
 focus_mode = 0
+theme_override_constants/icon_max_width = 24
+theme_override_icons/checked = SubResource("AtlasTexture_gghgi")
+theme_override_icons/unchecked = SubResource("AtlasTexture_2tq30")
 icon_alignment = 1
+expand_icon = true
 script = ExtResource("1_1i3t0")
 
 [node name="Panel" type="Panel" parent="."]
