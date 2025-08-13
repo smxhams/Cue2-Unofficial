@@ -78,6 +78,10 @@ public partial class AudioOutputPatchMatrix : Control
         _addChannelButton = GetNode<Button>("%AddChannelButton");
         _addChannelButton.Pressed += AddChannelButtonPressed;
         
+        // Signal from AudioDevices events
+        _globalSignals.AudioDevicesChanged += SyncAudioDeviceDisplays;
+        
+        
         SyncAudioDeviceDisplays();
     }
 
@@ -132,7 +136,8 @@ public partial class AudioOutputPatchMatrix : Control
                 
             else
             {
-                NewUsedButNotFoundDeviceColumn(device.Key, new Dictionary<string, List<int>>());
+                NewUsedButNotFoundDeviceColumn(device.Key, device.Value);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Device used in audio patch but not found: {device.Key}", 3); // TODO()
                 unusedDeviceList.Remove(device.Key);
             }
         }
@@ -186,7 +191,10 @@ public partial class AudioOutputPatchMatrix : Control
     
     private async void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
-        GD.Print($"AudioOutputPatchMatrix:NewUsedDeviceColumn - Add device {deviceName} column as USED");
+        //Double check the device has been opened.
+        _globalData.AudioDevices.OpenAudioDevice(deviceName, out var _);
+        
+        
         var header = LoadDeviceOutputDeviceHeader(deviceName, true);
     
         var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(deviceName);
@@ -197,11 +205,45 @@ public partial class AudioOutputPatchMatrix : Control
         }
         
         // Add device outputs
+        var outputNodes = AddDeviceOutputColumns(deviceName, outputChannels);
+    }
+    
+    private async void NewUsedButNotFoundDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
+    {
+        var header = LoadDeviceOutputDeviceHeader(deviceName, true);
+        var label = header.GetChild<Label>(1);
+        label.TooltipText = $"{deviceName}: Is used in patch but is currently unavailable.";
+        var style = new StyleBoxFlat();
+        style.BgColor = new Color((float)1.0,(float)0.00,(float)0.00,(float)0.5);
+
+        header.AddThemeStyleboxOverride("panel", style);
+        
+        //label.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+        
+        var outputNodes = AddDeviceOutputColumns(deviceName, outputChannels);
+        foreach (var outputNode in outputNodes)
+        {
+            outputNode.AddThemeStyleboxOverride("panel", style);
+        }
+    }
+    
+    private async void NewUnusedDeviceColumn(string deviceName)
+    {
+        var header = LoadDeviceOutputDeviceHeader(deviceName);
+        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled";
+    }
+
+
+    private List<Panel> AddDeviceOutputColumns(string deviceName, List<OutputChannel> outputChannels)
+    {
+        var DeviceOutputNodes = new List<Panel>();
         for (int outputIndex = 0; outputIndex < outputChannels.Count; outputIndex++)
         {
-            var outHeader = _deviceOutputHeaderScene.Instantiate();
+            var outHeader = _deviceOutputHeaderScene.Instantiate<Panel>();
             _deviceContainer.AddChild(outHeader);
-        
+            
+            DeviceOutputNodes.Add(outHeader);
+            
             var outputNameEdit = outHeader.GetNode<LineEdit>("OutputName");
             outputNameEdit.Text = outputChannels[outputIndex].Name;
             outHeader.Set("ParentDevice", deviceName);
@@ -225,19 +267,8 @@ public partial class AudioOutputPatchMatrix : Control
                 }
             };
         }
-    }
-    
-    private async void NewUsedButNotFoundDeviceColumn(string deviceName, Dictionary<string, List<int>> outputChannels)
-    {
-        GD.Print($"Add device {deviceName} column as USED BUT NOT FOUND");
-        var header = LoadDeviceOutputDeviceHeader(deviceName);
-    }
-    
-    private async void NewUnusedDeviceColumn(string deviceName)
-    {
-        GD.Print($"Add device {deviceName} column as UNUSED");
-        var header = LoadDeviceOutputDeviceHeader(deviceName);
-        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled";
+
+        return DeviceOutputNodes;
     }
     
     private void AddChannelButtonPressed()
@@ -247,9 +278,9 @@ public partial class AudioOutputPatchMatrix : Control
     }
 
 
-    private Node LoadDeviceOutputDeviceHeader(string name, bool state = false)
+    private Panel LoadDeviceOutputDeviceHeader(string name, bool state = false)
     {
-        Node instance = _deviceHeaderScene.Instantiate();
+        Panel instance = _deviceHeaderScene.Instantiate<Panel>();
         instance.Set("DeviceName", name);
         _deviceContainer.AddChild(instance);
         instance.GetNode<Label>("Label").Text = name;
@@ -309,7 +340,7 @@ public partial class AudioOutputPatchMatrix : Control
         foreach (var channel in sortedChannels)
         {
             int channelId = channel.Key;
-            GD.Print($"{channel.Key} : {channel.Value}");
+            //GD.Print($"{channel.Key} : {channel.Value}");
 
             for (int col = 0; col < culumnCount; col++)
             {
@@ -320,7 +351,6 @@ public partial class AudioOutputPatchMatrix : Control
                 if (parentDeviceVar.VariantType != Variant.Type.Nil)
                 {
                     string deviceName = parentDeviceVar.ToString();
-                    GD.Print($"{header.Name} has parent {deviceName}");
                     var outputIndexVar = header.Get("OutputIndex");
                     int outputIndex = outputIndexVar.AsInt32();
 

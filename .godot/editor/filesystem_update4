@@ -44,3 +44,16 @@ res://src/Base/CommandInterpreter/CueCommandInterpreter.cs
 res://src/Base/Settings/DeviceOutputPatchMatrix.cs
 res://src/Base/Classes/MediaPlayerState.cs
 res://src/Base/Minor/CurrentTime.cs
+res://src/Base/Settings/PatchMatrixDeviceHeader.tscn
+res://src/UI/Assets/base_theme.tres
+res://src/UI/Assets/GO_theme.tres
+res://src/Base/VideoPlayback.gdshader
+res://src/Base/VideoTextureRectMaterial.tres
+res://src/Base/Cue2Base.tscn
+res://src/Base/ActiveCueBar.tscn
+res://src/UI/Scenes/Header.tscn
+res://src/Base/settings.tscn
+res://src/UI/Scenes/MainTitleBar.tscn
+res://src/Base/Settings/AudioOutputPatchMatrix.tscn
+res://src/Base/Settings/PatchMatrixDeviceOutputHeader.tscn
+res://src/Base/Settings/AudioPatchMatrixCheckBox.tscn

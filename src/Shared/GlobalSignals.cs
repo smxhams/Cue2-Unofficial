@@ -49,6 +49,10 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void SettingsSaveWithShowEventHandler(string filters);
 	[Signal] public delegate void SettingsSaveUserDirEventHandler(string filters);
 	
+	
+	// Signals associated with devices
+	[Signal] public delegate void AudioDevicesChangedEventHandler();
+	
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
 	public override void _Ready()

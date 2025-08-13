@@ -23,7 +23,7 @@ public partial class AudioDevices : Node
 	    _globalData = GetNode<GlobalData>("/root/GlobalData");
 	    _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	    
-	    if (SDL.Init(SDL.InitFlags.Audio) == false)
+	    if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events) == false)
 	    {
 		    GD.Print($"SDL Init failed: {SDL.GetError()}");
 		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"SDL Init failed: {SDL.GetError()}", 3);
@@ -31,29 +31,94 @@ public partial class AudioDevices : Node
 	    }
     }
 
+    public override void _Process(double delta)
+    {
+	    
+	    // Check each process for a audio device disconnect event. 
+	    SDL.Event ev;
+	    if (SDL.PollEvent(out ev) == true)
+	    {
+		    if (ev.Type == (uint)SDL.EventType.AudioDeviceRemoved)
+		    {
+			    var removedPhysicalId = ev.ADevice.Which;
+			    CheckMissingDevices(removedPhysicalId);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+		    }
+		    else if (ev.Type == (uint)SDL.EventType.AudioDeviceAdded)
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+		    }
+	    }
+		    
+    }
+
+    /// <summary>
+    /// Checks if any devices in _openDevices are missing from the list of available audio devices.
+    /// Logs a warning for each missing device and returns their names.
+    /// </summary>
+    /// <returns>A list of names of devices that are in _openDevices but not in available devices.</returns>
+    private void CheckMissingDevices(uint removedPhysicalId)
+    {
+	    GD.Print("AudioDevices:CheckMissingDevices - Checking for missing audio devices");
+	    foreach (var device in _openDevices)
+	    {
+		    if (device.Value.PhysicalId == removedPhysicalId)
+		    {
+			    CloseAudioDevice(device.Key);
+		    };
+	    }
+	}
+    
+    /// <summary>
+    /// Closes an open audio device by its ID.
+    /// This method closes the SDL audio device, removes it from the open devices dictionary, and logs the result.
+    /// </summary>
+    /// <param name="deviceId">The ID of the audio device to close (key in _openDevices).</param>
+    /// <returns>True if the device was successfully closed and removed; false otherwise.</returns>
+    public bool CloseAudioDevice(int deviceId)
+    {
+	    var device = _openDevices[deviceId];
+	    try
+	    {
+		    SDL.CloseAudioDevice(device.LogicalId);
+		    _openDevices.Remove(deviceId);
+        
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+			    $"Successfully closed audio device '{device.Name}' (ID: {deviceId})", 0);
+		    GD.Print("AudioDevices:CloseAudioDevice - Successfully closed device ID: " + deviceId);
+		    return true;
+	    }
+	    catch (Exception ex)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+			    $"Error closing device '{device.Name}' (ID: {deviceId}): {ex.Message}", 2);
+		    GD.PrintErr("AudioDevices:CloseAudioDevice - Error closing device ID " + deviceId + ": " + ex.Message);
+		    return false;
+	    }
+	    
+    }
+
     public AudioDevice OpenAudioDevice(string name, out string error)
     {
 	    // Check if audio device already opened
+	    GD.Print($"OpenAudioDevice called for: {name}");
 	    foreach (var dev in _openDevices.Values)
 	    {
 		    if (dev.Name == name)
 		    {
+			    GD.Print(" ^^ Device already opened");
 				error = "Device already opened, returned existing device";
 				return dev;
 			    
 		    }
 	    }
 	    var physicalDeviceId = GetAudioDevicePhysicalIdFromName(name);
-	    if (physicalDeviceId == null)
-	    {
-		    error = "No availible device found with name given";
-		    return null; 
-	    }
+	    GD.Print($"PHYSICAL ID IS: {physicalDeviceId} NAME IS: {name}");
 	    //Open audio device
 	    var audioDevice = SDL.OpenAudioDevice((uint)physicalDeviceId, (nint)0); // Zero is a null, this means device will open with its own settings
 	    if (audioDevice == 0)
 	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open audio device: {SDL.GetError()}", 3);
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to find and open audio device of name: {name} ", 3);
 		    error = "Failed to open audio device: " + SDL.GetError();
 		    return null;
 	    }

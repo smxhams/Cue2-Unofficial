@@ -7,6 +7,7 @@ namespace Cue2.Base.Classes;
 public partial class Settings : Node
 {
     private GlobalSignals _globalSignals;
+    private GlobalData _globalData;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
 
     public float UiScale = 1.0f;
@@ -14,12 +15,7 @@ public partial class Settings : Node
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-        //Adds a default audio out patch at startup - this is only for debug
-        //AudioOutputPatch newPatch = new AudioOutputPatch("Default patch");
-        //_audioOutputPatches.Add(newPatch.Id, newPatch);
-        
-        
-        
+        _globalData = GetNode<GlobalData>("/root/GlobalData");
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;
@@ -57,6 +53,12 @@ public partial class Settings : Node
         }
         _audioOutputPatches.Add(patch.Id, patch);
         GD.Print("Settings:AddPatch - Added patch with ID: " + patch.Id + " and name: " + patch.Name);
+        
+        // Double check audio devices in added patch are opened. 
+        foreach (var device in patch.OutputDevices)
+        {
+            _globalData.AudioDevices.OpenAudioDevice(device.Key, out var _);
+        }
     }
 
     private void PrintPatches()
