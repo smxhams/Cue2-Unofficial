@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Reflection.Metadata;
 using Cue2.Base.Classes.Devices;
 using Godot;
 using SDL3;
@@ -13,10 +11,11 @@ public partial class AudioDevices : Node
 {
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
-	private Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>(); 
 	
-	//private static Dictionary<> OpenDevices;
+	private readonly Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>();
+	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
+	private Timer _pollTimer;
 	
     public override void _Ready()
     {
@@ -25,66 +24,92 @@ public partial class AudioDevices : Node
 	    
 	    if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events) == false)
 	    {
-		    GD.Print($"SDL Init failed: {SDL.GetError()}");
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"SDL Init failed: {SDL.GetError()}", 3);
-		    return;
+		    var errorMsg = $"SDL Init failed: {SDL.GetError}";
+		    GD.Print("AudioDevices:_Ready - " + errorMsg);
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), errorMsg, 3);
 	    }
+	    GD.Print("AudioDevices:_Ready - SDL initialized successfully.");
+
+	    _pollTimer = new Timer();
+	    _pollTimer.WaitTime = 0.5;
+	    _pollTimer.Autostart = true;
+	    _pollTimer.Timeout += PollSdlEvents;
+	    AddChild(_pollTimer);
     }
 
-    public override void _Process(double delta)
+    private void PollSdlEvents()
     {
-	    
-	    // Check each process for a audio device disconnect event. 
-	    SDL.Event ev;
-	    if (SDL.PollEvent(out ev) == true)
+	    bool changesDetected = false; 
+	    while (SDL.PollEvent(out var ev))
 	    {
 		    if (ev.Type == (uint)SDL.EventType.AudioDeviceRemoved)
 		    {
 			    var removedPhysicalId = ev.ADevice.Which;
 			    CheckMissingDevices(removedPhysicalId);
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+			    changesDetected = true;
 		    }
 		    else if (ev.Type == (uint)SDL.EventType.AudioDeviceAdded)
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+			    CheckAddedDevice(ev.ADevice.Which);
+			    changesDetected = true;
 		    }
 	    }
-		    
+
+	    if (changesDetected)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+	    }
     }
 
     /// <summary>
     /// Checks if any devices in _openDevices are missing from the list of available audio devices.
     /// Logs a warning for each missing device and returns their names.
     /// </summary>
-    /// <returns>A list of names of devices that are in _openDevices but not in available devices.</returns>
     private void CheckMissingDevices(uint removedPhysicalId)
     {
 	    GD.Print("AudioDevices:CheckMissingDevices - Checking for missing audio devices");
-	    foreach (var device in _openDevices)
+	    if (_physicalIdToDeviceId.TryGetValue(removedPhysicalId, out int deviceId))
 	    {
-		    if (device.Value.PhysicalId == removedPhysicalId)
-		    {
-			    CloseAudioDevice(device.Key);
-		    };
+		    var device = _openDevices[deviceId];
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio device disconnected/lost: {device.Name}", 3);
+		    CloseAudioDevice(deviceId);
 	    }
 	}
     
     /// <summary>
-    /// Closes an open audio device by its ID.
-    /// This method closes the SDL audio device, removes it from the open devices dictionary, and logs the result.
+    /// Checks if an audio devices physical ID matches a device used in an audio output patch.
+    /// Function will ensure device is opened if it is not already.
     /// </summary>
-    /// <param name="deviceId">The ID of the audio device to close (key in _openDevices).</param>
-    /// <returns>True if the device was successfully closed and removed; false otherwise.</returns>
-    public bool CloseAudioDevice(int deviceId)
+    /// <param name="addedPhysicalId">The ID of the audio device to check.</param>
+    private void CheckAddedDevice(uint addedPhysicalId)
+	{
+		var name = SDL.GetAudioDeviceName(addedPhysicalId);
+		var patches = _globalData.Settings.GetAudioOutputPatches();
+		foreach (var patch in patches)
+		{
+			if (name != null && patch.Value.OutputDevices.ContainsKey(name))
+			{
+				OpenAudioDevice(name, out var _);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Needed audio device reconnected: {name}", 0);
+				return;
+			}
+		}
+	}
+    
+	/// <summary>
+	/// Closes an open audio device by its ID, removes it from internal tracking, and logs the result.
+	/// </summary>
+	/// <param name="deviceId">The ID of the audio device to close (key in _openDevices).</param>
+	/// <returns>True if successfully closed and removed; false on error.</returns>
+    private bool CloseAudioDevice(int deviceId)
     {
 	    var device = _openDevices[deviceId];
 	    try
 	    {
 		    SDL.CloseAudioDevice(device.LogicalId);
 		    _openDevices.Remove(deviceId);
-        
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-			    $"Successfully closed audio device '{device.Name}' (ID: {deviceId})", 0);
+		    _physicalIdToDeviceId.Remove(device.PhysicalId);
+		    
 		    GD.Print("AudioDevices:CloseAudioDevice - Successfully closed device ID: " + deviceId);
 		    return true;
 	    }
@@ -98,6 +123,15 @@ public partial class AudioDevices : Node
 	    
     }
 
+    /// <summary>
+    /// Opens an audio device by name if not already open, registers it, and retrieves its specs.
+    /// </summary>
+    /// <param name="name">The name of the audio device to open.</param>
+    /// <param name="error">Output parameter for any error message; empty string on success.</param>
+    /// <returns>The opened AudioDevice instance, or null on failure.</returns>
+    /// <remarks>
+    /// If the device is already open, returns the existing instance.
+    /// </remarks>
     public AudioDevice OpenAudioDevice(string name, out string error)
     {
 	    // Check if audio device already opened
@@ -106,16 +140,15 @@ public partial class AudioDevices : Node
 	    {
 		    if (dev.Name == name)
 		    {
-			    GD.Print(" ^^ Device already opened");
-				error = "Device already opened, returned existing device";
+			    GD.Print("    ^^ Device already opened");
+			    error = "";
 				return dev;
 			    
 		    }
 	    }
 	    var physicalDeviceId = GetAudioDevicePhysicalIdFromName(name);
-	    GD.Print($"PHYSICAL ID IS: {physicalDeviceId} NAME IS: {name}");
 	    //Open audio device
-	    var audioDevice = SDL.OpenAudioDevice((uint)physicalDeviceId, (nint)0); // Zero is a null, this means device will open with its own settings
+	    var audioDevice = SDL.OpenAudioDevice(physicalDeviceId, 0); // Zero is a null, this means device will open with its own settings
 	    if (audioDevice == 0)
 	    {
 		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to find and open audio device of name: {name} ", 3);
@@ -132,24 +165,33 @@ public partial class AudioDevices : Node
 	    }
 	    var specs = GetAudioDeviceSpec(name);
 
-	    device.PhysicalId = (uint)physicalDeviceId;
+	    device.PhysicalId = physicalDeviceId;
 	    device.Channels = specs.Channels;
 	    device.Format = specs.Format;
 	    device.SampleRate = specs.Freq;
 	    device.BitDepth = GetBitDepth(specs.Format);
 	    
 	    _openDevices.Add(device.DeviceId, device);
+	    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
 
 	    error = "";
 	    return device;
     }
     
-    public List<string> GetAvailibleAudioDevicseNames()
+    /// <summary>
+    /// Retrieves the names of all available audio playback devices using SDL.
+    /// </summary>
+    /// <returns>A list of device names, or null if an error occurs during enumeration.</returns>
+    /// <remarks>
+    /// Catches exceptions and logs them internally. Does not include already opened devices' status.
+    /// </remarks>
+    public List<string> GetAvailableAudioDeviceNames()
     {
 	    try
 	    {
+		    GD.Print("AudioDevices:GetAvailableAudioDeviceNames - Enumerating playback devices");
 		    // Get number of playback devices
-		    var devices = SDL.GetAudioPlaybackDevices(out int count);
+		    var devices = SDL.GetAudioPlaybackDevices(out int _);
 		    var deviceNames = new List<string>();
 
 		    // Enumerate playback devices
@@ -171,7 +213,8 @@ public partial class AudioDevices : Node
 	    }
 	    catch (Exception ex)
 	    {
-		    Console.WriteLine($"An error occurred: {ex.Message}");
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error enumerating audio devices: {ex.Message}", 2);
+		    GD.PrintErr("AudioDevices:GetAvailableAudioDeviceNames - " + ex.Message);
 		    return null;
 	    }
 	    
@@ -189,20 +232,32 @@ public partial class AudioDevices : Node
 	    return deviceNames;
     }
 
-    public SDL.AudioSpec GetAudioDeviceSpec(string name)
+    /// <summary>
+    /// Retrieves the audio specifications for a device by name.
+    /// </summary>
+    /// <param name="name">The name of the audio device.</param>
+    /// <returns>The SDL.AudioSpec struct for the device.</returns>
+    /// <remarks>
+    /// Assumes the device exists; no error checking for invalid names.
+    /// </remarks>
+    private SDL.AudioSpec GetAudioDeviceSpec(string name)
     {
 	    var device = GetAudioDevicePhysicalIdFromName(name);
-	    Debug.Assert(device != null, nameof(device) + " != null");
-	    SDL.GetAudioDeviceFormat((uint)device, out SDL.AudioSpec spec, out _);
+	    SDL.GetAudioDeviceFormat(device, out SDL.AudioSpec spec, out _);
 	    return spec; // Return SDL_AudioSpec structu
     } 
 
+    
+    /// <summary>
+    /// Converts audio device specs into a human-readable list of strings.
+    /// </summary>
+    /// <param name="name">The name of the audio device.</param>
+    /// <returns>A list of formatted spec strings (e.g., "Bit Depth: 16 (S16LE)").</returns>
     public List<string> GetReadableAudioDeviceSpecs(string name)
     {
 	    var specs = new List<string>();
 	    var device = GetAudioDevicePhysicalIdFromName(name);
-	    if (device == null) return null;
-	    SDL.GetAudioDeviceFormat((uint)device, out SDL.AudioSpec spec, out _);
+	    SDL.GetAudioDeviceFormat(device, out SDL.AudioSpec spec, out _);
 	    var format = spec.Format.ToString().Substring(5);
 	    specs.Add($"Bit Depth: {GetBitDepth(spec.Format)} ({format})");
 	    specs.Add($"Bit Rate: {spec.Freq}");
@@ -210,9 +265,9 @@ public partial class AudioDevices : Node
 	    return specs;
     }
 
-    public uint GetAudioDevicePhysicalIdFromName(string name)
+    private uint GetAudioDevicePhysicalIdFromName(string name)
     {
-	    var devices = SDL.GetAudioPlaybackDevices(out int count);
+	    var devices = SDL.GetAudioPlaybackDevices(out int _);
 
 	    if (devices != null)
 	    {
@@ -238,17 +293,19 @@ public partial class AudioDevices : Node
 
     public AudioDevice GetAudioDevice(int deviceId)
     {
-	    if (_openDevices.ContainsKey(deviceId))
-	    {
-		    return _openDevices[deviceId];
-	    }
-
-	    return null;
+	    return _openDevices.GetValueOrDefault(deviceId);
     }
 
 
-// Helper function to map SDL_AudioFormat to bit depth
-	public static int GetBitDepth(SDL.AudioFormat format)
+    /// <summary>
+    /// Maps an SDL.AudioFormat to its bit depth.
+    /// </summary>
+    /// <param name="format">The SDL audio format.</param>
+    /// <returns>The bit depth (e.g., 16), or 0 for unsupported formats.</returns>
+    /// <remarks>
+    /// Logs a warning for unknown formats. Consider throwing an exception in strict modes.
+    /// </remarks>
+	private static int GetBitDepth(SDL.AudioFormat format)
 	{
 		switch (format)
 		{
@@ -266,6 +323,16 @@ public partial class AudioDevices : Node
 			default:
 				return 0; // Unknown or unsupported format
 		}
+	}
+
+	public override void _ExitTree()
+	{
+		foreach (var device in _openDevices.Values.ToList())
+		{
+			CloseAudioDevice(device.DeviceId);
+		}
+		if (SDL.WasInit(SDL.InitFlags.Audio) != 0) SDL.Quit();
+		GD.Print("AudioDevices:_ExitTree - Cleaned up SDL and devices.");
 	}
 	
 	

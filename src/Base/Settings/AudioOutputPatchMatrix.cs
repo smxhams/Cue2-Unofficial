@@ -114,7 +114,7 @@ public partial class AudioOutputPatchMatrix : Control
         await ToSignal(GetTree(), "process_frame");
 
         _currentDeivceList.Clear();
-        _availableDeviceList = _globalData.AudioDevices.GetAvailibleAudioDevicseNames();
+        _availableDeviceList = _globalData.AudioDevices.GetAvailableAudioDeviceNames();
         
         // CHANNELS (ROWS)
         var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
@@ -137,7 +137,7 @@ public partial class AudioOutputPatchMatrix : Control
             else
             {
                 NewUsedButNotFoundDeviceColumn(device.Key, device.Value);
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Device used in audio patch but not found: {device.Key}", 3); // TODO()
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Device used in audio patch but not found: {device.Key}", 3);
                 unusedDeviceList.Remove(device.Key);
             }
         }
