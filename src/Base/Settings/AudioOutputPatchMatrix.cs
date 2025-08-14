@@ -1,30 +1,25 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
-using LibVLCSharp.Shared.Structures;
 
 namespace Cue2.Base.Settings;
 
-// This is attached to AudioOutputPatchMatrix scene. Instantiated by presence of a audio patch via settings window.
+/// <summary>
+/// Manages the UI for an audio output patch matrix, allowing users to configure routing between channels and devices.
+/// </summary>
 public partial class AudioOutputPatchMatrix : Control
 {
-    [Export]
-    public AudioOutputPatch Patch { get; set; } // This is set in SettingsAudioOutputPatch when created. 
+    [Export] private AudioOutputPatch Patch { get; set; } // This is set in SettingsAudioOutputPatch when created. 
     
-    [Export]
-    public int PatchId { get; set; }
+    [Export] private int PatchId { get; set; }
     
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
     
-    private List<Node> _currentDeivceList = new List<Node>();
     private List<string> _availableDeviceList;
     
     private PackedScene _deviceHeaderScene;
@@ -39,9 +34,11 @@ public partial class AudioOutputPatchMatrix : Control
     private Button _deletePatchButton;
     private Button _addChannelButton;
     
-    private int _deviceCount = 0;
+    private int _deviceCount;
     
-    
+    /// <summary>
+    /// Initializes the node, loads required scenes, sets up UI elements, and connects signals.
+    /// </summary>
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
@@ -63,13 +60,12 @@ public partial class AudioOutputPatchMatrix : Control
         _channelList = GetNode<VBoxContainer>("%ChannelList"); 
         
         
-        
         // Load its patch info
-        GD.Print("Patch matrix loaded with id: " + PatchId + " and name: " + Patch.Name);
+        GD.Print("AudioOutputPatchMatrix:_Ready - Patch matrix loaded with id: " + PatchId + " and name: " + Patch.Name);
         
         _patchName = GetNode<LineEdit>("%PatchName");
         _patchName.Text = Patch.Name;
-        GD.Print($"Patch name: {Patch.Name}");
+        GD.Print("AudioOutputPatchMatrix:_Ready - Patch name: " + Patch.Name);
         _patchName.TextChanged += PatchNameOnTextChanged;
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
@@ -85,16 +81,20 @@ public partial class AudioOutputPatchMatrix : Control
         SyncAudioDeviceDisplays();
     }
 
+    /// <summary>
+    /// Handles the deletion of the current patch and removes the UI node.
+    /// </summary>
     private void DeletePatchButtonPressed()
     {
         _globalData.Settings.DeletePatch(Patch.Id);
         QueueFree();
     }
 
-    public int GetId() => PatchId;
-
-
-    public async void SyncAudioDeviceDisplays()
+    
+    /// <summary>
+    /// Synchronizes the displayed audio devices and channels with the current data, rebuilding the UI as needed.
+    /// </summary>
+    private async void SyncAudioDeviceDisplays()
     {
         GD.Print("Syncing devices in audio output patch matrix");
         // For now we remove devices and start fresh while developing, in future match agaisnt info instead.
@@ -112,8 +112,7 @@ public partial class AudioOutputPatchMatrix : Control
         }
 
         await ToSignal(GetTree(), "process_frame");
-
-        _currentDeivceList.Clear();
+        
         _availableDeviceList = _globalData.AudioDevices.GetAvailableAudioDeviceNames();
         
         // CHANNELS (ROWS)
@@ -154,7 +153,12 @@ public partial class AudioOutputPatchMatrix : Control
         BuildPatchMatrix();
     }
 
-    private async void NewChannelRow(KeyValuePair<int, string> channel)
+    
+    /// <summary>
+    /// Creates a new UI row for a channel, including delete button and editable label.
+    /// </summary>
+    /// <param name="channel">The channel key-value pair (ID and name).</param>
+    private void NewChannelRow(KeyValuePair<int, string> channel)
     {
         HBoxContainer channelHBox = new HBoxContainer();
         channelHBox.Name = $"{channel.Key}HBox";
@@ -167,6 +171,7 @@ public partial class AudioOutputPatchMatrix : Control
         deleteChannelButton.TooltipText = "Delete this channel";
         deleteChannelButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
         deleteChannelButton.ExpandIcon = true;
+        deleteChannelButton.FocusMode = FocusModeEnum.None;
         deleteChannelButton.AddThemeConstantOverride("icon_max_width", 13);
         deleteChannelButton.IconAlignment = HorizontalAlignment.Center;
         
@@ -190,11 +195,11 @@ public partial class AudioOutputPatchMatrix : Control
             $"Channel: {channel.Value}, cues get routed to this channel. " +
             $"From here you route this to a physical output device."; 
         
-        channelLabel.TextChanged += (newText) =>
+        channelLabel.TextChanged += newText =>
         {
             try
             {
-                Patch.RenameChannel(channel.Key, channelLabel.Text);
+                Patch.RenameChannel(channel.Key, newText);
             }
             catch (Exception ex)
             {
@@ -205,7 +210,7 @@ public partial class AudioOutputPatchMatrix : Control
         };
     }
     
-    private async void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
+    private void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
         //Double check the device has been opened.
         _globalData.AudioDevices.OpenAudioDevice(deviceName, out var _);
@@ -221,10 +226,10 @@ public partial class AudioOutputPatchMatrix : Control
         }
         
         // Add device outputs
-        var outputNodes = AddDeviceOutputColumns(deviceName, outputChannels);
+        AddDeviceOutputColumns(deviceName, outputChannels);
     }
     
-    private async void NewUsedButNotFoundDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
+    private void NewUsedButNotFoundDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
         var header = LoadDeviceOutputDeviceHeader(deviceName, true);
         var label = header.GetChild<Label>(1);
@@ -243,7 +248,7 @@ public partial class AudioOutputPatchMatrix : Control
         }
     }
     
-    private async void NewUnusedDeviceColumn(string deviceName)
+    private void NewUnusedDeviceColumn(string deviceName)
     {
         var header = LoadDeviceOutputDeviceHeader(deviceName);
         header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled";
@@ -252,20 +257,20 @@ public partial class AudioOutputPatchMatrix : Control
 
     private List<Panel> AddDeviceOutputColumns(string deviceName, List<OutputChannel> outputChannels)
     {
-        var DeviceOutputNodes = new List<Panel>();
+        var deviceOutputNodes = new List<Panel>();
         for (int outputIndex = 0; outputIndex < outputChannels.Count; outputIndex++)
         {
             var outHeader = _deviceOutputHeaderScene.Instantiate<Panel>();
             _deviceContainer.AddChild(outHeader);
             
-            DeviceOutputNodes.Add(outHeader);
+            deviceOutputNodes.Add(outHeader);
             
             var outputNameEdit = outHeader.GetNode<LineEdit>("OutputName");
             outputNameEdit.Text = outputChannels[outputIndex].Name;
             outHeader.Set("ParentDevice", deviceName);
             outHeader.Set("OutputIndex", outputIndex);
         
-            outputNameEdit.TextChanged += (string newText) =>
+            outputNameEdit.TextChanged += newText =>
             {
                 int idx = (int)outHeader.Get("OutputIndex");
                 if (!Patch.RenameDeviceChannel(deviceName, idx, newText))
@@ -284,7 +289,7 @@ public partial class AudioOutputPatchMatrix : Control
             };
         }
 
-        return DeviceOutputNodes;
+        return deviceOutputNodes;
     }
     
     private void AddChannelButtonPressed()
@@ -305,22 +310,21 @@ public partial class AudioOutputPatchMatrix : Control
         instance.Set("DeviceName", name);
         _deviceContainer.AddChild(instance);
         instance.GetNode<Label>("Label").Text = name;
-        _currentDeivceList.Add(instance);
         instance.Name = name; 
         
         CheckButton toggleDeviceButton = instance.GetNode<CheckButton>("ToggleDeviceButton");
         toggleDeviceButton.SetPressed(state);
         
         // Connect functions to the use device check button. 
-        toggleDeviceButton.Toggled += (bool presssed) =>
+        toggleDeviceButton.Toggled += presssed =>
         {
             if (presssed)
             {
                 AudioDevice enabledDevice = _globalData.AudioDevices.OpenAudioDevice(name, out string error);
-                GD.Print("When enabling audio device: " + error);
+                GD.Print("AudioOutputPatchMatrix:NewUnusedDeviceColumn - When enabling audio device: " + error);
                 if (enabledDevice == null)
                 {
-                    GD.Print("ERROR WHEN ENABLING DEVICE");
+                    GD.Print($"AudioOutputPatchMatrix:NewUnusedDeviceColumn - Error enabling audio device. {error}");
                     return;
                 }
 
@@ -338,8 +342,10 @@ public partial class AudioOutputPatchMatrix : Control
         return instance;
     }
 
+    /// <summary>
+    /// Builds the matrix of checkboxes for routing channels to device outputs.
+    /// </summary>
     private async void BuildPatchMatrix()
-        // This loads checkboxs between channels and devices.
     {
         // For now remove everything and start over on each build - eventauly should build once and update
         var children = _patchMatrix.GetChildren();
@@ -391,7 +397,7 @@ public partial class AudioOutputPatchMatrix : Control
                             $"Output at index {outputIndex} not found for device {deviceName} during matrix build", 1);
                     }
 
-                    checkBox.Toggled += (bool pressed) =>
+                    checkBox.Toggled += pressed =>
                     {
                         try
                         {
@@ -404,16 +410,14 @@ public partial class AudioOutputPatchMatrix : Control
                                     if (!channelListInner.Contains(channelId))
                                     {
                                         channelListInner.Add(channelId);
-                                        GD.Print($"Routed channel {channelId} to {deviceName}:index {outputIndex}");
+                                        GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix - Routed channel {channelId} to {deviceName}:index {outputIndex}");
                                     }
                                 }
                                 else
                                 {
                                     channelListInner.Remove(channelId);
-                                    GD.Print($"Unrouted channel {channelId} from {deviceName}:index {outputIndex}");
+                                    GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix -Unrouted channel {channelId} from {deviceName}:index {outputIndex}");
                                 }
-                                // Optional: Save or update settings after change
-                                //_globalData.Settings.UpdatePatch(Patch);
                             }
                             else
                             {
@@ -442,13 +446,19 @@ public partial class AudioOutputPatchMatrix : Control
     }
         
     
-
+    /// <summary>
+    /// Updates the patch name when the text in the LineEdit changes.
+    /// </summary>
+    /// <param name="newtext">The new text entered by the user.</param>
     private void PatchNameOnTextChanged(string newtext)
     {
         Patch.Name = newtext;
         _globalData.Settings.UpdatePatch(Patch);
     }
     
+    /// <summary>
+    /// Triggers a refresh of the audio device displays.
+    /// </summary>
     private void _onRefreshButtonPressed()
     {
         SyncAudioDeviceDisplays();
