@@ -6,6 +6,8 @@ using System.Threading.Channels;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 using Godot;
+using Godot.Collections;
+using Array = Godot.Collections.Array;
 
 namespace Cue2.Base.Classes;
 
@@ -29,9 +31,9 @@ public partial class AudioOutputPatch : Godot.GodotObject
     
     public int Id { get; set; }
     public string Name { get; set; }
-    public Dictionary<string, List<OutputChannel>> OutputDevices { get; set; }
+    public System.Collections.Generic.Dictionary<string, List<OutputChannel>> OutputDevices { get; set; }
     // <Device name, device output channnel, list of audio channel ID's>>
-    public Dictionary<int, string> Channels { get; set; } // List of audio channels>
+    public System.Collections.Generic.Dictionary<int, string> Channels { get; set; } // List of audio channels>
     private int _channelId { get; set; } = 0;
 
 
@@ -45,8 +47,8 @@ public partial class AudioOutputPatch : Godot.GodotObject
     {
         Id = _nextId++;
         Name = "Unnamed";
-        OutputDevices = new Dictionary<string, List<OutputChannel>>();
-        Channels = new Dictionary<int, string>();
+        OutputDevices = new System.Collections.Generic.Dictionary<string, List<OutputChannel>>();
+        Channels = new System.Collections.Generic.Dictionary<int, string>();
         
         // Add some default blank channels.
         Channels.Add(_channelId++, "Left");
@@ -64,8 +66,8 @@ public partial class AudioOutputPatch : Godot.GodotObject
     {
         Id = _nextId++;
         Name = name;
-        OutputDevices = new Dictionary<string, List<OutputChannel>>();
-        Channels = new Dictionary<int, string>();
+        OutputDevices = new System.Collections.Generic.Dictionary<string, List<OutputChannel>>();
+        Channels = new System.Collections.Generic.Dictionary<int, string>();
         
         // Add some default blank channels.
         Channels.Add(_channelId++, "Left");
@@ -90,7 +92,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
             string name = dataDict["Name"].AsString();
             GD.Print("Got ID and Name");
 
-            var channels = new Dictionary<int, string>();
+            var channels = new System.Collections.Generic.Dictionary<int, string>();
             var channelsDict = dataDict["Channels"].AsGodotDictionary();
             GD.Print("Created variables for channels");
             foreach (var channelKey in channelsDict.Keys)
@@ -102,7 +104,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
 
             GD.Print("Added channel data");
 
-            var outputDevices = new Dictionary<string, List<OutputChannel>>();
+            var outputDevices = new System.Collections.Generic.Dictionary<string, List<OutputChannel>>();
             var outputDevicesDict = dataDict["OutputDevices"].AsGodotDictionary();
             foreach (var deviceKey in outputDevicesDict.Keys)
             {
@@ -268,28 +270,28 @@ public partial class AudioOutputPatch : Godot.GodotObject
     /// <remarks>
     /// Uses ArrayList for nested collections to match Godot's serialization needs.
     /// </remarks>
-    public Hashtable GetData()
+    public Dictionary GetData()
     {
-        var data = new Hashtable();
+        var data = new Dictionary();
         data.Add("Id", Id);
         data.Add("Name", Name);
 
-        var channelsData = new Hashtable();
+        var channelsData = new Dictionary();
         foreach (var channel in Channels)
         {
             channelsData.Add(channel.Key, channel.Value);
         }
         data.Add("Channels", channelsData);
 
-        var outputDevicesData = new Hashtable();
+        var outputDevicesData = new Dictionary();
         foreach (var device in OutputDevices)
         {
-            var outputsArray = new ArrayList();
+            var outputsArray = new Array();
             foreach (var output in device.Value)
             {
-                var outputData = new Hashtable();
+                var outputData = new Dictionary();
                 outputData.Add("Name", output.Name);
-                var routedChannelsArray = new ArrayList(output.RoutedChannels);
+                var routedChannelsArray = new Godot.Collections.Array<int>(output.RoutedChannels);
                 outputData.Add("RoutedChannels", routedChannelsArray);
                 outputsArray.Add(outputData);
             }

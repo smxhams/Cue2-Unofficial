@@ -43,12 +43,3 @@ res://src/Base/Classes/AudioOutputPatch.cs
 res://src/Base/CommandInterpreter/CueCommandInterpreter.cs
 res://src/Base/Settings/DeviceOutputPatchMatrix.cs
 res://src/Base/Classes/MediaPlayerState.cs
-res://src/Base/Settings/AudioPatchMatrixCheckBox.tscn
-res://src/UI/Assets/base_theme.tres
-res://src/UI/Assets/GO_theme.tres
-res://src/UI/Assets/icon_atlas_texture.tres
-res://src/Base/VideoPlayback.gdshader
-res://src/Base/VideoTextureRectMaterial.tres
-res://src/Base/Cue2Base.tscn
-res://src/Base/Settings/AudioOutputPatchMatrix.tscn
-res://src/UI/Scenes/MainTitleBar.tscn

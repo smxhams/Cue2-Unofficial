@@ -30,13 +30,13 @@ public partial class Playback : Node
 	
 	private Dictionary<string, MediaPlayer> _activePlayers = new Dictionary<string, MediaPlayer>();
 	
+	/// <summary>
+	/// This is 
+	/// </summary>
 	public Playback()
 	{
 		Core.Initialize();
 		_libVLC = new LibVLC();
-		//_libVLC = new LibVLC(["-H"]);
-		//_libVLC = new LibVLC(["--audio-filter=remap", "--audio-filter=pan", "--aout-remap-channel-left=0", "--aout-remap-channel-right=0"]);
-		//_libVLC.Log += (sender, e) => Console.WriteLine($"[LibVLC] {e.Level}: {e.Message}");
 	}
 
 	public override void _Ready()
@@ -56,7 +56,7 @@ public partial class Playback : Node
 		//test.PlayAudio(cue.FilePath, _libVLC);
 		return;
 		
-		if (!File.Exists(cue.FilePath))
+		/*if (!File.Exists(cue.FilePath))
 		{
 			GD.PrintErr($"Error: File not found at {cue.FilePath}");
 			return;
@@ -97,10 +97,10 @@ public partial class Playback : Node
 
 		MediaPlayers[_playbackIndex].MediaPlayer.EndReached += MediaOnEndReached;
 		_playbackIndex++;
-		media.Dispose();
+		media.Dispose();*/
 
 	}
-	static void playAudio(nint opaque, nint samples, uint count, long pts)
+	/*static void playAudio(nint opaque, nint samples, uint count, long pts)
 	{
 		GD.Print("Count: " + count);
 		GD.Print("Samples: " + samples);
@@ -108,7 +108,7 @@ public partial class Playback : Node
 		Marshal.Copy(samples, tempBuffer, 0, (int)count);
 		//_audioBuffer.AddRange(tempBuffer);
 		Console.WriteLine($"AudioPlay: received {count} bytes");
-	}
+	}*/
 	
 
 	

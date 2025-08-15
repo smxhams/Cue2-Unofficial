@@ -221,9 +221,9 @@ public partial class AudioDevices : Node
 	    
     }
 
-    public List<string> GetOpenAudioDevicesNames()
+    public Godot.Collections.Array<string> GetOpenAudioDevicesNames()
     {
-	    var deviceNames = new List<string>();
+	    var deviceNames = new Godot.Collections.Array<string>();
 	    foreach (var device in _openDevices.Values)
 	    {
 		    deviceNames.Add(device.Name);

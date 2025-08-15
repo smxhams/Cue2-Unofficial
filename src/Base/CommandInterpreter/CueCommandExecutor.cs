@@ -40,7 +40,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         GD.Print(cue.Name);
 
         // Check cue type to determine how to play
-        if (cue.Type == "")
+        // TODO: This is broken by cue refactor
+        /*if (cue.Type == "")
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Nothing in the Cue.", 1);
         }
@@ -49,7 +50,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         {
             _globalData.Playback.PlayMedia(cue);
             _globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cue.Id);
-        }
+        }*/
         
 
         if (cue.ChildCues.Count() != 0)

@@ -40,7 +40,8 @@ public partial class ShellContext : MarginContainer
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
 		
-		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = _focusedCue.FilePath;
+		// TODO: Broken by cue refactor - files are now stored in class component.
+		//GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = _focusedCue.FilePath;
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer/CueNum").Text = _focusedCue.CueNum;
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ShellName").Text = _focusedCue.Name;
 		GetNode<Label>("%cueId").Text = _focusedCue.Id.ToString();
@@ -64,8 +65,10 @@ public partial class ShellContext : MarginContainer
 		GD.Print(@path + "    :    " + newPath);
 		GetNode<LineEdit>("ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/fileURL").Text = @path;
 		
-		_focusedCue.FilePath = @path;
-		var fileExtension = Path.GetExtension(newPath);
+		// TODO: Broken by cue refactor - files are now stored in class component. 
+		
+		//_focusedCue.FilePath = @path;
+		/*var fileExtension = Path.GetExtension(newPath);
 		_focusedCue.Type = fileExtension switch // Sets type based on extension
 		{
 			".wav" or ".mp3" => "Audio",
@@ -73,7 +76,7 @@ public partial class ShellContext : MarginContainer
 			_ => _focusedCue.Type
 		};
 
-		GD.Print(_focusedCue.FilePath);
+		GD.Print(_focusedCue.FilePath);*/
 	}
 	
 	// Handling the updating of fields

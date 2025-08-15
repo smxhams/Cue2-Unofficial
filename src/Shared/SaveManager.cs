@@ -69,9 +69,8 @@ public partial class SaveManager : Node
 	
 	private void SaveSession(string selectedPath, string sessionName)
 	{
-		GD.Print("IN SAVE SESSION");
-		GD.Print($" SessionFolder: {selectedPath}, SessionName: {sessionName}");
-		var saveData = new Hashtable(); // Save type (cues, cue data)
+		GD.Print($"SaveMasnager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
+		var saveData = new Dictionary(); // Save type (cues, cue data)
 		
 		var cueSaveData = FormatCuesForSave();
 		saveData.Add("cues", cueSaveData); // Save type (cues, cue data)();
@@ -100,10 +99,11 @@ public partial class SaveManager : Node
 		
 		// Define the full save path: /path/to/sessionName/sessionName.c2
 		string savePath = Path.Combine(sessionFolder, sessionName + ".c2");
-		GD.Print($"SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
+		GD.Print($"$\"SaveManager:SaveSession - SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
 		try
 		{
-			string saveJson = JsonSerializer.Serialize(saveData);
+			var json = new Json();
+			string saveJson = Json.Stringify(saveData);
 			Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(savePath, Godot.FileAccess.ModeFlags.Write, _decodepass);
 			if (file == null)
 			{
@@ -120,8 +120,6 @@ public partial class SaveManager : Node
 			_globalData.SessionPath = sessionFolder;
 			
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to: {savePath}", 0);
-			GD.Print($"SaveManager:SaveSession - Session saved to: {savePath}");
-
 		}
 		catch (Exception ex)
 		{
@@ -131,9 +129,9 @@ public partial class SaveManager : Node
 	}
 	
 
-	private Hashtable FormatCuesForSave()
+	private Dictionary FormatCuesForSave()
 	{
-		var cueSaveTable = new Hashtable();
+		var cueSaveTable = new Dictionary();
 		foreach (var cue1 in _globalData.Cuelist.Cuelist)
 		{
 			var cue = (Cue)cue1;
@@ -141,7 +139,7 @@ public partial class SaveManager : Node
 			
 			cueSaveTable.Add(cue.Id, cueData);
 		}
-		GD.Print(cueSaveTable);
+		GD.Print($"\"SaveManager:FormatCuesForSave - {cueSaveTable}");
 		return cueSaveTable;
 	}
 
@@ -151,11 +149,11 @@ public partial class SaveManager : Node
 		return cuelistSaveTable;
 	}
 	
-	private Hashtable FormatSettingsForSave()
+	private Dictionary FormatSettingsForSave()
 	{ 
-		var saveTable = new Hashtable();
+		var saveTable = new Dictionary();
 		// Audio patch
-		var patchTable = new Hashtable();
+		var patchTable = new Dictionary();
 		
 		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
 		{
@@ -176,23 +174,38 @@ public partial class SaveManager : Node
 	
 	private void OpenSelectedSession(string path)
 	{
-		Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
-		//var json = JsonSerializer.Deserialize<Hashtable>(file.GetAsText());
-		string jsonString = file.GetAsText();
-		var json = new Json();
-		Error parseResult = json.Parse(jsonString);
-		if (parseResult != Error.Ok)
+		try
 		{
-			GD.PrintErr($"JSON parse error: {parseResult}");
-			return;
+			Godot.FileAccess file =
+				Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
+			if (file == null)
+			{
+				Error err = Godot.FileAccess.GetOpenError();
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for reading: {path} with error: {err}", 2);
+				GD.PrintErr("SaveManager:OpenSelectedSession - Failed to open file: " + path + " Error: " + err);
+				return;
+			}
+			string jsonString = file.GetAsText();
+			file.Close();
+			var json = new Json();
+			Error parseResult = json.Parse(jsonString);
+			if (parseResult != Error.Ok)
+			{
+				GD.PrintErr($"JSON parse error: {parseResult}");
+				return;
+			}
+			var data = json.Data.AsGodotDictionary();
+			ResetSession();
+			_globalData.SessionName = Path.GetFileNameWithoutExtension(path);
+			_globalData.SessionPath = Path.GetDirectoryName(path);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Session loaded successfully.", 0);
+			LoadSession(data);
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error loading session: {ex.Message}", 2);
 		}
 		
-		var data = json.Data.AsGodotDictionary();
-		ResetSession();
-		_globalData.SessionName = Path.GetFileNameWithoutExtension(@path);
-		_globalData.SessionPath = Path.GetDirectoryName(@path);
-		GD.Print($"WHEN OPENING I SET PATH AS: {_globalData.SessionPath} and NAME AS: {_globalData.SessionName}");
-		LoadSession(data);
 	}
 
 	private void ResetSession()
@@ -202,12 +215,8 @@ public partial class SaveManager : Node
 		_globalData.Settings.ResetSettings();
 	}
 
-	private void LoadSession(Godot.Collections.Dictionary data)
+	private void LoadSession(Dictionary data)
 	{
-		//GD.Print(data);
-
-		//GD.Print("This here: " + data["Settings"]);
-		
 		bool foundCuelist = false;
 		var cuelistOrder = new Godot.Collections.Dictionary<int, int>();
 		
@@ -297,28 +306,5 @@ public partial class SaveManager : Node
 		GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
 		return false;
 	} 
-	
-	public void PrintHashtable(Hashtable table, string indent = "")
-	{
-		foreach (DictionaryEntry entry in table)
-		{
-			var key = entry.Key;
-			var value = entry.Value;
-
-			if (value is Hashtable nestedTable)
-			{
-				// Nested hashtable: recurse with increased indent
-				GD.Print($"{indent}{key}: {{");
-				PrintHashtable(nestedTable, indent + "  ");
-				GD.Print($"{indent}}}");
-			}
-			else
-			{
-				// Non-hashtable value: print key-value pair
-				GD.Print($"{indent}{key}: {value ?? "null"}");
-			}
-		}
-	}
-	
 }
 
