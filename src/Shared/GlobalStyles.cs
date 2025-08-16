@@ -32,6 +32,10 @@ public partial class GlobalStyles : Node
 	// List zebra styles
 	private static StyleBoxFlat _evenRowStyle;
 	private static StyleBoxFlat _oddRowStyle;
+	
+	// Fonts and text colors
+	public static Color SoftFontColor = new Color("#45606b"); 
+	public static Color DisabledColor = new Color("#1d1d1d");
 
 	
 	public override void _Ready()
@@ -72,7 +76,7 @@ public partial class GlobalStyles : Node
 		_focusedStyle.BorderColor = new Color("#06545C");
 		_focusedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
-		// Ative Style
+		// Active Style
 		ActiveStyle.BorderWidthBottom = 2;
 		ActiveStyle.BorderWidthRight = 2;
 		ActiveStyle.BorderWidthLeft = 2;
@@ -80,7 +84,7 @@ public partial class GlobalStyles : Node
 		ActiveStyle.BorderColor = new Color("#974B08");
 		ActiveStyle.BgColor = new Color((float)0.592,(float)0.294,(float)0.031,(float)0.6);
 		
-		//Danger Style
+		// Danger Style
 		_dangerStyle.BorderWidthBottom = 2;
 		_dangerStyle.BorderWidthRight = 2;
 		_dangerStyle.BorderWidthLeft = 2;
@@ -90,13 +94,18 @@ public partial class GlobalStyles : Node
 		_dangerStyle.BgColor = _highColor5;
 		
 		
-		// Zerbra rows
+		// Zebra rows
 		_evenRowStyle = new StyleBoxFlat();
 		_evenRowStyle.BgColor = new Color(0.4f, 0.4f, 0.4f, 0.05f); // Soft lightening
 		
 		_oddRowStyle = new StyleBoxFlat();
 		_oddRowStyle.BgColor = new Color(0f, 0f, 0f, 0.05f); // Soft darkening
-
+		
+		/*// Scan for existing Labels at startup
+		ScanForLabels(GetTree().Root);
+				
+		// Listen for new nodes added dynamically
+		GetTree().NodeAdded += OnNodeAdded;*/
 	}
 
 
@@ -124,5 +133,59 @@ public partial class GlobalStyles : Node
 	{
 		return _oddRowStyle;
 	}
+	
+	
+	/*/// <summary>
+	/// Recursively scans the scene tree for Label nodes and applies the default font color override.
+	/// </summary>
+	/// <param name="node">The starting node to scan from.</param>
+	private void ScanForLabels(Node node)
+	{
+		if (node is Label label)
+		{
+			ApplyLabelColor(label);
+		}
+
+		foreach (Node child in node.GetChildren())
+		{
+			ScanForLabels(child);
+		}
+	}
+	
+	
+	/// <summary>
+	/// Handles newly added nodes. If it's a Label, applies the default font color override.
+	/// </summary>
+	/// <param name="node">The newly added node.</param>
+	private void OnNodeAdded(Node node)
+	{
+		if (node is Label label)
+		{
+			ApplyLabelColor(label);
+		}
+	}
+
+	/// <summary>
+	/// Applies the default font color override to a Label, with error handling.
+	/// </summary>
+	/// <param name="label">The Label to modify.</param>
+	private void ApplyLabelColor(Label label)
+	{
+		try
+		{
+			if (label == null)
+			{
+				return;
+			}
+
+			label.AddThemeColorOverride("font_color", SoftFontColor);
+			GD.Print($"GlobalStyles:ApplyLabelColor - Applied color {SoftFontColor} to Label '{label.Name}' in '{label.GetPath()}'.");  // Debug print with script/function prefix //!!!
+		}
+		catch (Exception ex)
+		{
+			return;
+		}
+	}*/
+	
 	
 }

@@ -26,6 +26,7 @@ GlobalStyles="*res://src/Shared/GlobalStyles.cs"
 EventLogger="*res://src/Shared/EventLogger.cs"
 SaveManager="*res://src/Shared/SaveManager.cs"
 InputActionsListener="*res://src/Shared/InputActionsListener.cs"
+CueComponentChecker="*res://src/UI/Utilities/CueComponentChecker.cs"
 
 [display]
 

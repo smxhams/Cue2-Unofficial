@@ -2064,9 +2064,6 @@ corner_radius_bottom_left = 3
 corner_detail = 5
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_eyqo8"]
-grow_begin = -5.0
-grow_end = -5.0
-vertical = true
 
 [resource]
 default_base_scale = 1.0
@@ -2080,6 +2077,9 @@ Button/styles/hover = SubResource("StyleBoxFlat_ft43w")
 Button/styles/normal = SubResource("StyleBoxFlat_e8j8a")
 Button/styles/pressed = SubResource("StyleBoxFlat_ajrfy")
 CustomIcons/icons/Delete = SubResource("AtlasTexture_hh4k7")
+FontStyles/colors/SoftColor = Color(0, 0, 0, 1)
+FontStyles/font_sizes/ASnotherTest = 10
+FontStyles/fonts/TestOverride = null
 Fonts/font_sizes/FontSize = 10
 Fonts/fonts/large = SubResource("FontFile_52n5q")
 Fonts/fonts/normal = SubResource("FontFile_52n5q")
