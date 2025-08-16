@@ -99,10 +99,9 @@ public partial class SaveManager : Node
 		
 		// Define the full save path: /path/to/sessionName/sessionName.c2
 		string savePath = Path.Combine(sessionFolder, sessionName + ".c2");
-		GD.Print($"$\"SaveManager:SaveSession - SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
+		GD.Print($"SaveManager:SaveSession - SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
 		try
 		{
-			var json = new Json();
 			string saveJson = Json.Stringify(saveData);
 			Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(savePath, Godot.FileAccess.ModeFlags.Write, _decodepass);
 			if (file == null)

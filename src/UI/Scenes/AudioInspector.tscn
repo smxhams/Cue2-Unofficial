@@ -1,0 +1,92 @@
+[gd_scene format=3 uid="uid://c2oerlmq8wmp7"]
+
+[node name="AudioInspector" type="MarginContainer"]
+offset_right = 1157.0
+offset_bottom = 362.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
+metadata/_tab_index = 1
+
+[node name="ShellScroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ShellScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TextEdit" type="LineEdit" parent="ShellScroll/VBoxContainer"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+placeholder_text = "Command Line"
+
+[node name="ShellVBox" type="HBoxContainer" parent="ShellScroll/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ShellRow1" type="VBoxContainer" parent="ShellScroll/VBoxContainer/ShellVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.4
+
+[node name="GridContainer" type="GridContainer" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow1"]
+layout_mode = 2
+columns = 2
+
+[node name="ParentCueLabel" type="Label" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow1/GridContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="VSeparator" type="VSeparator" parent="ShellScroll/VBoxContainer/ShellVBox"]
+layout_mode = 2
+
+[node name="ShellRow2" type="VBoxContainer" parent="ShellScroll/VBoxContainer/ShellVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GridContainer" type="GridContainer" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow2"]
+layout_mode = 2
+columns = 2
+
+[node name="ButtonSelectFile" type="Button" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
+layout_mode = 2
+text = "Select File"
+
+[node name="fileURL" type="LineEdit" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "URL (Can drag and drop files here)"
+
+[node name="Label" type="Label" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
+layout_mode = 2
+text = "Patch:"
+
+[node name="OptionButton" type="OptionButton" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer"]
+layout_mode = 2
+item_count = 1
+popup/item_0/text = "Unpatched"
+popup/item_0/id = 0
+
+[node name="VSeparator2" type="VSeparator" parent="ShellScroll/VBoxContainer/ShellVBox"]
+layout_mode = 2
+
+[node name="ShellRow3" type="VBoxContainer" parent="ShellScroll/VBoxContainer/ShellVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+size_flags_stretch_ratio = 0.21
+
+[node name="HBoxContainer" type="HBoxContainer" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+layout_mode = 2
+
+[node name="cueId" type="Label" parent="ShellScroll/VBoxContainer/ShellVBox/ShellRow3"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[connection signal="pressed" from="ShellScroll/VBoxContainer/ShellVBox/ShellRow2/GridContainer/ButtonSelectFile" to="." method="_on_button_select_file_pressed"]
