@@ -28,6 +28,9 @@ public class AudioComponent : ICueComponent
     public string AudioFile { get; set; }
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
+
+    public double Duration { get; set; } = 0.0;
+    public double FileDuration { get; set; } = 0.0;
     public double Volume { get; set; } = 1.0f;
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
@@ -40,6 +43,8 @@ public class AudioComponent : ICueComponent
         data.Add("AudioFile", AudioFile);
         data.Add("StartTime", StartTime);
         data.Add("EndTime", EndTime);
+        data.Add("Duration", Duration);
+        data.Add("FileDuration", FileDuration);
         data.Add("Loop", Loop);
         data.Add("Volume", Volume);
         data.Add("PlayCount", PlayCount);
@@ -57,6 +62,8 @@ public class AudioComponent : ICueComponent
         AudioFile = (string)data["AudioFile"];
         StartTime = data.ContainsKey("StartTime") ? (double)data["StartTime"] : 0.0;
         EndTime = data.ContainsKey("EndTime") ? (double)data["EndTime"] : -1.0;
+        Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
+        FileDuration = data.ContainsKey("FileDuration") ? (double)data["FileDuration"] : 0.0;
         Loop = data.ContainsKey("Loop") ? (bool)data["Loop"] : false;
         Volume = data.ContainsKey("Volume") ? (float)data["Volume"] : 1.0f;
         PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
@@ -250,10 +257,11 @@ public class Cue : ICue
     }
     
     // Methods to add components dynamically
-    public void AddAudioComponent(string audioFile, AudioOutputPatch patch = null)
+    public AudioComponent AddAudioComponent(string audioFile, AudioOutputPatch patch = null)
     {
         var audioComp = new AudioComponent { AudioFile = audioFile, Patch = patch };
         Components.Add(audioComp);
+        return audioComp;
     }
 
     public void AddVideoComponent(string videoFile, GlobalSignals globalSignals)

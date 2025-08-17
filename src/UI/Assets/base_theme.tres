@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=34 format=4 uid="uid://vidokm2ilwtk"]
+[gd_resource type="Theme" load_steps=39 format=4 uid="uid://vidokm2ilwtk"]
 
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="1_hh4k7"]
 [ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_vt8rd"]
@@ -6,6 +6,22 @@
 [sub_resource type="AtlasTexture" id="AtlasTexture_jxm3t"]
 atlas = ExtResource("1_hh4k7")
 region = Rect2(0, 96, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w6urt"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(160, 64, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mvudg"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(192, 64, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p8lwo"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(128, 64, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wu7sp"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(96, 64, 32, 32)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_fd6x7"]
 atlas = ExtResource("1_hh4k7")
@@ -1923,7 +1939,10 @@ cache/0/25/0/kerning_overrides/1/0 = Vector2(0, 0)
 cache/0/25/0/kerning_overrides/10/0 = Vector2(0, 0)
 cache/0/25/0/kerning_overrides/25/0 = Vector2(0, 0)
 
-[sub_resource type="StyleBoxLine" id="StyleBoxLine_u5j3t"]
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_fd6x7"]
+color = Color(0.45098, 0.45098, 0.45098, 0.458824)
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_hh4k7"]
 
 [sub_resource type="StyleBoxLine" id="StyleBoxLine_fcguj"]
 color = Color(1, 1, 1, 0.129412)
@@ -1938,11 +1957,9 @@ content_margin_right = 4.0
 content_margin_bottom = 4.0
 bg_color = Color(1, 1, 1, 0.75)
 draw_center = false
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
-corner_detail = 5
+border_width_top = 1
+border_width_bottom = 1
+corner_detail = 1
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_v8fuq"]
 content_margin_left = 4.0
@@ -2068,7 +2085,12 @@ corner_detail = 5
 [resource]
 default_base_scale = 1.0
 default_font_size = 10
+AtlasIcons/base_type = &"Button"
 AtlasIcons/icons/DeleteBin = SubResource("AtlasTexture_jxm3t")
+AtlasIcons/icons/Down = SubResource("AtlasTexture_w6urt")
+AtlasIcons/icons/Left = SubResource("AtlasTexture_mvudg")
+AtlasIcons/icons/Right = SubResource("AtlasTexture_p8lwo")
+AtlasIcons/icons/Up = SubResource("AtlasTexture_wu7sp")
 Button/colors/icon_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
 Button/icons/Delete = SubResource("AtlasTexture_fd6x7")
 Button/styles/disabled = SubResource("StyleBoxFlat_fcguj")
@@ -2076,6 +2098,7 @@ Button/styles/focus = SubResource("StyleBoxFlat_tojog")
 Button/styles/hover = SubResource("StyleBoxFlat_ft43w")
 Button/styles/normal = SubResource("StyleBoxFlat_e8j8a")
 Button/styles/pressed = SubResource("StyleBoxFlat_ajrfy")
+CustomIcons/base_type = &"Button"
 CustomIcons/icons/Delete = SubResource("AtlasTexture_hh4k7")
 FontStyles/colors/SoftColor = Color(0, 0, 0, 1)
 FontStyles/font_sizes/ASnotherTest = 10
@@ -2083,7 +2106,9 @@ FontStyles/fonts/TestOverride = null
 Fonts/font_sizes/FontSize = 10
 Fonts/fonts/large = SubResource("FontFile_52n5q")
 Fonts/fonts/normal = SubResource("FontFile_52n5q")
-HSeparator/styles/separator = SubResource("StyleBoxLine_u5j3t")
+HSepLight/base_type = &"HSeparator"
+HSepLight/styles/separator = SubResource("StyleBoxLine_fd6x7")
+HSeparator/styles/separator = SubResource("StyleBoxLine_hh4k7")
 HSplitContainer/constants/autohide = 0
 HSplitContainer/styles/split_bar_background = SubResource("StyleBoxLine_fcguj")
 LineEdit/colors/selection_color = Color(0.00392157, 0.231373, 0.25098, 1)

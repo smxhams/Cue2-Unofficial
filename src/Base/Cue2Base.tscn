@@ -2367,6 +2367,7 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme = ExtResource("1_0cx45")
+theme_type_variation = &"AtlasIcons"
 script = ExtResource("2_5r320")
 
 [node name="Panel" type="Panel" parent="."]
@@ -2447,7 +2448,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Shell" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2" instance=ExtResource("7_7gle1")]
+[node name="ShellInspector" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2" instance=ExtResource("7_7gle1")]
 visible = false
 clip_contents = true
 layout_mode = 2
