@@ -34,6 +34,7 @@ public class AudioComponent : ICueComponent
     public double Volume { get; set; } = 1.0f;
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
+    
     public byte[] WaveformData { get; set; } // Serialised waveform for display
 
     public Dictionary GetData()
@@ -259,16 +260,27 @@ public class Cue : ICue
     // Methods to add components dynamically
     public AudioComponent AddAudioComponent(string audioFile, AudioOutputPatch patch = null)
     {
+        if (Components.FirstOrDefault(c => c.Type == "Audio") is AudioComponent existing)
+        {
+            GD.Print($"Cue:AddAudioComponent - Audio component already exists in cue {Id}. Returning existing."); // Prefixed print //!!!
+            return existing;
+        }
         var audioComp = new AudioComponent { AudioFile = audioFile, Patch = patch };
         Components.Add(audioComp);
         return audioComp;
     }
 
-    public void AddVideoComponent(string videoFile, GlobalSignals globalSignals)
+    public VideoComponent AddVideoComponent(string videoFile, GlobalSignals globalSignals)
     {
+        if (Components.FirstOrDefault(c => c.Type == "Audio") is VideoComponent existing)
+        {
+            GD.Print($"Cue:AddVideoComponent - Video component already exists in cue {Id}. Returning existing."); // Prefixed print //!!!
+            return existing;
+        }
         var videoComp = new VideoComponent { VideoFile = videoFile };
         videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
         Components.Add(videoComp);
+        return videoComp;
     }
 
     public void AddNetworkComponent(/* params */)

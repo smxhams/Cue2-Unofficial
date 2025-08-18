@@ -23,7 +23,6 @@ public partial class GlobalData : Node
 	private SaveManager _saveManager;
 	
 	public CueList Cuelist;
-	public Playback Playback;
 	public ShellSelection ShellSelection;
 	public CueCommandInterpreter CueCommandInterpreter;
 	public Settings Settings;
@@ -65,9 +64,6 @@ public partial class GlobalData : Node
 		//if (autoloadOnStartup == true){loadShow("Last");}
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
-
-		Playback = new Playback();
-		AddChild(Playback);
 		
 		ShellSelection = new ShellSelection();
 		AddChild(ShellSelection);

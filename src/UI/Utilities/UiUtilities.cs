@@ -99,21 +99,21 @@ public partial class UiUtilities : Node
                 double fracSec = 0.0;
                 if (!string.IsNullOrEmpty(msStr))
                 {
-                    msStr = msStr.Substring(0, Math.Min(msStr.Length, 3)); // Truncate to at most 3 digits, ignoring extra //!!!
+                    msStr = msStr.Substring(0, Math.Min(msStr.Length, 3)); // Truncate to at most 3 digits, ignoring extra
                     fracSec = double.Parse("0." + msStr);
                 }
 
                 // If no colon (plain number), treat entire input as seconds
                 if (!input.Contains(":") && double.TryParse(input, out double totalSec))
                 {
-                    hour = Math.Floor(totalSec / 3600); //!!!
-                    min = Math.Floor((totalSec % 3600) / 60); //!!!
+                    hour = Math.Floor(totalSec / 3600);
+                    min = Math.Floor((totalSec % 3600) / 60);
                     sec = Math.Floor(totalSec % 60);
-                    fracSec = totalSec - Math.Floor(totalSec); // Fractional as seconds //!!!
+                    fracSec = totalSec - Math.Floor(totalSec); // Fractional as seconds
                 }
 
-                seconds = (hour * 3600) + (min * 60) + sec + fracSec; //!!!
-                labeledFormat = FormatLabeledTime(seconds); //!!! Compute labeled format
+                seconds = (hour * 3600) + (min * 60) + sec + fracSec;
+                labeledFormat = FormatLabeledTime(seconds); // Compute labeled format
                 return FormatTime(seconds);
             }
             else
@@ -133,12 +133,12 @@ public partial class UiUtilities : Node
 
     public static string FormatTime(double seconds)
     {
-        var hour = (int)Math.Floor(seconds / 3600); //!!!
-        var min = (int)Math.Floor((seconds % 3600) / 60); //!!!
+        var hour = (int)Math.Floor(seconds / 3600);
+        var min = (int)Math.Floor((seconds % 3600) / 60);
         var sec = (int)Math.Floor(seconds % 60);
         var fracSec = seconds - Math.Floor(seconds);
-        var ms = (int)Math.Round(fracSec * 1000); // Round to nearest ms //!!!
-        if (ms >= 1000) // Carry over if rounding causes overflow //!!!
+        var ms = (int)Math.Round(fracSec * 1000); // Round to nearest ms
+        if (ms >= 1000) // Carry over if rounding causes overflow
         {
             ms -= 1000;
             sec += 1;
@@ -162,14 +162,14 @@ public partial class UiUtilities : Node
         return time;
     }
 
-    private static string FormatLabeledTime(double seconds) //!!! New method for labeled format
+    private static string FormatLabeledTime(double seconds)
     {
         var hour = (int)Math.Floor(seconds / 3600);
         var min = (int)Math.Floor((seconds % 3600) / 60);
         var sec = (int)Math.Floor(seconds % 60);
         var fracSec = seconds - Math.Floor(seconds);
-        var ms = (int)Math.Round(fracSec * 1000); // Round to nearest ms //!!!
-        if (ms >= 1000) // Carry over if rounding causes overflow //!!!
+        var ms = (int)Math.Round(fracSec * 1000); // Round to nearest ms
+        if (ms >= 1000) // Carry over if rounding causes overflow
         {
             ms -= 1000;
             sec += 1;
@@ -197,7 +197,7 @@ public partial class UiUtilities : Node
     /// Converts a linear volume (0.0f to 1.0f) to decibels (dB).
     /// </summary>
     /// <param name="linear">The linear volume value (0.0f = off, 1.0f = full).</param>
-    /// <returns>The dB value (e.g., 0dB for 1.0f, -60dB for 0.0f to avoid -inf).</returns>
+    /// <returns>The dB value rouinded to one decimal place (e.g., 0dB for 1.0f, -60dB for 0.0f to avoid -inf).</returns>
     /// <remarks>
     /// Formula: 20 * log10(linear). Clamps below -60dB for practicality in UI sliders.
     /// Logs warnings for invalid input (outside 0-1 range).
@@ -213,7 +213,8 @@ public partial class UiUtilities : Node
 
         if (Mathf.IsZeroApprox(linear)) return -60f; // Avoid -inf.
         float db = 20f * MathF.Log10(linear);
-        return db;
+        float dbRounded = MathF.Round(db, 1);
+        return dbRounded;
     }
     
     /// <summary>

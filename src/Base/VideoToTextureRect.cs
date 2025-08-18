@@ -41,9 +41,11 @@ public partial class VideoToTextureRect : TextureRect
 		
 		var buffersize = VideoWidth * VideoHeight * 4;
 		_videoBuffer = new byte[buffersize];
-		var mediaPlaterState = _globalData.Playback.GetMediaPlayerState(id);
+		
+		// TODO: Replace once MediaEngine.c active
+		/*var mediaPlaterState = _globalData.Playback.GetMediaPlayerState(id);
 		mediaPlaterState.MediaPlayer.SetVideoFormatCallbacks(VideoFormat, null);
-		mediaPlaterState.MediaPlayer.SetVideoCallbacks(Lock, null, Display);
+		mediaPlaterState.MediaPlayer.SetVideoCallbacks(Lock, null, Display);*/
 		
 		//GD.Print(_globalData.VideoCanvas.);
 		

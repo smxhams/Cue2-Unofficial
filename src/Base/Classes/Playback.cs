@@ -14,6 +14,13 @@ using Timer = System.Timers.Timer;
 
 namespace Cue2.Base.Classes;
 
+/// <summary>
+///  !!!! THIS HAS BEEN MADE REDUNDANT AND TRANSITIONING TO MediaEngine.cs !!!!
+/// </summary>
+
+
+
+
 public partial class Playback : Node
 {
 	private static readonly Dictionary<int, MediaPlayerState> MediaPlayers = new Dictionary<int, MediaPlayerState>(); // (CueID, State)
@@ -35,8 +42,8 @@ public partial class Playback : Node
 	/// </summary>
 	public Playback()
 	{
-		Core.Initialize();
-		_libVLC = new LibVLC();
+		//Core.Initialize();
+		//_libVLC = new LibVLC();
 	}
 
 	public override void _Ready()

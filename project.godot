@@ -27,6 +27,7 @@ EventLogger="*res://src/Shared/EventLogger.cs"
 SaveManager="*res://src/Shared/SaveManager.cs"
 InputActionsListener="*res://src/Shared/InputActionsListener.cs"
 UiUtilities="*res://src/UI/Utilities/UiUtilities.cs"
+MediaEngine="*res://src/Shared/MediaEngine.cs"
 
 [display]
 

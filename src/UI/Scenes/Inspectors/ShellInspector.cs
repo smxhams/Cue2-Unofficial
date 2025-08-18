@@ -44,6 +44,13 @@ public partial class ShellInspector : Control
 		GetNode<Label>("%PostWaitLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
 		_cueId.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
 		_parentCueLabel.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
+		
+		_cueNum.TextChanged += _onCueNumTextChanged;
+		_cueName.TextChanged += _onCueNameTextChanged;
+		_cueNum.TextSubmitted += _ => { _cueNum.ReleaseFocus(); };
+		_cueName.TextSubmitted += _ => { _cueName.ReleaseFocus(); };
+		
+		Visible = false;
 	}
 	
 	private void ShellSelected(int cueId)
@@ -86,9 +93,10 @@ public partial class ShellInspector : Control
 		_focusedCue.CueNum = data; // Updates Cue with user input
 		var shellObj = _focusedCue.ShellBar;
 		shellObj.GetNode<LineEdit>("%CueNumber").Text = data;
+		
 	}
 	
-	private void _onShellNameTextChanged(string data)
+	private void _onCueNameTextChanged(string data)
 	{
 		_focusedCue.Name = data;
 

@@ -17,6 +17,7 @@ public partial class AudioInspector : Control
     
     private Cue _focusedCue;
     private AudioComponent _focusedAudioComponent;
+    private MediaEngine _mediaEngine;
     
     // Ui Nodes
     private Label _infoLabel;
@@ -44,8 +45,11 @@ public partial class AudioInspector : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
 		
         _globalSignals.ShellFocused += ShellSelected;
+        
+
         
         
         // Ui Node setup
@@ -59,13 +63,11 @@ public partial class AudioInspector : Control
         _patchCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
         _patchAccordian = GetNode<VBoxContainer>("%PatchAccordian");
         _patchAccordian.Visible = false;
-        _patchCollapseButton.Pressed += () => ToggleAccordian(_patchAccordian, _patchCollapseButton);
         
         _waveformCollapseButton = GetNode<Button>("%WaveformCollapseButton");
         _waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
         _waveformAccordian = GetNode<VBoxContainer>("%WaveformAccordian");
         _waveformAccordian.Visible = false;
-        _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
         
         _startTimeInput = GetNode<LineEdit>("%StartTimeInput");
         _endTimeInput = GetNode<LineEdit>("%EndTimeInput");
@@ -78,11 +80,20 @@ public partial class AudioInspector : Control
         _startTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _startTimeInput);
         _endTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _endTimeInput);
         _volumeInput.TextSubmitted += (string newText) => VolumeInputSubmitted(newText, _volumeInput);
+        _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; };
+        _playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
+        _playCountInput.TextSubmitted += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); _playCountInput.ReleaseFocus(); };
 
         FormatLabels(this);
         
         GetNode<Label>("%InfoLabel").AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
         
+        // Ensure content is hidden at start up
+        _inspectorContent.Visible = false;
+        _selectFileContainer.Visible = false;
+        
+        _patchCollapseButton.Pressed += () => ToggleAccordian(_patchAccordian, _patchCollapseButton);
+        _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
         _buttonSelectFile.Pressed += OpenFileDialog;
         
     }
@@ -103,11 +114,17 @@ public partial class AudioInspector : Control
 
     private void TimeFieldSubmitted(string text, LineEdit textField)
     {
-        GD.Print("ITS TIMEEEEEEE");
         var time = UiUtilities.ParseAndFormatTime(text, out var seconds, out var labeledTime);
         GD.Print($"Time is {time} and seconds is {seconds}");
         textField.Text = time;
         textField.TooltipText = labeledTime;
+        if (textField == _startTimeInput) _focusedAudioComponent.StartTime = seconds;
+        else if (textField == _endTimeInput) _focusedAudioComponent.EndTime = seconds;
+        
+        var durationSecs = _focusedAudioComponent.EndTime - _focusedAudioComponent.StartTime;
+        _durationValue.Text = UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+        _focusedAudioComponent.Duration = durationSecs;
+        _durationValue.TooltipText = durLabeledTime;
         textField.ReleaseFocus();
         
     }
@@ -116,8 +133,9 @@ public partial class AudioInspector : Control
     {
         var volume = UiUtilities.DbToLinear(text);
         var dbReturn = UiUtilities.LinearToDb(volume);
-        var dbReturnRounded = Math.Round(dbReturn, 1);
-        textField.Text = $"{dbReturnRounded}dB";
+        textField.Text = $"{dbReturn}dB";
+        _focusedAudioComponent.Volume = volume;
+        textField.ReleaseFocus();
     }
 
     private void ShellSelected(int cueId)
@@ -177,6 +195,13 @@ public partial class AudioInspector : Control
         GD.Print(@path + "    :    " + newPath);
         _fileUrl.Text = path;
         _focusedAudioComponent =_focusedCue.AddAudioComponent(path);
+        _inspectorContent.Visible = true;
+        var fileMetadata = _mediaEngine.GetAudioFileMetadata(path);
+        
+        _focusedAudioComponent.FileDuration = fileMetadata.TryGetValue("DurationSeconds", out var value) ? (double)value : 0.0;
+        ShellSelected(_focusedCue.Id);
+        GD.Print((double)fileMetadata["DurationSeconds"]);
+        GD.Print(_focusedAudioComponent.FileDuration);
     }
 
     private void ClearFileDialog()
