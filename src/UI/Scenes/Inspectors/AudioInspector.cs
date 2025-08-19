@@ -8,6 +8,11 @@ using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Scenes.Inspectors;
 
+
+/// <summary>
+/// Inspector UI for managing audio components in cues. Handles file selection, playback settings,
+/// and output patching. Ensures user inputs are validated and updates the underlying AudioComponent.
+/// </summary>
 public partial class AudioInspector : Control
 {
 
@@ -37,6 +42,7 @@ public partial class AudioInspector : Control
     private CheckBox _loopInput;
     private LineEdit _playCountInput;
     private LineEdit _volumeInput;
+    private OptionButton _outputOptionButton;
     
 
     private FileDialog _fileDialog;
@@ -76,6 +82,7 @@ public partial class AudioInspector : Control
         _loopInput = GetNode<CheckBox>("%LoopInput");
         _playCountInput = GetNode<LineEdit>("%PlayCountInput");
         _volumeInput = GetNode<LineEdit>("%VolumeInput");
+        _outputOptionButton = GetNode<OptionButton>("%OutputOptionButton");
         
         _startTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _startTimeInput);
         _endTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _endTimeInput);
@@ -83,7 +90,9 @@ public partial class AudioInspector : Control
         _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; };
         _playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
         _playCountInput.TextSubmitted += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); _playCountInput.ReleaseFocus(); };
-
+        _outputOptionButton.ItemSelected += OutputOptionSelected;
+        
+        
         FormatLabels(this);
         
         GetNode<Label>("%InfoLabel").AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
@@ -98,6 +107,8 @@ public partial class AudioInspector : Control
         
     }
 
+
+
     private void FormatLabels(Node root)
     {
 
@@ -109,6 +120,86 @@ public partial class AudioInspector : Control
         {
             FormatLabels(child);
         }
+    }
+    
+    private void PopulateOutputOptions()
+    {
+        // Remove items from output options
+        var itemCount = _outputOptionButton.GetItemCount();
+        for (int i = 0; i < itemCount; i++)
+        {
+            GD.Print($"i is {i} and item count is {_outputOptionButton.GetItemCount()}");
+            _outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount()-1); // Removes last item
+        }
+        // Add patches as options
+        _outputOptionButton.AddItem("No output");
+        foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+        {
+            _outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+            _outputOptionButton.SetItemMetadata(_outputOptionButton.GetItemCount()-1,patch.Value.Id);
+            if (patch.Value.Id == _focusedAudioComponent.PatchId)
+            {
+                _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
+            }
+        }
+
+        foreach (var output in _globalData.AudioDevices.GetAvailableAudioDeviceNames())
+        {
+            _outputOptionButton.AddItem($"Direct Output: {output}");
+            if (output == _focusedAudioComponent.DirectOutput)
+            {
+                _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
+            }
+        }
+
+        if (_outputOptionButton.Selected == 0 && _focusedAudioComponent.DirectOutput != null)
+        {
+            _outputOptionButton.AddItem($"!!! Missing output: {_focusedAudioComponent.DirectOutput}");
+            _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
+            
+        }
+        if (_outputOptionButton.Selected == 0 && _focusedAudioComponent.Patch != null)
+        {
+            _outputOptionButton.AddItem($"!!! Missing patch: {_focusedAudioComponent.Patch.Name}");
+            _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
+            
+        }
+    }
+    
+    private void OutputOptionSelected(long index)
+    {
+        var item = _outputOptionButton.GetItemText((int)index);
+        if (item.StartsWith("Patch"))
+        {
+            var patchName = item.Replace("Patch: ", "");
+            var patchId = (int)_outputOptionButton.GetItemMetadata((int)index);
+            //_focusedAudioComponent.Patch = _globalData.Settings.GetAudioOutputPatches()[patchName];
+            GD.Print($"Patch selected is: {patchName} with id {patchId}");
+            _focusedAudioComponent.Patch = _globalData.Settings.GetPatch(patchId);
+            _focusedAudioComponent.PatchId = patchId;
+            _focusedAudioComponent.DirectOutput = null;
+
+            GD.Print($"Patch set? {_focusedAudioComponent.Patch.Name}");
+        }
+        
+        else if (item.StartsWith("Direct Output"))
+        {
+            var dirOutName = item.Replace("Direct Output: ", "");
+            GD.Print($"Direct output selected is: {dirOutName}");
+            _focusedAudioComponent.DirectOutput = dirOutName;
+            _focusedAudioComponent.Patch = null;
+            _focusedAudioComponent.PatchId = -1;
+        }
+    }
+
+    private void SyncPatchMatrix()
+    {
+        
+    }
+
+
+    private void LoadWaveForm()
+    {
         
     }
 
@@ -171,6 +262,7 @@ public partial class AudioInspector : Control
         _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
         _volumeInput.Text = $"{volumeDb}dB";
+        PopulateOutputOptions();
 
     }
 

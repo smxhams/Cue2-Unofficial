@@ -25,6 +25,8 @@ public class AudioComponent : ICueComponent
 {
     public string Type => "Audio";
     public AudioOutputPatch Patch { get; set; }
+    public int PatchId { get; set; } = -1; // This value is used to link patch whence loaded
+    public String DirectOutput { get; set; }
     public string AudioFile { get; set; }
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
@@ -36,11 +38,13 @@ public class AudioComponent : ICueComponent
     public int PlayCount { get; set; } = 1;
     
     public byte[] WaveformData { get; set; } // Serialised waveform for display
+    
 
     public Dictionary GetData()
     {
         var data = new Dictionary();
         data.Add("PatchId", Patch?.Id ?? -1); // Reference patch by ID
+        data.Add("DirectOutput", DirectOutput);
         data.Add("AudioFile", AudioFile);
         data.Add("StartTime", StartTime);
         data.Add("EndTime", EndTime);
@@ -69,6 +73,8 @@ public class AudioComponent : ICueComponent
         Volume = data.ContainsKey("Volume") ? (float)data["Volume"] : 1.0f;
         PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
         WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
+        PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
+        DirectOutput = data.ContainsKey("DirectOutput") ? (string)data["DirectOutput"] : null;
     }
 
 }
@@ -272,7 +278,7 @@ public class Cue : ICue
 
     public VideoComponent AddVideoComponent(string videoFile, GlobalSignals globalSignals)
     {
-        if (Components.FirstOrDefault(c => c.Type == "Audio") is VideoComponent existing)
+        if (Components.FirstOrDefault(c => c.Type == "Video") is VideoComponent existing)
         {
             GD.Print($"Cue:AddVideoComponent - Video component already exists in cue {Id}. Returning existing."); // Prefixed print //!!!
             return existing;

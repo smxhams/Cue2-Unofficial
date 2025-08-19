@@ -41,7 +41,8 @@ public partial class Settings : Node
         _audioOutputPatches.Add(newPatch.Id, newPatch);
         return newPatch;
     }
-
+    
+    public AudioOutputPatch GetPatch(int patchId) => _audioOutputPatches[patchId];
 
     public void AddPatch(AudioOutputPatch patch)
     {
