@@ -1,9 +1,10 @@
+GridContainer
+VBoxContainer
 OptionButton
 CheckBox
 HBoxContainer
 LineEdit
 Label
-VBoxContainer
 HSeparator
 Button
 CollapsibleContainer
@@ -11,5 +12,3 @@ Control
 MarginContainer
 ScrollContainer
 ColorPickerButton
-GridContainer
-HSplitContainer

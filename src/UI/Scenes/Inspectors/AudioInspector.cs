@@ -1,7 +1,9 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
@@ -30,8 +32,8 @@ public partial class AudioInspector : Control
     private VBoxContainer _inspectorContent;
     private Button _buttonSelectFile;
     private LineEdit _fileUrl;
-    private Button _patchCollapseButton;
-    private VBoxContainer _patchAccordian;
+    private Button _routingCollapseButton;
+    private VBoxContainer _routingAccordian;
     private Button _waveformCollapseButton;
     private VBoxContainer _waveformAccordian;
     
@@ -44,7 +46,10 @@ public partial class AudioInspector : Control
     private LineEdit _volumeInput;
     private OptionButton _outputOptionButton;
     
-
+    // Routing matrix
+    private GridContainer _routingMatrixGrid;
+    private VBoxContainer _routingContainer;
+    
     private FileDialog _fileDialog;
     
     public override void _Ready()
@@ -65,10 +70,10 @@ public partial class AudioInspector : Control
         _buttonSelectFile = GetNode<Button>("%ButtonSelectFile");
         _fileUrl = GetNode<LineEdit>("%FileURL");
         
-        _patchCollapseButton = GetNode<Button>("%PatchCollapseButton");
-        _patchCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-        _patchAccordian = GetNode<VBoxContainer>("%PatchAccordian");
-        _patchAccordian.Visible = false;
+        _routingCollapseButton = GetNode<Button>("%RoutingCollapseButton");
+        _routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+        _routingAccordian = GetNode<VBoxContainer>("%RoutingAccordian");
+        _routingAccordian.Visible = false;
         
         _waveformCollapseButton = GetNode<Button>("%WaveformCollapseButton");
         _waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
@@ -88,9 +93,15 @@ public partial class AudioInspector : Control
         _endTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _endTimeInput);
         _volumeInput.TextSubmitted += (string newText) => VolumeInputSubmitted(newText, _volumeInput);
         _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; };
-        _playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
-        _playCountInput.TextSubmitted += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); _playCountInput.ReleaseFocus(); };
+        //_playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
+        _playCountInput.TextSubmitted+= OnPlayCountSubmitted;
         _outputOptionButton.ItemSelected += OutputOptionSelected;
+        
+        
+        
+        _routingContainer = GetNode<VBoxContainer>("%RoutingContainer");
+        _routingMatrixGrid = GetNode<GridContainer>("%RoutingMatrixGrid");
+        _routingContainer.Visible = false; // Hidden until needed.
         
         
         FormatLabels(this);
@@ -101,13 +112,101 @@ public partial class AudioInspector : Control
         _inspectorContent.Visible = false;
         _selectFileContainer.Visible = false;
         
-        _patchCollapseButton.Pressed += () => ToggleAccordian(_patchAccordian, _patchCollapseButton);
+        _routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
         _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
         _buttonSelectFile.Pressed += OpenFileDialog;
         
     }
+    
+    /// <summary>
+    /// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
+    /// </summary>
+    /// <param name="text">The submitted text.</param>
+    /// <param name="textField">The LineEdit field.</param>
+    private void TimeFieldSubmitted(string text, LineEdit textField)
+    {
+        try
+        {
+            var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out var labeledTime);
+            
+            if (time == "")
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1); // Warning log
+                return;
+            }
+            textField.Text = time;
+            textField.TooltipText = labeledTime;
+            if (textField == _startTimeInput)
+            {
+                _focusedAudioComponent.StartTime = timeSecs;
+            }
+            else if (textField == _endTimeInput)
+            {
+                _focusedAudioComponent.EndTime = timeSecs < 0 ? _focusedAudioComponent.FileDuration : timeSecs; // Handles -1 as full duration
+            }
+            
+            // Recalculate duration
+            var durationSecs = _focusedAudioComponent.EndTime < 0 
+                ? _focusedAudioComponent.FileDuration - _focusedAudioComponent.StartTime 
+                : _focusedAudioComponent.EndTime - _focusedAudioComponent.StartTime;
+            _durationValue.Text =
+                UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+                //? durLabeledTime : _durationValue.Text; // Fallback to previous if parse fails
+            _focusedAudioComponent.Duration = durationSecs;
+            _durationValue.TooltipText = durLabeledTime;
+            textField.ReleaseFocus();
+            
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing time: {ex.Message}", 2);
+        }
+    }
 
-
+    
+    /// <summary>
+    /// Handles volume input submission. Converts dB to linear, updates component, and formats display.
+    /// </summary>
+    /// <param name="text">The submitted text.</param>
+    /// <param name="textField">The LineEdit field.</param>
+    private void VolumeInputSubmitted(string text, LineEdit textField)
+    {
+        try
+        {
+            if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid volume format: {text}", 1);
+                return;
+            }
+            var volume = UiUtilities.DbToLinear(dbValue.ToString());
+            var dbReturn = UiUtilities.LinearToDb(volume);
+            textField.Text = $"{dbReturn}dB";
+            _focusedAudioComponent.Volume = volume;
+            textField.ReleaseFocus();
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing volume: {ex.Message}", 2);
+        }
+    }
+    
+    /// <summary>
+    /// Handles play count submission with validation to prevent invalid integers.
+    /// </summary>
+    /// <param name="newText">The submitted text.</param>
+    private void OnPlayCountSubmitted(string newText)
+    {
+        if (int.TryParse(newText, out var playCount) && playCount > 0)
+        {
+            _focusedAudioComponent.PlayCount = playCount;
+        }
+        else
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid play count: {newText}. Must be positive integer.", 1);
+            _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString(); // Revert to previous
+        }
+        _playCountInput.ReleaseFocus();
+    }
 
     private void FormatLabels(Node root)
     {
@@ -128,7 +227,6 @@ public partial class AudioInspector : Control
         var itemCount = _outputOptionButton.GetItemCount();
         for (int i = 0; i < itemCount; i++)
         {
-            GD.Print($"i is {i} and item count is {_outputOptionButton.GetItemCount()}");
             _outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount()-1); // Removes last item
         }
         // Add patches as options
@@ -180,6 +278,7 @@ public partial class AudioInspector : Control
             _focusedAudioComponent.DirectOutput = null;
 
             GD.Print($"Patch set? {_focusedAudioComponent.Patch.Name}");
+            BuildRoutingMatrix();
         }
         
         else if (item.StartsWith("Direct Output"))
@@ -189,52 +288,174 @@ public partial class AudioInspector : Control
             _focusedAudioComponent.DirectOutput = dirOutName;
             _focusedAudioComponent.Patch = null;
             _focusedAudioComponent.PatchId = -1;
+            BuildRoutingMatrix();
         }
     }
 
-    private void SyncPatchMatrix()
+    
+    /// <summary>
+    /// Builds the per-cue routing matrix grid based on selected output (patch or direct).
+    /// </summary>
+    private async void BuildRoutingMatrix()
     {
+        GD.Print($"Building routing matrix start");
+        foreach (var child in _routingMatrixGrid.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        if (_focusedAudioComponent == null) return;
+        await ToSignal(GetTree(), "process_frame"); // Wait a frame for exisisting chilren to fully clear.
+
+        var inputChannels = _focusedAudioComponent.ChannelCount;
+        var inputLabels = GetChannelLabels(inputChannels, isInput: true);
+
+        int outputChannels;
+        List<string> outputLabels = new List<string>();
+        if (_focusedAudioComponent.PatchId != -1)
+        {
+            var patch = _globalData.Settings.GetPatch(_focusedAudioComponent.PatchId);
+            outputChannels = patch.Channels.Count;
+            outputLabels = patch.Channels.Values.ToList();
+        }
+        else if (!string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput))
+        {
+            var device = _globalData.AudioDevices.OpenAudioDevice(_focusedAudioComponent.DirectOutput, out var _);
+            if (device == null)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Direct output device not found: {_focusedAudioComponent.DirectOutput}", 2);
+                return;
+            }
+            outputChannels = device.Channels;
+            for (int i = 0; i < outputChannels; i++)
+            {
+                outputLabels.Add($"Channel {i}");
+            }
+        }
+        else
+        {
+            GD.Print($"AudioInspector: BuildRoutingMatrix - No output");
+            return; // No output selected
+        }
         
+        // Ensure CuePatch exists or create default
+        if (_focusedAudioComponent.Routing == null)
+        {
+            _focusedAudioComponent.Routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+        }
+        
+        // Set grid columns: outputChannels + 1 (for input labels)
+        _routingMatrixGrid.Columns = outputChannels + 1;
+        
+        // Add header row: empty + output labels
+        _routingMatrixGrid.AddChild(new Label { Text = ""}); // Corner
+        foreach (var outLabel in outputLabels)
+        {
+            var label = new Label { Text = outLabel };
+            _routingMatrixGrid.AddChild(label);
+        }
+        
+        // Add rows: input label + volume fields
+        for (int row = 0; row < inputChannels; row++)
+        {
+            var inLabel = new Label { Text = inputLabels[row] };
+            _routingMatrixGrid.AddChild(inLabel);
+            
+            for (int col = 0; col < outputChannels; col++)
+            {
+                var volumeEdit = new LineEdit();
+                var linearVol = _focusedAudioComponent.Routing.GetVolume(row, col);
+                if (linearVol > 0.0f)
+                {
+                    var dbVol = UiUtilities.LinearToDb(linearVol);
+                    volumeEdit.Text = $"{dbVol}dB";
+                }
+
+                var row1 = row;
+                var col1 = col;
+                volumeEdit.TextSubmitted += (string newText) => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
+                _routingMatrixGrid.AddChild(volumeEdit);
+            }
+        }
+        _routingContainer.Visible = true;
+
     }
 
+    /// <summary>
+    /// Handles matrix volume submission. Converts dB to linear and updates CuePatch.
+    /// </summary>
+    /// <param name="text">Submitted text.</param>
+    /// <param name="textField">LineEdit field.</param>
+    /// <param name="inputCh">Input channel index.</param>
+    /// <param name="outputCh">Output channel index.</param>
+    private void OnMatrixVolumeSubmitted(string text, LineEdit textField, int inputCh, int outputCh)
+    {
+        GD.Print($"In {inputCh}. Out {outputCh}");
+        try
+        {
+            if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid matrix volume: {text}", 1);
+                return;
+            }
+
+            var linear = UiUtilities.DbToLinear(dbValue.ToString());
+            _focusedAudioComponent.Routing.SetVolume(inputCh, outputCh, linear);
+            var dbReturn = UiUtilities.LinearToDb(linear);
+            textField.Text = $"{dbReturn}dB";
+            textField.ReleaseFocus();
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OnMatrixVolumeSubmitted - Error: {ex.Message}", 2);
+        } 
+    }
+
+
+
+    /// <summary>
+    /// Gets standard channel labels based on count. For inputs (audio file) or outputs (patch/device).
+    /// </summary>
+    /// <param name="count">Number of channels.</param>
+    /// <param name="isInput">True for input labels.</param>
+    /// <returns>List of labels.</returns>
+    private List<string> GetChannelLabels(int count, bool isInput) // New helper //!!!
+    {
+        return count switch
+        {
+            1 => new List<string> { "Mono" },
+            2 => new List<string> { "Left", "Right" },
+            4 => new List<string> { "Front Left", "Front Right", "Rear Left", "Rear Right" }, // Quad
+            6 => new List<string> { "Front Left", "Front Right", "Center", "LFE", "Surround Left", "Surround Right" }, // 5.1
+            8 => new List<string> { "Front Left", "Front Right", "Center", "LFE", "Surround Left", "Surround Right", "Surround Back Left", "Surround Back Right" }, // 7.1
+            _ => Enumerable.Range(1, count).Select(i => $"Ch {i}").ToList() // Fallback for others
+        };
+    }
 
     private void LoadWaveForm()
     {
         
     }
 
-    private void TimeFieldSubmitted(string text, LineEdit textField)
-    {
-        var time = UiUtilities.ParseAndFormatTime(text, out var seconds, out var labeledTime);
-        GD.Print($"Time is {time} and seconds is {seconds}");
-        textField.Text = time;
-        textField.TooltipText = labeledTime;
-        if (textField == _startTimeInput) _focusedAudioComponent.StartTime = seconds;
-        else if (textField == _endTimeInput) _focusedAudioComponent.EndTime = seconds;
-        
-        var durationSecs = _focusedAudioComponent.EndTime - _focusedAudioComponent.StartTime;
-        _durationValue.Text = UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
-        _focusedAudioComponent.Duration = durationSecs;
-        _durationValue.TooltipText = durLabeledTime;
-        textField.ReleaseFocus();
-        
-    }
     
-    private void VolumeInputSubmitted(string text, LineEdit textField)
-    {
-        var volume = UiUtilities.DbToLinear(text);
-        var dbReturn = UiUtilities.LinearToDb(volume);
-        textField.Text = $"{dbReturn}dB";
-        _focusedAudioComponent.Volume = volume;
-        textField.ReleaseFocus();
-    }
+    
 
+    /// <summary>
+    /// Called when a cue shell is selected. Updates UI based on presence of AudioComponent.
+    /// </summary>
+    /// <param name="cueId">The ID of the selected cue.</param>
     private void ShellSelected(int cueId)
     {
         _focusedCue = CueList.FetchCueFromId(cueId);
+
+        if (_focusedCue == null)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio Inspector: Cue with ID {cueId} not found.", 2);
+            return;
+        }
         
-        var checker = UiUtilities.HasComponent<AudioComponent>(_focusedCue);
-        if (!checker) // No Audio component in Cue
+        var hasAudio = UiUtilities.HasComponent<AudioComponent>(_focusedCue);
+        if (!hasAudio) // No Audio component in Cue
         {
             _infoLabel.Text = $"No Audio File";
             _selectFileContainer.Visible = true;
@@ -251,9 +472,9 @@ public partial class AudioInspector : Control
         _fileUrl.Text = file;
         _infoLabel.Text = "";
         _inspectorContent.Visible = true;
-        
-        
-        _startTimeInput.Text = UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out var startTip);
+
+        _startTimeInput.Text =
+            UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out var startTip);
         _startTimeInput.TooltipText = startTip;
         _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
         _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
@@ -263,9 +484,12 @@ public partial class AudioInspector : Control
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
         _volumeInput.Text = $"{volumeDb}dB";
         PopulateOutputOptions();
-
+        BuildRoutingMatrix();
     }
 
+    /// <summary>
+    /// Opens a file dialog for selecting an audio file.
+    /// </summary>
     private void OpenFileDialog()
     {
         _fileDialog = new FileDialog();
@@ -280,28 +504,46 @@ public partial class AudioInspector : Control
         _fileDialog.Canceled += ClearFileDialog;
     }
 
-    private void FileSelected(string path)
+    /// <summary>
+    /// Handles file selection from dialog. Adds AudioComponent, fetches metadata asynchronously if possible.
+    /// </summary>
+    /// <param name="path">The selected file path.</param>
+    private async void FileSelected(string path)
     {
         ClearFileDialog();
-        var newPath = Path.Combine("res://Files/", Path.GetFileName(@path));
-        GD.Print(@path + "    :    " + newPath);
+        if (!File.Exists(path))
+        {
+            GD.Print($"Audio Inspector: Selected audio file not found: {path}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio Inspector: Selected audio file not found: {path}", 2);
+            return;
+        }
+        
         _fileUrl.Text = path;
         _focusedAudioComponent =_focusedCue.AddAudioComponent(path);
         _inspectorContent.Visible = true;
-        var fileMetadata = _mediaEngine.GetAudioFileMetadata(path);
         
+        // Fetch metadata asynchronously to avoid UI blocking
+        var fileMetadata = await Task.Run(() => _mediaEngine.GetAudioFileMetadata(path));
         _focusedAudioComponent.FileDuration = fileMetadata.TryGetValue("DurationSeconds", out var value) ? (double)value : 0.0;
+        _focusedAudioComponent.ChannelCount = fileMetadata.TryGetValue("Channels", out value) ? (int)value : 0;
         ShellSelected(_focusedCue.Id);
-        GD.Print((double)fileMetadata["DurationSeconds"]);
-        GD.Print(_focusedAudioComponent.FileDuration);
+        GD.Print($"AudioInspector:FileSelected - File duration (seconds): {_focusedAudioComponent.FileDuration}");
     }
 
+    /// <summary>
+    /// Clears the file dialog instance.
+    /// </summary>
     private void ClearFileDialog()
     {
         _fileDialog.QueueFree();
         _fileDialog = null;
     }
     
+    /// <summary>
+    /// Toggles visibility of an accordion container and updates button icon.
+    /// </summary>
+    /// <param name="accordian">The VBoxContainer to toggle.</param>
+    /// <param name="button">The Button controlling the toggle.</param>
     private void ToggleAccordian(VBoxContainer accordian, Button button)
     {
         accordian.Visible = !accordian.Visible;

@@ -199,6 +199,7 @@ public partial class SaveManager : Node
 			_globalData.SessionPath = Path.GetDirectoryName(path);
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Session loaded successfully.", 0);
 			LoadSession(data);
+			LinkAudioPatches();
 		}
 		catch (Exception ex)
 		{
@@ -282,6 +283,35 @@ public partial class SaveManager : Node
 			}
 		}
 		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end
+	}
+
+	/// <summary>
+	/// This is a temporary solution to link patches to audio components.
+	/// Currently needed because of load ordering. 
+	/// </summary>
+	private void LinkAudioPatches()
+	{
+		var patches = _globalData.Settings.GetAudioOutputPatches();
+		foreach (var cueObj in _globalData.Cuelist.Cuelist)
+		{
+			var cue = (Cue)cueObj;
+			foreach (var component in cue.Components)
+			{
+				if (component is AudioComponent audioComponent)
+				{
+					if (patches.TryGetValue(audioComponent.PatchId, out var patch))
+					{
+						audioComponent.Patch = patch;
+						audioComponent.Patch = patches[audioComponent.PatchId];
+						GD.Print($"SaveManager:LinkAudioPatches - Linked patch {audioComponent.PatchId} to audio component in cue {cue.Id}");
+					}
+					else
+					{
+						_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Patch {audioComponent.PatchId} not found for audio component in cue {cue.Id}", 2); //!!!
+					}
+				}
+			}
+		}
 	}
 
 	private bool FolderCreator(string folderPath)

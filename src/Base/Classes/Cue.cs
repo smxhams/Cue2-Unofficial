@@ -36,7 +36,11 @@ public class AudioComponent : ICueComponent
     public double Volume { get; set; } = 1.0f;
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
-    
+
+    public int ChannelCount { get; set; } = 2; // Default stereo, set from metadata
+
+    public CuePatch Routing { get; set; }
+
     public byte[] WaveformData { get; set; } // Serialised waveform for display
     
 
@@ -53,7 +57,13 @@ public class AudioComponent : ICueComponent
         data.Add("Loop", Loop);
         data.Add("Volume", Volume);
         data.Add("PlayCount", PlayCount);
+        data.Add("ChannelCount", ChannelCount);
+        if (Routing != null)
+        {
+            data.Add("Routing", Routing.GetData());
+        }
         data.Add("WaveformData", WaveformData);
+        
         return data;
     }
 
@@ -74,6 +84,12 @@ public class AudioComponent : ICueComponent
         PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
         WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
         PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
+        ChannelCount = data.ContainsKey("ChannelCount") ? (int)data["ChannelCount"] : 2;
+        if (data.ContainsKey("Routing"))
+        {
+            Routing = new CuePatch();
+            Routing.LoadFromData((Dictionary)data["Routing"]);
+        }
         DirectOutput = data.ContainsKey("DirectOutput") ? (string)data["DirectOutput"] : null;
     }
 
@@ -118,37 +134,6 @@ public class VideoComponent : ICueComponent
         {
             EmbeddedAudio = new AudioComponent();
             EmbeddedAudio.LoadFromData((Dictionary)data["EmbeddedAudio"]);
-        }
-    }
-    
-    
-    public void ExtractAudioIfPresent(string filePath, GlobalSignals globalSignals)
-    {
-        try
-        {
-            using var libVLC = new LibVLCSharp.Shared.LibVLC();
-            using var media = new LibVLCSharp.Shared.Media(libVLC, filePath);
-            media.Parse(); // Parse media metadata
-
-            if (media.Tracks.Any(t => t.TrackType == TrackType.Audio))
-            {
-                HasAudio = true;
-                EmbeddedAudio = new AudioComponent
-                {
-                    AudioFile = filePath // Reuse video file for audio extraction
-                    // Inherit other defaults or analyze further if needed
-                };
-                globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio track detected in video: {filePath}", 0);
-            }
-            else
-            {
-                HasAudio = false;
-                globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"No audio in video: {filePath}", 0);
-            }
-        }
-        catch (Exception ex)
-        {
-            globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error checking video audio: {ex.Message}", 2);
         }
     }
     
@@ -284,7 +269,7 @@ public class Cue : ICue
             return existing;
         }
         var videoComp = new VideoComponent { VideoFile = videoFile };
-        videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
+        //videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
         Components.Add(videoComp);
         return videoComp;
     }

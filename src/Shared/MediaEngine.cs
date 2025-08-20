@@ -72,7 +72,7 @@ public partial class MediaEngine : Node
                 var primaryAudio = audioTracks.First();
 
                 // Number of channels
-                metadata.Add("Channels", primaryAudio.Data.Audio.Channels);
+                metadata.Add("Channels", (int)primaryAudio.Data.Audio.Channels);
 
                 // Sample rate (Hz)
                 if (primaryAudio.Data.Audio.Rate > 0)

@@ -1,11 +1,3 @@
-res://src/UI/Scenes/Inspectors/AudioInspector.cs
-res://src/UI/Scenes/Inspectors/AudioInspector.tscn
-res://src/UI/Assets/base_theme.tres
-res://src/UI/Assets/GO_theme.tres
-res://src/Base/Classes/CueList.cs
-res://src/Base/VideoPlayback.gdshader
-res://src/Base/VideoTextureRectMaterial.tres
-res://src/Base/SettingsWindow.cs
 res://src/UI/Scenes/HeaderUI.cs
 res://src/Base/Classes/Settings.cs
 res://src/Base/VideoToTextureRect.cs
@@ -15,6 +7,7 @@ res://src/Shared/InputActionsListener.cs
 res://src/Base/Preview.cs
 res://src/Shared/MediaEngine.cs
 res://src/Base/SaveDialog.cs
+res://src/Base/Classes/CueList.cs
 res://src/Base/Cue2Base.cs
 res://src/UI/Scenes/ActiveCueBar.cs
 res://src/Base/Settings/PatchMatrixDeviceOutputHeader.cs
@@ -22,6 +15,7 @@ res://src/UI/Scenes/ActiveCueContainer.cs
 res://src/Base/Classes/ShellSelection.cs
 res://src/Base/Devices.cs
 res://src/launcher/LauncherHandles.cs
+res://src/UI/Scenes/Inspectors/AudioInspector.cs
 res://src/Shared/GlobalData.cs
 res://src/UI/Utilities/UiUtilities.cs
 res://src/Shared/EventLogger.cs
@@ -35,6 +29,7 @@ res://src/Base/CommandInterpreter/CueCommandWriter.cs
 res://src/UI/Scenes/ButtonStyles.cs
 res://src/Base/ShellBar.cs
 res://src/Base/OpenDialog.cs
+res://src/Base/SettingsWindow.cs
 res://src/UI/Scenes/SubWindowHandles.cs
 res://src/Base/Settings/AudioOutputPatchMatrix.cs
 res://src/Shared/GlobalSignals.cs
@@ -51,4 +46,8 @@ res://src/Base/Classes/MediaPlayerState.cs
 res://src/Base/Minor/CurrentTime.cs
 res://src/UI/Scenes/ActiveCueProgressBar.cs
 res://src/Base/Settings/DeviceOutputPatchMatrix.cs
-res://src/Base/Cue2Base.tscn
+res://src/UI/Scenes/Inspectors/AudioInspector.tscn
+res://src/UI/Assets/base_theme.tres
+res://src/UI/Assets/GO_theme.tres
+res://src/Base/VideoPlayback.gdshader
+res://src/Base/VideoTextureRectMaterial.tres

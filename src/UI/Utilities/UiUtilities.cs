@@ -79,10 +79,8 @@ public partial class UiUtilities : Node
 
         try
         {
-            GD.Print($"Input to format: {input}");
             // Normalize input: remove any non-numeric/colon/dot characters, handle flexible formats
             input = Regex.Replace(input, @"[^0-9:.]", "");
-            GD.Print($"Post strip input: {input}");
 
             // minute:second.milisecond
             var regex = new Regex(@"^(?:(\d+):)?(?:(\d+):)?(?:(\d+)(?:\.(\d+))?)?$");
@@ -241,7 +239,7 @@ public partial class UiUtilities : Node
 
             if (!float.TryParse(cleaned, out float db))
             {
-                throw new FormatException("Invalid numeric format after cleaning.");
+                throw new FormatException("Invalid numeric format after parsing.");
             }
 
             if (db <= -60f)
