@@ -12,6 +12,9 @@ public partial class Settings : Node
 
     public float UiScale = 1.0f;
     public float GoScale = 1.0f;
+    
+    public int WaveformResolution = 4096;
+    
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");

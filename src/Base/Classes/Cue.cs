@@ -62,7 +62,7 @@ public class AudioComponent : ICueComponent
         {
             data.Add("Routing", Routing.GetData());
         }
-        data.Add("WaveformData", WaveformData);
+        data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
         
         return data;
     }

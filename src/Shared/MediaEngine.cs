@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Godot;
 using LibVLCSharp.Shared;
+using NAudio.Wave;
 
 namespace Cue2.Shared;
 
@@ -15,6 +19,7 @@ public partial class MediaEngine : Node
 {
     private static LibVLC _libVlc;
     private GlobalSignals _globalSignals;
+
     
     // Cache for preloaded media to reduce load times
     private Dictionary<string, Media> _preloadedMedia = new Dictionary<string, Media>(); // Dictionary of type system (not Godot)
@@ -22,6 +27,7 @@ public partial class MediaEngine : Node
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        
         try
         {
             // Initialize single LibVLC instance with options (e.g., logging, hardware accel)
@@ -38,6 +44,7 @@ public partial class MediaEngine : Node
             GD.PrintErr($"MediaEngine:_Ready - Initialization error: {ex.Message}");
             // Fallback: Disable VLC features or notify user
         }
+        
     }
     
     /// <summary>
@@ -116,5 +123,112 @@ public partial class MediaEngine : Node
 
         return metadata;
     }
+
+    /// <summary>
+    /// Generates waveform data (min/max per bin) from audio file asynchronously using NAudio.
+    /// </summary>
+    /// <param name="path">Audio file path.</param>
+    /// <param name="binCount">Number of bins for resolution (e.g., 4096).</param>
+    /// <param name="subsampleFactor">Factor to skip samples for speedup (1 = exact, >1 = approx).</param>
+    /// <returns>Byte array of interleaved min/max floats.</returns>
+    public async Task<byte[]> GenerateWaveformAsync(string path, int binCount = 4096, int subsampleFactor = 1)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - File not found: {path}", 2);
+                return Array.Empty<byte>();
+            }
+
+            return await Task.Run(() => // Off-main thread for UI
+            {
+                using var reader = new AudioFileReader(path); // Handles WAV, MP3, etc.
+                int channels = reader.WaveFormat.Channels;
+                long totalSamples = reader.Length / (reader.WaveFormat.BitsPerSample / 8); // Raw samples
+                long monoSamples = totalSamples / channels;
+
+                if (monoSamples <= 0)
+                {
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Invalid samples for {path}", 2);
+                    return Array.Empty<byte>();
+                }
+
+                long effectiveSamples = monoSamples / subsampleFactor;
+                long binSize = effectiveSamples / binCount;
+                if (binSize < 1) binSize = 1;
+
+                var minMaxPerBin = new float[binCount * 2];
+                for (int i = 0; i < binCount; i++)
+                {
+                    minMaxPerBin[i * 2] = float.MaxValue; // min
+                    minMaxPerBin[i * 2 + 1] = float.MinValue; // max
+                }
+
+                var buffer = new float[channels * 4096]; // Chunk read buffer
+                long currentMono = 0;
+                int read;
+
+                while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    for (int i = 0; i < read; i += channels * subsampleFactor) // Subsample skip
+                    {
+                        if (i + channels > read) break; // Bound
+
+                        float mono = 0f;
+                        for (int ch = 0; ch < channels; ch++)
+                        {
+                            mono += buffer[i + ch]; // Already [-1,1] from AudioFileReader
+                        }
+                        mono /= channels;
+
+                        int binIdx = (int)(currentMono / binSize);
+                        if (binIdx < binCount)
+                        {
+                            float currentMin = minMaxPerBin[binIdx * 2];
+                            float currentMax = minMaxPerBin[binIdx * 2 + 1];
+                            if (mono < currentMin) minMaxPerBin[binIdx * 2] = mono;
+                            if (mono > currentMax) minMaxPerBin[binIdx * 2 + 1] = mono;
+                        }
+
+                        currentMono++;
+                    }
+                }
+
+                // Fill unfilled bins
+                for (int i = 0; i < binCount; i++)
+                {
+                    // ReSharper disable once CompareOfFloatsByEqualityOperator
+                    if (minMaxPerBin[i * 2] == float.MaxValue)
+                    {
+                        minMaxPerBin[i * 2] = 0f;
+                        minMaxPerBin[i * 2 + 1] = 0f;
+                    }
+                }
+
+                // Serialize to byte[]
+                byte[] byteArray = new byte[minMaxPerBin.Length * sizeof(float)];
+                Buffer.BlockCopy(minMaxPerBin, 0, byteArray, 0, byteArray.Length);
+
+                return byteArray;
+            });
+        }
+        catch (DllNotFoundException ex) // Specific for missing codecs/DLLs
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Missing codec or DLL for {path}: {ex.Message}. Ensure OS supports the format.", 2); //!!!
+            return Array.Empty<byte>();
+        }
+        catch (InvalidOperationException ex) // Common for unsupported formats
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Unsupported format or codec issue for {path}: {ex.Message}. Try converting the file.", 2); //!!!
+            return Array.Empty<byte>();
+        }
+        catch (Exception ex) // General fallback
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Error generating waveform for {path}: {ex.Message}", 2);
+            return Array.Empty<byte>();
+        }
+    }
+
 
 }
