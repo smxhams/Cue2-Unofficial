@@ -131,7 +131,7 @@ public partial class MediaEngine : Node
     /// <param name="binCount">Number of bins for resolution (e.g., 4096).</param>
     /// <param name="subsampleFactor">Factor to skip samples for speedup (1 = exact, >1 = approx).</param>
     /// <returns>Byte array of interleaved min/max floats.</returns>
-    public async Task<byte[]> GenerateWaveformAsync(string path, int binCount = 4096, int subsampleFactor = 1)
+    public async Task<byte[]> GenerateWaveformAsync(string path, int binCount = 4096)
     {
         try
         {
@@ -143,7 +143,7 @@ public partial class MediaEngine : Node
 
             return await Task.Run(() => // Off-main thread for UI
             {
-                using var reader = new AudioFileReader(path); // Handles WAV, MP3, etc.
+                using var reader = new AudioFileReader(path); // This is NAudio library at the moment
                 int channels = reader.WaveFormat.Channels;
                 long totalSamples = reader.Length / (reader.WaveFormat.BitsPerSample / 8); // Raw samples
                 long monoSamples = totalSamples / channels;
@@ -154,8 +154,7 @@ public partial class MediaEngine : Node
                     return Array.Empty<byte>();
                 }
 
-                long effectiveSamples = monoSamples / subsampleFactor;
-                long binSize = effectiveSamples / binCount;
+                long binSize = monoSamples / binCount;
                 if (binSize < 1) binSize = 1;
 
                 var minMaxPerBin = new float[binCount * 2];
@@ -171,7 +170,7 @@ public partial class MediaEngine : Node
 
                 while ((read = reader.Read(buffer, 0, buffer.Length)) > 0)
                 {
-                    for (int i = 0; i < read; i += channels * subsampleFactor) // Subsample skip
+                    for (int i = 0; i < read; i += channels)
                     {
                         if (i + channels > read) break; // Bound
 
@@ -204,7 +203,7 @@ public partial class MediaEngine : Node
                         minMaxPerBin[i * 2] = 0f;
                         minMaxPerBin[i * 2 + 1] = 0f;
                     }
-                }
+                } 
 
                 // Serialize to byte[]
                 byte[] byteArray = new byte[minMaxPerBin.Length * sizeof(float)];

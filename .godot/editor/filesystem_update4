@@ -1,3 +1,4 @@
+res://src/Shared/MediaEngine.cs
 res://src/UI/Scenes/HeaderUI.cs
 res://src/Base/Classes/Settings.cs
 res://src/Base/VideoToTextureRect.cs
@@ -5,7 +6,6 @@ res://src/Base/Minor/BottomRightContainer.cs
 res://src/Base/Classes/Playback.cs
 res://src/Shared/InputActionsListener.cs
 res://src/Base/Preview.cs
-res://src/Shared/MediaEngine.cs
 res://src/Base/SaveDialog.cs
 res://src/Base/Classes/CueList.cs
 res://src/Base/Cue2Base.cs

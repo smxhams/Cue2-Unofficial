@@ -56,8 +56,8 @@ public partial class AudioInspector : Control
     private Line2D _waveformLineLeftGrey;
     private Line2D _waveformLineMiddleColor;
     private Line2D _waveformLineRightGrey;
-    private Control _startDragHandle; // Draggable for start 
-    private Control _endDragHandle; // Draggable for end 
+    private Button _startDragHandle; // Draggable for start 
+    private VSeparator _endDragHandle; // Draggable for end 
     private HBoxContainer _timeBar;
     private HSlider _zoomSlider;
     private float _zoomFactor = 1.0f; // 1.0 = full view
@@ -112,13 +112,11 @@ public partial class AudioInspector : Control
         _waveformLineLeftGrey = new Line2D { DefaultColor = GlobalStyles.LowColor4, Width = 1.0f };
         _waveformLineMiddleColor = new Line2D { DefaultColor = GlobalStyles.HighColor1, Width = 1.0f };
         _waveformLineRightGrey = new Line2D { DefaultColor = GlobalStyles.LowColor4, Width = 1.0f };
-        _startDragHandle = new Control { CustomMinimumSize = new Vector2(4, 0), Modulate = Colors.Green }; // Thin draggable
-        _endDragHandle = new Control { CustomMinimumSize = new Vector2(4, 0), Modulate = Colors.Red }; 
+        _startDragHandle = GetNode<Button>("%StartDragHandle");
+        _endDragHandle = GetNode<VSeparator>("%EndDragHandle");
         _waveformPanel.AddChild(_waveformLineLeftGrey);
         _waveformPanel.AddChild(_waveformLineMiddleColor);
         _waveformPanel.AddChild(_waveformLineRightGrey);
-        _waveformPanel.AddChild(_startDragHandle);
-        _waveformPanel.AddChild(_endDragHandle);
 
         _timeBar = GetNode<HBoxContainer>("%TimeBar");
         _zoomSlider = GetNode<HSlider>("%ZoomSlider");
@@ -524,6 +522,7 @@ public partial class AudioInspector : Control
         
         if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0) // Check cache
         {
+            GD.Print($"AudioInspector:ShellSelected - No waveform found");
             try
             {
                 _focusedAudioComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
@@ -670,18 +669,20 @@ public partial class AudioInspector : Control
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
                 _isDraggingStart = mouseButton.Pressed;
-                _dragStartX = mouseButton.Position.X; //!!!
+                _dragStartX = mouseButton.Position.X;
             }
         }
         else if (@event is InputEventMouseMotion mouseMotion && _isDraggingStart)
         {
             float deltaX = mouseMotion.Position.X - _dragStartX;
             float newX = _startDragHandle.Position.X + deltaX;
-            newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound //!!!
-            float normX = (newX + _waveformScroll.ScrollHorizontal) / (_waveformPanel.Size.X); // Account scroll //!!!
+            newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
+            float normX = (newX + _waveformScroll.ScrollHorizontal) / (_waveformPanel.Size.X); // Account scroll
             _focusedAudioComponent.StartTime = normX * _focusedAudioComponent.FileDuration;
             UpdateWaveformDisplay(); // Refresh
-            _dragStartX = mouseMotion.Position.X; // Update for smooth //!!!
+            _dragStartX = mouseMotion.Position.X; // Update for smooth
+            _startDragHandle.SetPosition(new Vector2(_dragStartX, _startDragHandle.Position.Y)); // Update info
+            
         }
     }
 
