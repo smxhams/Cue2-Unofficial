@@ -1,31 +1,20 @@
-[gd_scene load_steps=4 format=3 uid="uid://dt7rlfag7yr2c"]
-
-[ext_resource type="Script" uid="uid://dbuleicnaxcs4" path="res://src/UI/Scenes/ActiveCueBar.cs" id="1_yj65f"]
-[ext_resource type="Script" uid="uid://5cr30d8rmy3b" path="res://src/UI/Scenes/ActiveCueProgressBar.cs" id="2_jnntm"]
+[gd_scene load_steps=2 format=3 uid="uid://dt7rlfag7yr2c"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_usfis"]
 bg_color = Color(0.592157, 0.294118, 0.0313726, 1)
 
-[node name="ActiveCueBar" type="Control"]
-clip_contents = true
-custom_minimum_size = Vector2(0, 40)
-layout_mode = 3
+[node name="ActiveCueBar" type="VBoxContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-script = ExtResource("1_yj65f")
 
 [node name="Panel" type="Panel" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_vertical = 0
 
 [node name="MarginContainer" type="MarginContainer" parent="Panel"]
 layout_mode = 1
@@ -42,7 +31,6 @@ mouse_default_cursor_shape = 2
 theme_override_styles/fill = SubResource("StyleBoxFlat_usfis")
 value = 20.0
 show_percentage = false
-script = ExtResource("2_jnntm")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/ProgressBar"]
 layout_mode = 1
@@ -68,18 +56,21 @@ mouse_filter = 2
 columns = 2
 
 [node name="LabelName" type="Label" parent="Panel/MarginContainer/ProgressBar/HBoxContainer/GridContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 text = "Name"
 
 [node name="LabelBlank" type="Label" parent="Panel/MarginContainer/ProgressBar/HBoxContainer/GridContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_alignment = 2
 
 [node name="LabelTimeLeft" type="Label" parent="Panel/MarginContainer/ProgressBar/HBoxContainer/GridContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -87,6 +78,7 @@ text = "Time"
 vertical_alignment = 2
 
 [node name="LabelTimeRight" type="Label" parent="Panel/MarginContainer/ProgressBar/HBoxContainer/GridContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -101,7 +93,10 @@ size_flags_vertical = 4
 focus_mode = 0
 text = "X"
 
-[connection signal="mouse_entered" from="Panel/MarginContainer/ProgressBar" to="Panel/MarginContainer/ProgressBar" method="mouse_entered"]
-[connection signal="mouse_exited" from="Panel/MarginContainer/ProgressBar" to="Panel/MarginContainer/ProgressBar" method="mouse_extied"]
-[connection signal="pressed" from="Panel/MarginContainer/ProgressBar/HBoxContainer/ActivePause" to="." method="_onActivePausePressed"]
-[connection signal="pressed" from="Panel/MarginContainer/ProgressBar/HBoxContainer/ActiveStop" to="." method="_onActiveStopPressed"]
+[node name="PanelContainer" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer"]
+layout_mode = 2
+text = "A Component"

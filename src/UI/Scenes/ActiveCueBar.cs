@@ -7,7 +7,7 @@ public partial class ActiveCueBar : Control
 {
 	[Export] private int PlaybackId { get; set; } = -1;
 	
-	public override void _Process(double delta)
+	/*public override void _Process(double delta)
 	{
 		float pos = 0f;
 		long length = 0;
@@ -57,5 +57,5 @@ public partial class ActiveCueBar : Control
 		var timespan = TimeSpan.FromTicks(time);
 		string strTime = timespan.ToString(@"hh\:mm\:ss");
 		return strTime;
-	}
+	}*/
 }

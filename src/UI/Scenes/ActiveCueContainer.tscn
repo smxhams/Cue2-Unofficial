@@ -1,7 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://c7uaftlqmt1qj"]
+[gd_scene load_steps=7 format=3 uid="uid://c7uaftlqmt1qj"]
 
 [ext_resource type="Script" uid="uid://8oabpi8j7qka" path="res://src/UI/Scenes/ActiveCueContainer.cs" id="1_d3m5n"]
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="2_d3m5n"]
+[ext_resource type="PackedScene" uid="uid://dt7rlfag7yr2c" path="res://src/Base/ActiveCueBar.tscn" id="3_5r80v"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_5r80v"]
 atlas = ExtResource("2_d3m5n")
@@ -86,8 +87,11 @@ layout_mode = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ActiveCueContainer" type="VBoxContainer" parent="VBoxContainer/ScrollContainer"]
+[node name="ActiveCueList" type="VBoxContainer" parent="VBoxContainer/ScrollContainer"]
 unique_name_in_owner = true
-clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 0
+
+[node name="ActiveCueBar" parent="VBoxContainer/ScrollContainer/ActiveCueList" instance=ExtResource("3_5r80v")]
+layout_mode = 2

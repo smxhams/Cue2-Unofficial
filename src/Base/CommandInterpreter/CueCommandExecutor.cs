@@ -15,6 +15,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     private GlobalSignals _globalSignals;
     private MediaEngine _mediaEngine;
     private AudioDevices _audioDevices;
+
+    private VBoxContainer _activeCueList;
     
     private readonly List<ActiveCue> _activeCues = new List<ActiveCue>();
     
@@ -24,6 +26,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
         _audioDevices = _globalData.AudioDevices;
+        
+        _activeCueList = GetNode("/root/Cue2Base").GetNode<PanelContainer>("%ActiveCueContainer").GetNode<VBoxContainer>("%ActiveCueList");
         GD.Print("CueCommandExecutor:_Ready - Cue Command Executor Successfully added");
         
         GD.Print("Cue Command Executor Successfully added");
@@ -50,21 +54,27 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     {
         //_globalData.Playback.PlayMedia(cue.FilePath);
         GD.Print($"CueCommandExecutor:ActivateCue - Activating: {cue.Name}");
-
+        //var liveViewContainer = GetNode("/root/Cue2Base").GetNode<PanelContainer>("%ActiveCueContainer").GetNode<VBoxContainer>("%ActiveCueList");
 
         var audioComponent = cue.GetAudioComponent();
         if (audioComponent != null)
         {
             try
             {
-
+                // UI Element for active cue
+                var activeCueBar = LoadActiveCueBar();
+                _activeCueList.AddChild(activeCueBar);
+                
+                // Init active cue
+                var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
+                _activeCues.Add(activeCue);
+                await activeCue.StartAsync();
             }
             catch (Exception ex)
             {
-                
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to execute cue {cue.Name}: {ex.Message}", 2);
+                GD.PrintErr($"CueCommandExecutor:ActivateCue - {ex.Message}");
             }
-            //_globalData.Playback.PlayMedia(cue);
-            //_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cue.Id);
         }
         
 
@@ -85,6 +95,19 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     private void StopAllCommand()
     {
         return;
+    }
+    
+    public VBoxContainer LoadActiveCueBar()
+    {
+        // Load in a shell bar
+        VBoxContainer activeBar = (VBoxContainer)SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out var error);
+        if (activeBar == null || !string.IsNullOrEmpty(error))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load active cue bar: {error}", 2);
+            return null;
+        }
+
+        return activeBar;
     }
 
 }

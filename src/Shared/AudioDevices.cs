@@ -19,6 +19,9 @@ public partial class AudioDevices : Node
 	private readonly Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>();
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
+	private readonly Dictionary<int, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<int, List<ActiveAudioPlayback>>();
+	
+	
 	private Timer _pollTimer;
 	
     public override void _Ready()
@@ -299,6 +302,16 @@ public partial class AudioDevices : Node
     {
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
     /// <summary>

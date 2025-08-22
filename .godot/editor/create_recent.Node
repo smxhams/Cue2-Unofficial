@@ -1,8 +1,9 @@
+VBoxContainer
+Label
+PanelContainer
 MarginContainer
 Button
 Control
-VBoxContainer
-PanelContainer
 Container
 VSeparator
 Line2D
@@ -11,4 +12,3 @@ HSlider
 HBoxContainer
 SubViewport
 GridContainer
-OptionButton

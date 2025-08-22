@@ -39,7 +39,7 @@ public partial class ActiveCueContainer : PanelContainer
 	{ //From global signal, emitted by shell_bar
 		var cue = CueList.FetchCueFromId(cueId);
 		_activeCues.Add(playbackIndex, cue);
-		LoadActiveCueBar(playbackIndex, cue);
+		//LoadActiveCueBar(playbackIndex, cue);
 		
 	}
 
@@ -50,20 +50,5 @@ public partial class ActiveCueContainer : PanelContainer
 		_activeCueBars.Remove(playbackIndex);
 	}
 
-	private void LoadActiveCueBar(int playbackIndex, Cue cue)
-	{
-		// Load in a shell bar
-		string error;
-		var activeBar = SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out error);
-		var container = GetNode<VBoxContainer>("%ActiveCueContainer");
-		container.AddChild(activeBar);
-		
-		activeBar.GetChild(0).GetChild(0).GetChild(0).GetChild(0).GetChild(1).GetChild<Label>(0).Text = cue.CueNum; // Cue Number
-		activeBar.GetChild(0).GetChild(0).GetChild(0).GetChild(0).GetChild(1).GetChild<Label>(1).Text = cue.Name; // Cue Name
-		
-		activeBar.Set("PlaybackId", playbackIndex); // Sets shell_bar property CueId
-		activeBar.GetChild(0).GetChild(0).GetChild(0).Set("PlaybackId", playbackIndex);
-		_activeCueBars.Add(playbackIndex, activeBar);	
-		
-	}
+	
 }

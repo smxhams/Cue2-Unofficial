@@ -2441,7 +2441,8 @@ size_flags_stretch_ratio = 0.3
 [node name="PreviewContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("5_lfhyt")]
 layout_mode = 2
 
-[node name="LiveViewContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("6_jn5cm")]
+[node name="ActiveCueContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("6_jn5cm")]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="HSplitContainer2" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
