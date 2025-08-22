@@ -7,6 +7,10 @@ using SDL3;
 
 namespace Cue2.Shared;
 
+
+/// <summary>
+/// AudioDevices looks after all SDL related tasks.
+/// </summary>
 public partial class AudioDevices : Node
 {
 	private GlobalData _globalData;

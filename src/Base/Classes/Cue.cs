@@ -253,19 +253,24 @@ public class Cue : ICue
     {
         if (Components.FirstOrDefault(c => c.Type == "Audio") is AudioComponent existing)
         {
-            GD.Print($"Cue:AddAudioComponent - Audio component already exists in cue {Id}. Returning existing."); // Prefixed print //!!!
+            GD.Print($"Cue:AddAudioComponent - Audio component already exists in cue {Id}. Returning existing.");
             return existing;
         }
         var audioComp = new AudioComponent { AudioFile = audioFile, Patch = patch };
         Components.Add(audioComp);
         return audioComp;
     }
+    
+    public AudioComponent GetAudioComponent()
+    {
+        return Components.FirstOrDefault(c => c.Type == "Audio") as AudioComponent;
+    }
 
     public VideoComponent AddVideoComponent(string videoFile, GlobalSignals globalSignals)
     {
         if (Components.FirstOrDefault(c => c.Type == "Video") is VideoComponent existing)
         {
-            GD.Print($"Cue:AddVideoComponent - Video component already exists in cue {Id}. Returning existing."); // Prefixed print //!!!
+            GD.Print($"Cue:AddVideoComponent - Video component already exists in cue {Id}. Returning existing.");
             return existing;
         }
         var videoComp = new VideoComponent { VideoFile = videoFile };

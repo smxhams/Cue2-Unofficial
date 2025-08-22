@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Cue2.Base.Classes;
@@ -11,46 +13,61 @@ public partial class CueCommandExectutor : CueCommandInterpreter
 {
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private MediaEngine _mediaEngine;
+    private AudioDevices _audioDevices;
+    
+    private readonly List<ActiveCue> _activeCues = new List<ActiveCue>();
+    
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
+        _audioDevices = _globalData.AudioDevices;
+        GD.Print("CueCommandExecutor:_Ready - Cue Command Executor Successfully added");
+        
         GD.Print("Cue Command Executor Successfully added");
         
         _globalSignals.Go += GoCommand;
+        _globalSignals.StopAll += StopAllCommand;
     }
 
     public void GoCommand()
     {
         if (!_globalData.ShellSelection.SelectedShells.Any())
         {
-            GD.Print("No Shells Selected");
+            GD.Print("CueCommandExecutor:GoCommand - No Shells Selected");
             return;
         }
         foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
         {
             var cue = (Cue)cue1;
-            _globalData.CueCommandInterpreter.CueCommandExectutor.ExecuteCommand(cue);
+            ActivateCue(cue);
         } 
     }
 
-    public void ExecuteCommand(Cue cue)
+    public async void ActivateCue(Cue cue)
     {
         //_globalData.Playback.PlayMedia(cue.FilePath);
-        GD.Print(cue.Name);
+        GD.Print($"CueCommandExecutor:ActivateCue - Activating: {cue.Name}");
 
-        // Check cue type to determine how to play
-        // TODO: This is broken by cue refactor
-        /*if (cue.Type == "")
+
+        var audioComponent = cue.GetAudioComponent();
+        if (audioComponent != null)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Nothing in the Cue.", 1);
+            try
+            {
+
+            }
+            catch (Exception ex)
+            {
+                
+            }
+            //_globalData.Playback.PlayMedia(cue);
+            //_globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cue.Id);
         }
         
-        else
-        {
-            _globalData.Playback.PlayMedia(cue);
-            _globalSignals.EmitSignal(nameof(GlobalSignals.CueGo), cue.Id);
-        }*/
+
         
 
         if (cue.ChildCues.Count() != 0)
@@ -58,11 +75,16 @@ public partial class CueCommandExectutor : CueCommandInterpreter
             foreach (var child in cue.ChildCues)
             {
                 var childCue = CueList.FetchCueFromId(child);
-                ExecuteCommand(childCue);
+                ActivateCue(childCue);
 
             }
         }
         
+    }
+    
+    private void StopAllCommand()
+    {
+        return;
     }
 
 }

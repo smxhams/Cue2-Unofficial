@@ -622,7 +622,7 @@ public partial class AudioInspector : Control
         // Position handles
         float startX = startNorm * width;
         float endX = endNorm * width;
-        GD.Print($"StartX: {startX}, EndX: {endX}");
+        if (endX >= width - 2) endX -= 1;
         _startDragHandle.Position = new Vector2(startX - 2 , 0); // Center on line
         _endDragHandle.Position = new Vector2(endX - 2, 0);
     }
@@ -642,12 +642,9 @@ public partial class AudioInspector : Control
             var width = _waveformPanel.Size.X;
             var mouseX = mouseMotion.Position.X;
             var barPos = _startDragHandle.Position.X; 
-            GD.Print($"X Position of container: {_waveformPanel.Position.X}, mouse pos: {mouseMotion.Position.X}");
             float newX = barPos + mouseX;
             newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
-            //GD.Print($"Post clamp newX: {newX}");
             float normX = newX / width;
-            GD.Print($"NormX: {normX}");
             _focusedAudioComponent.StartTime = normX * _focusedAudioComponent.FileDuration;
             _startTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.StartTime); // Update input
             DrawWaveform(); // Refresh
@@ -668,12 +665,9 @@ public partial class AudioInspector : Control
             var width = _waveformPanel.Size.X;
             var mouseX = mouseMotion.Position.X;
             var barPos = _endDragHandle.Position.X; 
-            GD.Print($"X Position of container: {_waveformPanel.Position.X}, mouse pos: {mouseMotion.Position.X}");
             float newX = barPos + mouseX;
             newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
-            //GD.Print($"Post clamp newX: {newX}");
             float normX = newX / width;
-            GD.Print($"NormX: {normX}");
             _focusedAudioComponent.EndTime = normX * _focusedAudioComponent.FileDuration;
             _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime); // Update input
             DrawWaveform(); // Refresh
