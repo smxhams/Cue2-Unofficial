@@ -22,7 +22,7 @@ public partial class GlobalStyles : Node
 	private static Color _highColor5 = new Color("#3E1D00");
 	private static Color _lowColor1 = new Color("#03838F");
 	private static Color _lowColor2 = new Color("#086871");
-	private static Color _lowColor3 = new Color("#06545C");
+	public static Color LowColor3 = new Color("#06545C");
 	public static Color LowColor4 = new Color("#013B40");
 	private static Color _lowColor5 = new Color("#002326");
 	

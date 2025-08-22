@@ -68,6 +68,7 @@ public partial class MediaEngine : Node
             // Duration in milliseconds
             if (media.Duration > 0)
             {
+                GD.Print($"Media Duration: {media.Duration} ms");
                 metadata.Add("DurationMs", media.Duration);
                 metadata.Add("DurationSeconds", media.Duration / 1000.0);
             }
@@ -160,11 +161,11 @@ public partial class MediaEngine : Node
                 var minMaxPerBin = new float[binCount * 2];
                 for (int i = 0; i < binCount; i++)
                 {
-                    minMaxPerBin[i * 2] = float.MaxValue; // min
-                    minMaxPerBin[i * 2 + 1] = float.MinValue; // max
+                    minMaxPerBin[i * 2] = float.MaxValue; // min init
+                    minMaxPerBin[i * 2 + 1] = float.MinValue; // max init
                 }
 
-                var buffer = new float[channels * 4096]; // Chunk read buffer
+                var buffer = new float[channels * 4096]; // Read buffer
                 long currentMono = 0;
                 int read;
 
@@ -172,12 +173,12 @@ public partial class MediaEngine : Node
                 {
                     for (int i = 0; i < read; i += channels)
                     {
-                        if (i + channels > read) break; // Bound
+                        if (i + channels > read) break;
 
                         float mono = 0f;
                         for (int ch = 0; ch < channels; ch++)
                         {
-                            mono += buffer[i + ch]; // Already [-1,1] from AudioFileReader
+                            mono += buffer[i + ch]; // Normalized [-1,1]
                         }
                         mono /= channels;
 
@@ -226,6 +227,45 @@ public partial class MediaEngine : Node
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Error generating waveform for {path}: {ex.Message}", 2);
             return Array.Empty<byte>();
+        }
+    }
+    
+    
+    /// <summary>
+    /// Gets the duration of an audio file in seconds using NAudio.
+    /// </summary>
+    /// <param name="path">Audio file path.</param>
+    /// <returns>Duration in seconds, or 0 on failure.</returns>
+    public async Task<double> GetFileDurationAsync(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GetFileDurationAsync - File not found: {path}", 2);
+                return 0.0;
+            }
+
+            return await Task.Run(() =>
+            {
+                using var reader = new AudioFileReader(path);
+                return reader.TotalTime.TotalSeconds;
+            });
+        }
+        catch (DllNotFoundException ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GetFileDurationAsync - Missing codec or DLL for {path}: {ex.Message}. Ensure OS supports the format.", 2);
+            return 0.0;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GetFileDurationAsync - Unsupported format or codec issue for {path}: {ex.Message}. Try converting the file.", 2);
+            return 0.0;
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GetFileDurationAsync - Error getting duration for {path}: {ex.Message}", 2);
+            return 0.0;
         }
     }
 
