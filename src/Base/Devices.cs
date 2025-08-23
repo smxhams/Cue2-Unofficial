@@ -10,6 +10,7 @@ namespace Cue2.Base;
 public partial class Devices : Node
 {
     private GlobalData _globalData;
+    private AudioDevices _audioDevices;
 
     private int Index = 0;
     
@@ -24,7 +25,7 @@ public partial class Devices : Node
     {
         string? device = null;
 
-        var vlcDevices = _globalData.AudioDevices.GetAvailableAudioDeviceNames(); // Get devices availible to VLC
+        var vlcDevices = _audioDevices.GetAvailableAudioDeviceNames(); // Get devices availible to VLC
         
         // Match vlc device to name
         foreach (var i in vlcDevices)

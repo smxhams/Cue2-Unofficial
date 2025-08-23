@@ -20,6 +20,7 @@ public partial class AudioInspector : Control
 
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private AudioDevices _audioDevices;
 
     
     private Cue _focusedCue;
@@ -68,6 +69,7 @@ public partial class AudioInspector : Control
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
+        _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
 		
         _globalSignals.ShellFocused += ShellSelected;
         
@@ -273,7 +275,7 @@ public partial class AudioInspector : Control
             }
         }
 
-        foreach (var output in _globalData.AudioDevices.GetAvailableAudioDeviceNames())
+        foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
         {
             _outputOptionButton.AddItem($"Direct Output: {output}");
             if (output == _focusedAudioComponent.DirectOutput)
@@ -352,7 +354,7 @@ public partial class AudioInspector : Control
         }
         else if (!string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput))
         {
-            var device = _globalData.AudioDevices.OpenAudioDevice(_focusedAudioComponent.DirectOutput, out var _);
+            var device = _audioDevices.OpenAudioDevice(_focusedAudioComponent.DirectOutput, out var _);
             if (device == null)
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Direct output device not found: {_focusedAudioComponent.DirectOutput}", 2);

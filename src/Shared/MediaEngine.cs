@@ -47,6 +47,42 @@ public partial class MediaEngine : Node
         
     }
     
+    // Async preload for non-blocking
+    public async Task<Media> PreloadMediaAsync(string path)
+    {
+        if (_preloadedMedia.TryGetValue(path, out var media))
+        {
+            return media;
+        }
+
+        try
+        {
+            media = new Media(_libVlc, path);
+            await media.Parse();
+            if (media.ParsedStatus != MediaParsedStatus.Done)
+            {
+                throw new Exception("Failed to parse media.");
+            }
+            _preloadedMedia[path] = media;
+            return media;
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"Failed to preload {path}: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to preload {path}: {ex.Message}", 2);
+            return null;
+        }
+    }
+
+    // New: Sync version for simplicity in some cases
+    public Media PreloadMedia(string path)
+    {
+        return PreloadMediaAsync(path).Result; // Use with caution; prefer async
+    }
+    
+    
+    
+    
     /// <summary>
     /// Retrieves metadata from an audio file using LibVLCSharp.
     /// Returns a dictionary containing file length (duration in milliseconds), number of audio channels,

@@ -8,6 +8,7 @@ public partial class Settings : Node
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
+    private AudioDevices _audioDevices;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
 
     public float UiScale = 1.0f;
@@ -61,7 +62,7 @@ public partial class Settings : Node
         // Double check audio devices in added patch are opened. 
         foreach (var device in patch.OutputDevices)
         {
-            _globalData.AudioDevices.OpenAudioDevice(device.Key, out var _);
+            _audioDevices.OpenAudioDevice(device.Key, out var _);
         }
     }
 

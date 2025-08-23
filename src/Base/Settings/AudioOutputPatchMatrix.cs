@@ -19,6 +19,7 @@ public partial class AudioOutputPatchMatrix : Control
     
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private AudioDevices _audioDevices;
     
     private List<string> _availableDeviceList;
     
@@ -43,6 +44,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals"); // Global
+        _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         
         
         // This is "PatchMatrixDeviceHeader" header
@@ -113,7 +115,7 @@ public partial class AudioOutputPatchMatrix : Control
 
         await ToSignal(GetTree(), "process_frame");
         
-        _availableDeviceList = _globalData.AudioDevices.GetAvailableAudioDeviceNames();
+        _availableDeviceList = _audioDevices.GetAvailableAudioDeviceNames();
         
         // CHANNELS (ROWS)
         var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
@@ -213,12 +215,12 @@ public partial class AudioOutputPatchMatrix : Control
     private void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
         //Double check the device has been opened.
-        _globalData.AudioDevices.OpenAudioDevice(deviceName, out var _);
+        _audioDevices.OpenAudioDevice(deviceName, out var _);
         
         
         var header = LoadDeviceOutputDeviceHeader(deviceName, true);
     
-        var specs = _globalData.AudioDevices.GetReadableAudioDeviceSpecs(deviceName);
+        var specs = _audioDevices.GetReadableAudioDeviceSpecs(deviceName);
         header.GetChild<Label>(1).TooltipText = deviceName;
         foreach (var spec in specs)
         {
@@ -320,7 +322,7 @@ public partial class AudioOutputPatchMatrix : Control
         {
             if (presssed)
             {
-                AudioDevice enabledDevice = _globalData.AudioDevices.OpenAudioDevice(name, out string error);
+                AudioDevice enabledDevice = _audioDevices.OpenAudioDevice(name, out string error);
                 GD.Print("AudioOutputPatchMatrix:NewUnusedDeviceColumn - When enabling audio device: " + error);
                 if (enabledDevice == null)
                 {

@@ -16,6 +16,7 @@ public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
 	private Shared.GlobalData _globalData;
+	private AudioDevices _audioDevices;
 	
 	//private Dictionary<string, string> saveData;
 
@@ -25,6 +26,7 @@ public partial class SaveManager : Node
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
 		
 		_globalSignals.Save += Save;
 		_globalSignals.SaveAs += SaveAs;
@@ -159,7 +161,7 @@ public partial class SaveManager : Node
 			patchTable.Add(patch.Key, patch.Value.GetData());
 		}
 
-		var devices = _globalData.AudioDevices.GetOpenAudioDevicesNames();
+		var devices = _audioDevices.GetOpenAudioDevicesNames();
 
 		saveTable.Add("AudioPatch", patchTable);
 		saveTable.Add("AudioDevices", devices);

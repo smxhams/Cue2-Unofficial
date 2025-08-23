@@ -4,7 +4,7 @@ using Cue2.Base.Classes;
 using Godot;
 using LibVLCSharp.Shared;
 
-namespace Cue2.Shared;
+namespace Cue2.Base.Classes;
 
 /// <summary>
 /// Encapsulates an active audio playback session for control (volume, pause, stop, fade).
@@ -21,6 +21,10 @@ public partial class ActiveAudioPlayback : GodotObject
     private object _lock = new object(); // For thread safety
     private float _volume = 1.0f; // Normalized [0-1]
 
+    public ActiveAudioPlayback()
+    {
+        
+    }
     public ActiveAudioPlayback(MediaPlayer mediaPlayer, uint sdlDevice, IntPtr audioStream, AudioOutputPatch patch, int outputChannel)
     {
         _mediaPlayer = mediaPlayer;

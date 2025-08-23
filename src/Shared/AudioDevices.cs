@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Godot;
+using LibVLCSharp.Shared;
 using SDL3;
 
 namespace Cue2.Shared;
@@ -15,12 +18,15 @@ public partial class AudioDevices : Node
 {
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
+	private MediaEngine _mediaEngine;
 	
 	private readonly Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>();
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
 	private readonly Dictionary<int, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<int, List<ActiveAudioPlayback>>();
-	
+
+	private int _bytesPerFrame;
+	private SDL.AudioSpec _audioSpec;
 	
 	private Timer _pollTimer;
 	
@@ -28,6 +34,7 @@ public partial class AudioDevices : Node
     {
 	    _globalData = GetNode<GlobalData>("/root/GlobalData");
 	    _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+	    _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
 	    
 	    if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events) == false)
 	    {
@@ -302,6 +309,82 @@ public partial class AudioDevices : Node
     {
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
+
+
+    public async Task<ActiveAudioPlayback> PlayAudio(string mediaPath, string deviceName)
+    {
+	    GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
+		var playback = new ActiveAudioPlayback();
+
+		GD.Print($"Lets play this track: {mediaPath}");
+		var device = OpenAudioDevice(deviceName, out var error);
+		if (device == null)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open audio device: {error}", 2);
+			return null;
+		}
+		
+		var media = await _mediaEngine.PreloadMediaAsync(mediaPath);
+		if (media == null)
+		{
+			GD.Print($"AudioDevices:PlayAudio - Failed to preload media: {mediaPath}");
+		}
+		
+		// Get specs of audio track
+		SDL.AudioSpec sourceSpec = new SDL.AudioSpec();
+		var audioTracks = media.Tracks.Where(t => t.TrackType == TrackType.Audio).ToList();
+		if (audioTracks.Count == 0)
+		{
+			throw new Exception("No audio track found.");
+		}
+		var primaryAudio = audioTracks.First();
+		sourceSpec.Freq = (int)primaryAudio.Data.Audio.Rate;
+		sourceSpec.Channels = (byte)primaryAudio.Data.Audio.Channels;
+		sourceSpec.Format = GetSdlFormatFromCodec(primaryAudio.Codec);
+		
+		
+		int bytesPerSample = sourceSpec.Format switch
+		{
+			SDL.AudioFormat.AudioS16LE or SDL.AudioFormat.AudioS16BE => 2,
+			SDL.AudioFormat.AudioS32LE or SDL.AudioFormat.AudioS32BE => 4,
+			SDL.AudioFormat.AudioF32LE or SDL.AudioFormat.AudioF32BE => 4,
+			SDL.AudioFormat.AudioU8 or SDL.AudioFormat.AudioS8 => 1,
+			_ => 2
+		};
+		_bytesPerFrame = bytesPerSample * sourceSpec.Channels;
+		
+		
+		// Get device specs
+		SDL.GetAudioDeviceFormat(device.LogicalId, out var obtainedSpec, out var sampleFrames);
+		var formatName = SDL.GetAudioFormatName(obtainedSpec.Format);
+		_audioSpec = obtainedSpec;
+		
+		GD.Print($"Source spec format is: {sourceSpec.Format}.   Destination audio device format is: {obtainedSpec.Format}");
+		GD.Print($"Device preferred settings: name={SDL.GetAudioDeviceName(device.PhysicalId)}, " +
+		         $"format={formatName}, freq={_audioSpec.Freq}, channels={_audioSpec.Channels}, " +
+		         $"samples={sampleFrames}");
+		
+		
+		// Create audio stream
+		IntPtr audioStream = SDL.CreateAudioStream(sourceSpec, _audioSpec);
+		if (audioStream == IntPtr.Zero)
+		{
+			throw new Exception($"Failed to create SDL audio stream: {SDL.GetError()}");
+		}
+		
+		// Bind stream to device (specific to output channel? SDL3 may need channel mapping; simplify for now)
+		var streams = new[] { audioStream };
+		bool bindResult = SDL.BindAudioStreams(device.LogicalId, streams, streams.Length);
+		if (bindResult == false)
+		{
+			Console.WriteLine($"Failed to bind audio stream: {SDL.GetError()}");
+			SDL.DestroyAudioStream(audioStream);
+		}
+		Console.WriteLine("Audio stream bound successfully.");
+		
+		
+	    return playback;
+    }
     
     
     
@@ -341,6 +424,33 @@ public partial class AudioDevices : Node
 				return 0; // Unknown or unsupported format
 		}
 	}
+
+
+	/// <summary>
+	/// Map VLC codec to SDL.AudioFormat
+	/// </summary>
+	private SDL.AudioFormat GetSdlFormatFromCodec(uint codec)
+	{
+		string codecName = System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(codec)).ToLower();
+		GD.Print($"AudioDevices:GetSdlFormatFromCodec - Mapping codec {codecName} to SDL format");
+		switch (codecName)
+		{
+			case "s16l": return SDL.AudioFormat.AudioS16LE;
+			case "s16b": return SDL.AudioFormat.AudioS16BE;
+			case "s32l": return SDL.AudioFormat.AudioS32LE;
+			case "s32b": return SDL.AudioFormat.AudioS32BE;
+			case "f32l": return SDL.AudioFormat.AudioF32LE;
+			case "f32b": return SDL.AudioFormat.AudioF32BE;
+			case "mp3": return SDL.AudioFormat.AudioS16LE;
+			case "mpeg": return SDL.AudioFormat.AudioS16LE; // Common for MP3
+			case "flac": return SDL.AudioFormat.AudioS32LE;
+			case "pcm": return SDL.AudioFormat.AudioS32LE; // Common for FLAC, high-quality PCM
+			default: return SDL.AudioFormat.AudioS16LE;
+		}
+	}
+    
+    
+    
 
 	public override void _ExitTree()
 	{

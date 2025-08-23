@@ -54,3 +54,4 @@ res://src/Base/Settings/AudioOutputPatchMatrix.cs
 res://src/UI/Utilities/UiUtilities.cs
 res://src/Base/ActiveCueBar.tscn
 res://src/UI/Scenes/ActiveCueContainer.tscn
+res://src/Base/Classes/ActiveAudioPlayback.cs

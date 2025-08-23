@@ -25,7 +25,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
-        _audioDevices = _globalData.AudioDevices;
+        _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         
         _activeCueList = GetNode("/root/Cue2Base").GetNode<PanelContainer>("%ActiveCueContainer").GetNode<VBoxContainer>("%ActiveCueList");
         GD.Print("CueCommandExecutor:_Ready - Cue Command Executor Successfully added");
@@ -64,7 +64,6 @@ public partial class CueCommandExectutor : CueCommandInterpreter
                 // UI Element for active cue
                 var activeCueBar = LoadActiveCueBar();
                 _activeCueList.AddChild(activeCueBar);
-                
                 // Init active cue
                 var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
                 _activeCues.Add(activeCue);

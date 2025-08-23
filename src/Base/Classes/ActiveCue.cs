@@ -21,7 +21,13 @@ public partial class ActiveCue : GodotObject
 
     private Timer _fadeTimer; // For fade-in/out
     private bool _isPlaying;
-    //private ActiveAudioPlayback _audioPlayback;
+    private ActiveAudioPlayback _audioPlayback;
+
+
+    public ActiveCue()
+    {
+        // Blank constructor for Godot
+    }
     
     public ActiveCue(Cue cue, VBoxContainer activeCueBar, MediaEngine mediaEngine, AudioDevices audioDevices, GlobalSignals globalSignals)
     {
@@ -44,24 +50,26 @@ public partial class ActiveCue : GodotObject
     {
         if (_isPlaying) return;
         GD.Print($"ActiveCue:StartAsync - Starting: {_cue.Name}");
-        
-        var audioComponent = _cue.GetAudioComponent();
+        _isPlaying = true;
         try
         {
+            var audioComponent = _cue.GetAudioComponent();
             if (audioComponent != null)
             {
+                
                 var audioPath = audioComponent.AudioFile;
                 var patch = audioComponent.Patch;
-                
-                
+                await _audioDevices.PlayAudio(audioPath, audioComponent.DirectOutput);
                 GD.Print($"Trying audio playback");
             }
         }
         catch (Exception ex)
         {
-            
+            GD.Print($"ActiveCue:StartAsync - Exception: {ex.Message}");
         }
         
         
     }
+    
+    // What I want to do - take audio file, split the 2 ch's and compose to audio streams according to the device.
 }
