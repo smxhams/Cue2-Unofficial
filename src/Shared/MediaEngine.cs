@@ -74,10 +74,16 @@ public partial class MediaEngine : Node
         }
     }
 
-    // New: Sync version for simplicity in some cases
+    // Sync version for simplicity in some cases
     public Media PreloadMedia(string path)
     {
         return PreloadMediaAsync(path).Result; // Use with caution; prefer async
+    }
+    
+    // Create MediaPlayer from preloaded media
+    public MediaPlayer CreateMediaPlayer(Media media)
+    {
+        return new MediaPlayer(_libVlc) { Media = media };
     }
     
     

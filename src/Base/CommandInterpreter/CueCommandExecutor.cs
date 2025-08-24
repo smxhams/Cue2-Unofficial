@@ -45,7 +45,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         }
         foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
         {
-            var cue = (Cue)cue1;
+            var cue = (Cue)cue1; 
             ActivateCue(cue);
         } 
     }

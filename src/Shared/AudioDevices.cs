@@ -27,6 +27,7 @@ public partial class AudioDevices : Node
 
 	private int _bytesPerFrame;
 	private SDL.AudioSpec _audioSpec;
+	private static IntPtr _audioStream; 
 	
 	private Timer _pollTimer;
 	
@@ -311,7 +312,7 @@ public partial class AudioDevices : Node
     }
 
 
-    public async Task<ActiveAudioPlayback> PlayAudio(string mediaPath, string deviceName)
+    public async Task<ActiveAudioPlayback> PlayAudio(string mediaPath, string deviceName, int outputChannel, AudioOutputPatch patch)
     {
 	    GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
 		var playback = new ActiveAudioPlayback();
@@ -372,6 +373,7 @@ public partial class AudioDevices : Node
 			throw new Exception($"Failed to create SDL audio stream: {SDL.GetError()}");
 		}
 		
+		_audioStream = audioStream;
 		// Bind stream to device (specific to output channel? SDL3 may need channel mapping; simplify for now)
 		var streams = new[] { audioStream };
 		bool bindResult = SDL.BindAudioStreams(device.LogicalId, streams, streams.Length);
@@ -381,9 +383,64 @@ public partial class AudioDevices : Node
 			SDL.DestroyAudioStream(audioStream);
 		}
 		Console.WriteLine("Audio stream bound successfully.");
+		string vlcFormat = GetVlcFormat(sourceSpec);
+		GD.Print(vlcFormat);
+
+		var mediaPlayer = _mediaEngine.CreateMediaPlayer(media);
+		mediaPlayer.SetAudioFormat(vlcFormat, (uint)sourceSpec.Freq, (uint)sourceSpec.Channels);
+		mediaPlayer.SetAudioCallbacks(AudioCallback, null, null, null, null);
 		
 		
-	    return playback;
+		// Start playback
+		/*if (!mediaPlayer.Play())
+		{
+			throw new Exception("Failed to start VLC playback.");
+		}*/
+		
+		// Start SDL audio
+		SDL.ResumeAudioDevice(device.LogicalId);
+		
+		
+		// Create and track ActiveAudioPlayback
+		// Each physical deivce Id has a list of AtiveAudioPlaybacks that are associated with it.
+		var deviceId = (int)device.PhysicalId;
+		playback = new ActiveAudioPlayback(mediaPlayer, device.LogicalId, audioStream, patch, outputChannel);
+		if (!_activePlaybacks.ContainsKey(deviceId))
+		{
+			_activePlaybacks[deviceId] = new List<ActiveAudioPlayback>();
+		}
+		_activePlaybacks[deviceId].Add(playback);
+
+		GD.Print($"AudioDevices:PlayAudioOnOutput - Started playback on device {device.Name}, output {outputChannel}.");
+		return playback;
+
+    }
+    
+    private void AudioCallback(nint opaque, nint samples, uint count, long pts)
+    {
+	    //if (!_isPlaying) return;
+	    int byteCount = (int)count * _bytesPerFrame;
+		
+	    if (SDL.PutAudioStreamData(_audioStream, samples, byteCount) == false)
+	    {
+		    GD.Print($"Failed to put audio stream data: {SDL.GetError()}");
+	    }
+	    else
+	    {
+		    //GD.Print($"Queued {count} bytes to SDL audio stream.");
+	    }
+
+	    // Check queue status to avoid underflow or overflow
+	    int queued = SDL.GetAudioStreamQueued(_audioStream);
+	    if (queued < 4096) // Adjust threshold based on your needs (e.g., 4KB)
+	    {
+		    GD.Print("Warning: Audio queue running low, potential underflow!");
+	    }
+	    else if (queued > 65536) // Adjust threshold (e.g., 64KB)
+	    {
+		    GD.Print("Warning: Audio queue growing large, potential overflow!");
+		    SDL.ClearAudioStream(_audioStream); // Clear to prevent latency
+	    }
     }
     
     
@@ -392,7 +449,7 @@ public partial class AudioDevices : Node
     
     
     
-    
+	
     
     
 
@@ -448,9 +505,23 @@ public partial class AudioDevices : Node
 			default: return SDL.AudioFormat.AudioS16LE;
 		}
 	}
-    
-    
-    
+
+	private string GetVlcFormat(SDL.AudioSpec sourceSpec)
+	{
+		switch (sourceSpec.Format)
+		{
+			case SDL.AudioFormat.AudioS16LE : return "S16L";
+			case SDL.AudioFormat.AudioS16BE : return "S16N";
+			case SDL.AudioFormat.AudioS32LE : return "S32N";
+			case SDL.AudioFormat.AudioS32BE : return "S32N";
+			case SDL.AudioFormat.AudioF32LE : return "f32n";
+			case SDL.AudioFormat.AudioF32BE : return "f32n"; 
+			default: return "S16N";
+		}
+
+	}
+
+
 
 	public override void _ExitTree()
 	{

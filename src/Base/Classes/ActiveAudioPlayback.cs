@@ -12,7 +12,7 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveAudioPlayback : GodotObject
 {
-    private readonly MediaPlayer _mediaPlayer;
+    public readonly MediaPlayer MediaPlayer;
     private readonly uint _sdlDevice;
     private readonly IntPtr _audioStream;
     private readonly AudioOutputPatch _patch;
@@ -27,14 +27,15 @@ public partial class ActiveAudioPlayback : GodotObject
     }
     public ActiveAudioPlayback(MediaPlayer mediaPlayer, uint sdlDevice, IntPtr audioStream, AudioOutputPatch patch, int outputChannel)
     {
-        _mediaPlayer = mediaPlayer;
+        MediaPlayer = mediaPlayer;
         _sdlDevice = sdlDevice;
         _audioStream = audioStream;
         _patch = patch;
         _outputChannel = outputChannel;
 
         // Event handlers for end/reached, errors
-        _mediaPlayer.EndReached += OnEndReached;
+        MediaPlayer.Play();
+        MediaPlayer.EndReached += OnEndReached;
         // ... (add more)
     }
 
@@ -45,7 +46,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            _mediaPlayer?.Stop();
+            MediaPlayer?.Stop();
             if (_audioStream != IntPtr.Zero)
             {
                 SDL3.SDL.ClearAudioStream(_audioStream);
@@ -65,7 +66,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            _mediaPlayer?.Pause();
+            MediaPlayer?.Pause();
             SDL3.SDL.PauseAudioDevice(_sdlDevice);
         }
     }
@@ -77,7 +78,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            _mediaPlayer?.Play(); // If paused
+            MediaPlayer?.Play(); // If paused
             SDL3.SDL.ResumeAudioDevice(_sdlDevice);
         }
     }
@@ -89,7 +90,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         if (durationSeconds <= 0)
         {
-            lock (_lock) { _volume = targetVolume; _mediaPlayer.Volume = (int)(targetVolume * 100); }
+            lock (_lock) { _volume = targetVolume; MediaPlayer.Volume = (int)(targetVolume * 100); }
             return;
         }
 
@@ -101,7 +102,7 @@ public partial class ActiveAudioPlayback : GodotObject
             elapsed += 0.05f;
             float t = elapsed / durationSeconds;
             _volume = Mathf.Lerp(startVolume, targetVolume, t);
-            lock (_lock) { _mediaPlayer.Volume = (int)(_volume * 100); }
+            lock (_lock) { MediaPlayer.Volume = (int)(_volume * 100); }
         }
     }
 
@@ -115,6 +116,6 @@ public partial class ActiveAudioPlayback : GodotObject
     public void Dispose()
     {
         Stop();
-        _mediaPlayer?.Dispose();
+        MediaPlayer?.Dispose();
     }
 }

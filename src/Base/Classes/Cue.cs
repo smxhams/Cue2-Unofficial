@@ -156,6 +156,12 @@ public class NetworkComponent : ICueComponent
     }
 }
 
+public enum FollowType
+{
+    None,
+    Continue, // Continue will tell the next cue in cuelist to trigger when post-wait has elapsed. 
+    Follow // Follow will tell the next cue in cuelist to trigger at the same time
+}
 
 public class Cue : ICue
 {
@@ -170,6 +176,11 @@ public class Cue : ICue
     public int ParentId = -1;
 
     public List<int> ChildCues = new List<int>();
+    
+    public double PreWait { get; set; } = 0.0;
+    public double Duration { get; set; } = 0.0;
+    public double PostWait { get; set; } = 0.0;
+    public FollowType Follow = FollowType.None;
 
     
     public List<ICueComponent> Components = new List<ICueComponent>();
@@ -203,6 +214,10 @@ public class Cue : ICue
                 ChildCues.Add(childInt.AsInt32());
             }
         }
+        PreWait = data.ContainsKey("PreWait") ? (double)data["PreWait"] : 0.0;
+        Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
+        PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : 0.0;
+        Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
         
         if (data.ContainsKey("Components"))
         {
@@ -311,6 +326,10 @@ public class Cue : ICue
         dict.Add("CueNum", CueNum);
         dict.Add("ParentId", ParentId.ToString());
         dict.Add("ChildCues", new Array<int>(ChildCues));
+        dict.Add("PreWait", PreWait);
+        dict.Add("Duration", Duration);
+        dict.Add("PostWait", PostWait);
+        dict.Add("Follow", (int)Follow);
 
         var compData = new Array();
         foreach (var comp in Components)
