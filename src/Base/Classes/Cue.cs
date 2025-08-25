@@ -32,6 +32,8 @@ public class AudioComponent : ICueComponent
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
 
     public double Duration { get; set; } = 0.0;
+    
+    public double TotalDuration { get; set; } = 0.0;
     public double FileDuration { get; set; } = 0.0;
     public double Volume { get; set; } = 1.0f;
     public bool Loop { get; set; } = false;
@@ -156,6 +158,9 @@ public class NetworkComponent : ICueComponent
     }
 }
 
+/// <summary>
+/// Enum for cue follow types
+/// </summary>
 public enum FollowType
 {
     None,
@@ -175,10 +180,11 @@ public class Cue : ICue
 
     public int ParentId = -1;
 
-    public List<int> ChildCues = new List<int>();
+    public List<int> ChildCues = new List<int>(); // List of child cue ID's
     
     public double PreWait { get; set; } = 0.0;
-    public double Duration { get; set; } = 0.0;
+    public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
+    public double TotalDuration { get; set; } = 0.0;
     public double PostWait { get; set; } = 0.0;
     public FollowType Follow = FollowType.None;
 
@@ -216,6 +222,7 @@ public class Cue : ICue
         }
         PreWait = data.ContainsKey("PreWait") ? (double)data["PreWait"] : 0.0;
         Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
+        TotalDuration = data.ContainsKey("TotalDuration") ? (double)data["TotalDuration"] : 0.0;
         PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : 0.0;
         Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
         
@@ -299,8 +306,42 @@ public class Cue : ICue
         var netComp = new NetworkComponent { /* init */ };
         Components.Add(netComp);
     }
-    
-    
+
+    public double CalculateTotalDuration()
+    {
+        var contentsDuration = 0.0;
+        foreach (var comp in Components)
+        {
+            if (comp.Type == "Audio")
+            {
+                if (contentsDuration < ((AudioComponent)comp).Duration) contentsDuration = ((AudioComponent)comp).Duration;
+            }
+            else if (comp.Type == "Video")
+            {
+                //contentsDuration = ((VideoComponent)comp).Duration;
+            }
+        }
+        var childDuration = DurationOfChildren();
+        if (childDuration > contentsDuration) contentsDuration = childDuration;
+        Duration = contentsDuration;
+        TotalDuration = PreWait + contentsDuration + PostWait;
+        return TotalDuration;
+    }
+
+    private double DurationOfChildren()
+    {
+        var longestDuration = 0.0;
+        foreach (var childId in ChildCues)
+        {
+            var childCue = CueList.FetchCueFromId(childId);
+            if (childCue != null)
+            {
+                var childDuration = childCue.CalculateTotalDuration();
+                if (childDuration > longestDuration) longestDuration = childDuration;
+            }
+        }
+        return longestDuration;
+    }
     
     public void AddChildCue(int childId)
     {
@@ -328,6 +369,7 @@ public class Cue : ICue
         dict.Add("ChildCues", new Array<int>(ChildCues));
         dict.Add("PreWait", PreWait);
         dict.Add("Duration", Duration);
+        dict.Add("TotalDuration", TotalDuration);
         dict.Add("PostWait", PostWait);
         dict.Add("Follow", (int)Follow);
 

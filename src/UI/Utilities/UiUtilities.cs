@@ -257,4 +257,24 @@ public partial class UiUtilities : Node
             return -1f;
         }
     }
+    
+    /// <summary>
+    /// Recursively sets the colour of all label children of provided root
+    /// </summary>
+    /// <param name="root">Parent node</param>
+    /// <param name="colour">Colour to set labels to</param>
+    public static void FormatLabelsColours(Node root, Color colour)
+    {
+
+        if (root is Label label)
+        {
+            label.AddThemeColorOverride("font_color", colour);
+        }
+        foreach (var child in root.GetChildren())
+        {
+            FormatLabelsColours(child, colour);
+        }
+    }
+    
+    
 }

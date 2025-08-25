@@ -1,8 +1,10 @@
+using System;
 using Godot;
 
 using System.IO;
 using Cue2.Base.Classes;
 using Cue2.Shared;
+using Cue2.UI.Utilities;
 
 // This script is attached to shell context tab
 
@@ -20,7 +22,11 @@ public partial class ShellInspector : Control
 	private LineEdit _cueNum;
 	private LineEdit _cueName;
 	private Label _cueId;
-	private Label _parentCueLabel; 
+	private Label _parentCueLabel;
+	private LineEdit _preWaitInput;
+	private LineEdit _durationValue;
+	private LineEdit _postWaitInput;
+	private OptionButton _followOption;
 	
 	
 	
@@ -36,19 +42,24 @@ public partial class ShellInspector : Control
 		_cueId = GetNode<Label>("%CueId");
 		_parentCueLabel = GetNode<Label>("%ParentCueLabel");
 		
-		GetNode<Label>("%CueNumLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		GetNode<Label>("%CueNameLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		GetNode<Label>("%ColourLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		GetNode<Label>("%PreWaitLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		GetNode<Label>("%DurationLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		GetNode<Label>("%PostWaitLabel").AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		_cueId.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-		_parentCueLabel.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
+		_preWaitInput = GetNode<LineEdit>("%PreWaitInput");
+		_durationValue = GetNode<LineEdit>("%DurationValue");
+		_postWaitInput = GetNode<LineEdit>("%PostWaitInput");
+		_followOption = GetNode<OptionButton>("%FollowOption");
+		
+		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
 		
 		_cueNum.TextChanged += _onCueNumTextChanged;
 		_cueName.TextChanged += _onCueNameTextChanged;
 		_cueNum.TextSubmitted += _ => { _cueNum.ReleaseFocus(); };
 		_cueName.TextSubmitted += _ => { _cueName.ReleaseFocus(); };
+		
+		_preWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _preWaitInput);
+		_postWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _postWaitInput);
+		_followOption.ItemSelected += FollowOptionItemSelected;
+		
+		
+		
 		
 		Visible = false;
 	}
@@ -69,6 +80,23 @@ public partial class ShellInspector : Control
 			_parentCueLabel.Text = ("Parent: " + CueList.FetchCueFromId(_focusedCue.ParentId).Name);
 		}
 		else _parentCueLabel.Text = "";
+		
+		
+		var followOptions = Enum.GetValues(typeof(FollowType));
+		_followOption.Clear();
+		for (int i = 0; i < followOptions.Length; i++)
+		{
+			var enumValue = (FollowType)followOptions.GetValue(i)!;
+			_followOption.AddItem(enumValue.ToString());
+			_followOption.SetItemMetadata(i, (int)enumValue);
+			_followOption.TooltipText = _followOption.TooltipText;
+		}
+		_followOption.Selected = (int)_focusedCue.Follow;
+		
+		_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
+		_durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
+		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
+		
 
 	}
 	
@@ -81,12 +109,61 @@ public partial class ShellInspector : Control
 	
 	// TRIGGERS
 	// Hotkey
-	
-	
-	
 
 
-	
+	/// <summary>
+	/// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
+	/// </summary>
+	/// <param name="text">The submitted text.</param>
+	/// <param name="textField">The LineEdit field.</param>
+	private void TimeFieldSubmitted(string text, LineEdit textField)
+	{
+		try
+		{
+			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out var labeledTime);
+
+			if (time == "")
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}",
+					1); // Warning log
+				return;
+			}
+
+			textField.Text = time;
+			textField.TooltipText = labeledTime;
+			if (textField == _preWaitInput)
+			{
+				_focusedCue.PreWait = timeSecs;
+			}
+			else if (textField == _postWaitInput)
+			{
+				_focusedCue.PostWait = timeSecs;
+			}
+
+			// Recalculate duration
+			var durationSecs = _focusedCue.CalculateTotalDuration();
+			_durationValue.Text =
+				UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+			//? durLabeledTime : _durationValue.Text; // Fallback to previous if parse fails
+			_durationValue.TooltipText = durLabeledTime;
+			textField.ReleaseFocus();
+		}
+		catch (Exception ex)
+		{
+			GD.Print($"ShellInspector:TimeFieldSubmitted - Error parsing time: {ex.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing time: {ex.Message}", 2);
+		}
+	}
+
+
+	private void FollowOptionItemSelected(long index)
+	{
+		int selectedValue = _followOption.GetItemMetadata((int)index).AsInt32();
+		_focusedCue.Follow = (FollowType)selectedValue;
+	}
+
+
+
 	// Handling the updating of fields
 	private void _onCueNumTextChanged(string data)
 	{

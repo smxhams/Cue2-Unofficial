@@ -134,7 +134,7 @@ public partial class AudioInspector : Control
         _routingContainer.Visible = false; // Hidden until needed.
         
         
-        FormatLabels(this);
+        UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
         
         GetNode<Label>("%InfoLabel").AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
         
@@ -240,19 +240,6 @@ public partial class AudioInspector : Control
             _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString(); // Revert to previous
         }
         _playCountInput.ReleaseFocus();
-    }
-
-    private void FormatLabels(Node root)
-    {
-
-        if (root is Label label)
-        {
-            label.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
-        }
-        foreach (var child in root.GetChildren())
-        {
-            FormatLabels(child);
-        }
     }
     
     private void PopulateOutputOptions()
