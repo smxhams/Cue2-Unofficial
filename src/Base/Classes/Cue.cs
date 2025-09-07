@@ -69,6 +69,14 @@ public class AudioComponent : ICueComponent
         return data;
     }
 
+    public Double RecalculateDuration()
+    {
+        Duration = EndTime < 0 ? FileDuration - StartTime 
+            : EndTime - StartTime;
+        Duration *= PlayCount;
+        return Duration;
+    }
+
     public void LoadFromData(Dictionary data)
     {
         if (!data.ContainsKey("AudioFile")) 
@@ -199,7 +207,7 @@ public class Cue : ICue
         Command = "";
     }
 
-    public Cue(Dictionary data) // Load from saved data - Using full namespace //!!!
+    public Cue(Dictionary data) // Load from saved data - Using full namespace
     {
         if (!data.ContainsKey("Id"))
         {
@@ -310,18 +318,37 @@ public class Cue : ICue
     public double CalculateTotalDuration()
     {
         var contentsDuration = 0.0;
-        foreach (var comp in Components)
+        foreach (var component in Components)
         {
-            if (comp.Type == "Audio")
+            if (component.Type == "Audio")
             {
-                if (contentsDuration < ((AudioComponent)comp).Duration) contentsDuration = ((AudioComponent)comp).Duration;
+                if (((AudioComponent)component).Loop == true)
+                {
+                    contentsDuration = -1;
+                    break;
+                }
+                var componentDuration = ((AudioComponent)component).RecalculateDuration();
+                if (contentsDuration < componentDuration) contentsDuration = componentDuration;
             }
-            else if (comp.Type == "Video")
+            else if (component.Type == "Video")
             {
                 //contentsDuration = ((VideoComponent)comp).Duration;
             }
         }
+
+        // If loop
+        if (contentsDuration == -1)
+        {
+            TotalDuration = -1;
+            return TotalDuration;
+        }
+        
         var childDuration = DurationOfChildren();
+        if (childDuration == -1)
+        {
+            TotalDuration = -1;
+            return TotalDuration;
+        }
         if (childDuration > contentsDuration) contentsDuration = childDuration;
         Duration = contentsDuration;
         TotalDuration = PreWait + contentsDuration + PostWait;
@@ -337,6 +364,8 @@ public class Cue : ICue
             if (childCue != null)
             {
                 var childDuration = childCue.CalculateTotalDuration();
+                if (childDuration == -1) return childDuration; // Break if loop found
+
                 if (childDuration > longestDuration) longestDuration = childDuration;
             }
         }

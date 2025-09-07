@@ -17,6 +17,7 @@ public partial class GlobalSignals : Node
 	[Signal]  public delegate void UpdateShellBarEventHandler(int cue);
 	[Signal]  public delegate void OpenSelectedSessionEventHandler(string path);
 	[Signal]  public delegate void SaveFileEventHandler(string url, string showName);
+	[Signal] public delegate void SyncShellInspectorEventHandler();
 	
 	
 	// Signals Associated with InputActions

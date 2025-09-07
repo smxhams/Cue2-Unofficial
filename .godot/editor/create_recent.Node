@@ -1,8 +1,11 @@
+Timer
+MarginContainer
+HBoxContainer
+ProgressBar
 OptionButton
 VBoxContainer
 Label
 PanelContainer
-MarginContainer
 Button
 Control
 Container
@@ -10,6 +13,3 @@ VSeparator
 Line2D
 ScrollContainer
 HSlider
-HBoxContainer
-SubViewport
-GridContainer

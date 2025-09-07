@@ -57,6 +57,8 @@ public partial class ShellInspector : Control
 		_preWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _preWaitInput);
 		_postWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _postWaitInput);
 		_followOption.ItemSelected += FollowOptionItemSelected;
+
+		_globalSignals.SyncShellInspector += UpdateFields;
 		
 		
 		
@@ -100,6 +102,7 @@ public partial class ShellInspector : Control
 
 	}
 	
+	
 	// Shell Colour
 	// Shell outline colour
 	// Delete cue
@@ -109,6 +112,19 @@ public partial class ShellInspector : Control
 	
 	// TRIGGERS
 	// Hotkey
+
+	public void UpdateFields()
+	{
+		_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
+		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
+		var duration = _focusedCue.TotalDuration;
+		if (duration < 0)
+		{
+			_durationValue.Text = "Until Stopped";
+		}
+		else _durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
+	}
+	
 
 
 	/// <summary>

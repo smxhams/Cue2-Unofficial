@@ -21,7 +21,6 @@ public partial class AudioInspector : Control
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
     private AudioDevices _audioDevices;
-
     
     private Cue _focusedCue;
     private AudioComponent _focusedAudioComponent;
@@ -70,6 +69,7 @@ public partial class AudioInspector : Control
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+        
 		
         _globalSignals.ShellFocused += ShellSelected;
         
@@ -122,7 +122,7 @@ public partial class AudioInspector : Control
         _startTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _startTimeInput);
         _endTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _endTimeInput);
         _volumeInput.TextSubmitted += (string newText) => VolumeInputSubmitted(newText, _volumeInput);
-        _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; };
+        _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; SyncDuration();};
         //_playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
         _playCountInput.TextSubmitted+= OnPlayCountSubmitted;
         _outputOptionButton.ItemSelected += OutputOptionSelected;
@@ -176,14 +176,8 @@ public partial class AudioInspector : Control
             }
             
             // Recalculate duration
-            var durationSecs = _focusedAudioComponent.EndTime < 0 
-                ? _focusedAudioComponent.FileDuration - _focusedAudioComponent.StartTime 
-                : _focusedAudioComponent.EndTime - _focusedAudioComponent.StartTime;
-            _durationValue.Text =
-                UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
-                //? durLabeledTime : _durationValue.Text; // Fallback to previous if parse fails
-            _focusedAudioComponent.Duration = durationSecs;
-            _durationValue.TooltipText = durLabeledTime;
+            SyncDuration();
+            
             textField.ReleaseFocus();
             
             // Update waveform
@@ -196,7 +190,7 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing time: {ex.Message}", 2);
         }
     }
-
+    
     
     /// <summary>
     /// Handles volume input submission. Converts dB to linear, updates component, and formats display.
@@ -233,6 +227,7 @@ public partial class AudioInspector : Control
         if (int.TryParse(newText, out var playCount) && playCount > 0)
         {
             _focusedAudioComponent.PlayCount = playCount;
+            SyncDuration();
         }
         else
         {
@@ -623,7 +618,19 @@ public partial class AudioInspector : Control
         {
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
-                _isDraggingStart = mouseButton.Pressed;
+                if (mouseButton.Pressed)
+                {
+                    _isDraggingStart = true;
+                }
+                else // Released
+                {
+                    if (_isDraggingStart)
+                    {
+                        //Recaluclate duration only on release
+                        SyncDuration();
+                        _isDraggingStart = false;
+                    }
+                }
             }
         }
         else if (@event is InputEventMouseMotion mouseMotion && _isDraggingStart)
@@ -646,7 +653,18 @@ public partial class AudioInspector : Control
         {
             if (mouseButton.ButtonIndex == MouseButton.Left)
             {
-                _isDraggingEnd = mouseButton.Pressed;
+                if (mouseButton.Pressed)
+                {
+                    _isDraggingEnd = true;
+                }
+                else // Released
+                {
+                    if (_isDraggingEnd)
+                    {
+                        SyncDuration();
+                        _isDraggingEnd = false;
+                    }
+                }
             }
         }
         else if (@event is InputEventMouseMotion mouseMotion && _isDraggingEnd)
@@ -661,6 +679,17 @@ public partial class AudioInspector : Control
             _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime); // Update input
             DrawWaveform(); // Refresh
         }
+    }
+
+    
+    private void SyncDuration()
+    {
+        _focusedCue.CalculateTotalDuration();
+        var durationSecs = _focusedAudioComponent.Duration;
+        _durationValue.Text =
+            UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+        _durationValue.TooltipText = durLabeledTime;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
     }
     
     
