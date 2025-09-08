@@ -17,7 +17,7 @@ namespace Cue2.Base.Classes;
 public partial class ActiveCue : GodotObject
 {
     private readonly Cue _cue;
-    private readonly VBoxContainer _activeCueBar;
+    private readonly PanelContainer _activeCueBar;
     private readonly GlobalSignals _globalSignals;
     private readonly MediaEngine _mediaEngine;
     private readonly AudioDevices _audioDevices;
@@ -34,10 +34,15 @@ public partial class ActiveCue : GodotObject
     private Label _headLabelName;
     private Label _headLabelTimeLeft;
     private Label _headLabelTimeRight;
-    
+
+    private Button _headPause;
+    private Button _headStop;
+        
     private Label _preWaitTimerLabel;
     private ProgressBar _preWaitProgress;
     private PanelContainer _preWaitPanel;
+    private Button _preWaitPause;
+    private Button _preWaitSkip;
 
 
     public ActiveCue()
@@ -45,7 +50,7 @@ public partial class ActiveCue : GodotObject
         // Blank constructor for Godot
     }
     
-    public ActiveCue(Cue cue, VBoxContainer activeCueBar, MediaEngine mediaEngine, AudioDevices audioDevices, GlobalSignals globalSignals)
+    public ActiveCue(Cue cue, PanelContainer activeCueBar, MediaEngine mediaEngine, AudioDevices audioDevices, GlobalSignals globalSignals)
     {
         _cue = cue;
         _activeCueBar = activeCueBar;
@@ -57,6 +62,7 @@ public partial class ActiveCue : GodotObject
         _fadeTimer = new Timer();
         _fadeTimer.OneShot = true;
         _preWaitTimer = new Timer();
+        _preWaitTimer.IgnoreTimeScale = true;
         _activeCueBar.AddChild(_preWaitTimer);
         
         _updateTimer = new Timer();
@@ -74,6 +80,9 @@ public partial class ActiveCue : GodotObject
         _headLabelName.Text = _cue.Name;
         _headLabelTimeLeft.Text = UiUtilities.FormatTime(_cue.Duration);
         _headLabelTimeRight.Text = $"-({UiUtilities.FormatTime(_cue.Duration)})";
+        
+        _headPause = _activeCueBar.GetNode<Button>("%HeadPause");
+        _headStop = _activeCueBar.GetNode<Button>("%HeadStop");
 
     }
     
@@ -84,8 +93,8 @@ public partial class ActiveCue : GodotObject
         GD.Print($"ActiveCue:StartAsync - Starting: {_cue.Name}");
         
         // Set-up Ui
-        
-        
+        _headPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        _headStop.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
         
         // Pre-wait
         if (_cue.PreWait > 0)
@@ -96,8 +105,6 @@ public partial class ActiveCue : GodotObject
         {
             await RunComponents();
         }
-        
-        
         
     }
 
@@ -114,6 +121,10 @@ public partial class ActiveCue : GodotObject
         _preWaitTimerLabel = _activeCueBar.GetNode<Label>("%PreWaitTimer");
         _preWaitTimerLabel.Text = _preWaitTimer.TimeLeft.ToString();
         _preWaitProgress = _activeCueBar.GetNode<ProgressBar>("%PreWaitProgress");
+        _preWaitPause = _activeCueBar.GetNode<Button>("%PreWaitPause");
+        _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        _preWaitSkip = _activeCueBar.GetNode<Button>("%PreWaitSkip");
+        _preWaitSkip.Icon = _activeCueBar.GetThemeIcon("Skip", "AtlasIcons");
 
         _preWaitPanel.Visible = true;
 
@@ -122,6 +133,26 @@ public partial class ActiveCue : GodotObject
         _preWaitTimer.Timeout += PreWaitComplete;
         
         _preWaitTimer.Start();
+        
+        // Pause logic
+        _preWaitPause.Pressed += () =>
+        {
+            if (_preWaitTimer.Paused)
+            {
+                // Play prewait
+                _preWaitTimer.SetPaused(false);
+                _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+            }
+            else
+            {
+                // Pause prewait
+                _preWaitTimer.SetPaused(true);
+                _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
+            }
+        };
+
+        _preWaitSkip.Pressed += PreWaitComplete;
+
     }
 
     private void PreWaitUpdate()
@@ -134,6 +165,7 @@ public partial class ActiveCue : GodotObject
     private async void PreWaitComplete()
     {
         _updateTimer.Timeout -= PreWaitUpdate;
+        _preWaitTimer.Timeout -= PreWaitComplete;
         _preWaitPanel.QueueFree();
         await RunComponents();
     }
@@ -169,12 +201,6 @@ public partial class ActiveCue : GodotObject
             }
             _isPlaying = true;
             InitialiseUi();
-            _updateTimer = new Timer()
-            {
-                WaitTime = 0.1f,
-                OneShot = false,
-                Autostart = true
-            };
             _activeCueBar.AddChild(_updateTimer);
             _updateTimer.Timeout += UpdateUiState;
             

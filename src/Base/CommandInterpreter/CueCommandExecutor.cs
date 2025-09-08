@@ -96,10 +96,10 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         return;
     }
     
-    public VBoxContainer LoadActiveCueBar()
+    public PanelContainer LoadActiveCueBar()
     {
         // Load in a shell bar
-        VBoxContainer activeBar = (VBoxContainer)SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out var error);
+        PanelContainer activeBar = (PanelContainer)SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out var error);
         if (activeBar == null || !string.IsNullOrEmpty(error))
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load active cue bar: {error}", 2);
