@@ -1,4 +1,6 @@
-[gd_scene load_steps=5 format=3 uid="uid://dt7rlfag7yr2c"]
+[gd_scene load_steps=7 format=3 uid="uid://dt7rlfag7yr2c"]
+
+[ext_resource type="PackedScene" uid="uid://cb7g4xgryo2dg" path="res://src/UI/Scenes/ComponentProgressBar.tscn" id="1_4ndav"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2onnw"]
 draw_center = false
@@ -16,6 +18,11 @@ bg_color = Color(0.454109, 0.000192667, 0.47222, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_usfis"]
 bg_color = Color(0.592157, 0.294118, 0.0313726, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fc2kv"]
+bg_color = Color(0, 0, 0, 1)
+border_width_bottom = 1
+border_color = Color(2.88785e-07, 0.274594, 0.728915, 1)
 
 [node name="ActiveCueBar" type="PanelContainer"]
 anchors_preset = 15
@@ -40,24 +47,26 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_4ndav")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+[node name="ProgressBarContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 1
 
-[node name="PreWaitBar" type="PanelContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+[node name="PreWaitBar" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
-[node name="PreWaitProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar"]
+[node name="PreWaitProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 theme_override_styles/fill = SubResource("StyleBoxFlat_kb0cf")
 show_percentage = false
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress"]
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -67,10 +76,10 @@ grow_vertical = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_right = 10
 
-[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer"]
 layout_mode = 2
 
-[node name="PreWaitPause" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+[node name="PreWaitPause" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -79,27 +88,27 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="PreWaitLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+[node name="PreWaitLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Pre-Wait"
 
-[node name="PreWaitNameLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+[node name="PreWaitNameLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Name"
 horizontal_alignment = 1
 
-[node name="PreWaitTimer" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+[node name="PreWaitTimer" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "0"
 horizontal_alignment = 2
 
-[node name="PreWaitSkip" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+[node name="PreWaitSkip" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -108,12 +117,12 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="CueProgressHead" type="Panel" parent="PanelContainer/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 40)
+[node name="CueProgressHead" type="Panel" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 size_flags_vertical = 0
 
-[node name="ProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead"]
+[node name="ProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -127,7 +136,22 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_usfis")
 value = 20.0
 show_percentage = false
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar"]
+[node name="FadeProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_vertical = 1
+mouse_default_cursor_shape = 2
+theme_override_styles/fill = SubResource("StyleBoxFlat_fc2kv")
+fill_mode = 2
+show_percentage = false
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -137,10 +161,10 @@ grow_vertical = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_right = 10
 
-[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer"]
 layout_mode = 2
 
-[node name="HeadPause" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
+[node name="HeadPause" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -149,28 +173,28 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="GridContainer" type="GridContainer" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
+[node name="GridContainer" type="GridContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 mouse_filter = 2
 columns = 2
 
-[node name="LabelName" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
+[node name="LabelName" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 text = "Name"
 
-[node name="LabelBlank" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
+[node name="LabelBlank" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_alignment = 2
 
-[node name="LabelTimeLeft" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
+[node name="LabelTimeLeft" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -178,7 +202,7 @@ size_flags_vertical = 3
 text = "Time"
 vertical_alignment = 2
 
-[node name="LabelTimeRight" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
+[node name="LabelTimeRight" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -187,7 +211,7 @@ text = "Time Remaining"
 horizontal_alignment = 2
 vertical_alignment = 2
 
-[node name="HeadStop" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
+[node name="HeadStop" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -195,41 +219,6 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="ComponentProgressBar" type="PanelContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 20)
+[node name="ComponentProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer" instance=ExtResource("1_4ndav")]
+visible = false
 layout_mode = 2
-
-[node name="ComponentProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar"]
-custom_minimum_size = Vector2(0, 20)
-layout_mode = 2
-show_percentage = false
-
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar/ComponentProgress"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_right = 10
-
-[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar/ComponentProgress/MarginContainer"]
-layout_mode = 2
-
-[node name="PreWaitLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar/ComponentProgress/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Pre-Wait"
-
-[node name="PreWaitNameLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar/ComponentProgress/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Name"
-horizontal_alignment = 1
-
-[node name="PreWaitTimer" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ComponentProgressBar/ComponentProgress/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "0"
-horizontal_alignment = 2

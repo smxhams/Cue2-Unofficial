@@ -31,8 +31,15 @@ public class AudioComponent : ICueComponent
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
 
+    /// <summary>
+    /// Duration is length of audio between start and endtime
+    /// </summary>
     public double Duration { get; set; } = 0.0;
     
+    /// <summary>
+    /// TotalDuration is time the audio plays including playcount. ((Endtime-Starttime) * playcount)
+    /// </summary>
+    /// <value>Returns -1 if looping enabled</value>
     public double TotalDuration { get; set; } = 0.0;
     public double FileDuration { get; set; } = 0.0;
     public double Volume { get; set; } = 1.0f;
@@ -73,7 +80,7 @@ public class AudioComponent : ICueComponent
     {
         Duration = EndTime < 0 ? FileDuration - StartTime 
             : EndTime - StartTime;
-        Duration *= PlayCount;
+        TotalDuration = Duration * PlayCount;
         return Duration;
     }
 
@@ -194,6 +201,7 @@ public class Cue : ICue
     public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
     public double TotalDuration { get; set; } = 0.0;
     public double PostWait { get; set; } = 0.0;
+    public Color Color { get; set; }
     public FollowType Follow = FollowType.None;
 
     
@@ -327,7 +335,8 @@ public class Cue : ICue
                     contentsDuration = -1;
                     break;
                 }
-                var componentDuration = ((AudioComponent)component).RecalculateDuration();
+                ((AudioComponent)component).RecalculateDuration();
+                var componentDuration = ((AudioComponent)component).TotalDuration;
                 if (contentsDuration < componentDuration) contentsDuration = componentDuration;
             }
             else if (component.Type == "Video")

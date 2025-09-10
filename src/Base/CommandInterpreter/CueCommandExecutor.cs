@@ -66,7 +66,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
                 _activeCueList.AddChild(activeCueBar);
                 // Init active cue
                 var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
-                _activeCues.Add(activeCue);
+                //_activeCues.Add(activeCue);
                 await activeCue.StartAsync();
             }
             catch (Exception ex)
@@ -90,6 +90,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         }
         
     }
+    
     
     private void StopAllCommand()
     {

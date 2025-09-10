@@ -1,14 +1,14 @@
+<DOCUMENT filename="ActiveCue.cs">
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot;
+using Godot.Collections;
 
 namespace Cue2.Base.Classes;
-
 
 /// <summary>
 /// Manages the active state of a playing cue, including timers for fades/delays, UI updates, and interaction with playback engines.
@@ -22,21 +22,16 @@ public partial class ActiveCue : GodotObject
     private readonly GlobalSignals _globalSignals;
     private readonly MediaEngine _mediaEngine;
     private readonly AudioDevices _audioDevices;
-    private readonly Settings _settings;
 
     private Timer _fadeTimer; // For fade-in/out
     private Timer _updateTimer;
     private bool _isPlaying;
-    private ActiveAudioPlayback _audioPlayback;
-    private bool _inPreWait = false;
+    private ActiveAudioPlayback _audioPlayback; //!!! (Note: This is deprecated in favor of _activeAudioComponents; will be removed in future refactoring)
 
     private Timer _preWaitTimer;
     
-    private Dictionary<PanelContainer, ActiveAudioPlayback> _activeAudioComponents = new Dictionary<PanelContainer, ActiveAudioPlayback>();
-    private Dictionary<PanelContainer, AudioComponent> _componentToAudio = new Dictionary<PanelContainer, AudioComponent>();
-    
-    [Signal]
-    public delegate void CompletedEventHandler();
+    private Dictionary<Node, ActiveAudioPlayback> _activeAudioComponents = new Dictionary<Node, ActiveAudioPlayback>();
+    private Dictionary<Node, AudioComponent> _componentToAudio = new Dictionary<Node, AudioComponent>(); //!!!
     
     
     // UI
@@ -58,7 +53,9 @@ public partial class ActiveCue : GodotObject
     
     private PackedScene _componentProgressBarScene;
 
-    private bool _isPaused = false;
+    private bool _isPaused = false; //!!!
+
+
 
     public ActiveCue()
     {
@@ -73,8 +70,6 @@ public partial class ActiveCue : GodotObject
         _audioDevices = audioDevices;
         _globalSignals = globalSignals;
 
-        _settings = _activeCueBar.GetNode<GlobalData>("/root/GlobalData").Settings;
-
         // Setup optional fade timer (use Godot Timer for cross-platform)
         _fadeTimer = new Timer();
         _fadeTimer.OneShot = true;
@@ -86,7 +81,7 @@ public partial class ActiveCue : GodotObject
         _activeCueBar.AddChild(_updateTimer);
         _updateTimer.OneShot = false;
         _updateTimer.WaitTime = 0.05; // Sets update rate for ui
-        _updateTimer.Timeout += UpdateUi;
+        _updateTimer.Timeout += UpdateUi; //!!!
         _updateTimer.Start();
         
         _progressBarContainer = _activeCueBar.GetNode<VBoxContainer>("%ProgressBarContainer");
@@ -105,10 +100,7 @@ public partial class ActiveCue : GodotObject
         _headStop = _activeCueBar.GetNode<Button>("%HeadStop");
 
         _componentProgressBarScene = SceneLoader.LoadPackedScene("uid://cb7g4xgryo2dg", out _);
-
         
-
-
     }
     
 
@@ -120,9 +112,9 @@ public partial class ActiveCue : GodotObject
         // Set-up Ui
         _headPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
         _headStop.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
-
-        _headPause.Pressed += TogglePauseAll;
-        _headStop.Pressed += StopAll;
+        
+        _headPause.Pressed += TogglePauseAll; //!!!
+        _headStop.Pressed += () => Stop(); //!!!
         
         // Set up components
         await SetupComponents();
@@ -137,17 +129,11 @@ public partial class ActiveCue : GodotObject
             await PlayAllComponents();
         }
         
-        _globalSignals.StopAll += StopAll;
-        _globalSignals.PauseAll += GlobalPauseAll;
-        _globalSignals.ResumeAll += GlobalResumeAll;
-
     }
-
-    
 
     private void PreWait()
     {
-        GD.Print($"ActiveCue:PreWait - Pre-wait of {_cue.PreWait} detected");
+        GD.Print($"ActiveCue:PreWait - Pre-wait of {_cue.PreWait} detected"); //!!!
         _preWaitTimer.OneShot = true;
         _preWaitTimer.WaitTime = _cue.PreWait;
         
@@ -156,27 +142,37 @@ public partial class ActiveCue : GodotObject
         var preWaitNameLabel = _activeCueBar.GetNode<Label>("%PreWaitNameLabel");
         preWaitNameLabel.Text = _cue.Name;
         _preWaitTimerLabel = _activeCueBar.GetNode<Label>("%PreWaitTimer");
-        _preWaitTimerLabel.Text = _preWaitTimer.TimeLeft.ToString();
+        _preWaitTimerLabel.Text = UiUtilities.FormatTime(_cue.PreWait); //!!!
         _preWaitProgress = _activeCueBar.GetNode<ProgressBar>("%PreWaitProgress");
         _preWaitPause = _activeCueBar.GetNode<Button>("%PreWaitPause");
         _preWaitSkip = _activeCueBar.GetNode<Button>("%PreWaitSkip");
-
-        _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-        _preWaitSkip.Icon = _activeCueBar.GetThemeIcon("Skip", "AtlasIcons");
         
-        _preWaitPanel.Visible = true;
-
-        _inPreWait = true;
-        _updateTimer.Timeout += PreWaitUpdate;
+        _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons"); //!!!
         
+        bool preWaitPaused = false; //!!!
+        double remainingPreWait = 0; //!!!
         
-        // Pause logic
-        _preWaitPause.Pressed += TogglePreWaitPause;
+        _preWaitPause.Pressed += () => //!!!
+        {
+            preWaitPaused = !preWaitPaused;
+            if (preWaitPaused)
+            {
+                remainingPreWait = _preWaitTimer.TimeLeft;
+                _preWaitTimer.Stop();
+                _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
+            }
+            else
+            {
+                _preWaitTimer.WaitTime = remainingPreWait;
+                _preWaitTimer.Start();
+                _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+            }
+        };
 
         _preWaitSkip.Pressed += PreWaitComplete;
 
-        _preWaitTimer.Timeout += PreWaitComplete;
-        _preWaitTimer.Start();
+        _preWaitTimer.Timeout += PreWaitComplete; //!!!
+        _preWaitTimer.Start(); //!!! (Moved here for clarity)
     }
 
     private void PreWaitUpdate()
@@ -185,45 +181,22 @@ public partial class ActiveCue : GodotObject
         var preWaitPercentage = (_preWaitTimer.TimeLeft / (float)_cue.PreWait) * 100;
         _preWaitProgress.Value = preWaitPercentage;
     }
-
-    private void TogglePreWaitPause()
-    {
-        if (_preWaitTimer.Paused)
-        {
-            PreWaitResume();
-        }
-        else
-        {
-            PreWaitPause();
-        }
-    }
-
-    private void PreWaitPause()
-    {
-        _preWaitTimer.SetPaused(true);
-        _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
-    }
-
-    private void PreWaitResume()
-    {
-        _preWaitTimer.SetPaused(false);
-        _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-    }
     
     private async void PreWaitComplete()
     {
-        _updateTimer.Timeout -= PreWaitUpdate;
-        _preWaitTimer.Timeout -= PreWaitComplete;
-        _preWaitPause.Pressed -= TogglePreWaitPause;
-        if (_preWaitPanel != null) _preWaitPanel.QueueFree();
-        _inPreWait = false;
+        _preWaitTimer.Timeout -= PreWaitComplete; //!!!
+        if (_preWaitPanel != null) _preWaitPanel.QueueFree(); //!!!
         await PlayAllComponents();
     }
-
-
-    private void UpdateUi()
+    
+    private void UpdateUi() //!!!
     {
-        foreach (var panel in _activeAudioComponents.Keys)
+        if (_preWaitPanel != null && IsInstanceValid(_preWaitPanel))
+        {
+            PreWaitUpdate();
+        }
+        
+        foreach (var panel in _activeAudioComponents.Keys.ToArray())
         {
             if (IsInstanceValid(panel))
             {
@@ -231,29 +204,32 @@ public partial class ActiveCue : GodotObject
                 UpdateComponentUiState(panel, audioComponent);
             }
         }
+        
+        // TODO: Implement head progress bar update if needed (e.g., based on max component duration)
     }
 
     private async Task SetupComponents()
     {
-        var tasks = new List<Task>();
+        var tasks = new List<Task>(); //!!!
         foreach (var component in _cue.Components)
         {
             if (component is AudioComponent audioComponent)
             {
-                tasks.Add(ActivateAudioComponent(audioComponent));
+                tasks.Add(ActivateAudioComponent(audioComponent)); //!!!
             }
         }
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks); //!!!
     }
 
 
     private async Task PlayAllComponents()
     {
-        if (_isPaused) return;
-        foreach (var audio in _activeAudioComponents)
+        foreach (var audio in _activeAudioComponents.Values) //!!!
         {
-            audio.Value.Resume();
+            audio.Resume();
         }
+        _isPlaying = true; //!!! (Moved here as components are now playing)
+        _isPaused = false; //!!!
     }
 
 
@@ -266,11 +242,11 @@ public partial class ActiveCue : GodotObject
                 var audioPath = audioComponent.AudioFile;
                 var patch = audioComponent.Patch;
                 
-                _audioPlayback = await _audioDevices.PlayAudio(audioComponent, 1, patch);
-                GD.Print($"ActiveCue:ActivateAudioComponent - Trying audio playback");
+                _audioPlayback = await _audioDevices.PlayAudio(audioPath, audioComponent.DirectOutput, 1, patch);
+                GD.Print($"ActiveCue:ActivateAudioComponent - Trying audio playback"); //!!!
                 if (_audioPlayback == null)
                 {
-                    throw new Exception("ActiveCue:ActivateAudioComponent - Failed to start audio playback.");
+                    throw new Exception("Failed to start audio playback.");
                 }
             }
             
@@ -279,28 +255,23 @@ public partial class ActiveCue : GodotObject
             _progressBarContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = Path.GetFileName(audioComponent.AudioFile);
             var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio", "AtlasIcons");
             var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
+            pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
             timeLabel.Text = UiUtilities.FormatTime(audioComponent.TotalDuration);
             
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio", "AtlasIcons");
-            pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
-            
-            
-            // Component Logic
-            
             _activeAudioComponents.Add(componentPanel, _audioPlayback);
-            _componentToAudio.Add(componentPanel, audioComponent);
+            _componentToAudio.Add(componentPanel, audioComponent); //!!!
             
-            
-            pauseButton.Pressed += () => 
+            // Implement pause toggle for component
+            bool componentPaused = false; //!!!
+            pauseButton.Pressed += () => //!!!
             {
-                
                 var playback = _activeAudioComponents[componentPanel];
-                bool componentPaused = playback.MediaPlayer.IsPlaying;
-                
+                componentPaused = !componentPaused;
                 if (componentPaused)
                 {
                     playback.Pause();
@@ -313,14 +284,17 @@ public partial class ActiveCue : GodotObject
                 }
             };
             
-            // Stop
-            stopButton.Pressed += async () => await StopComponent(componentPanel);
+            // Implement stop for component
+            stopButton.Pressed += () => //!!!
+            {
+                var playback = _activeAudioComponents[componentPanel];
+                playback.Stop();
+            };
             
-            
-            // Progress bar seeking
-            var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
-            bool isSeeking = false; 
-            progressBar.GuiInput += (@event) => 
+            // Implement seek on progress bar (click and drag)
+            var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress"); //!!!
+            bool isSeeking = false; //!!!
+            progressBar.GuiInput += (@event) => //!!!
             {
                 if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
                 {
@@ -342,10 +316,9 @@ public partial class ActiveCue : GodotObject
                     GD.Print($"ActiveCue:ActivateAudioComponent - Seeking to {seekTime}");
                 }
             };
-            
 
-            // Cleanup
-            _audioPlayback.Completed += () =>
+            // Handle completion and cleanup for this component
+            _audioPlayback.Completed += () => //!!!
             {
                 if (_activeAudioComponents.ContainsKey(componentPanel))
                 {
@@ -365,27 +338,17 @@ public partial class ActiveCue : GodotObject
                 }
             };
 
-
         }
         catch (Exception ex)
         {
-            GD.Print($"ActiveCue:StartAsync - Exception: {ex.Message}");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
-            StopAll();
+            GD.Print($"ActiveCue:ActivateAudioComponent - Exception: {ex.Message}"); //!!!
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error activating audio component: {ex.Message}", 2); //!!!
+            Stop();
         }
         
     }
-
-    private async Task StopComponent(PanelContainer componentPanel)
-    {
-        var playback = _activeAudioComponents[componentPanel];
-        var tasks = new List<Task>();
-        tasks.Add(playback.Stop(_settings.StopFadeDuration));
-        await Task.WhenAll(tasks);
-    }
     
-    private void UpdateComponentUiState(PanelContainer componentPanel, AudioComponent audioComponent)
+    private void UpdateComponentUiState(Node componentPanel, AudioComponent audioComponent)
     {
         var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
         var audioPlayback = _activeAudioComponents[componentPanel];
@@ -395,115 +358,67 @@ public partial class ActiveCue : GodotObject
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
         timeLabel.Text = UiUtilities.FormatTime(trackTime);
         progressBar.Value = progressPercentage;
-        
-        // Update fade-out progress
-        var fadeProgress = componentPanel.GetNode<ProgressBar>("%ComponentFadeProgress");
-        if (audioPlayback.IsFadingOut)
-        {
-            fadeProgress.Visible = true;
-            fadeProgress.Value = (1 - audioPlayback.CurrentVolume) * 100;
-        }
-        else
-        {
-            fadeProgress.Visible = false;
-        }
-        
     }
-    
-    
-    private void TogglePauseAll()
+
+    private void TogglePauseAll() //!!!
     {
+        _isPaused = !_isPaused;
         if (_isPaused)
         {
-            ResumeAll();
+            foreach (var playback in _activeAudioComponents.Values)
+            {
+                playback.Pause();
+            }
+            _headPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
         }
         else
         {
-            PauseAll();
+            foreach (var playback in _activeAudioComponents.Values)
+            {
+                playback.Resume();
+            }
+            _headPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
         }
     }
-
-    private void ResumeAll()
-    {
-        foreach (var playback in _activeAudioComponents)
-        {
-            playback.Value.Resume();
-            playback.Key.GetNode<Button>("%ComponentPause").Icon = playback.Key.GetThemeIcon("Pause", "AtlasIcons");
-        }
-        _headPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-        _isPaused = false;
-    }
-
-    private void PauseAll()
-    {
-        foreach (var playback in _activeAudioComponents)
-        {
-            playback.Value.Pause();
-            playback.Key.GetNode<Button>("%ComponentPause").Icon = playback.Key.GetThemeIcon("Play", "AtlasIcons");
-        }
-        _headPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
-        _isPaused = true;
-    }
-    
 
     /// <summary>
     /// Stops playback with optional fade-out.
     /// </summary>
-    public async void StopAll()
+    public void Stop(bool fadeOut = true)
     {
-        // If in prewait, dispose all
-        if (_inPreWait || _isPaused)
+        if (!_isPlaying) return;
+        // TODO: Implement fade-out logic if fadeOut is true (e.g., await SetVolumeAsync on all playbacks)
+        if (fadeOut)
         {
-            Cleanup();
-            return;
+            GD.Print($"ActiveCue:Stop - Fade-out not yet implemented; stopping immediately"); //!!!
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Fade-out for cue stop is not implemented yet", 1); //!!!
         }
-        var tasks = new List<Task>();
-        var fadeDuration = _settings.StopFadeDuration;
-        foreach (var audioComp in _activeAudioComponents)
+        InternalStop();
+    }
+    
+    private void InternalStop()
+    {
+        foreach (var playback in _activeAudioComponents.Values) //!!!
         {
-            tasks.Add(audioComp.Value.Stop(fadeDuration));
+            playback.Stop();
         }
-        await Task.WhenAll(tasks);
         _isPlaying = false;
+        //UpdateUiState("Stopped");
+        // Emit signal if needed
     }
     
-    private void GlobalPauseAll()
-    {
-        if (_inPreWait == true) 
-        {
-            PreWaitPause();
-        }
-        else PauseAll();
-    }
-
-    private void GlobalResumeAll()
-    {
-        if (_inPreWait == true)
-        {
-            PreWaitResume();
-        }
-        else ResumeAll();
-    }
-    
-    private void Cleanup()
+    private void Cleanup() //!!!
     {
         _updateTimer.Stop();
-        
-        _globalSignals.StopAll -= StopAll;
-        _globalSignals.PauseAll -= GlobalPauseAll;
-        _globalSignals.ResumeAll -= GlobalResumeAll;
-        _headPause.Pressed -= TogglePauseAll;
-        _headStop.Pressed -= StopAll;
         _updateTimer.Timeout -= UpdateUi;
-        
         _updateTimer.QueueFree();
         _preWaitTimer.QueueFree();
         _fadeTimer.QueueFree();
         _activeCueBar.QueueFree();
-        EmitSignal(SignalName.Completed, this);
-        Free();
+        QueueFree();
         GD.Print($"ActiveCue:Cleanup - Cleaned up active cue: {_cue.Name}");
     }
     
     // What I want to do - take audio file, split the 2 ch's and compose to audio streams according to the device.
 }
+</DOCUMENT>

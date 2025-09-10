@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
     <list default="true" id="3603db88-aea1-472e-b3d9-57e6b51cab2a" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="DarkyenusTimeTracker">
+    <option name="totalTimeSeconds" value="483" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -16,6 +22,18 @@
     &quot;assignee&quot;: &quot;smxhams&quot;
   }
 }</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/smxhams/Cue2.git&quot;,
+    &quot;accountId&quot;: &quot;30163182-d938-468b-8281-4fc188c721f1&quot;
+  }
+}</component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/src/Dumper.cs" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 1
 }</component>
@@ -26,9 +44,14 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Native Executable.Editor.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "com.codeium.enabled": "true",
     "git-widget-placeholder": "main",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "preferences.pluginManager",
     "vue.rearranger.settings.migration": "true"
@@ -46,13 +69,17 @@
       <method v="2" />
     </configuration>
     <configuration name="Editor" type="RunNativeExe" factoryName="Native Executable">
-      <option name="EXE_PATH" value="$PROJECT_DIR$/../Ext/Godot_v4.3-stable_mono_win64/Godot_v4.3-stable_mono_win64.exe" />
+      <option name="EXE_PATH" value="$PROJECT_DIR$/../Ext/Godot_v4.4-stable_mono_win64/Godot_v4.4-stable_mono_win64.exe" />
       <option name="PROGRAM_PARAMETERS" value="--path &quot;./&quot; --editor" />
-      <option name="WORKING_DIRECTORY" value="C:\MyFiles\Cue2_Home\Cue2" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="PASS_PARENT_ENVS" value="1" />
       <option name="USE_EXTERNAL_CONSOLE" value="0" />
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="GdScript Start and Debug.Player GDScript" />
+      <item itemvalue="Native Executable.Editor" />
+    </list>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -64,6 +91,8 @@
       <updated>1736198550014</updated>
       <workItem from="1736198551070" duration="14000" />
       <workItem from="1741820967320" duration="17000" />
+      <workItem from="1757462513955" duration="27000" />
+      <workItem from="1757462549454" duration="505000" />
     </task>
     <servers />
   </component>

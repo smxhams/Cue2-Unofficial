@@ -312,11 +312,14 @@ public partial class AudioDevices : Node
     }
 
 
-    public async Task<ActiveAudioPlayback> PlayAudio(string mediaPath, string deviceName, int outputChannel, AudioOutputPatch patch)
+    public async Task<ActiveAudioPlayback> PlayAudio(AudioComponent audioComponent, int outputChannel, AudioOutputPatch patch)
     {
 	    GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
 		var playback = new ActiveAudioPlayback();
 
+		var mediaPath = audioComponent.AudioFile;
+		var deviceName = audioComponent.DirectOutput;
+		
 		GD.Print($"Lets play this track: {mediaPath}");
 		var device = OpenAudioDevice(deviceName, out var error);
 		if (device == null)
@@ -391,12 +394,6 @@ public partial class AudioDevices : Node
 		mediaPlayer.SetAudioCallbacks(AudioCallback, null, null, null, null);
 		
 		
-		// Start playback
-		/*if (!mediaPlayer.Play())
-		{
-			throw new Exception("Failed to start VLC playback.");
-		}*/
-		
 		// Start SDL audio
 		SDL.ResumeAudioDevice(device.LogicalId);
 		
@@ -404,7 +401,7 @@ public partial class AudioDevices : Node
 		// Create and track ActiveAudioPlayback
 		// Each physical deivce Id has a list of AtiveAudioPlaybacks that are associated with it.
 		var deviceId = (int)device.PhysicalId;
-		playback = new ActiveAudioPlayback(mediaPlayer, device.LogicalId, audioStream, patch, outputChannel);
+		playback = new ActiveAudioPlayback(mediaPlayer, device.LogicalId, audioStream, patch, outputChannel, audioComponent);
 		if (!_activePlaybacks.ContainsKey(deviceId))
 		{
 			_activePlaybacks[deviceId] = new List<ActiveAudioPlayback>();

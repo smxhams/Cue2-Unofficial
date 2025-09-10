@@ -1,14 +1,14 @@
+ProgressBar
+Button
+TextureRect
 PanelContainer
 MarginContainer
 HBoxContainer
 Panel
 VBoxContainer
 Timer
-ProgressBar
 OptionButton
 Label
-Button
 Control
 Container
 VSeparator
-Line2D

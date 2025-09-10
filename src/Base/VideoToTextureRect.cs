@@ -16,7 +16,7 @@ public partial class VideoToTextureRect : TextureRect
 	private ImageTexture _godotTexture;
 	private Image _godotImage;
 	private byte[] _videoBuffer;
-	private Playback _playback;
+	//private Playback _playback;
 	private Window _window;
 	
 	[Export]
