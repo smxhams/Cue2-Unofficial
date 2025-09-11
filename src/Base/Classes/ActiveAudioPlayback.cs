@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,17 +16,21 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveAudioPlayback : GodotObject
 {
-    public readonly MediaPlayer MediaPlayer;
-    private readonly uint _sdlDevice;
-    private readonly IntPtr _audioStream;
-    private readonly AudioOutputPatch _patch;
-    private readonly int _outputChannel;
+    public MediaPlayer MediaPlayer;
+    public AudioOutputPatch Patch;
+    public CuePatch CuePatch { get; set; }
+    public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
+    public int SourceChannels { get; set; }
+    public int SourceBytesPerFrame { get; set; }
+    public SDL.AudioFormat SourceFormat { get; set; }
+    
     private readonly AudioComponent _audioComponent;
-
+        
+    
     private readonly object _lock = new object(); // For thread safety
     private float _volume = 1.0f; // Normalized [0-1]
     private bool _isFadingOut = false;
-    private bool _isStopped = false;
+    public bool IsStopped = false;
     private CancellationTokenSource _fadeCts;
     
     private long _startTimeMs;
@@ -46,13 +51,9 @@ public partial class ActiveAudioPlayback : GodotObject
         // Blank constructor for Godot
     }
     
-    public ActiveAudioPlayback(MediaPlayer mediaPlayer, uint sdlDevice, IntPtr audioStream, AudioOutputPatch patch, int outputChannel, AudioComponent audioComponent)
+    public ActiveAudioPlayback(MediaPlayer mediaPlayer, AudioComponent audioComponent)
     {
         MediaPlayer = mediaPlayer ?? throw new ArgumentNullException(nameof(mediaPlayer));
-        _sdlDevice = sdlDevice;
-        _audioStream = audioStream;
-        _patch = patch;
-        _outputChannel = outputChannel;
         _audioComponent = audioComponent ?? throw new ArgumentNullException(nameof(audioComponent));
         
         // Validate and set start time
@@ -128,7 +129,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            if (_isStopped)
+            if (IsStopped)
             {
                 GD.Print($"ActiveAudioPlayback:Stop - Playback already stopped");
                 return;
@@ -154,7 +155,7 @@ public partial class ActiveAudioPlayback : GodotObject
             
             lock (_lock)
             {
-                if (!_isStopped)
+                if (!IsStopped)
                 {
                     Clean();
                     GD.Print($"ActiveAudioPlayback:Stop - Playback stopped during fade-out");
@@ -164,20 +165,20 @@ public partial class ActiveAudioPlayback : GodotObject
         catch (OperationCanceledException)
         {
             // Fade-out was cancelled for immediate stop
-            GD.Print($"ActiveAudioPlayback:Stop - Fade-out cancelled for immediate stop");
             lock (_lock)
             {
-                if (!_isStopped)
+                if (!IsStopped)
                 {
+                    GD.Print($"ActiveAudioPlayback:Stop - Fade-out cancelled for immediate stop");
                     Clean();
                 }
             }
         }
         catch (Exception ex)
         {
-            GD.Print($"ActiveAudioPlayback:Stop - Exception during fade-out: {ex.Message}");
             lock (_lock)
             {
+                GD.Print($"ActiveAudioPlayback:Stop - Exception during fade-out: {ex.Message}");
                 Clean();
             }
         }
@@ -200,7 +201,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            if (_isStopped || _isFadingOut)
+            if (IsStopped || _isFadingOut)
             {
                 GD.Print($"ActiveAudioPlayback:Pause - Cannot pause: stopped or fading"); //!!!
                 return;
@@ -218,7 +219,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            if (_isStopped && _isFadingOut)
+            if (IsStopped && _isFadingOut)
             {
                 GD.Print($"ActiveAudioPlayback:Resume - Cannot resume: Stopped or fading");
             }
@@ -280,7 +281,7 @@ public partial class ActiveAudioPlayback : GodotObject
             float newVolume = Mathf.Lerp(startVolume, targetVolume, t);
             lock (_lock) 
             { 
-                if (_isStopped) return; // Early exit if stopped
+                if (IsStopped) return; // Early exit if stopped
                 _volume = newVolume; 
                 MediaPlayer.Volume = (int)(_volume * 100); 
             }
@@ -293,7 +294,7 @@ public partial class ActiveAudioPlayback : GodotObject
         {
             lock (_lock)
             {
-                if (_isStopped || _isFadingOut) break;
+                if (IsStopped || _isFadingOut) break;
             }
             long elapsed = _playTimer.ElapsedMilliseconds;
             long current = _startTimeMs + elapsed;
@@ -321,7 +322,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         lock (_lock)
         {
-            if (_isStopped || _isFadingOut) return;
+            if (IsStopped || _isFadingOut) return;
             HandleEndReached();
         }
     }
@@ -382,28 +383,74 @@ public partial class ActiveAudioPlayback : GodotObject
     }
     
     
-    // Dispose: Call Stop()
     public void Clean()
     {
         lock (_lock)
         {
-            if (_isStopped)
+            GD.Print($"ActiveAudioPlayback:Clean - Clean Start");
+            if (IsStopped)
             {
                 GD.Print("ActiveAudioPlayback:Clean - Already cleaned");
                 return;
             }
-            _isStopped = true;
-            MediaPlayer?.Stop();
+
+            IsStopped = true;
+            _playTimer.Stop(); // Stop timer first
+
+            // Stop MediaPlayer safely
             if (MediaPlayer != null)
             {
-                MediaPlayer.EndReached -= OnEndReached; // Detach event handler
-                MediaPlayer.LengthChanged -= OnLengthChanged;
-                MediaPlayer?.Dispose();
+                try
+                {
+                    if (MediaPlayer.IsPlaying) // Check if playing before stopping
+                    {
+                        MediaPlayer.Stop();
+                        GD.Print($"ActiveAudioPlayback:Clean - MediaPlayer stopped");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GD.Print($"ActiveAudioPlayback:Clean - Exception stopping MediaPlayer: {ex.Message}");
+                }
+
+                try
+                {
+                    MediaPlayer.EndReached -= OnEndReached;
+                    MediaPlayer.LengthChanged -= OnLengthChanged;
+                    MediaPlayer.Dispose();
+                    GD.Print($"ActiveAudioPlayback:Clean - MediaPlayer disposed");
+                }
+                catch (Exception ex)
+                {
+                    GD.Print($"ActiveAudioPlayback:Clean - Exception disposing MediaPlayer: {ex.Message}");
+                }
+                MediaPlayer = null; // Prevent accidental reuse
             }
 
-            GD.Print($"ActiveAudioPlayback:Clean - {_audioComponent.AudioFile}");
-            EmitSignal(SignalName.Completed);
+            // Clean up SDL audio streams
+            foreach (var stream in DeviceStreams.Values)
+            {
+                try
+                {
+                    SDL.DestroyAudioStream(stream);
+                    GD.Print($"ActiveAudioPlayback:Clean - Destroyed SDL stream");
+                }
+                catch (Exception ex)
+                {
+                    GD.Print($"ActiveAudioPlayback:Clean - Exception destroying SDL stream: {ex.Message}");
+                }
+            }
+            DeviceStreams.Clear();
+            GD.Print($"ActiveAudioPlayback:Clean - DeviceStreams cleared");
         }
+    
+        CallDeferred(nameof(EmitCompletedSignal)); // Defer signal emission
+    }
+    
+    private void EmitCompletedSignal()
+    {
+        EmitSignal(SignalName.Completed);
+        GD.Print($"ActiveAudioPlayback:EmitCompletedSignal - Completed signal emitted");
     }
     
 }

@@ -285,25 +285,39 @@ public partial class AudioInspector : Control
         var item = _outputOptionButton.GetItemText((int)index);
         if (item.StartsWith("Patch"))
         {
-            var patchName = item.Replace("Patch: ", "");
             var patchId = (int)_outputOptionButton.GetItemMetadata((int)index);
-            //_focusedAudioComponent.Patch = _globalData.Settings.GetAudioOutputPatches()[patchName];
-            GD.Print($"Patch selected is: {patchName} with id {patchId}");
-            _focusedAudioComponent.Patch = _globalData.Settings.GetPatch(patchId);
-            _focusedAudioComponent.PatchId = patchId;
-            _focusedAudioComponent.DirectOutput = null;
-
-            GD.Print($"Patch set? {_focusedAudioComponent.Patch.Name}");
+            GD.Print($"AudioInspector:OutputOptionSelected - Patch selected with id {patchId}");
+            if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
+            {
+                _focusedAudioComponent.Patch = patch;
+                _focusedAudioComponent.PatchId = patchId;
+                _focusedAudioComponent.DirectOutput = null;
+                GD.Print($"AudioInspector:OutputOptionSelected - Patch set to: {patch.Name}");
+            }
+            else
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OutputOptionSelected - Patch ID {patchId} not found, resetting output", 1);
+                _focusedAudioComponent.Patch = null;
+                _focusedAudioComponent.PatchId = -1;
+                _focusedAudioComponent.DirectOutput = null;
+                _outputOptionButton.Select(0); // Select "No output"
+            }
             BuildRoutingMatrix();
         }
-        
         else if (item.StartsWith("Direct Output"))
         {
             var dirOutName = item.Replace("Direct Output: ", "");
-            GD.Print($"Direct output selected is: {dirOutName}");
+            GD.Print($"AudioInspector:OutputOptionSelected - Direct output selected: {dirOutName}");
             _focusedAudioComponent.DirectOutput = dirOutName;
             _focusedAudioComponent.Patch = null;
             _focusedAudioComponent.PatchId = -1;
+            BuildRoutingMatrix();
+        }
+        else // "No output" or missing patch/output case
+        {
+            _focusedAudioComponent.Patch = null;
+            _focusedAudioComponent.PatchId = -1;
+            _focusedAudioComponent.DirectOutput = null;
             BuildRoutingMatrix();
         }
     }
@@ -314,14 +328,19 @@ public partial class AudioInspector : Control
     /// </summary>
     private async void BuildRoutingMatrix()
     {
-        GD.Print($"Building routing matrix start");
+        GD.Print($"AudioInspector:BuildRoutingMatrix - Building routing matrix start");
         foreach (var child in _routingMatrixGrid.GetChildren())
         {
             child.QueueFree();
         }
 
-        if (_focusedAudioComponent == null) return;
-        await ToSignal(GetTree(), "process_frame"); // Wait a frame for exisisting chilren to fully clear.
+        if (_focusedAudioComponent == null)
+        {
+            GD.Print($"AudioInspector:BuildRoutingMatrix - No focused audio component");
+            _routingContainer.Visible = false;
+            return;
+        }
+        await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
 
         var inputChannels = _focusedAudioComponent.ChannelCount;
         var inputLabels = GetChannelLabels(inputChannels, isInput: true);
@@ -330,7 +349,16 @@ public partial class AudioInspector : Control
         List<string> outputLabels = new List<string>();
         if (_focusedAudioComponent.PatchId != -1)
         {
-            var patch = _globalData.Settings.GetPatch(_focusedAudioComponent.PatchId);
+            if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedAudioComponent.PatchId, out var patch))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:BuildRoutingMatrix - Patch ID {_focusedAudioComponent.PatchId} not found, resetting output", 2);
+                _focusedAudioComponent.Patch = null;
+                _focusedAudioComponent.PatchId = -1;
+                _focusedAudioComponent.Routing = null;
+                PopulateOutputOptions(); // Refresh UI to reflect missing patch
+                _routingContainer.Visible = false;
+                return;
+            }
             outputChannels = patch.Channels.Count;
             outputLabels = patch.Channels.Values.ToList();
         }
@@ -339,7 +367,10 @@ public partial class AudioInspector : Control
             var device = _audioDevices.OpenAudioDevice(_focusedAudioComponent.DirectOutput, out var _);
             if (device == null)
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Direct output device not found: {_focusedAudioComponent.DirectOutput}", 2);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:BuildRoutingMatrix - Direct output device not found: {_focusedAudioComponent.DirectOutput}", 2);
+                _focusedAudioComponent.DirectOutput = null;
+                PopulateOutputOptions(); // Refresh UI to reflect missing output
+                _routingContainer.Visible = false;
                 return;
             }
             outputChannels = device.Channels;
@@ -350,7 +381,8 @@ public partial class AudioInspector : Control
         }
         else
         {
-            GD.Print($"AudioInspector: BuildRoutingMatrix - No output");
+            GD.Print($"AudioInspector:BuildRoutingMatrix - No output selected");
+            _routingContainer.Visible = false;
             return; // No output selected
         }
         
@@ -409,16 +441,25 @@ public partial class AudioInspector : Control
         GD.Print($"In {inputCh}. Out {outputCh}");
         try
         {
-            if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
+            float dbValue;
+            if (string.IsNullOrWhiteSpace(text.Replace("dB", "").Trim()))
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid matrix volume: {text}", 1);
+                dbValue = -60.0f;
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OnMatrixVolumeSubmitted - Blank input treated as OFF for In {inputCh}, Out {outputCh}", 0);
+            }
+            else if (!float.TryParse(text.Replace("dB", "").Trim(), out dbValue))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OnMatrixVolumeSubmitted - Invalid matrix volume: {text}", 1);
                 return;
             }
 
             var linear = UiUtilities.DbToLinear(dbValue.ToString());
             _focusedAudioComponent.Routing.SetVolume(inputCh, outputCh, linear);
-            var dbReturn = UiUtilities.LinearToDb(linear);
-            textField.Text = $"{dbReturn}dB";
+            if (linear > 0.0f)
+            {
+                var dbReturn = UiUtilities.LinearToDb(linear);
+                textField.Text = $"{dbReturn}dB";
+            }
             textField.ReleaseFocus();
         }
         catch (Exception ex)

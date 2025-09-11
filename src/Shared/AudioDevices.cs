@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
@@ -42,6 +43,7 @@ public partial class AudioDevices : Node
 		    var errorMsg = $"SDL Init failed: {SDL.GetError}";
 		    GD.Print("AudioDevices:_Ready - " + errorMsg);
 		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), errorMsg, 3);
+		    return;
 	    }
 	    GD.Print("AudioDevices:_Ready - SDL initialized successfully.");
 
@@ -166,7 +168,7 @@ public partial class AudioDevices : Node
 	    var audioDevice = SDL.OpenAudioDevice(physicalDeviceId, 0); // Zero is a null, this means device will open with its own settings
 	    if (audioDevice == 0)
 	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to find and open audio device of name: {name} ", 3);
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:OpenAudioDevice - Failed to find and open audio device of name: {name} ", 3);
 		    error = "Failed to open audio device: " + SDL.GetError();
 		    return null;
 	    }
@@ -311,42 +313,76 @@ public partial class AudioDevices : Node
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
 
-
-    public async Task<ActiveAudioPlayback> PlayAudio(AudioComponent audioComponent, int outputChannel, AudioOutputPatch patch)
+    /// <summary>
+    /// Initiates audio playback for a cue, applying routing via CuePatch and AudioOutputPatch.
+    /// Supports multiple devices and concurrent playbacks, creating per-device SDL audio streams.
+    /// </summary>
+    /// <param name="audioComponent">The audio component containing the file path, routing, and patch details.</param>
+    /// <param name="outputChannel">The output channel index (used only for direct output; ignored if patch is provided).</param>
+    /// <param name="patch">The AudioOutputPatch defining device channel routing, or null for direct output.</param>
+    /// <returns>An ActiveAudioPlayback instance tracking the playback, or null on failure.</returns>
+    /// <remarks>
+    /// The method:
+    /// 1. Validates inputs (media path, devices).
+    /// 2. Preloads media via MediaEngine to minimize latency.
+    /// 3. Retrieves source audio specs (format, channels, sample rate) from VLC.
+    /// 4. Validates CuePatch input channels against source channels.
+    /// 5. For each target device (from patch or direct output):
+    ///    - Opens the device and retrieves its specs.
+    ///    - Creates an SDL audio stream from source format (post-CuePatch channels, float32) to device format.
+    ///    - Binds the stream to the device for SDL's native mixing of concurrent playbacks.
+    /// 6. Sets up a LibVLC MediaPlayer with an audio callback that processes samples through CuePatch (file-to-patch channels) and AudioOutputPatch (patch-to-device channels).
+    /// 7. Tracks playback in _activePlaybacks for each device, resuming devices as needed.
+    /// Errors are logged via globalSignals.Log, and playback is aborted if no valid streams are created.
+    /// </remarks>
+    public async Task<ActiveAudioPlayback> PlayAudio(AudioComponent audioComponent)
     {
-	    GD.Print(" --- --- Starting audio playback with test implementation of SDL --- --- ");
-		var playback = new ActiveAudioPlayback();
-
+	    GD.Print("AudioDevices:PlayAudio --- --- Starting audio playback with test implementation of SDL --- --- ");
 		var mediaPath = audioComponent.AudioFile;
-		var deviceName = audioComponent.DirectOutput;
-		
-		GD.Print($"Lets play this track: {mediaPath}");
-		var device = OpenAudioDevice(deviceName, out var error);
-		if (device == null)
+		var cuePatch = audioComponent.Routing;
+		var patch = audioComponent.Patch;
+		var deviceNames = patch != null ? patch.OutputDevices.Keys.ToList() : new List<string> { audioComponent.DirectOutput };
+		foreach (var deviceName in deviceNames)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open audio device: {error}", 2);
+			GD.Print($"Deivce list names: {deviceName}");
+		}
+		
+		// Validate inputs
+		if (string.IsNullOrEmpty(mediaPath))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:PlayAudio - Invalid media path", 2);
+			return null;
+		}
+		if (deviceNames.Count == 0)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:PlayAudio - No output devices specified", 2);
 			return null;
 		}
 		
+		// Preload media
 		var media = await _mediaEngine.PreloadMediaAsync(mediaPath);
 		if (media == null)
 		{
-			GD.Print($"AudioDevices:PlayAudio - Failed to preload media: {mediaPath}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:PlayAudio - Failed to preload media: {mediaPath}", 2);
+			GD.Print("AudioDevices:PlayAudio - Failed to preload media: " + mediaPath);
+			return null;
 		}
 		
 		
 		// Get specs of audio track
-		SDL.AudioSpec sourceSpec = new SDL.AudioSpec();
 		var audioTracks = media.Tracks.Where(t => t.TrackType == TrackType.Audio).ToList();
 		if (audioTracks.Count == 0)
 		{
-			throw new Exception("No audio track found.");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:PlayAudio - No audio tracks in {mediaPath}", 2);
+			return null;
 		}
 		var primaryAudio = audioTracks.First();
-		sourceSpec.Freq = (int)primaryAudio.Data.Audio.Rate;
-		sourceSpec.Channels = (byte)primaryAudio.Data.Audio.Channels;
-		sourceSpec.Format = GetSdlFormatFromCodec(primaryAudio.Codec);
-		
+		SDL.AudioSpec sourceSpec = new SDL.AudioSpec
+		{
+			Freq = (int)primaryAudio.Data.Audio.Rate,
+			Channels = (int)primaryAudio.Data.Audio.Channels,
+			Format = GetSdlFormatFromCodec(primaryAudio.Codec)
+		};
 		
 		int bytesPerSample = sourceSpec.Format switch
 		{
@@ -356,110 +392,368 @@ public partial class AudioDevices : Node
 			SDL.AudioFormat.AudioU8 or SDL.AudioFormat.AudioS8 => 1,
 			_ => 2
 		};
-		_bytesPerFrame = bytesPerSample * sourceSpec.Channels;
+		int sourceBytesPerFrame = bytesPerSample * sourceSpec.Channels;
+		// _bytesPerFrame = bytesPerSample * sourceSpec.Channels; BOVE VAR IS NEW REPLACING THIS
 		
 		
-		// Get device specs
-		SDL.GetAudioDeviceFormat(device.LogicalId, out var obtainedSpec, out var sampleFrames);
-		var formatName = SDL.GetAudioFormatName(obtainedSpec.Format);
-		_audioSpec = obtainedSpec;
-		
-		GD.Print($"Source spec format is: {sourceSpec.Format}.   Destination audio device format is: {obtainedSpec.Format}");
-		GD.Print($"Device preferred settings: name={SDL.GetAudioDeviceName(device.PhysicalId)}, " +
-		         $"format={formatName}, freq={_audioSpec.Freq}, channels={_audioSpec.Channels}, " +
-		         $"samples={sampleFrames}");
-		
-		
-		// Create audio stream
-		IntPtr audioStream = SDL.CreateAudioStream(sourceSpec, _audioSpec);
-		if (audioStream == IntPtr.Zero)
+		// Validate CuePatch
+		if (cuePatch != null && cuePatch.InputChannels != sourceSpec.Channels)
 		{
-			throw new Exception($"Failed to create SDL audio stream: {SDL.GetError()}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+				$"AudioDevices:PlayAudio - CuePatch input channels ({cuePatch.InputChannels}) " +
+				$"do not match source channels ({sourceSpec.Channels})", 2);
+			return null;
 		}
+		int patchChannels = cuePatch?.OutputChannels ?? sourceSpec.Channels;
 		
-		_audioStream = audioStream;
-		// Bind stream to device (specific to output channel? SDL3 may need channel mapping; simplify for now)
-		var streams = new[] { audioStream };
-		bool bindResult = SDL.BindAudioStreams(device.LogicalId, streams, streams.Length);
-		if (bindResult == false)
-		{
-			Console.WriteLine($"Failed to bind audio stream: {SDL.GetError()}");
-			SDL.DestroyAudioStream(audioStream);
-		}
-		Console.WriteLine("Audio stream bound successfully.");
-		string vlcFormat = GetVlcFormat(sourceSpec);
-		GD.Print(vlcFormat);
-
+		// Create media player
 		var mediaPlayer = _mediaEngine.CreateMediaPlayer(media);
+		
+		var playback = new ActiveAudioPlayback(mediaPlayer, audioComponent);
+		string vlcFormat = GetVlcFormat(sourceSpec);
 		mediaPlayer.SetAudioFormat(vlcFormat, (uint)sourceSpec.Freq, (uint)sourceSpec.Channels);
-		mediaPlayer.SetAudioCallbacks(AudioCallback, null, null, null, null);
+		mediaPlayer.SetAudioCallbacks((opaque, samples, count, pts) => 
+			AudioCallback(opaque, samples, count, pts, playback), null, null, null, null);
 		
-		
-		// Start SDL audio if this is the first playback on the device
-		if (!_activePlaybacks.ContainsKey(device.PhysicalId) || _activePlaybacks[device.PhysicalId].Count == 0)
+		// Initialise playback with per-device streams
+		playback.DeviceStreams = new Dictionary<uint, IntPtr>();
+		foreach (var deviceName in deviceNames)
 		{
-			SDL.ResumeAudioDevice(device.LogicalId);
+			var device = OpenAudioDevice(deviceName, out var error);
+			if (device == null)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:PlayAudio - Failed to open device {deviceName}: {error}", 2);
+				continue;
+			}
+
+			// Validate AudioOutputPatch
+			var outputs = new List<OutputChannel>();
+			if (patch != null && patch.OutputDevices.TryGetValue(deviceName, out outputs) && outputs.Count != device.Channels)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+					$"AudioDevices:PlayAudio - Patch outputs ({outputs.Count}) do not match device channels ({device.Channels}) for {deviceName}", 2);
+				continue;
+			}
+			
+			// Create audio stream: sourceSpec to deviceSpec
+			SDL.GetAudioDeviceFormat(device.LogicalId, out var deviceSpec, out var _);
+			var streamSrcSpec = sourceSpec;
+			streamSrcSpec.Channels = (byte)(patch != null ? outputs.Count : device.Channels); // Post-patch channels
+			streamSrcSpec.Format = SDL.AudioFormat.AudioF32LE; // Process in float32
+			var audioStream = SDL.CreateAudioStream(streamSrcSpec, deviceSpec);
+			if (audioStream == IntPtr.Zero)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+					$"AudioDevices:PlayAudio - Failed to create SDL audio stream for {deviceName}: {SDL.GetError()}", 2);
+				continue;
+			}
+			
+			// Bind stream
+			var streams = new[] { audioStream };
+			if (!SDL.BindAudioStreams(device.LogicalId, streams, streams.Length))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+					$"AudioDevices:PlayAudio - Failed to bind audio stream for {deviceName}: {SDL.GetError()}", 2);
+				SDL.DestroyAudioStream(audioStream);
+				continue;
+			}
+
+			playback.DeviceStreams[device.PhysicalId] = audioStream;
+			if (!_activePlaybacks.ContainsKey(device.PhysicalId))
+			{
+				_activePlaybacks[device.PhysicalId] = new List<ActiveAudioPlayback>();
+			}
+			_activePlaybacks[device.PhysicalId].Add(playback);
+
+			// Resume device if first playback
+			if (_activePlaybacks[device.PhysicalId].Count == 1)
+			{
+				SDL.ResumeAudioDevice(device.LogicalId);
+			}
+		}
+		
+		if (playback.DeviceStreams.Count == 0)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:PlayAudio - No valid devices/streams initialized", 2);
+			mediaPlayer.Dispose();
+			return null;
 		}
 
-
-		// Create and track ActiveAudioPlayback
-		// Each physical deivce Id has a list of AtiveAudioPlaybacks that are associated with it.
-		var deviceId = (int)device.PhysicalId;
-		playback = new ActiveAudioPlayback(mediaPlayer, device.LogicalId, audioStream, patch, outputChannel, audioComponent);
-		if (!_activePlaybacks.ContainsKey(device.PhysicalId))
-		{
-			_activePlaybacks[device.PhysicalId] = new List<ActiveAudioPlayback>();
-		}
-		_activePlaybacks[device.PhysicalId].Add(playback);
-		
-		playback.Completed += () => OnPlaybackCompleted(device.PhysicalId, playback);
-		
-		GD.Print($"AudioDevices:PlayAudioOnOutput - Started playback on device {device.Name}, output {outputChannel}.");
+		// Set up playback
+		playback.MediaPlayer = mediaPlayer;
+		playback.Patch = patch;
+		playback.CuePatch = cuePatch;
+		playback.SourceChannels = sourceSpec.Channels;
+		playback.SourceBytesPerFrame = sourceBytesPerFrame;
+		playback.SourceFormat = sourceSpec.Format;
+		playback.Completed += () => OnPlaybackCompleted(playback);
+        
+		GD.Print($"AudioDevices:PlayAudio - Started playback on {playback.DeviceStreams.Count} devices for {mediaPath}");
 		return playback;
 
     }
     
-    private void AudioCallback(nint opaque, nint samples, uint count, long pts)
+    
+    /// <summary>
+    /// Processes audio samples from VLC, applying CuePatch and AudioOutputPatch routing, and queues to per-device SDL streams.
+    /// </summary>
+    /// <param name="opaque">Unused pointer from VLC callback.</param>
+    /// <param name="samples">Pointer to interleaved audio samples from VLC.</param>
+    /// <param name="count">Number of frames (samples per channel).</param>
+    /// <param name="pts">Presentation timestamp (ignored).</param>
+    /// <param name="playback">The ActiveAudioPlayback instance containing routing and stream info.</param>
+    /// <remarks>
+    /// The processing pipeline:
+    /// 1. Deinterleaves samples into per-channel arrays, normalizing to float32 [-1,1] based on source format (S16 or F32).
+    /// 2. Applies CuePatch volume matrix to mix source channels to patch channels (if CuePatch is present).
+    /// 3. For each device:
+    ///    - Applies AudioOutputPatch to sum patch channels to device physical channels (or uses 1:1 mapping for direct output).
+    ///    - Clamps samples to [-1,1] to prevent clipping.
+    ///    - Interleaves samples to float32 and queues to the device's SDL audio stream.
+    /// 4. Monitors queue size to prevent underflow (low latency) or overflow (high latency).
+    /// SDL handles format conversion (from float32 to device format) and mixing of multiple streams per device.
+    /// Errors are logged via globalSignals.Log, and memory is safely managed with try-finally blocks.
+    /// </remarks>
+    private unsafe void AudioCallback(nint opaque, nint samples, uint count, long pts, ActiveAudioPlayback playback)
     {
-	    //if (!_isPlaying) return;
-	    int byteCount = (int)count * _bytesPerFrame;
-		
-	    if (SDL.PutAudioStreamData(_audioStream, samples, byteCount) == false)
+	    int frameCount = (int)count;
+	    int sourceChannels = playback.SourceChannels;
+	    int sourceBytesPerFrame = playback.SourceBytesPerFrame;
+
+	    // Deinterleave samples based on source format
+	    float[][] patchSamples;
+	    try
 	    {
-		    GD.Print($"Failed to put audio stream data: {SDL.GetError()}");
+		    patchSamples = DeinterleaveSamples(samples, sourceChannels, frameCount, playback.SourceFormat);
+	    }
+	    catch (Exception ex)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+			    $"AudioDevices:AudioCallback - Failed to deinterleave samples: {ex.Message}", 2);
+		    GD.PrintErr($"AudioDevices:AudioCallback - Deinterleave error: {ex.Message}");
+		    return;
+	    }
+	    
+	    // Apply CuePatch (file channels to patch channels)
+	    int patchChannels = playback.CuePatch?.OutputChannels ?? sourceChannels;
+	    if (playback.CuePatch != null)
+	    {
+		    var temp = new float[patchChannels][];
+		    for (int ch = 0; ch < patchChannels; ch++)
+			    temp[ch] = new float[frameCount];
+            
+		    for (int f = 0; f < frameCount; f++)
+		    {
+			    for (int outCh = 0; outCh < patchChannels; outCh++)
+			    {
+				    float sum = 0f;
+				    for (int inCh = 0; inCh < sourceChannels; inCh++)
+				    {
+					    sum += patchSamples[inCh][f] * playback.CuePatch.GetVolume(inCh, outCh);
+				    }
+				    temp[outCh][f] = Math.Clamp(sum, -1f, 1f);
+			    }
+		    }
+		    patchSamples = temp;
+	    }
+	    
+	    // Process per device
+        foreach (var kv in playback.DeviceStreams)
+        {
+            uint physicalId = kv.Key;
+            IntPtr stream = kv.Value;
+            if (!_physicalIdToDeviceId.TryGetValue(physicalId, out int deviceId))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                    $"AudioDevices:AudioCallback - Device not found for physical ID {physicalId}", 2);
+                continue;
+            }
+            var device = _openDevices[deviceId];
+            var deviceName = device.Name;
+            int deviceChannels = device.Channels;
+
+            // Apply AudioOutputPatch (patch channels to device channels)
+            float[][] deviceSamples = new float[deviceChannels][];
+            for (int ch = 0; ch < deviceChannels; ch++)
+                deviceSamples[ch] = new float[frameCount];
+
+            if (playback.Patch != null && playback.Patch.OutputDevices.TryGetValue(deviceName, out var outputs))
+            {
+                for (int physicalCh = 0; physicalCh < deviceChannels; physicalCh++)
+                {
+                    var routed = outputs[physicalCh].RoutedChannels;
+                    if (routed.Count == 0)
+                    {
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                            $"AudioDevices:AudioCallback - No routes for {deviceName} channel {physicalCh}", 1);
+                        continue;
+                    }
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float sum = 0f;
+                        foreach (int patchCh in routed)
+                        {
+                            if (patchCh < patchChannels)
+                                sum += patchSamples[patchCh][f];
+                        }
+                        deviceSamples[physicalCh][f] = Math.Clamp(sum, -1f, 1f);
+                    }
+                }
+            }
+            else
+            {
+                // Direct output: assume 1:1 mapping
+                int minCh = Math.Min(patchChannels, deviceChannels);
+                for (int ch = 0; ch < minCh; ch++)
+                {
+                    Array.Copy(patchSamples[ch], deviceSamples[ch], frameCount);
+                }
+            }
+
+            // Interleave and queue to SDL stream
+            int byteCount = frameCount * 4 * deviceChannels;
+            nint tempPtr = Marshal.AllocHGlobal(byteCount);
+            try
+            {
+                InterleaveFloat(deviceSamples, deviceChannels, frameCount, tempPtr);
+                if (!SDL.PutAudioStreamData(stream, tempPtr, byteCount))
+                {
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                        $"AudioDevices:AudioCallback - Failed to queue data for {deviceName}: {SDL.GetError()}", 2);
+                }
+
+                // Monitor queue to prevent underflow/overflow
+                int queued = SDL.GetAudioStreamQueued(stream);
+                if (queued < 4096)
+                {
+                    GD.Print($"AudioDevices:AudioCallback - Warning: Queue low for {deviceName} ({queued} bytes)");
+                }
+                else if (queued > 65536)
+                {
+                    GD.Print($"AudioDevices:AudioCallback - Warning: Queue overflow for {deviceName} ({queued} bytes)");
+                    SDL.ClearAudioStream(stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                    $"AudioDevices:AudioCallback - Error processing for {deviceName}: {ex.Message}", 2);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(tempPtr);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Deinterleaves audio samples from VLC into per-channel float arrays, normalizing to [-1,1].
+    /// </summary>
+    /// <param name="samplesPtr">Pointer to interleaved samples from VLC.</param>
+    /// <param name="channels">Number of source channels.</param>
+    /// <param name="frameCount">Number of frames (samples per channel).</param>
+    /// <param name="format">SDL audio format (S16 or F32 supported).</param>
+    /// <returns>Array of per-channel float arrays, normalized to [-1,1].</returns>
+    /// <exception cref="NotSupportedException">Thrown for unsupported audio formats.</exception>
+    /// <remarks>
+    /// Converts interleaved samples (e.g., LRLR for stereo) into separate arrays per channel.
+    /// For S16, normalizes 16-bit integers to [-1,1] by dividing by 32768.
+    /// For F32, uses samples directly (already [-1,1]).
+    /// Uses unsafe code for performance; ensure project settings allow unsafe code.
+    /// This step prepares samples for CuePatch processing (volume matrix application).
+    /// </remarks>
+    private unsafe float[][] DeinterleaveSamples(nint samplesPtr, int channels, int frameCount, SDL.AudioFormat format)
+    {
+	    float[][] deinterleaved = new float[channels][];
+	    for (int ch = 0; ch < channels; ch++)
+		    deinterleaved[ch] = new float[frameCount];
+
+	    if (format == SDL.AudioFormat.AudioF32LE || format == SDL.AudioFormat.AudioF32BE)
+	    {
+		    float* samples = (float*)samplesPtr;
+		    for (int f = 0; f < frameCount; f++)
+		    {
+			    for (int ch = 0; ch < channels; ch++)
+			    {
+				    deinterleaved[ch][f] = samples[f * channels + ch];
+			    }
+		    }
+	    }
+	    else if (format == SDL.AudioFormat.AudioS16LE || format == SDL.AudioFormat.AudioS16BE)
+	    {
+		    short* samples = (short*)samplesPtr;
+		    for (int f = 0; f < frameCount; f++)
+		    {
+			    for (int ch = 0; ch < channels; ch++)
+			    {
+				    deinterleaved[ch][f] = samples[f * channels + ch] / 32768f; // Normalize to [-1,1]
+			    }
+		    }
 	    }
 	    else
 	    {
-		    //GD.Print($"Queued {count} bytes to SDL audio stream.");
+		    throw new NotSupportedException($"Audio format {format} not supported for processing");
 	    }
-
-	    // Check queue status to avoid underflow or overflow
-	    int queued = SDL.GetAudioStreamQueued(_audioStream);
-	    if (queued < 4096) // Adjust threshold based on your needs (e.g., 4KB)
+	    return deinterleaved;
+    }
+    
+    
+    /// <summary>
+    /// Interleaves per-channel float arrays into a single float32 buffer for SDL audio stream.
+    /// </summary>
+    /// <param name="deinterleaved">Array of per-channel float arrays (post-routing).</param>
+    /// <param name="channels">Number of device channels.</param>
+    /// <param name="frameCount">Number of frames per channel.</param>
+    /// <param name="outputPtr">Pointer to output buffer for interleaved samples.</param>
+    /// <remarks>
+    /// Combines per-channel float arrays into interleaved format (e.g., LRLR for stereo).
+    /// Samples are assumed to be [-1,1] floats, suitable for SDL audio stream (float32).
+    /// Uses unsafe code for performance; caller must free outputPtr.
+    /// This step finalizes samples for queuing to a device's SDL stream, which handles conversion to the device's native format.
+    /// </remarks>
+    private unsafe void InterleaveFloat(float[][] deinterleaved, int channels, int frameCount, nint outputPtr)
+    {
+	    float* output = (float*)outputPtr;
+	    for (int f = 0; f < frameCount; f++)
 	    {
-		    GD.Print("Warning: Audio queue running low, potential underflow!");
-	    }
-	    else if (queued > 65536) // Adjust threshold (e.g., 64KB)
-	    {
-		    GD.Print("Warning: Audio queue growing large, potential overflow!");
-		    SDL.ClearAudioStream(_audioStream); // Clear to prevent latency
+		    for (int ch = 0; ch < channels; ch++)
+		    {
+			    output[f * channels + ch] = deinterleaved[ch][f];
+		    }
 	    }
     }
     
-    private void OnPlaybackCompleted(uint physicalId, ActiveAudioPlayback playback) 
-    { 
-	    if (_activePlaybacks.TryGetValue(physicalId, out var list))
+    
+    /// <summary>
+    /// Handles cleanup when an audio playback completes, pausing devices with no active playbacks.
+    /// </summary>
+    /// <param name="playback">The completed ActiveAudioPlayback instance.</param>
+    /// <remarks>
+    /// For each device in the playback:
+    /// 1. Removes the playback from _activePlaybacks.
+    /// 2. Destroys the associated SDL audio stream.
+    /// 3. Pauses the device if no playbacks remain.
+    /// Ensures resources are freed and devices are paused to save CPU when idle.
+    /// Logs cleanup actions via GD.Print for debugging.
+    /// </remarks>
+    private void OnPlaybackCompleted(ActiveAudioPlayback playback) 
+    {
+	    foreach (var physicalId in playback.DeviceStreams.Keys.ToList())
 	    {
-		    GD.Print($"AudioDevices:OnPlaybackCompleted - SDL Cleanup");
-		    list.Remove(playback); 
-		    if (list.Count == 0) 
-		    { 
-			    var deviceId = _physicalIdToDeviceId[physicalId]; 
-			    var device = _openDevices[deviceId]; 
-			    SDL.PauseAudioDevice(device.LogicalId); 
-			    GD.Print($"AudioDevices:OnPlaybackCompleted - Paused device {device.Name} as no active playbacks."); 
-		    } 
-	    } 
+		    if (_activePlaybacks.TryGetValue(physicalId, out var list))
+		    {
+			    GD.Print($"AudioDevices:OnPlaybackCompleted - Cleaning up for device {physicalId}");
+			    list.Remove(playback);
+			    if (list.Count == 0)
+			    {
+				    var deviceId = _physicalIdToDeviceId[physicalId];
+				    var device = _openDevices[deviceId];
+				    SDL.PauseAudioDevice(device.LogicalId);
+				    GD.Print($"AudioDevices:OnPlaybackCompleted - Paused device {device.Name} as no active playbacks.");
+			    }
+		    }
+	    }
+	    playback.DeviceStreams.Clear(); // Ensure cleared even if not in _activePlaybacks
     }
     
     

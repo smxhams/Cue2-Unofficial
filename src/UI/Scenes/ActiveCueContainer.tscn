@@ -95,4 +95,5 @@ size_flags_vertical = 0
 theme_override_constants/separation = 10
 
 [node name="ActiveCueBar" parent="VBoxContainer/ScrollContainer/ActiveCueList" instance=ExtResource("3_5r80v")]
+visible = false
 layout_mode = 2
