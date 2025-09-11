@@ -68,6 +68,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
                 var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
                 //_activeCues.Add(activeCue);
                 await activeCue.StartAsync();
+                
+                
             }
             catch (Exception ex)
             {

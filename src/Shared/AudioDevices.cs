@@ -23,7 +23,7 @@ public partial class AudioDevices : Node
 	private readonly Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>();
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
-	private readonly Dictionary<int, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<int, List<ActiveAudioPlayback>>();
+	private readonly Dictionary<uint, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<uint, List<ActiveAudioPlayback>>();
 
 	private int _bytesPerFrame;
 	private SDL.AudioSpec _audioSpec;
@@ -334,6 +334,7 @@ public partial class AudioDevices : Node
 			GD.Print($"AudioDevices:PlayAudio - Failed to preload media: {mediaPath}");
 		}
 		
+		
 		// Get specs of audio track
 		SDL.AudioSpec sourceSpec = new SDL.AudioSpec();
 		var audioTracks = media.Tracks.Where(t => t.TrackType == TrackType.Audio).ToList();
@@ -394,20 +395,25 @@ public partial class AudioDevices : Node
 		mediaPlayer.SetAudioCallbacks(AudioCallback, null, null, null, null);
 		
 		
-		// Start SDL audio
-		SDL.ResumeAudioDevice(device.LogicalId);
-		
-		
+		// Start SDL audio if this is the first playback on the device
+		if (!_activePlaybacks.ContainsKey(device.PhysicalId) || _activePlaybacks[device.PhysicalId].Count == 0)
+		{
+			SDL.ResumeAudioDevice(device.LogicalId);
+		}
+
+
 		// Create and track ActiveAudioPlayback
 		// Each physical deivce Id has a list of AtiveAudioPlaybacks that are associated with it.
 		var deviceId = (int)device.PhysicalId;
 		playback = new ActiveAudioPlayback(mediaPlayer, device.LogicalId, audioStream, patch, outputChannel, audioComponent);
-		if (!_activePlaybacks.ContainsKey(deviceId))
+		if (!_activePlaybacks.ContainsKey(device.PhysicalId))
 		{
-			_activePlaybacks[deviceId] = new List<ActiveAudioPlayback>();
+			_activePlaybacks[device.PhysicalId] = new List<ActiveAudioPlayback>();
 		}
-		_activePlaybacks[deviceId].Add(playback);
-
+		_activePlaybacks[device.PhysicalId].Add(playback);
+		
+		playback.Completed += () => OnPlaybackCompleted(device.PhysicalId, playback);
+		
 		GD.Print($"AudioDevices:PlayAudioOnOutput - Started playback on device {device.Name}, output {outputChannel}.");
 		return playback;
 
@@ -440,10 +446,21 @@ public partial class AudioDevices : Node
 	    }
     }
     
-    
-    
-    
-    
+    private void OnPlaybackCompleted(uint physicalId, ActiveAudioPlayback playback) 
+    { 
+	    if (_activePlaybacks.TryGetValue(physicalId, out var list))
+	    {
+		    GD.Print($"AudioDevices:OnPlaybackCompleted - SDL Cleanup");
+		    list.Remove(playback); 
+		    if (list.Count == 0) 
+		    { 
+			    var deviceId = _physicalIdToDeviceId[physicalId]; 
+			    var device = _openDevices[deviceId]; 
+			    SDL.PauseAudioDevice(device.LogicalId); 
+			    GD.Print($"AudioDevices:OnPlaybackCompleted - Paused device {device.Name} as no active playbacks."); 
+		    } 
+	    } 
+    }
     
     
 	
@@ -522,6 +539,15 @@ public partial class AudioDevices : Node
 
 	public override void _ExitTree()
 	{
+		foreach (var playbacks in _activePlaybacks.Values)
+		{
+			foreach (var playback in playbacks.ToList())
+			{
+				playback.Stop(0).Wait();
+			}
+		}
+		_activePlaybacks.Clear();
+		
 		foreach (var device in _openDevices.Values.ToList())
 		{
 			CloseAudioDevice(device.DeviceId);

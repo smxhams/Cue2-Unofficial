@@ -257,12 +257,12 @@ public partial class MediaEngine : Node
         }
         catch (DllNotFoundException ex) // Specific for missing codecs/DLLs
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Missing codec or DLL for {path}: {ex.Message}. Ensure OS supports the format.", 2); //!!!
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Missing codec or DLL for {path}: {ex.Message}. Ensure OS supports the format.", 2);
             return Array.Empty<byte>();
         }
         catch (InvalidOperationException ex) // Common for unsupported formats
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Unsupported format or codec issue for {path}: {ex.Message}. Try converting the file.", 2); //!!!
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"MediaEngine:GenerateWaveformAsync - Unsupported format or codec issue for {path}: {ex.Message}. Try converting the file.", 2);
             return Array.Empty<byte>();
         }
         catch (Exception ex) // General fallback
