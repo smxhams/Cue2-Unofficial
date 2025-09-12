@@ -352,7 +352,7 @@ public partial class ActiveAudioPlayback : GodotObject
             else
             {
                 GD.Print($"ActiveAudioPlayback:HandleEndReached - Playback completed");
-                Clean();
+                CallDeferred(nameof(Clean)); // Must be executed on main thread to avoid race conditions. 
             }
         }
     }
@@ -365,6 +365,8 @@ public partial class ActiveAudioPlayback : GodotObject
             if (_useCustomEnd)
             {
                 _playTimer.Stop();
+                MediaPlayer.Stop();
+                MediaPlayer.Play();
                 MediaPlayer.Time = _startTimeMs;
                 _playTimer.Reset();
                 _playTimer.Start();
@@ -373,8 +375,9 @@ public partial class ActiveAudioPlayback : GodotObject
             }
             else
             {
-                MediaPlayer.Time = _startTimeMs;
+                MediaPlayer.Stop();
                 MediaPlayer.Play();
+                MediaPlayer.Time = _startTimeMs;
                 _playTimer.Reset();
                 _playTimer.Start();
                 GD.Print($"ActiveAudioPlayback:ResetForLoop - Time set and playback resumed for full duration");

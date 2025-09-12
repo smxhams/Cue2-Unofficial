@@ -344,6 +344,7 @@ public partial class ActiveCue : GodotObject
                     var playback = _activeAudioComponents[componentPanel];
                     double seekTime = audioComponent.StartTime + percent * audioComponent.Duration;
                     playback.MediaPlayer.Time = (long)(seekTime * 1000);
+                    if (percent >= 1f) isSeeking = false;
                     GD.Print($"ActiveCue:ActivateAudioComponent - Seeking to {seekTime}");
                 }
             };
@@ -483,12 +484,10 @@ public partial class ActiveCue : GodotObject
             GD.Print("ActiveCue:HandleAudioComponentCompleted - Component already cleaned or invalid");
             return;
         }
-
-        GD.Print($"HELLLLLLLLOOOOOO?");
+        
         _activeAudioComponents.Remove(componentPanel);
         _componentToAudio.Remove(componentPanel);
         componentPanel.QueueFree();
-        GD.Print($"ARE WE HERRRREEEEE????");
         if (_activeAudioComponents.Count == 0)
         {
             Cleanup();

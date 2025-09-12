@@ -46,10 +46,3 @@ res://src/Base/Classes/AudioOutputPatch.cs
 res://src/Base/Minor/BottomRightContainer.cs
 res://src/UI/Scenes/ActiveCueContainer.cs
 res://src/Base/Settings/AudioOutputPatchMatrix.cs
-res://src/UI/Scenes/Inspectors/AudioInspector.tscn
-res://src/UI/Assets/base_theme.tres
-res://src/UI/Assets/GO_theme.tres
-res://src/Base/VideoPlayback.gdshader
-res://src/Base/VideoTextureRectMaterial.tres
-res://src/Base/ActiveCueBar.tscn
-res://src/UI/Scenes/ActiveCueContainer.tscn
