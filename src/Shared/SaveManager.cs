@@ -3,11 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using Godot;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.CueTypes;
 using Godot.Collections;
 
 namespace Cue2.Shared;
@@ -227,7 +229,7 @@ public partial class SaveManager : Node
 			// Load Settings
 			if ((string)saveType.Key == "settings")
 			{
-				GD.Print("Found Settings");
+				GD.Print("SaveManager:LoadSession - Loading settings");
 				//GD.Print(saveType);
 				foreach (var setting in (Godot.Collections.Dictionary)saveType.Value)
 				{
@@ -256,6 +258,7 @@ public partial class SaveManager : Node
 			// Load cues
 			if ((string)saveType.Key == "cues")
 			{
+				GD.Print($"SaveManager:Loadsession - Loading Cues");
 				// Cues need to be converted back into Dictionary, then created. 
 				foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
 				{
@@ -274,6 +277,7 @@ public partial class SaveManager : Node
 
 			if ((string)saveType.Key == "cuelist")
 			{
+				GD.Print($"SaveManager:Loadsession - Loading Cuelist");
 				foundCuelist = true;
 				//GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
 				foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
@@ -285,6 +289,8 @@ public partial class SaveManager : Node
 			}
 		}
 		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end
+		
+		//LinkCueLights();
 	}
 
 	/// <summary>
@@ -315,6 +321,29 @@ public partial class SaveManager : Node
 			}
 		}
 	}
+	
+	/// <summary>
+	/// Links cue light components to actual CueLight instances post-load.
+	/// </summary>
+	private void LinkCueLights()
+	{
+		var manager = _globalData.CueLightManager; // Assuming added to GlobalData
+		foreach (var cueObj in _globalData.Cuelist.Cuelist)
+		{
+			var cue = (Cue)cueObj;
+			foreach (var component in cue.Components.OfType<CueLightComponent>())
+			{
+				// Validation: CueLight exists
+				if (manager.GetCueLight(component.CueLightId) == null)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+						$"SaveManager:LinkCueLights - CueLight {component.CueLightId} not found for cue {cue.Id}", 2);
+				}
+				GD.Print($"SaveManager:LinkCueLights - Linked CueLight {component.CueLightId} to cue {cue.Id}");
+			}
+		}
+	}
+	
 
 	private bool FolderCreator(string folderPath)
 	{

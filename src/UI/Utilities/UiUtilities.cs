@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Godot;
 

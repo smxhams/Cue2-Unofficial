@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot;

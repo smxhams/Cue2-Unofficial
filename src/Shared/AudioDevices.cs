@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Base.Classes.Devices;
 using Godot;
 using LibVLCSharp.Shared;

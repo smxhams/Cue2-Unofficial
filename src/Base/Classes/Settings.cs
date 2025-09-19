@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Cue2.Shared;
 using Godot;
@@ -10,12 +11,11 @@ public partial class Settings : Node
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
+    private Godot.Collections.Dictionary _cueLightData = new Godot.Collections.Dictionary();
 
     public float UiScale = 1.0f;
     public float GoScale = 1.0f;
-    
     public int WaveformResolution = 4096;
-
     public float StopFadeDuration = 2.0f;
     
     public override void _Ready()
@@ -30,9 +30,7 @@ public partial class Settings : Node
     public void UpdatePatch(AudioOutputPatch patch)
     {
         _audioOutputPatches[patch.Id] = patch;
-
-        GD.Print("Updated patch with id: " + patch.Id + " and name: " + patch.Name);
-        
+        GD.Print($"Settings:UpdatePatch - Updated patch with id: {patch.Id} and name: {patch.Name}");
     }
 
     public void DeletePatch(int patchId)
@@ -54,12 +52,13 @@ public partial class Settings : Node
     {
         if (_audioOutputPatches.ContainsKey(patch.Id))
         {
-            GD.PrintErr("Settings:AddPatch - Patch ID already exists: " + patch.Id);
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to add patch due to duplicate ID: " + patch.Id, 2);
+            GD.PrintErr($"Settings:AddPatch - Patch ID already exists: {patch.Id}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                $"Settings:AddPatch - Failed to add patch due to duplicate ID: {patch.Id}", 2);
             return;
         }
         _audioOutputPatches.Add(patch.Id, patch);
-        GD.Print("Settings:AddPatch - Added patch with ID: " + patch.Id + " and name: " + patch.Name);
+        GD.Print($"Settings:AddPatch - Added patch with ID: {patch.Id} and name: {patch.Name}");
         
         // Double check audio devices in added patch are opened. 
         foreach (var device in patch.OutputDevices)
@@ -74,14 +73,11 @@ public partial class Settings : Node
         {
             foreach (var channels in patch.Value.Channels)
             {
-                GD.Print($"ID: {patch.Key} Name: {patch.Value.Name} Channel: {channels.Key} Name: {channels.Value}");
-
+                GD.Print($"Settings:PrintPatches - ID: {patch.Key} Name: {patch.Value.Name} Channel: {channels.Key} Name: {channels.Value}");
             }
         }
     }
     
-
-
     public void ResetSettings()
     {
         foreach (var patch in _audioOutputPatches)
@@ -89,6 +85,42 @@ public partial class Settings : Node
             patch.Value.Free();
         }
         _audioOutputPatches.Clear();
+        _cueLightData.Clear();
     }
+    
+    /// <summary>
+    /// Saves cue light data.
+    /// </summary>
+    public void SaveCueLightData(Godot.Collections.Dictionary data)
+    {
+        _cueLightData = data;
+        GD.Print("Settings:SaveCueLightData - Stored data");
+    }
+
+    /// <summary>
+    /// Loads cue light data.
+    /// </summary>
+    public Godot.Collections.Dictionary LoadCueLightData()
+    {
+        return _cueLightData;
+    }
+
+    /*private Hashtable FormatSettingsForSave()
+    {
+        var saveTable = new Hashtable();
+        var patchTable = new Hashtable();
+
+        foreach (var patch in _audioOutputPatches)
+        {
+            patchTable.Add(patch.Key, patch.Value.GetData());
+        }
+
+        var devices = _audioDevices.GetOpenAudioDevicesNames();
+
+        saveTable.Add("AudioPatch", patchTable);
+        saveTable.Add("AudioDevices", devices);
+        saveTable.Add("CueLights", _cueLightData);
+        return saveTable;
+    }*/
     
 }

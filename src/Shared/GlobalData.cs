@@ -27,6 +27,7 @@ public partial class GlobalData : Node
 	public CueCommandInterpreter CueCommandInterpreter;
 	public Settings Settings;
 	public Devices Devices;
+	public CueLightManager CueLightManager;
 	//public AudioDevices AudioDevices;
 	
 	
@@ -76,6 +77,9 @@ public partial class GlobalData : Node
 
 		Devices = new Devices();
 		AddChild(Devices);
+		
+		CueLightManager = new CueLightManager();
+		AddChild(CueLightManager);
 		
 		//AudioDevices = new AudioDevices();
 		//AddChild(AudioDevices);

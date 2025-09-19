@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Cue2.Base.Classes.CueTypes;
 
 namespace Cue2.Base.Classes;
 

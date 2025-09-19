@@ -3,6 +3,7 @@ using Godot;
 
 using System.IO;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 

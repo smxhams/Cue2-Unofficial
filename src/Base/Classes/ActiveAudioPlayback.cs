@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.CueTypes;
 using Godot;
 using LibVLCSharp.Shared;
 using SDL3;
