@@ -10,7 +10,7 @@ public partial class Settings : Node
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
-    private Godot.Collections.Dictionary _cueLightData = new Godot.Collections.Dictionary();
+    private Dictionary _cueLightData = new Dictionary();
 
     public float UiScale = 1.0f;
     public float GoScale = 1.0f;
@@ -162,7 +162,9 @@ public partial class Settings : Node
         }
         
         UiScale = settingsData.TryGetValue("UiScale", out var value) ? (float)value : UiScale;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         GoScale = settingsData.TryGetValue("GoScale", out value) ? (float)value : GoScale;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
         WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
         StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
         

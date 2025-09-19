@@ -3,7 +3,7 @@ using System;
 using System.Threading.Tasks;
 using Cue2.Shared;
 
-namespace Cue2.UI;
+namespace Cue2.UI.Scenes;
 
 public partial class MainTitleBarUI : Control
 {

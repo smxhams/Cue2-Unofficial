@@ -100,6 +100,7 @@ public partial class SettingsWindow : Window
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Video Devices" => "VideoDevices",
 			"General" => "SettingsGeneral",
+			"Cue Lights" => "CueLights",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};
 	
@@ -141,6 +142,8 @@ public partial class SettingsWindow : Window
 		// Connections
 		TreeItem tiConnections = _setTree.CreateItem(root);
 		tiConnections.SetText(0, "Connections");
+		TreeItem tiCueLights = _setTree.CreateItem(tiConnections);
+		tiCueLights.SetText(0, "Cue Lights");
 		TreeItem tiOSCConnection = _setTree.CreateItem(tiConnections);
 		tiOSCConnection.SetText(0, "OSC Connection");
 		TreeItem tiNetworkConnection = _setTree.CreateItem(tiConnections);
@@ -153,11 +156,12 @@ public partial class SettingsWindow : Window
 		tiDefaults.SetText(0, "Defaults");
 		tiDefaults.SetTooltipText(0, "Set default behaviors and paramters acroll shells and cues universaly.");
 		TreeItem tiAudioCueDafaults = _setTree.CreateItem(tiDefaults);
-		tiDefaults.SetText(0, "Audio Cues");
-		tiDefaults.SetTooltipText(0, "Set defaults for audio cues.");
+		tiAudioCueDafaults.SetText(0, "Audio Cues");
+		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for audio cues.");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiDefaults.SetText(0, "Defaults");
-		tiDefaults.SetTooltipText(0, "Set defaults for video cues.");
+		tiAudioCueDafaults.SetText(0, "Defaults");
+		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for video cues.");
+		
 		
 	}
 }
