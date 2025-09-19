@@ -1,29 +1,22 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using Godot;
 using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
-using Cue2.Base.Classes;
-using Cue2.Base.Classes.CueTypes;
 using Godot.Collections;
 
 namespace Cue2.Shared;
 
+/// <summary>
+/// Manages saving and loading of session data, including cues and settings.
+/// Handles file dialogs, encryption via Godot's FileAccess, and data serialization/deserialization using Godot's Json.
+/// </summary>
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
-	private Shared.GlobalData _globalData;
+	private GlobalData _globalData;
 	private AudioDevices _audioDevices;
 	
-	//private Dictionary<string, string> saveData;
-
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
-
 
 	public override void _Ready()
 	{
@@ -39,18 +32,25 @@ public partial class SaveManager : Node
 
 		if (_globalData.LaunchLoadPath != null)
 		{
-			Task.Delay(0).ContinueWith(t => LoadOnLaunch(_globalData.LaunchLoadPath));
+			LoadOnLaunch();
 		}
 		
 	}
 	
-	private async void LoadOnLaunch(string path)
+	/// <summary>
+	/// Asynchronously loads a session file specified at launch, waiting for the next process frame to ensure the scene is ready.
+	/// </summary>
+	private async void LoadOnLaunch()
 	{
 		await ToSignal(GetTree(), "process_frame");
-		GD.Print("Load On Launch");
+		GD.Print("SaveManager:LoadOnLaunch - Load On Launch");
 		OpenSelectedSession(_globalData.LaunchLoadPath);
 	}
-	// On "Save" signal opens save dialogue if session unnamed.
+	
+	/// <summary>
+	/// Initiates a save operation. If the session is unnamed or has no path, triggers SaveAs.
+	/// Otherwise, saves to the existing path.
+	/// </summary>
 	private void Save()
 	{
 		if (_globalData.SessionName == null || _globalData.SessionPath == null)
@@ -65,15 +65,25 @@ public partial class SaveManager : Node
 		}
 	}
 
+	/// <summary>
+	/// Opens the save file dialog to allow the user to choose a directory and name for the session.
+	/// </summary>
 	private void SaveAs()
 	{
 		GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
 	}
 	
+	
+	/// <summary>
+	/// Saves the current session data to the specified path and name.
+	/// Creates necessary folders, serializes data to JSON, encrypts it, and writes to file.
+	/// </summary>
+	/// <param name="selectedPath">The full path where the session file will be saved.</param>
+	/// <param name="sessionName">The name of the session (used for logging).</param>
 	private void SaveSession(string selectedPath, string sessionName)
 	{
-		GD.Print($"SaveMasager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
+		GD.Print($"SaveManager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
 		
 		// SAVE DATA
 		var saveData = new Dictionary(); // Save type (cues, cue data)
@@ -84,8 +94,7 @@ public partial class SaveManager : Node
 		var settingsData = _globalData.Settings.GetData();
 		saveData.Add("settings", settingsData);
 		
-		
-		// SAVE DIRECTORY
+		// Create folder if needed
 		string baseDir = Path.GetDirectoryName(selectedPath);
 		if (string.IsNullOrEmpty(baseDir))
 		{
@@ -93,55 +102,44 @@ public partial class SaveManager : Node
 			GD.PrintErr("SaveManager:SaveSession - Invalid save path: " + selectedPath);
 			return;
 		}
-
-		string sessionFolder = baseDir;//Path.Combine(baseDir, sessionName);
-		if (!FolderCreator(sessionFolder))
-		{
-			// Folder already exists; proceed.
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Show folder already exists: {sessionFolder}", 1);
-			GD.Print($"SaveManager:SaveSession - Show folder already exists: {sessionFolder}");
-		}
+		FolderCreator(baseDir);
 		
-		// Define the full save path: /path/to/sessionName/sessionName.c2
-		string savePath = Path.Combine(sessionFolder, sessionName + ".c2");
-		GD.Print($"SaveManager:SaveSession - SAVE PATH: {savePath}, SessionFolder: {sessionFolder}, SessionName: {sessionName}");
-		try
+		// Serialize to JSON
+		string jsonString = Json.Stringify(saveData);
+		
+		// Write encrypted file directly (no temp file)
+		using var file = Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
+		if (file == null)
 		{
-			string saveJson = Json.Stringify(saveData);
-			Godot.FileAccess file = Godot.FileAccess.OpenEncryptedWithPass(savePath, Godot.FileAccess.ModeFlags.Write, _decodepass);
-			if (file == null)
-			{
-				Error err = Godot.FileAccess.GetOpenError();
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for writing: {savePath} with error: {err}", 2);
-				GD.PrintErr("SaveManager:SaveSession - Failed to open file: " + savePath + " Error: " + err);
-				return;
-			}
-
-			file.StoreString(saveJson);
-			file.Close();
-
-			_globalData.SessionName = sessionName;
-			_globalData.SessionPath = sessionFolder;
-			
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to: {savePath}", 0);
+			Error err = Godot.FileAccess.GetOpenError();
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for writing: {selectedPath} with error: {err}", 2);
+			GD.PrintErr($"SaveManager:SaveSession - Failed to open file: {selectedPath} Error: {err}");
+			return;
 		}
-		catch (Exception ex)
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error saving session: {ex.Message}", 2);
-			GD.PrintErr($"SaveManager:SaveSession - Error saving: {ex.Message}");
-		}
+		file.StoreString(jsonString);
+		file.Close(); // Explicit close, though using handles it
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to {selectedPath}", 0);
+        
+		// Update session info
+		_globalData.SessionPath = selectedPath;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
 	}
 	
-	
+	/// <summary>
+	/// Opens the open file dialog for selecting a session to load.
+	/// </summary>
 	private void OpenSession()
 	{
 		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
 	}
 	
+	/// <summary>
+	/// Loads and processes a selected session file, decrypting it, parsing JSON, and applying data to settings and cuelist.
+	/// </summary>
+	/// <param name="selectedPath">The file path of the session to load.</param>
 	private void OpenSelectedSession(string selectedPath)
 	{
-		GD.Print($"SaveManager:OpenSelectedSession - Opening session from: {selectedPath}");
-		
 		// Verify file before resetting current session.
 		if (!File.Exists(selectedPath))
 		{
@@ -163,26 +161,31 @@ public partial class SaveManager : Node
 		
 	}
 
+	
+	/// <summary>
+	/// Loads the session data from the encrypted file, parses JSON, and delegates loading to settings and cuelist.
+	/// </summary>
+	/// <param name="selectedPath">The file path to load from.</param>
 	private void LoadSession(string selectedPath)
 	{
 		try
 		{
-			Godot.FileAccess file =
-				Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
+			using var file = Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
 			if (file == null)
 			{
 				Error err = Godot.FileAccess.GetOpenError();
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for reading: {selectedPath} with error: {err}", 2);
-				GD.PrintErr("SaveManager:OpenSelectedSession - Failed to open file: " + selectedPath + " Error: " + err);
+				GD.PrintErr($"SaveManager:LoadSession - Failed to open file: {selectedPath} Error: {err}");
 				return;
 			}
+			
 			string jsonString = file.GetAsText();
-			file.Close();
-			var json = new Json();
+			using var json = new Json();
 			Error parseResult = json.Parse(jsonString);
 			if (parseResult != Error.Ok)
 			{
-				GD.PrintErr($"JSON parse error: {parseResult}");
+				GD.PrintErr($"SaveManager:LoadSession - JSON parse error: {parseResult}");
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"JSON parse error: {parseResult}", 2);
 				return;
 			}
 			var saveData = json.Data.AsGodotDictionary();
@@ -192,7 +195,6 @@ public partial class SaveManager : Node
 				GD.Print("SaveManager:LoadSession - Loading Settings");
 				var settingsData = saveData["settings"].AsGodotDictionary();
 				_globalData.Settings.LoadSettings(settingsData);
-				
 			}
 			
 			if (saveData.ContainsKey("cues"))
@@ -201,8 +203,6 @@ public partial class SaveManager : Node
 				var cuesData = saveData["cues"].AsGodotDictionary();
 				_globalData.Cuelist.LoadData(cuesData);
 			}
-			
-			GD.Print($"SAVE MADE IT");
 		}
 		catch (Exception ex)
 		{
@@ -210,132 +210,13 @@ public partial class SaveManager : Node
 			GD.PrintErr("SaveManager:LoadSession - Error: " + ex.Message);
 		}
 		
-		
-		// Old code before restructure
-		/*bool foundCuelist = false;
-		var cuelistOrder = new Godot.Collections.Dictionary<int, int>();
-		
-		foreach (var saveType in data)
-		{
-			// Load Settings
-			if ((string)saveType.Key == "settings")
-			{
-				GD.Print("SaveManager:LoadSession - Loading settings");
-				//GD.Print(saveType);
-				foreach (var setting in (Godot.Collections.Dictionary)saveType.Value)
-				{
-					// Load Audio Devices
-					if ((string)setting.Key == "AudioDevices")
-					{
-						foreach (var device in (Godot.Collections.Dictionary)setting.Value)
-						{
-							_globalData.Devices.AddAudioDeviceWithId(device.Key.AsInt32(), device.Value.ToString());
-						}
-					}
-					// Load audio patch -- this whole system might need a serious revisit- there no need for so many nested dictionaries. 
-					else if ((string)setting.Key == "AudioPatch")
-					{
-						GD.Print("Found audio patch");
-						foreach (var patch in (Dictionary)setting.Value)
-						{
-							var patchAsDict = patch.Value.AsGodotDictionary();
-							var patchObj = AudioOutputPatch.FromData(patchAsDict);
-							_globalData.Settings.AddPatch(patchObj);
-						}
-					}
-				}
-			}
-
-			// Load cues
-			if ((string)saveType.Key == "cues")
-			{
-				GD.Print($"SaveManager:Loadsession - Loading Cues");
-				// Cues need to be converted back into Dictionary, then created. 
-				foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
-				{
-					var asDict = cue.Value.AsGodotDictionary();
-					var cueData = new Dictionary();
-					foreach (var key in asDict.Keys)
-					{
-						var value = asDict[key];
-						string keyStr = key.ToString();
-						
-						cueData[keyStr] = value;
-					}
-					_globalData.Cuelist.CreateCue(cueData);
-				}
-			}
-
-			if ((string)saveType.Key == "cuelist")
-			{
-				GD.Print($"SaveManager:Loadsession - Loading Cuelist");
-				foundCuelist = true;
-				//GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
-				foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
-				{
-					cuelistOrder.Add((int)cue.Key, (int)cue.Value);
-					//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
-				}
-
-			}
-		}
-		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end*/
-		
-		//LinkCueLights();
-	}
-
-	/// <summary>
-	/// This is a temporary solution to link patches to audio components.
-	/// Currently needed because of load ordering. 
-	/// </summary>
-	private void LinkAudioPatches()
-	{
-		var patches = _globalData.Settings.GetAudioOutputPatches();
-		foreach (var cueObj in _globalData.Cuelist.Cuelist)
-		{
-			var cue = (Cue)cueObj;
-			foreach (var component in cue.Components)
-			{
-				if (component is AudioComponent audioComponent)
-				{
-					if (patches.TryGetValue(audioComponent.PatchId, out var patch))
-					{
-						audioComponent.Patch = patch;
-						audioComponent.Patch = patches[audioComponent.PatchId];
-						GD.Print($"SaveManager:LinkAudioPatches - Linked patch {audioComponent.PatchId} to audio component in cue {cue.Id}");
-					}
-					else
-					{
-						_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Patch {audioComponent.PatchId} not found for audio component in cue {cue.Id}", 2); //!!!
-					}
-				}
-			}
-		}
 	}
 	
 	/// <summary>
-	/// Links cue light components to actual CueLight instances post-load.
+	/// Creates a directory if it does not exist, logging the attempt and result.
 	/// </summary>
-	private void LinkCueLights()
-	{
-		var manager = _globalData.CueLightManager; // Assuming added to GlobalData
-		foreach (var cueObj in _globalData.Cuelist.Cuelist)
-		{
-			var cue = (Cue)cueObj;
-			foreach (var component in cue.Components.OfType<CueLightComponent>())
-			{
-				// Validation: CueLight exists
-				if (manager.GetCueLight(component.CueLightId) == null)
-				{
-					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-						$"SaveManager:LinkCueLights - CueLight {component.CueLightId} not found for cue {cue.Id}", 2);
-				}
-				GD.Print($"SaveManager:LinkCueLights - Linked CueLight {component.CueLightId} to cue {cue.Id}");
-			}
-		}
-	}
-	
-
+	/// <param name="folderPath">The path of the folder to create.</param>
+	/// <returns>True if created, false if it already exists or creation failed.</returns>
 	private bool FolderCreator(string folderPath)
 	{
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Attempting to create folder: {folderPath}", 0);

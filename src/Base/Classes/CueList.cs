@@ -487,39 +487,6 @@ public partial class CueList : ScrollContainer
 		}
 		
 	}
-	
-	/*// Load cues
-	if ((string)saveType.Key == "cues")
-	{
-		GD.Print($"SaveManager:Loadsession - Loading Cues");
-		// Cues need to be converted back into Dictionary, then created. 
-		foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
-		{
-			var asDict = cue.Value.AsGodotDictionary();
-			var cueData = new Dictionary();
-			foreach (var key in asDict.Keys)
-			{
-				var value = asDict[key];
-				string keyStr = key.ToString();
-						
-				cueData[keyStr] = value;
-			}
-			_globalData.Cuelist.CreateCue(cueData);
-		}
-	}
-
-if ((string)saveType.Key == "cuelist")
-{
-	GD.Print($"SaveManager:Loadsession - Loading Cuelist");
-	foundCuelist = true;
-	//GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
-	foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
-	{
-		cuelistOrder.Add((int)cue.Key, (int)cue.Value);
-		//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
-	}
-
-}*/
 
 }
 
