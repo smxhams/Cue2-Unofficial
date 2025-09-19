@@ -27,6 +27,7 @@ public partial class LogWindow : Window
     {
         var label = new Label();
         label.Text = printout;
+        _logListContainer = GetNode<VBoxContainer>("%LogListContainer");
         _logListContainer.AddChild(label);
         _logListContainer.MoveChild(label, 0);
         if (type == 2) label.AddThemeColorOverride("font_color", GlobalStyles.Danger);
@@ -49,5 +50,10 @@ public partial class LogWindow : Window
             _logListContainer.AddChild(label);
             _logListContainer.MoveChild(label, 0);
         }
+    }
+
+    public override void _ExitTree()
+    {
+        _globalSignals.LogUpdated -= _newLog;
     }
 }

@@ -1,11 +1,7 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Linq;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
-using Cue2.UI.Utilities;
 using Godot;
 using Godot.Collections;
 
@@ -55,10 +51,11 @@ public partial class CueList : ScrollContainer
 		
 	}
 
-	public void CreateCue(Dictionary data) // Create a cue from data
+	public Cue CreateCue(Dictionary data) // Create a cue from data
 	{
 		var newCue = new Cue(data);
 		AddCue(newCue);
+		return newCue;
 	}
 	public void CreateCue()
 	{
@@ -372,21 +369,7 @@ public partial class CueList : ScrollContainer
 	}
 
 
-	// Resets CueList
-	public void ResetCuelist()
-	{
-		var removalList = Cuelist;
-		// Removes shellbars from ui
-		foreach (ICue cue in removalList)
-		{
-			cue.ShellBar.Free();
-		}
-		// Resets 
-		Cuelist = new List<ICue>();
-		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
-		_globalData.ShellSelection.SelectedShells = new List<ICue>();
-		
-	}
+	
 
 	public void StructureCuelistToData(Godot.Collections.Dictionary<int, int> cueOrder)
 	{
@@ -423,8 +406,120 @@ public partial class CueList : ScrollContainer
 
 		return cueOrder;
 	}
+	
+	
+	// Save and load
+	
+	public void ResetCuelist()
+	{
+		var removalList = Cuelist;
+		// Removes shellbars from ui
+		foreach (ICue cue in removalList)
+		{
+			cue.ShellBar.Free();
+		}
+		// Resets 
+		Cuelist = new List<ICue>();
+		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
+		_globalData.ShellSelection.SelectedShells = new List<ICue>();
+	}
+	
+	public Dictionary GetData()
+	{
+		var saveTable = new Dictionary();
+		var cues = new Dictionary();
+		var cueOrder = GetCueOrder();
+		saveTable.Add("CueOrder", cueOrder);
+		foreach (var cue1 in Cuelist)
+		{
+			var cue = (Cue)cue1;
+			var cueData = cue.GetData();
+			
+			cues.Add(cue.Id, cueData);
+		}
+		saveTable.Add("Cues", cues);
+		return saveTable;
+	}
 
+	public void LoadData(Dictionary cueData)
+	{
+		GD.Print($"CueList:LoadData - Loading Cues");
 
+		if (cueData.TryGetValue("Cues", out var cues))
+		{
+			foreach (var cue in (Dictionary)cues)
+			{
+				var asDict = cue.Value.AsGodotDictionary();
+				var cueDict = new Dictionary();
+				foreach (var key in asDict.Keys)
+				{
+					var value = asDict[key];
+					string keyStr = key.ToString();
+						
+					cueDict[keyStr] = value;
+				}
+				Cue newCue = CreateCue(cueDict);
+				
+				var newCueAudioComponent = newCue.GetAudioComponent();
+				if (newCueAudioComponent != null)
+				{
+					var patches = _globalData.Settings.GetAudioOutputPatches();
+					patches.TryGetValue(newCueAudioComponent.PatchId, out var patch);
+					if (patch != null)
+					{
+						newCueAudioComponent.Patch = patch;
+					}
+				}
+				
+				
+			}
+		}
+
+		if (cueData.TryGetValue("CueOrder", out var order))
+		{
+			var cueOrder = new Godot.Collections.Dictionary<int, int>();
+			foreach (var cue in (Godot.Collections.Dictionary)order)
+			{
+				cueOrder.Add((int)cue.Key, (int)cue.Value);
+				//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
+			}
+			StructureCuelistToData(cueOrder);	
+		}
+		
+	}
+	
+	/*// Load cues
+	if ((string)saveType.Key == "cues")
+	{
+		GD.Print($"SaveManager:Loadsession - Loading Cues");
+		// Cues need to be converted back into Dictionary, then created. 
+		foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
+		{
+			var asDict = cue.Value.AsGodotDictionary();
+			var cueData = new Dictionary();
+			foreach (var key in asDict.Keys)
+			{
+				var value = asDict[key];
+				string keyStr = key.ToString();
+						
+				cueData[keyStr] = value;
+			}
+			_globalData.Cuelist.CreateCue(cueData);
+		}
+	}
+
+if ((string)saveType.Key == "cuelist")
+{
+	GD.Print($"SaveManager:Loadsession - Loading Cuelist");
+	foundCuelist = true;
+	//GD.Print("CUELIST FOUND IN SAVE DATA " + saveType);
+	foreach (var cue in (Godot.Collections.Dictionary)saveType.Value)
+	{
+		cuelistOrder.Add((int)cue.Key, (int)cue.Value);
+		//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
+	}
+
+}*/
 
 }
 

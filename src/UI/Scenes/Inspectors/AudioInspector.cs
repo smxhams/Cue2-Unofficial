@@ -329,7 +329,6 @@ public partial class AudioInspector : Control
     /// </summary>
     private async void BuildRoutingMatrix()
     {
-        GD.Print($"AudioInspector:BuildRoutingMatrix - Building routing matrix start");
         foreach (var child in _routingMatrixGrid.GetChildren())
         {
             child.QueueFree();
@@ -341,15 +340,21 @@ public partial class AudioInspector : Control
             _routingContainer.Visible = false;
             return;
         }
+        
         await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
-
+        
+        
+        // Get ins and outs data
         var inputChannels = _focusedAudioComponent.ChannelCount;
         var inputLabels = GetChannelLabels(inputChannels, isInput: true);
 
         int outputChannels;
         List<string> outputLabels = new List<string>();
+        
+        // Audio Output Patch
         if (_focusedAudioComponent.PatchId != -1)
         {
+            // Check if selected patch exists, if not clean the audio component of it.
             if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedAudioComponent.PatchId, out var patch))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:BuildRoutingMatrix - Patch ID {_focusedAudioComponent.PatchId} not found, resetting output", 2);
@@ -361,8 +366,10 @@ public partial class AudioInspector : Control
                 return;
             }
             outputChannels = patch.Channels.Count;
-            outputLabels = patch.Channels.Values.ToList();
+            outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
         }
+        
+        // Direct output
         else if (!string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput))
         {
             var device = _audioDevices.OpenAudioDevice(_focusedAudioComponent.DirectOutput, out var _);
@@ -386,12 +393,44 @@ public partial class AudioInspector : Control
             _routingContainer.Visible = false;
             return; // No output selected
         }
+
         
-        // Ensure CuePatch exists or create default
-        if (_focusedAudioComponent.Routing == null)
+        // Validate routing (CuePatch) matches what is expected
+        var routing = _focusedAudioComponent.Routing;
+        bool needsUpdate = routing == null ||
+                           routing.OutputChannels != outputChannels ||
+                           !routing.OutputLabels.SequenceEqual(outputLabels) ||
+                           routing.InputChannels != inputChannels ||
+                           !routing.InputLabels.SequenceEqual(inputLabels);
+        
+        if (needsUpdate)
         {
-            _focusedAudioComponent.Routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+            // Preserve old volumes if possible
+            var oldRouting = routing;
+
+            // Create new CuePatch with current dimensions
+            routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+            _focusedAudioComponent.Routing = routing;
+
+            if (oldRouting != null)
+            {
+                // Copy over existing volumes for overlapping channels
+                int copyInputs = Math.Min(oldRouting.InputChannels, inputChannels);
+                int copyOutputs = Math.Min(oldRouting.OutputChannels, outputChannels);
+
+                for (int i = 0; i < copyInputs; i++)
+                {
+                    for (int j = 0; j < copyOutputs; j++)
+                    {
+                        routing.SetVolume(i, j, oldRouting.GetVolume(i, j));
+                    }
+                }
+            }
+
+            GD.Print($"AudioInspector:BuildRoutingMatrix - Resized/created CuePatch to inputs: {inputChannels}, outputs: {outputChannels}"); //!!!
         }
+        
+        
         
         // Set grid columns: outputChannels + 1 (for input labels)
         _routingMatrixGrid.Columns = outputChannels + 1;

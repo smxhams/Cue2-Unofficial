@@ -73,18 +73,19 @@ public partial class SaveManager : Node
 	
 	private void SaveSession(string selectedPath, string sessionName)
 	{
-		GD.Print($"SaveMasnager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
+		GD.Print($"SaveMasager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
+		
+		// SAVE DATA
 		var saveData = new Dictionary(); // Save type (cues, cue data)
 		
-		var cueSaveData = FormatCuesForSave();
+		var cueSaveData = _globalData.Cuelist.GetData();
 		saveData.Add("cues", cueSaveData); // Save type (cues, cue data)();
-		
-		var cuelistSaveData = FormatCueslistForSave();
-		saveData.Add("cuelist", cuelistSaveData); // Save type (cues, cue data)();
 
-		var settingsData = FormatSettingsForSave();
+		var settingsData = _globalData.Settings.GetData();
 		saveData.Add("settings", settingsData);
 		
+		
+		// SAVE DIRECTORY
 		string baseDir = Path.GetDirectoryName(selectedPath);
 		if (string.IsNullOrEmpty(baseDir))
 		{
@@ -93,7 +94,7 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		string sessionFolder = selectedPath;//Path.Combine(baseDir, sessionName);
+		string sessionFolder = baseDir;//Path.Combine(baseDir, sessionName);
 		if (!FolderCreator(sessionFolder))
 		{
 			// Folder already exists; proceed.
@@ -131,61 +132,48 @@ public partial class SaveManager : Node
 		}
 	}
 	
-
-	private Dictionary FormatCuesForSave()
-	{
-		var cueSaveTable = new Dictionary();
-		foreach (var cue1 in _globalData.Cuelist.Cuelist)
-		{
-			var cue = (Cue)cue1;
-			var cueData = cue.GetData();
-			
-			cueSaveTable.Add(cue.Id, cueData);
-		}
-		GD.Print($"\"SaveManager:FormatCuesForSave - {cueSaveTable}");
-		return cueSaveTable;
-	}
-
-	private Godot.Collections.Dictionary<int, int> FormatCueslistForSave()
-	{
-		var cuelistSaveTable = _globalData.Cuelist.GetCueOrder();
-		return cuelistSaveTable;
-	}
-	
-	private Dictionary FormatSettingsForSave()
-	{ 
-		var saveTable = new Dictionary();
-		// Audio patch
-		var patchTable = new Dictionary();
-		
-		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
-		{
-			patchTable.Add(patch.Key, patch.Value.GetData());
-		}
-
-		var devices = _audioDevices.GetOpenAudioDevicesNames();
-
-		saveTable.Add("AudioPatch", patchTable);
-		saveTable.Add("AudioDevices", devices);
-		return saveTable;
-	}
 	
 	private void OpenSession()
 	{
 		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
 	}
 	
-	private void OpenSelectedSession(string path)
+	private void OpenSelectedSession(string selectedPath)
+	{
+		GD.Print($"SaveManager:OpenSelectedSession - Opening session from: {selectedPath}");
+		
+		// Verify file before resetting current session.
+		if (!File.Exists(selectedPath))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session file not found: {selectedPath}", 2);
+			GD.PrintErr("SaveManager:LoadSession - File not found: " + selectedPath);
+			return;
+		}
+		
+		// Reset session
+		_globalData.Cuelist.ResetCuelist();
+		_globalData.Devices.ResetAudioDevices();
+		_globalData.Settings.ResetSettings();
+		
+		LoadSession(selectedPath);
+		
+		// Update session info
+		_globalData.SessionPath = selectedPath;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
+		
+	}
+
+	private void LoadSession(string selectedPath)
 	{
 		try
 		{
 			Godot.FileAccess file =
-				Godot.FileAccess.OpenEncryptedWithPass(path, Godot.FileAccess.ModeFlags.Read, _decodepass);
+				Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
 			if (file == null)
 			{
 				Error err = Godot.FileAccess.GetOpenError();
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for reading: {path} with error: {err}", 2);
-				GD.PrintErr("SaveManager:OpenSelectedSession - Failed to open file: " + path + " Error: " + err);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for reading: {selectedPath} with error: {err}", 2);
+				GD.PrintErr("SaveManager:OpenSelectedSession - Failed to open file: " + selectedPath + " Error: " + err);
 				return;
 			}
 			string jsonString = file.GetAsText();
@@ -197,31 +185,34 @@ public partial class SaveManager : Node
 				GD.PrintErr($"JSON parse error: {parseResult}");
 				return;
 			}
-			var data = json.Data.AsGodotDictionary();
-			ResetSession();
-			_globalData.SessionName = Path.GetFileNameWithoutExtension(path);
-			_globalData.SessionPath = Path.GetDirectoryName(path);
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Session loaded successfully.", 0);
-			LoadSession(data);
-			LinkAudioPatches();
+			var saveData = json.Data.AsGodotDictionary();
+
+			if (saveData.ContainsKey("settings"))
+			{
+				GD.Print("SaveManager:LoadSession - Loading Settings");
+				var settingsData = saveData["settings"].AsGodotDictionary();
+				_globalData.Settings.LoadSettings(settingsData);
+				
+			}
+			
+			if (saveData.ContainsKey("cues"))
+			{
+				GD.Print("SaveManager:LoadSession - Loading Cues");
+				var cuesData = saveData["cues"].AsGodotDictionary();
+				_globalData.Cuelist.LoadData(cuesData);
+			}
+			
+			GD.Print($"SAVE MADE IT");
 		}
 		catch (Exception ex)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error loading session: {ex.Message}", 2);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load session: {ex.Message}", 2);
+			GD.PrintErr("SaveManager:LoadSession - Error: " + ex.Message);
 		}
 		
-	}
-
-	private void ResetSession()
-	{
-		_globalData.Cuelist.ResetCuelist();
-		_globalData.Devices.ResetAudioDevices();
-		_globalData.Settings.ResetSettings();
-	}
-
-	private void LoadSession(Dictionary data)
-	{
-		bool foundCuelist = false;
+		
+		// Old code before restructure
+		/*bool foundCuelist = false;
 		var cuelistOrder = new Godot.Collections.Dictionary<int, int>();
 		
 		foreach (var saveType in data)
@@ -288,7 +279,7 @@ public partial class SaveManager : Node
 
 			}
 		}
-		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end
+		if (foundCuelist) _globalData.Cuelist.StructureCuelistToData(cuelistOrder); // Need to be executed at end*/
 		
 		//LinkCueLights();
 	}

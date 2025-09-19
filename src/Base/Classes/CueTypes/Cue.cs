@@ -138,7 +138,7 @@ public class Cue : ICue
     
     public AudioComponent GetAudioComponent()
     {
-        return Components.FirstOrDefault(c => c.Type == "Audio") as AudioComponent;
+        return Components.FirstOrDefault(c => c.Type == "Audio", defaultValue:null) as AudioComponent;
     }
 
     public VideoComponent AddVideoComponent(string videoFile, GlobalSignals globalSignals)

@@ -1,7 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
 using Cue2.Shared;
 using Godot;
+using Godot.Collections;
 
 namespace Cue2.Base.Classes;
 
@@ -22,6 +21,7 @@ public partial class Settings : Node
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
+        _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;
@@ -78,6 +78,26 @@ public partial class Settings : Node
         }
     }
     
+    
+    
+    /// <summary>
+    /// Saves cue light data.
+    /// </summary>
+    public void SaveCueLightData(Dictionary data)
+    {
+        _cueLightData = data;
+        GD.Print("Settings:SaveCueLightData - Stored data");
+    }
+
+    /// <summary>
+    /// Loads cue light data.
+    /// </summary>
+    public Dictionary LoadCueLightData()
+    {
+        return _cueLightData;
+    }
+    
+    // Save and loads
     public void ResetSettings()
     {
         foreach (var patch in _audioOutputPatches)
@@ -87,28 +107,11 @@ public partial class Settings : Node
         _audioOutputPatches.Clear();
         _cueLightData.Clear();
     }
-    
-    /// <summary>
-    /// Saves cue light data.
-    /// </summary>
-    public void SaveCueLightData(Godot.Collections.Dictionary data)
-    {
-        _cueLightData = data;
-        GD.Print("Settings:SaveCueLightData - Stored data");
-    }
 
-    /// <summary>
-    /// Loads cue light data.
-    /// </summary>
-    public Godot.Collections.Dictionary LoadCueLightData()
+    public Dictionary GetData()
     {
-        return _cueLightData;
-    }
-
-    /*private Hashtable FormatSettingsForSave()
-    {
-        var saveTable = new Hashtable();
-        var patchTable = new Hashtable();
+        var saveTable = new Dictionary();
+        var patchTable = new Dictionary();
 
         foreach (var patch in _audioOutputPatches)
         {
@@ -120,7 +123,49 @@ public partial class Settings : Node
         saveTable.Add("AudioPatch", patchTable);
         saveTable.Add("AudioDevices", devices);
         saveTable.Add("CueLights", _cueLightData);
+        
+        saveTable.Add("UiScale", UiScale);
+        saveTable.Add("GoScale", GoScale);
+        saveTable.Add("WaveformResolution", WaveformResolution);
+        saveTable.Add("StopFadeDuration", StopFadeDuration);
         return saveTable;
-    }*/
+    }
+
+    public void LoadSettings(Dictionary settingsData)
+    {
+        GD.Print($"Settings:LoadSettings - Loading Settings");
+
+        if (settingsData.TryGetValue("AudioDevices", out var devices))
+        {
+            GD.Print($"Settings:LoadSettings - Loading AudioDevices");
+            var deviceArray = (Array<string>)devices;
+            foreach (var device in deviceArray)
+            {
+                _audioDevices.OpenAudioDevice(device, out var _);
+            }
+        }
+
+        if (settingsData.TryGetValue("AudioPatch", out var patchs))
+        {
+            GD.Print($"Settings:LoadSettings - Loading AudioPatches");
+            foreach (var patch in (Dictionary)patchs)
+            {
+                var patchAsDict = patch.Value.AsGodotDictionary();
+                var patchObj = AudioOutputPatch.FromData(patchAsDict);
+                _globalData.Settings.AddPatch(patchObj);
+            }
+        }
+
+        if (settingsData.TryGetValue("CueLights", out var cueLights))
+        {
+            GD.Print($"Settings:LoadSettings - Loading CueLights");
+        }
+        
+        UiScale = settingsData.TryGetValue("UiScale", out var value) ? (float)value : UiScale;
+        GoScale = settingsData.TryGetValue("GoScale", out value) ? (float)value : GoScale;
+        WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
+        StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
+        
+    }
     
 }
