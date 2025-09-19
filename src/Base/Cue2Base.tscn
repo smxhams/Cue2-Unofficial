@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=4 uid="uid://begopskfmco7t"]
+[gd_scene load_steps=31 format=4 uid="uid://begopskfmco7t"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" uid="uid://cm5s0bi03612d" path="res://src/UI/Scenes/Inspectors/ShellInspector.tscn" id="7_7gle1"]
 [ext_resource type="PackedScene" uid="uid://c2oerlmq8wmp7" path="res://src/UI/Scenes/Inspectors/AudioInspector.tscn" id="8_7gle1"]
 [ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
+[ext_resource type="Script" uid="uid://brbuud6xpdj8r" path="res://src/Base/TestCueLightButton.cs" id="9_7xm62"]
 [ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://crc7u0mdel1jo" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
@@ -2460,7 +2461,7 @@ size_flags_stretch_ratio = 0.3
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-current_tab = 1
+current_tab = 5
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
 
@@ -2470,6 +2471,7 @@ layout_mode = 2
 metadata/_tab_index = 0
 
 [node name="Audio" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("8_7gle1")]
+visible = false
 layout_mode = 2
 
 [node name="Video" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
@@ -2491,10 +2493,18 @@ tooltip_text = "Connection controls"
 metadata/_tab_index = 4
 
 [node name="Network" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
-visible = false
 layout_mode = 2
 tooltip_text = "Network commands"
 metadata/_tab_index = 5
+
+[node name="TestCueLightButton" type="Button" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs/Network"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+text = "CUE LIGHT
+GOOOO"
+script = ExtResource("9_7xm62")
 
 [node name="Control" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
 visible = false
