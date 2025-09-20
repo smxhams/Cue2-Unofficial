@@ -10,12 +10,21 @@ public partial class Settings : Node
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
-    private Dictionary _cueLightData = new Dictionary();
 
     public float UiScale = 1.0f;
     public float GoScale = 1.0f;
     public int WaveformResolution = 4096;
     public float StopFadeDuration = 2.0f;
+    
+    
+    // Cuelight settings
+    public Color CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
+    public Color CueLightGoColour = new Color(0f, 1f, 0f, 1f);
+    public Color CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
+    public Color CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
+    public byte CueLightBrightness = 50;
+    
+    
     
     public override void _Ready()
     {
@@ -79,24 +88,6 @@ public partial class Settings : Node
     }
     
     
-    
-    /// <summary>
-    /// Saves cue light data.
-    /// </summary>
-    public void SaveCueLightData(Dictionary data)
-    {
-        _cueLightData = data;
-        GD.Print("Settings:SaveCueLightData - Stored data");
-    }
-
-    /// <summary>
-    /// Loads cue light data.
-    /// </summary>
-    public Dictionary LoadCueLightData()
-    {
-        return _cueLightData;
-    }
-    
     // Save and loads
     public void ResetSettings()
     {
@@ -105,7 +96,16 @@ public partial class Settings : Node
             patch.Value.Free();
         }
         _audioOutputPatches.Clear();
-        _cueLightData.Clear();
+        
+        UiScale = 1.0f;
+        GoScale = 1.0f;
+        WaveformResolution = 4096;
+        StopFadeDuration = 2.0f;
+        CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
+        CueLightGoColour = new Color(0f, 1f, 0f, 1f);
+        CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
+        CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
+        
     }
 
     public Dictionary GetData()
@@ -122,12 +122,19 @@ public partial class Settings : Node
 
         saveTable.Add("AudioPatch", patchTable);
         saveTable.Add("AudioDevices", devices);
-        saveTable.Add("CueLights", _cueLightData);
+        saveTable.Add("CueLights", _globalData.CueLightManager.GetData());
         
         saveTable.Add("UiScale", UiScale);
         saveTable.Add("GoScale", GoScale);
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
+        
+        // Cuelights
+        saveTable.Add("CueLightIdleColour", CueLightIdleColour.ToHtml());
+        saveTable.Add("CueLightGoColour", CueLightGoColour.ToHtml());
+        saveTable.Add("CueLightStandbyColour", CueLightStandbyColour.ToHtml());
+        saveTable.Add("CueLightCountInColour", CueLightCountInColour.ToHtml());
+        saveTable.Add("CueLightBrightness", CueLightBrightness);
         return saveTable;
     }
 
@@ -159,6 +166,8 @@ public partial class Settings : Node
         if (settingsData.TryGetValue("CueLights", out var cueLights))
         {
             GD.Print($"Settings:LoadSettings - Loading CueLights");
+            var cueLightsAsDict = cueLights.AsGodotDictionary();
+            _globalData.CueLightManager.LoadData(cueLightsAsDict);
         }
         
         UiScale = settingsData.TryGetValue("UiScale", out var value) ? (float)value : UiScale;
@@ -168,6 +177,11 @@ public partial class Settings : Node
         WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
         StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
         
+        CueLightIdleColour = settingsData.TryGetValue("CueLightIdleColour", out value) ? Color.FromString(value.AsString(), CueLightIdleColour) : CueLightIdleColour;
+        CueLightGoColour = settingsData.TryGetValue("CueLightGoColour", out value) ? Color.FromString(value.AsString(), CueLightGoColour) : CueLightGoColour;
+        CueLightStandbyColour = settingsData.TryGetValue("CueLightStandbyColour", out value) ? Color.FromString(value.AsString(), CueLightStandbyColour) : CueLightStandbyColour;
+        CueLightCountInColour = settingsData.TryGetValue("CueLightCountInColour", out value) ? Color.FromString(value.AsString(), CueLightCountInColour) : CueLightCountInColour;
+        CueLightBrightness = settingsData.TryGetValue("CueLightBrightness", out value) ? (byte)value : CueLightBrightness;
     }
     
 }

@@ -1,10 +1,11 @@
-[gd_scene load_steps=18 format=4 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=19 format=4 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
 [ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/Base/Settings/SettingsGeneral.cs" id="3_jdmuw"]
 [ext_resource type="Script" uid="uid://cu1ujebi3h7vu" path="res://src/Base/Settings/SettingsAudioOutputPatch.cs" id="3_pnmd8"]
 [ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindowHandles.tscn" id="4_r2cu3"]
+[ext_resource type="PackedScene" uid="uid://msbmpql2gk17" path="res://src/UI/Scenes/Settings/SettingsCueLights.tscn" id="5_uxven"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -2180,95 +2181,9 @@ theme = SubResource("Theme_k6x2l")
 layout_mode = 2
 text = "Add Device Video"
 
-[node name="CueLights" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
+[node name="CueLights" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("5_uxven")]
 unique_name_in_owner = true
 layout_mode = 2
-
-[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer"]
-layout_mode = 2
-size_flags_vertical = 0
-
-[node name="Header" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Cue Lights"
-vertical_alignment = 1
-uppercase = true
-
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Label5" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-text = "LED Colours"
-
-[node name="Label" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-text = "     Idle:"
-
-[node name="ColorPickerButton4" type="ColorPickerButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-
-[node name="Label3" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-text = "    Go:"
-
-[node name="ColorPickerButton2" type="ColorPickerButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-
-[node name="Label4" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-text = "    Standby:"
-
-[node name="ColorPickerButton" type="ColorPickerButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-
-[node name="Label2" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-text = "    Count-In:"
-
-[node name="ColorPickerButton3" type="ColorPickerButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer"]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 2
-
-[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Label5" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer2"]
-layout_mode = 2
-text = "LED Master Brightness:"
-
-[node name="LineEdit" type="LineEdit" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer2"]
-layout_mode = 2
-text = "100"
-alignment = 1
-max_length = 3
-
-[node name="Label6" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer/HBoxContainer2"]
-layout_mode = 2
-text = "%"
-
-[node name="HSeparator2" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Button" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/CueLights/MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 0
-text = "New Cuelight"
 
 [node name="DropMenuFilter" type="PanelContainer" parent="."]
 unique_name_in_owner = true

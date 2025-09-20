@@ -13,6 +13,8 @@ namespace Cue2.UI.Utilities;
 /// </summary>
 public partial class UiUtilities : Node
 {
+    private static readonly Regex IpRegex = new Regex(@"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+    private static readonly Regex CleanRegex = new Regex(@"[^\d.]"); // Removes anything that's not digit or dot
     
     /// <summary>
     /// Checks if the given Cue contains a component of the specified type.
@@ -276,6 +278,70 @@ public partial class UiUtilities : Node
             FormatLabelsColours(child, colour);
         }
     }
+
+    
+    /// <summary>
+    /// Cleans and verifies an IP address string.
+    /// - Removes invalid characters (non-digits/dots).
+    /// - Trims leading/trailing dots.
+    /// - Validates as a proper IPv4 address (four octets, each 0-255).
+    /// - If invalid, logs an error via GlobalSignals and returns null.
+    /// - If valid, returns the cleaned IP string.
+    /// </summary>
+    /// <param name="input">The raw user input string.</param>
+    /// <param name="globalSignals">Reference to GlobalSignals for logging errors. If null, falls back to GD.PrintErr.</param>
+    /// <returns>Cleaned valid IP string, or null if invalid.</returns>
+    public static string VerifyIpInput(string input, GlobalSignals globalSignals = null)
+    {
+        try
+        {
+            string cleaned = CleanRegex.Replace(input ?? "", "").Trim('.');
+            
+            if (string.IsNullOrEmpty(cleaned) || cleaned.Count(c => c == '.') != 3)
+            {
+                LogError("Invalid IP format: Must have exactly three dots and non-empty octets.", globalSignals);
+                return null;
+            }
+            
+            string[] octets = cleaned.Split('.');
+            if (octets.Length != 4 || octets.Any(o => !int.TryParse(o, out int val) || val < 0 || val > 255))
+            {
+                LogError("Invalid IP: Each octet must be an integer between 0-255.", globalSignals);
+                return null;
+            }
+            
+            if (!IpRegex.IsMatch(cleaned))
+            {
+                LogError("Invalid IP format: Leading zeros not allowed except for octet value 0.", globalSignals);
+                return null;
+            }
+
+            return cleaned;
+        }
+        catch (Exception ex)
+        {
+            LogError($"Unexpected error validating IP: {ex.Message}", globalSignals, 2);
+            return null;
+        }
+    }
+    
+    
+    /// <summary>
+    /// Helper to log errors via GlobalSignals if available, else GD.PrintErr.
+    /// Uses log level 1 (Warning) by default, or specified level.
+    /// </summary>
+    private static void LogError(string message, GlobalSignals globalSignals, int logLevel = 1)
+    {
+        if (globalSignals != null)
+        {
+            globalSignals.EmitSignal(nameof(GlobalSignals.Log), message, logLevel);
+        }
+        else
+        {
+            GD.PrintErr(message);
+        }
+    }
+    
     
     
 }

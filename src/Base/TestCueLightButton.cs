@@ -8,7 +8,7 @@ namespace Cue2.Shared;
 
 public partial class TestCueLightButton : Button
 {
-    private GlobalSignals _globalSignals;
+    /*private GlobalSignals _globalSignals;
     private const string Esp32Ip = "192.168.1.47"; // Replace with your ESP32 IP
     private const int Esp32Port = 80;
     private const string Command = "BLINK_GREEN\n";
@@ -43,5 +43,5 @@ public partial class TestCueLightButton : Button
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
                 $"TestCueLightButton:SendCueLightCommandAsync - Unexpected error: {ex.Message}", 2);
         }
-    }
+    }*/
 }

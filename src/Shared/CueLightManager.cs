@@ -1,7 +1,8 @@
 using Godot;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.Connections;
+using Godot.Collections;
 
 namespace Cue2.Shared;
 
@@ -12,16 +13,14 @@ public partial class CueLightManager : Node
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
-    private Dictionary<int, CueLight> _cueLights = new();
+    private System.Collections.Generic.Dictionary<int, CueLight> _cueLights = new();
     private int _nextId = 0;
 
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
-        _globalSignals.Save += SaveCueLights; // Connect to save signal
-        _globalSignals.OpenSelectedSession += OnOpenSession; // Async load
-        GD.Print("CueLightManager:_Ready - Initialized"); //!!!
+        GD.Print("CueLightManager:_Ready - Initialized");
     }
 
     /// <summary>
@@ -48,7 +47,7 @@ public partial class CueLightManager : Node
     {
         foreach (var cueLight in _cueLights.Values)
         {
-            if (!cueLight.IsConnected)
+            if (!cueLight.CueLightIsConnected)
                 await cueLight.ConnectAsync();
         }
     }
@@ -62,38 +61,91 @@ public partial class CueLightManager : Node
             await cueLight.DisconnectAsync();
     }
 
-    private void SaveCueLights()
+    public void DeleteCueLight(CueLight cueLight)
     {
-        var data = new Godot.Collections.Dictionary();
-        foreach (var kvp in _cueLights)
-            data[kvp.Key] = kvp.Value.GetData();
-        _globalData.Settings.SaveCueLightData(data); // Delegate to Settings
-        GD.Print("CueLightManager:SaveCueLights - Saved data"); //!!!
+        if (_cueLights.Remove(cueLight.Id))
+        {
+            cueLight.Dispose();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"CueLightManager:DeleteCueLight - Removed CueLight {cueLight.Id} ({cueLight.Name})", 0);
+        }
     }
 
-    private async void OnOpenSession(string path)
+    /// <summary>
+    /// Returns an array of all cuelights
+    /// </summary>
+    /// <returns></returns>
+    public Array<CueLight> GetCueLights()
     {
-        // Need to find something else for this
-        
-        
-        /*await DisconnectAllAsync();
-        _cueLights.Clear();
-        _nextId = 0;
-        var loadedData = _globalData.Settings.LoadCueLightData();
-        foreach (var entry in loadedData)
+        var result = new Array<CueLight>();
+        foreach (var cueLight in _cueLights.Values)
         {
-            if (entry.Key is Variant keyVar && keyVar.TryToInt(out int id))
-            {
-                var cueLight = new CueLight(id);
-                cueLight.SetData(entry.Value.AsGodotDictionary());
-                _cueLights[id] = cueLight;
-                if (id >= _nextId) _nextId = id + 1;
-                if (_globalData.SessionPath == path) // Reconnect for loaded session
-                    await cueLight.ConnectAsync();
-                if (cueLight.IsIdentifying) // Restore state
-                    await cueLight.IdentifyAsync(true);
-            }
+            result.Add(cueLight);
         }
-        GD.Print($"CueLightManager:OnOpenSession - Loaded {_cueLights.Count} cue lights");*/
+        return result;
+    }
+
+    public async void AllGo()
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (cueLight.CueLightIsConnected)
+                await cueLight.GoAsync();
+        }
+    }
+
+    public async void AllStandby()
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (cueLight.CueLightIsConnected)
+                await cueLight.StandbyAsync();
+        }
+    }
+
+    public async void AllCountIn(int timeUntilGo = 3)
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (cueLight.CueLightIsConnected)
+                await cueLight.CountInAsync(timeUntilGo);
+        }
+    }
+
+    public async void AllIdentify(bool state)
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (cueLight.CueLightIsConnected)
+                await cueLight.IdentifyAsync(state);
+        }
+    }
+     
+    
+
+    public Dictionary GetData()
+    {
+        var data = new Dictionary();
+        foreach (var kvp in _cueLights)
+            data[kvp.Key] = kvp.Value.GetData();
+        return data;
+    }
+
+    public async Task LoadData(Dictionary data)
+    {
+        foreach (var value in data.Values)
+        {
+            var cueLightDict = value.AsGodotDictionary();
+            if (!cueLightDict.ContainsKey("Id"))
+            {
+                GD.PrintErr("CueLightManager:LoadData - Missing 'Id' key in data.");
+                return;
+            }
+            if ((int)cueLightDict["Id"] >= _nextId) _nextId = (int)cueLightDict["Id"] + 1;
+            var cueLight = new CueLight(cueLightDict);
+            _cueLights[cueLight.Id] = cueLight;
+        }
+
+        await ConnectAllAsync();
     }
 }

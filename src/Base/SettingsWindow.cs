@@ -42,10 +42,6 @@ public partial class SettingsWindow : Window
 			GetNode<PanelContainer>("%DropMenuFilter").Visible = false;
 			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
 		};
-		//GetNode<Button>("%SettingSaveAs").pressed += 
-		
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
-		
 		
 		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
 	}
