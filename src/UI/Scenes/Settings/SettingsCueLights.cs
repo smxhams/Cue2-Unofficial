@@ -35,7 +35,10 @@ public partial class SettingsCueLights : ScrollContainer
     private Button _testStandbyButton;
     private Button _testCountInButton;
     private Button _testIdentifyButton;
+    private Button _testCancelButton;
     
+    // Next: Brightness, check connection ping w/ is connected status. implement disable. signals on issue.
+    // Ensure only one IP is used Cuelight view in main ui then components. 
     
     public override void _Ready()
     {
@@ -62,36 +65,38 @@ public partial class SettingsCueLights : ScrollContainer
         _testStandbyButton = GetNode<Button>("%TestStandbyButton");
         _testCountInButton = GetNode<Button>("%TestCountInButton");
         _testIdentifyButton = GetNode<Button>("%TestIdentifyButton");
+        _testCancelButton = GetNode<Button>("%TestCancelStandbyButton");
         
         
         
         OnVisible(); // Initial set data
         
-        _idleColour.ColorChanged += async color => 
+        _idleColour.PopupClosed += () => 
         {
-            _settings.CueLightIdleColour = color;
-            await UpdateAllCueLightColorsAsync();
+            _settings.CueLightIdleColour = _idleColour.Color;
+            _ = UpdateAllCueLightSettingsAsync();
         };
-        _goColour.ColorChanged += async color => 
+        _goColour.PopupClosed += () => 
         {
-            _settings.CueLightGoColour = color;
-            await UpdateAllCueLightColorsAsync();
+            _settings.CueLightGoColour = _goColour.Color;
+            _ = UpdateAllCueLightSettingsAsync();
         };
-        _standbyColour.ColorChanged += async color => 
+        _standbyColour.PopupClosed += () => 
         {
-            _settings.CueLightStandbyColour = color;
-            await UpdateAllCueLightColorsAsync();
+            _settings.CueLightStandbyColour = _standbyColour.Color;
+            _ = UpdateAllCueLightSettingsAsync();
         };
-        _countInColour.ColorChanged += async color => 
+        _countInColour.PopupClosed += () => 
         {
-            _settings.CueLightCountInColour = color;
-            await UpdateAllCueLightColorsAsync();
+            _settings.CueLightCountInColour = _countInColour.Color;
+            _ = UpdateAllCueLightSettingsAsync();
         };
 
-        _testGoButton.Pressed += () => _cueLightManager.AllGo();
-        _testStandbyButton.Pressed += () => _cueLightManager.AllStandby();
-        _testCountInButton.Pressed += () => _cueLightManager.AllCountIn();
+        _testGoButton.Pressed += () => _cueLightManager.AllGo("TEST");
+        _testStandbyButton.Pressed += () => _cueLightManager.AllStandby("TEST");
+        _testCountInButton.Pressed += () => _cueLightManager.AllCountIn(cueNum:"TEST");
         _testIdentifyButton.Toggled += state => _cueLightManager.AllIdentify(state);
+        _testCancelButton.Pressed += () => _cueLightManager.AllCancel();
         
         
         _newCueLightButton.Pressed += NewCueLightButton;
@@ -111,7 +116,6 @@ public partial class SettingsCueLights : ScrollContainer
     private async void NewCueLightButton()
     {
         var cueLight = _cueLightManager.CreateCueLight();
-        await cueLight.ConnectAsync();
         PanelContainer instance = _cueLightInstanceScene.Instantiate<PanelContainer>();
         _cueLightsContainer.AddChild(instance);
         instance.Name = cueLight.Id.ToString();
@@ -179,7 +183,6 @@ public partial class SettingsCueLights : ScrollContainer
             // Disconnect the CueLight if connected
             if (cueLight.CueLightIsConnected)
             {
-                await cueLight.DisconnectAsync();
                 GD.Print($"SettingsCueLights:DeleteCueLightAsync - Disconnected CueLight {cueLight.Id} ({cueLight.Name})");
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
                     $"Disconnected CueLight {cueLight.Id} ({cueLight.Name})", 0);
@@ -202,7 +205,7 @@ public partial class SettingsCueLights : ScrollContainer
         }
     }
     
-    private async Task UpdateAllCueLightColorsAsync()
+    private async Task UpdateAllCueLightSettingsAsync()
     {
         try
         {
@@ -211,7 +214,7 @@ public partial class SettingsCueLights : ScrollContainer
             {
                 if (cueLight.CueLightIsConnected)
                 {
-                    await cueLight.ConfigureColorsAsync(
+                    await cueLight.ConfigureAsync(
                         _settings.CueLightIdleColour, 
                         _settings.CueLightGoColour, 
                         _settings.CueLightStandbyColour, 

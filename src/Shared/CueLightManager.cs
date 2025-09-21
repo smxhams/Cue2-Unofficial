@@ -1,5 +1,6 @@
 using Godot;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.Connections;
 using Godot.Collections;
@@ -21,6 +22,8 @@ public partial class CueLightManager : Node
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         GD.Print("CueLightManager:_Ready - Initialized");
+
+        TreeExiting += Clean;
     }
 
     /// <summary>
@@ -40,26 +43,6 @@ public partial class CueLightManager : Node
     /// </summary>
     public CueLight? GetCueLight(int id) => _cueLights.TryGetValue(id, out var cl) ? cl : null;
 
-    /// <summary>
-    /// Connects all cue lights asynchronously.
-    /// </summary>
-    public async Task ConnectAllAsync()
-    {
-        foreach (var cueLight in _cueLights.Values)
-        {
-            if (!cueLight.CueLightIsConnected)
-                await cueLight.ConnectAsync();
-        }
-    }
-
-    /// <summary>
-    /// Disconnects all cue lights.
-    /// </summary>
-    public async Task DisconnectAllAsync()
-    {
-        foreach (var cueLight in _cueLights.Values)
-            await cueLight.DisconnectAsync();
-    }
 
     public void DeleteCueLight(CueLight cueLight)
     {
@@ -85,30 +68,38 @@ public partial class CueLightManager : Node
         return result;
     }
 
-    public async void AllGo()
+    public async void AllGo(string cueNum = "")
     {
         foreach (var cueLight in _cueLights.Values)
         {
-            if (cueLight.CueLightIsConnected)
-                await cueLight.GoAsync();
+            await cueLight.GoAsync(cueNum);
         }
     }
 
-    public async void AllStandby()
+    public async void AllStandby(string cueNum = "")
     {
         foreach (var cueLight in _cueLights.Values)
         {
             if (cueLight.CueLightIsConnected)
-                await cueLight.StandbyAsync();
+                await cueLight.StandbyAsync(cueNum);
+        }
+    }
+    
+    public async void AllCancel()
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (cueLight.CueLightIsConnected)
+                await cueLight.CancelAsync();
         }
     }
 
-    public async void AllCountIn(int timeUntilGo = 3)
+    public async void AllCountIn(int timeUntilGo = 3, string cueNum = "")
     {
         foreach (var cueLight in _cueLights.Values)
         {
             if (cueLight.CueLightIsConnected)
-                await cueLight.CountInAsync(timeUntilGo);
+                await cueLight.CountInAsync(timeUntilGo, cueNum);
         }
     }
 
@@ -119,6 +110,20 @@ public partial class CueLightManager : Node
             if (cueLight.CueLightIsConnected)
                 await cueLight.IdentifyAsync(state);
         }
+    }
+    
+    
+
+    private async void Clean()
+    {
+        foreach (var cueLight in _cueLights.Values)
+        {
+            if (_cueLights.Remove(cueLight.Id))
+            {
+                cueLight.Dispose();
+            }
+        }
+
     }
      
     
@@ -145,7 +150,5 @@ public partial class CueLightManager : Node
             var cueLight = new CueLight(cueLightDict);
             _cueLights[cueLight.Id] = cueLight;
         }
-
-        await ConnectAllAsync();
     }
 }
