@@ -1,5 +1,7 @@
 using Godot;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
@@ -19,17 +21,20 @@ public partial class SettingsCueLights : ScrollContainer
     private CueLightManager _cueLightManager;
     private Base.Classes.Settings _settings;
     
+    private Godot.Collections.Dictionary<CueLight, Callable> _cueLightHandlers = new Godot.Collections.Dictionary<CueLight, Callable>();
+    
+    
     //UI
     private PackedScene _cueLightInstanceScene;
     
     private VBoxContainer _cueLightsContainer;
     
-    private Button _newCueLightButton;
 
     private ColorPickerButton _idleColour;
     private ColorPickerButton _goColour;
     private ColorPickerButton _standbyColour;
     private ColorPickerButton _countInColour;
+    private LineEdit _brightnessLineEdit;
 
     private Button _testGoButton;
     private Button _testStandbyButton;
@@ -37,7 +42,9 @@ public partial class SettingsCueLights : ScrollContainer
     private Button _testIdentifyButton;
     private Button _testCancelButton;
     
-    // Next: Brightness, check connection ping w/ is connected status. implement disable. signals on issue.
+    private Button _newCueLightButton;
+    private Button _scanNetworkButton;
+    
     // Ensure only one IP is used Cuelight view in main ui then components. 
     
     public override void _Ready()
@@ -60,12 +67,16 @@ public partial class SettingsCueLights : ScrollContainer
         _goColour = GetNode<ColorPickerButton>("%GoColour");
         _standbyColour = GetNode<ColorPickerButton>("%StandbyColour");
         _countInColour = GetNode<ColorPickerButton>("%CountInColour");
+        _brightnessLineEdit = GetNode<LineEdit>("%BrightnessLineEdit");
         
         _testGoButton = GetNode<Button>("%TestGoButton");
         _testStandbyButton = GetNode<Button>("%TestStandbyButton");
         _testCountInButton = GetNode<Button>("%TestCountInButton");
         _testIdentifyButton = GetNode<Button>("%TestIdentifyButton");
-        _testCancelButton = GetNode<Button>("%TestCancelStandbyButton");
+        _testCancelButton = GetNode<Button>("%TestCancelButton");
+        
+        _scanNetworkButton = GetNode<Button>("%ScanNetworkButton");
+        _scanNetworkButton.Pressed += OnScanNetworkPressed;
         
         
         
@@ -92,6 +103,8 @@ public partial class SettingsCueLights : ScrollContainer
             _ = UpdateAllCueLightSettingsAsync();
         };
 
+        _brightnessLineEdit.TextSubmitted += OnBrightnessSubmitted;
+
         _testGoButton.Pressed += () => _cueLightManager.AllGo("TEST");
         _testStandbyButton.Pressed += () => _cueLightManager.AllStandby("TEST");
         _testCountInButton.Pressed += () => _cueLightManager.AllCountIn(cueNum:"TEST");
@@ -110,7 +123,26 @@ public partial class SettingsCueLights : ScrollContainer
             instance.Name = cueLight.Id.ToString();
             SetUpInstance(instance, cueLight);
         }
-        
+    }
+    
+    private void OnBrightnessSubmitted(string text)
+    {
+        if (int.TryParse(text, out int percent))
+        {
+            percent = Mathf.Clamp(percent, 0, 100);
+            _settings.CueLightBrightness = (byte)(percent * 255 / 100);
+            _brightnessLineEdit.Text = percent.ToString();
+            _ = UpdateAllCueLightSettingsAsync();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                $"Updated cue light brightness to {percent}% ({_settings.CueLightBrightness}/255)", 0);
+        }
+        else
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                $"Invalid brightness input: '{text}'. Must be an integer between 0 and 100.", 1);
+            _brightnessLineEdit.Text = Math.Round(_settings.CueLightBrightness * 100f / 255f).ToString();
+        }
+        _brightnessLineEdit.ReleaseFocus();
     }
 
     private async void NewCueLightButton()
@@ -124,41 +156,20 @@ public partial class SettingsCueLights : ScrollContainer
 
     private void SetUpInstance(PanelContainer instance, CueLight cueLight)
     {
-        var nameLineEdit = instance.GetNode<LineEdit>("%NameLineEdit");
-        nameLineEdit.Text = cueLight.Name;
-        nameLineEdit.TextSubmitted += text =>
-        {
-            cueLight.Name = text;
-            nameLineEdit.ReleaseFocus();
-        }; 
-        
         var collapseButton = instance.GetNode<Button>("%CueLightCollapseButton");
         collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
         var configAccordian = instance.GetNode<HBoxContainer>("%ConfigAccordian");
         configAccordian.Visible = false;
         
         
-        var deleteButton = instance.GetNode<Button>("%DeleteButton");
-        deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
-        deleteButton.Pressed += async () =>
+        var nameLineEdit = instance.GetNode<LineEdit>("%NameLineEdit");
+        nameLineEdit.Text = cueLight.Name;
+        nameLineEdit.TextSubmitted += text =>
         {
-            await DeleteCueLight(instance, cueLight);
-        };
-        
-        
-        var connectionStatusColourRect = instance.GetNode<ColorRect>("%ConnectionStatusColourRect");
-        connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;
-        var checkConnectionButton = instance.GetNode<Button>("%CheckConnectionButton");
-        checkConnectionButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        checkConnectionButton.Pressed += () =>
-        {
-            connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;
-            connectionStatusColourRect.TooltipText = cueLight.CueLightIsConnected ? "Connected" : "Disconnected";
-        };
-        
-        var identifyButton = instance.GetNode<Button>("%IdentifyButton");
-        identifyButton.Toggled += async state => await cueLight.IdentifyAsync(state);
-        
+            cueLight.Name = text;
+            _ = UpdateAllCueLightSettingsAsync();
+            nameLineEdit.ReleaseFocus();
+        }; 
         
         var ipLineEdit = instance.GetNode<LineEdit>("%IpLineEdit");
         ipLineEdit.Text = cueLight.IpAddress;
@@ -173,8 +184,52 @@ public partial class SettingsCueLights : ScrollContainer
             ipLineEdit.Text = cueLight.IpAddress;
             ipLineEdit.ReleaseFocus();
         };
+        
+        var connectionStatusColourRect = instance.GetNode<ColorRect>("%ConnectionStatusColourRect");
+        connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;
+        
+        Callable handler = Callable.From((bool state) => {
+            if (GodotObject.IsInstanceValid(connectionStatusColourRect))
+            {
+                connectionStatusColourRect.Color = state ? new Color(0, 1, 0) : new Color(1, 0, 0);
+            }
 
+        });
+
+        cueLight.Connect(CueLight.SignalName.ConnectionChanged, handler);
+        _cueLightHandlers[cueLight] = handler;
+        
+        
+        var checkConnectionButton = instance.GetNode<Button>("%CheckConnectionButton");
+        checkConnectionButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+        checkConnectionButton.Pressed += () =>
+        {
+            _ = cueLight.PingAsync();
+            connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;
+            connectionStatusColourRect.TooltipText = cueLight.CueLightIsConnected ? "Connected" : "Disconnected";
+        };
+        
+        var identifyButton = instance.GetNode<Button>("%IdentifyButton");
+        identifyButton.Toggled += async state => await cueLight.IdentifyAsync(state);
+        
+        var enabledToggle = instance.GetNode<CheckButton>("%EnabledToggle"); 
+        enabledToggle.ButtonPressed = cueLight.IsEnabled; 
+        enabledToggle.Toggled += (bool pressed) => 
+        { 
+            cueLight.IsEnabled = pressed; 
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),  
+                $"CueLight {cueLight.Id} ({cueLight.Name}) {(pressed ? "enabled" : "disabled")}", 0); 
+        };
+        
+        var deleteButton = instance.GetNode<Button>("%DeleteButton");
+        deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        deleteButton.Pressed += async () =>
+        {
+            await DeleteCueLight(instance, cueLight);
+        };
+        
     }
+    
 
     private async Task DeleteCueLight(PanelContainer instance, CueLight cueLight)
     {
@@ -212,7 +267,7 @@ public partial class SettingsCueLights : ScrollContainer
             var cueLights = _cueLightManager.GetCueLights();
             foreach (var cueLight in cueLights)
             {
-                if (cueLight.CueLightIsConnected)
+                if (cueLight.CueLightIsConnected&& cueLight.IsEnabled)
                 {
                     await cueLight.ConfigureAsync(
                         _settings.CueLightIdleColour, 
@@ -234,6 +289,44 @@ public partial class SettingsCueLights : ScrollContainer
         }
     }
     
+    // New method
+    private async void OnScanNetworkPressed()
+    {
+        try
+        {
+            _scanNetworkButton.Disabled = true; // Prevent spam
+            var discoveredIps = await _cueLightManager.DiscoverCueLightsAsync();
+        
+            var existingIps = new HashSet<string>(_cueLightManager.GetCueLights().Select(cl => cl.IpAddress));
+        
+            foreach (var ip in discoveredIps)
+            {
+                if (!existingIps.Contains(ip))
+                {
+                    var cueLight = _cueLightManager.CreateCueLightWithIp(ip);
+                    var instance = _cueLightInstanceScene.Instantiate<PanelContainer>();
+                    _cueLightsContainer.AddChild(instance);
+                    SetUpInstance(instance, cueLight);
+                    await cueLight.PingAsync();
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added discovered cue light at {ip}", 0);
+                }
+                else
+                {
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Skipped duplicate cue light at {ip}", 1);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"SettingsCueLights:OnScanNetworkPressed - Error scanning network: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error scanning for cue lights: {ex.Message}", 2);
+        }
+        finally
+        {
+            _scanNetworkButton.Disabled = false;
+        }
+    }
+    
     
     private void OnVisible()
     {
@@ -244,5 +337,19 @@ public partial class SettingsCueLights : ScrollContainer
             _standbyColour.Color = _settings.CueLightStandbyColour;
             _countInColour.Color = _settings.CueLightCountInColour;
         }
+    }
+    
+    public override void _ExitTree()
+    {
+        foreach (var pair in _cueLightHandlers)
+        {
+            var cueLight = pair.Key;
+            var handler = pair.Value;
+            if (GodotObject.IsInstanceValid(cueLight))
+            {
+                cueLight.Disconnect(CueLight.SignalName.ConnectionChanged, handler);
+            }
+        }
+        _cueLightHandlers.Clear();
     }
 }

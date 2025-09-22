@@ -1,6 +1,6 @@
+HBoxContainer
 CheckButton
 Button
-HBoxContainer
 Label
 ColorRect
 Control
@@ -12,4 +12,3 @@ ColorPickerButton
 BoxContainer
 MarginContainer
 ScrollContainer
-ProgressBar

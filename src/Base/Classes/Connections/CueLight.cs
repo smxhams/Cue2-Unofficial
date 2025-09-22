@@ -16,13 +16,17 @@ public partial class CueLight : GodotObject, IDisposable
 {
     private UdpClient? _udpClient;
     private bool _disposed = false;
-    private readonly int _connectionTimeoutMs = 3000;
+    private readonly int _connectionTimeoutMs = 1000;
 
     public int Id { get; private set; }
     public string Name { get; set; }
     public string IpAddress { get; private set; }
     public int Port { get; private set; }
     public bool CueLightIsConnected { get; private set; }
+    public bool IsEnabled { get; set; } = true;
+    
+    [Signal] public delegate void ConnectionChangedEventHandler(bool connection);
+    
     
     public CueLight(int id)
     {
@@ -31,6 +35,7 @@ public partial class CueLight : GodotObject, IDisposable
         IpAddress = "192.168.1.100"; // Default for testing
         Port = 80;
         CueLightIsConnected = false;
+        IsEnabled = true;
     }
     
     /// <summary>
@@ -43,6 +48,7 @@ public partial class CueLight : GodotObject, IDisposable
         IpAddress = data.ContainsKey("IpAddress") ? data["IpAddress"].ToString() : "192.168.1.100";
         Port = data.ContainsKey("Port") ? data["Port"].AsInt32() : 80;
         CueLightIsConnected = false;
+        IsEnabled = data.ContainsKey("IsEnabled") ? data["IsEnabled"].AsBool() : true;
     }
     
     /// <summary>
@@ -57,7 +63,11 @@ public partial class CueLight : GodotObject, IDisposable
             {
                 _udpClient = new UdpClient();
                 _udpClient.Client.ReceiveTimeout = _connectionTimeoutMs;
-                CueLightIsConnected = false;
+                if (CueLightIsConnected == true)
+                {
+                    CueLightIsConnected = false;
+                    EmitSignal(SignalName.ConnectionChanged, false);
+                }
             }
 
             string pingCommand = "PING";
@@ -65,35 +75,70 @@ public partial class CueLight : GodotObject, IDisposable
             await _udpClient.SendAsync(sendBytes, sendBytes.Length, IpAddress, Port);
             GD.Print($"CueLight:PingAsync - Sent {pingCommand} to {Name} at {IpAddress}:{Port}");
 
-            var result = await _udpClient.ReceiveAsync();
-            string response = Encoding.UTF8.GetString(result.Buffer).Trim();
-            if (response == "PONG")
+            var receiveTask = _udpClient.ReceiveAsync();
+            if (await Task.WhenAny(receiveTask, Task.Delay(_connectionTimeoutMs)) == receiveTask)
             {
-                CueLightIsConnected = true;
-                GD.Print($"CueLight:PingAsync - Received PONG:{Id} from {Name}");
-                return true;
+                var result = await receiveTask;
+                string response = Encoding.UTF8.GetString(result.Buffer).Trim();
+                if (response == "PONG")
+                {
+                    if (CueLightIsConnected == false)
+                    {
+                        CueLightIsConnected = true;
+                        EmitSignal(SignalName.ConnectionChanged, true);
+                    }
+                    GD.Print($"CueLight:PingAsync - Received PONG:{Id} from {Name}");
+                    return true;
+                }
+                else
+                {
+                    if (CueLightIsConnected == true)
+                    {
+                        CueLightIsConnected = false;
+                        EmitSignal(SignalName.ConnectionChanged, false);
+                    }
+                    GD.PrintErr($"CueLight:PingAsync - Invalid response from {Name}: {response}");
+                    return false;
+                }
             }
             else
             {
+                GD.PrintErr($"CueLight:PingAsync - Timeout pinging {Name}");
+                _udpClient.Close();
+                _udpClient = null;
                 CueLightIsConnected = false;
-                GD.PrintErr($"CueLight:PingAsync - Invalid response from {Name}: {response}");
+                EmitSignal(SignalName.ConnectionChanged, false);
                 return false;
             }
         }
         catch (Exception ex)
         {
-            CueLightIsConnected = false;
+            if (CueLightIsConnected == true)
+            {
+                CueLightIsConnected = false;
+                EmitSignal(SignalName.ConnectionChanged, false);
+            }
             GD.PrintErr($"CueLight:PingAsync - Error pinging {Name}: {ex.Message}");
+            _udpClient?.Close();
+            _udpClient = null;
             return false;
         }
     }
-
+    
     /// <summary>
     /// Sends a command and awaits acknowledgment.
     /// </summary>
     public async Task<bool> SendCommandAsync(string command)
     {
-        if (_disposed) return false;
+        if (_disposed || !IsEnabled)
+        {
+            if (!IsEnabled)
+            {
+                GD.Print($"CueLight:SendCommandAsync - Skipped command '{command}' for {Name} (disabled)");
+                return false;
+            }
+            return false;
+        }
         try
         {
             if (_udpClient == null)
@@ -107,26 +152,41 @@ public partial class CueLight : GodotObject, IDisposable
             await _udpClient.SendAsync(sendBytes, sendBytes.Length, IpAddress, Port);
             GD.Print($"CueLight:SendCommandAsync - Sent {command} to {Name} at {IpAddress}:{Port}");
 
-            var result = await _udpClient.ReceiveAsync();
-            string response = Encoding.UTF8.GetString(result.Buffer).Trim();
-            if (response == "OK" || response == "ACK") 
-            {
-                CueLightIsConnected = true;
-                GD.Print($"CueLight:SendCommandAsync - Received OK for {command} from {Name}");
-                return true;
-            }
-            else
-            {
-                CueLightIsConnected = false;
-                GD.PrintErr($"CueLight:SendCommandAsync - Error response for {command} from {Name}: {response}");
-                return false;
-            }
+            var receiveTask = _udpClient.ReceiveAsync(); 
+            if (await Task.WhenAny(receiveTask, Task.Delay(_connectionTimeoutMs)) == receiveTask) 
+            { 
+                var result = await receiveTask; 
+                string response = Encoding.UTF8.GetString(result.Buffer).Trim(); 
+                if (response == "OK") 
+                { 
+                    GD.Print($"CueLight:SendCommandAsync - Received OK from {Name}"); 
+                    EmitSignal(SignalName.ConnectionChanged, true);
+                    return true; 
+                } 
+                else 
+                { 
+                    GD.PrintErr($"CueLight:SendCommandAsync - Invalid response from {Name}: {response}"); 
+                    return false; 
+                } 
+            } 
+            else 
+            { 
+                GD.PrintErr($"CueLight:SendCommandAsync - Timeout sending command to {Name}"); 
+                _udpClient.Close(); 
+                _udpClient = null; 
+                CueLightIsConnected = false; 
+                EmitSignal(SignalName.ConnectionChanged, false);
+                return false; 
+            } 
         }
         catch (Exception ex)
         {
-            CueLightIsConnected = false;
-            GD.PrintErr($"CueLight:SendCommandAsync - Error sending {command} to {Name}: {ex.Message}");
-            return false;
+            GD.PrintErr($"CueLight:SendCommandAsync - Error sending command to {Name}: {ex.Message}"); 
+            _udpClient?.Close(); 
+            _udpClient = null; 
+            CueLightIsConnected = false; 
+            EmitSignal(SignalName.ConnectionChanged, false);
+            return false; 
         }
     }
     
@@ -178,6 +238,7 @@ public partial class CueLight : GodotObject, IDisposable
             { "Name", Name },
             { "IpAddress", IpAddress },
             { "Port", Port },
+            {"IsEnabled", IsEnabled },
         };
     }
     
@@ -211,7 +272,7 @@ public partial class CueLight : GodotObject, IDisposable
     /// <param name="text">Optional TFT text (defaults to empty).</param>
     public async Task<bool> GoAsync(string text = "")
     {
-        if (text.Length > 5) text = text.Substring(0, 5); //!!! Ensure max 5 chars
+        if (text.Length > 5) text = text.Substring(0, 5);
         return await SendCommandAsync($"GO:{text}");
     }
 
@@ -221,7 +282,7 @@ public partial class CueLight : GodotObject, IDisposable
     /// <param name="text">Optional TFT text (defaults to empty).</param>
     public async Task<bool> StandbyAsync(string text = "")
     {
-        if (text.Length > 5) text = text.Substring(0, 5); //!!! Ensure max 5 chars
+        if (text.Length > 5) text = text.Substring(0, 5);
         return await SendCommandAsync($"STANDBY:{text}");
     }
     
@@ -245,8 +306,8 @@ public partial class CueLight : GodotObject, IDisposable
             GD.PrintErr($"CueLight:CountInAsync - Invalid duration for {Name}: {timeUntilGo}");
             return false;
         }
-        if (text.Length > 5) text = text.Substring(0, 5); //!!! Ensure max 5 chars
-        return await SendCommandAsync($"COUNTIN:{timeUntilGo}:{text}"); //!!! Updated to COUNTIN
+        if (text.Length > 5) text = text.Substring(0, 5);
+        return await SendCommandAsync($"COUNTIN:{timeUntilGo}:{text}");
     }
 
     /// <summary>
@@ -254,6 +315,69 @@ public partial class CueLight : GodotObject, IDisposable
     /// </summary>
     public async Task<bool> IdentifyAsync(bool on)
     {
-        return await SendCommandAsync($"IDENTIFY:{(on ? "START" : "STOP")}"); //!!! Aligned with Arduino
+        return await SendCommandAsync($"IDENTIFY:{(on ? "START" : "STOP")}");
     }
+    
+    // ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+    // Network Configuration Commands 
+    
+    /// <summary>
+    /// Sets the preferred network mode (WiFi or Ethernet).
+    /// </summary>
+    /// <param name="mode">The network mode: "WiFi" or "Ethernet".</param>
+    public async Task<bool> SetNetworkModeAsync(string mode) 
+    { 
+        if (mode != "WiFi" && mode != "Ethernet") 
+        { 
+            GD.PrintErr($"CueLight:SetNetworkModeAsync - Invalid mode '{mode}' for {Name}"); 
+            return false; 
+        } 
+        return await SendCommandAsync($"SET_MODE:{mode}"); 
+    } 
+    
+    /// <summary>
+    /// Sets the WiFi configuration.
+    /// </summary>
+    /// <param name="ssid">WiFi SSID.</param>
+    /// <param name="password">WiFi password.</param>
+    /// <param name="dhcp">True for DHCP, false for static IP.</param>
+    /// <param name="ip">Static IP address (if dhcp=false).</param>
+    /// <param name="subnet">Subnet mask (if dhcp=false).</param>
+    /// <param name="gateway">Gateway (if dhcp=false).</param>
+    public async Task<bool> SetWiFiConfigAsync(string ssid, string password, bool dhcp, string ip = "", string subnet = "", string gateway = "") 
+    { 
+        string command = $"SET_WIFI:{ssid}:{password}:{(dhcp ? "dhcp" : "static")}"; 
+        if (!dhcp) 
+        { 
+            if (string.IsNullOrEmpty(ip) || string.IsNullOrEmpty(subnet) || string.IsNullOrEmpty(gateway)) 
+            { 
+                GD.PrintErr($"CueLight:SetWiFiConfigAsync - Missing static IP details for {Name}"); 
+                return false; 
+            } 
+            command += $":{ip}:{subnet}:{gateway}"; 
+        } 
+        return await SendCommandAsync(command); 
+    } 
+    
+    /// <summary>
+    /// Sets the Ethernet configuration.
+    /// </summary>
+    /// <param name="dhcp">True for DHCP, false for static IP.</param>
+    /// <param name="ip">Static IP address (if dhcp=false).</param>
+    /// <param name="subnet">Subnet mask (if dhcp=false).</param>
+    /// <param name="gateway">Gateway (if dhcp=false).</param>
+    public async Task<bool> SetEthernetConfigAsync(bool dhcp, string ip = "", string subnet = "", string gateway = "") 
+    { 
+        string command = $"SET_ETHERNET:{(dhcp ? "dhcp" : "static")}"; 
+        if (!dhcp) 
+        { 
+            if (string.IsNullOrEmpty(ip) || string.IsNullOrEmpty(subnet) || string.IsNullOrEmpty(gateway)) 
+            { 
+                GD.PrintErr($"CueLight:SetEthernetConfigAsync - Missing static IP details for {Name}"); 
+                return false; 
+            } 
+            command += $":{ip}:{subnet}:{gateway}"; 
+        } 
+        return await SendCommandAsync(command); 
+    } 
 }

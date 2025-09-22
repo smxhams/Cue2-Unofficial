@@ -1,6 +1,11 @@
+using System;
+using System.Collections.Generic;
 using Godot;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.Connections;
 using Godot.Collections;
@@ -32,6 +37,20 @@ public partial class CueLightManager : Node
     public CueLight CreateCueLight()
     {
         var cueLight = new CueLight(_nextId++);
+        _cueLights[cueLight.Id] = cueLight;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+            $"CueLightManager:CreateCueLight - Created {_nextId - 1}: {cueLight.Name}", 0);
+        return cueLight;
+    }
+    
+    /// <summary>
+    /// Creates a new CueLight instance from given IP address
+    /// </summary>
+    public CueLight CreateCueLightWithIp(string ipAddress)
+    {
+        var cueLight = new CueLight(_nextId++);
+        cueLight.Name = $"CueLight_{ipAddress.Split('.')[3]}";
+        cueLight.SetIpAddressAsync(ipAddress);
         _cueLights[cueLight.Id] = cueLight;
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
             $"CueLightManager:CreateCueLight - Created {_nextId - 1}: {cueLight.Name}", 0);
@@ -124,6 +143,84 @@ public partial class CueLightManager : Node
             }
         }
 
+    }
+    
+    /// <summary>
+    /// Discovers cue lights on the local network using UDP broadcast.
+    /// Sends "PING" to the broadcast address and collects IPs that respond with "PONG".
+    /// </summary>
+    /// <param name="timeoutMs">Timeout in milliseconds to wait for responses.</param>
+    /// <returns>A list of discovered IP addresses.</returns>
+    public async Task<List<string>> DiscoverCueLightsAsync(int timeoutMs = 2000)
+    {
+        var discoveredIps = new List<string>();
+        UdpClient? udpClient = null;
+
+        try
+        {
+            udpClient = new UdpClient();
+            udpClient.EnableBroadcast = true; // Required for broadcast
+            // Note: No ReceiveTimeout set, as it doesn't apply to async receives reliably 
+
+            // Send "PING" to broadcast address on port 80
+            byte[] sendBytes = Encoding.UTF8.GetBytes("PING");
+            await udpClient.SendAsync(sendBytes, sendBytes.Length, new IPEndPoint(IPAddress.Broadcast, 80));
+            GD.Print($"CueLightManager:DiscoverCueLightsAsync - Sent broadcast PING"); 
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Sent UDP broadcast for cue light discovery", 0);
+
+            // Listen for responses with per-receive timeout using Task.WhenAny 
+            var endTime = DateTime.UtcNow.AddMilliseconds(timeoutMs); 
+            while (DateTime.UtcNow < endTime) 
+            {
+                var remainingMs = (int)(endTime - DateTime.UtcNow).TotalMilliseconds; 
+                remainingMs = Math.Max(remainingMs, 1); // Avoid zero or negative 
+
+                var receiveTask = udpClient.ReceiveAsync(); 
+                var delayTask = Task.Delay(remainingMs); 
+
+                var completedTask = await Task.WhenAny(receiveTask, delayTask); 
+
+                if (completedTask == receiveTask) 
+                {
+                    try 
+                    {
+                        var receiveResult = await receiveTask; 
+                        string response = Encoding.UTF8.GetString(receiveResult.Buffer).Trim(); 
+                        string remoteIp = receiveResult.RemoteEndPoint.Address.ToString(); 
+
+                        if (response == "PONG" && !discoveredIps.Contains(remoteIp)) 
+                        {
+                            discoveredIps.Add(remoteIp); 
+                            GD.Print($"CueLightManager:DiscoverCueLightsAsync - Discovered cue light at {remoteIp}"); 
+                            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Discovered cue light at {remoteIp}", 0); 
+                        } 
+                    } 
+                    catch (Exception ex) 
+                    { 
+                        GD.PrintErr($"CueLightManager:DiscoverCueLightsAsync - Error processing response: {ex.Message}"); 
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error processing discovery response: {ex.Message}", 2); 
+                    } 
+                } 
+                else 
+                { 
+                    // Per-receive timeout reached; overall loop will check endTime and exit if needed 
+                    GD.Print($"CueLightManager:DiscoverCueLightsAsync - Receive timeout, continuing discovery"); 
+                    break; // Optional: Break early if no data, but continue to allow multiple receives 
+                } 
+            } 
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"CueLightManager:DiscoverCueLightsAsync - Error during discovery: {ex.Message}"); 
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error during cue light discovery: {ex.Message}", 2);
+        }
+        finally
+        {
+            udpClient?.Close();
+            udpClient?.Dispose();
+        }
+
+        return discoveredIps;
     }
      
     
