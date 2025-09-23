@@ -41,11 +41,11 @@ public partial class ActiveAudioPlayback : GodotObject
     private int _effectivePlayCount;
     private bool _hasStarted = false;
     private bool _reachedEnd = false;
+    
 
     private readonly Stopwatch _playTimer = new Stopwatch();
 
-    [Signal]
-    public delegate void CompletedEventHandler();
+    [Signal] public delegate void CompletedEventHandler();
     
     public ActiveAudioPlayback()
     {
@@ -187,6 +187,7 @@ public partial class ActiveAudioPlayback : GodotObject
         {
             lock (_lock)
             {
+                _isFadingOut = false;
                 _fadeCts?.Dispose();
                 _fadeCts = null;
             }
@@ -204,7 +205,7 @@ public partial class ActiveAudioPlayback : GodotObject
         {
             if (IsStopped || _isFadingOut)
             {
-                GD.Print($"ActiveAudioPlayback:Pause - Cannot pause: stopped or fading"); //!!!
+                GD.Print($"ActiveAudioPlayback:Pause - Cannot pause: stopped or fading"); 
                 return;
             }
             MediaPlayer?.Pause();
@@ -234,9 +235,11 @@ public partial class ActiveAudioPlayback : GodotObject
                 }
                 MediaPlayer?.Play();
                 GD.Print($"Start time is: {_startTimeMs}");
+                
+                // TODO: Use new OnPlay callable with needsSeekAfterPlay
                 MediaPlayer.Time = _startTimeMs;
                 GD.Print($"MediaPlayer.Time: {MediaPlayer.Time}");
-                _hasStarted = true;
+                //_hasStarted = true;
                 _playTimer.Reset();
                 _playTimer.Start();
                 if (_useCustomEnd)
@@ -385,7 +388,6 @@ public partial class ActiveAudioPlayback : GodotObject
             }
         }
     }
-    
     
     public void Clean()
     {

@@ -7,6 +7,7 @@ using Cue2.Base;
 using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Godot;
+using Godot.Collections;
 using LibVLCSharp.Shared;
 using SDL3;
 
@@ -32,7 +33,7 @@ public partial class GlobalData : Node
 	
 	
 	public int FocusedCue = -1;
-	public Dictionary<int, Node> CueShellObj = new Dictionary<int, Node>();
+	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
 	public int CueCount;
 	public int CueTotal;
@@ -136,6 +137,19 @@ public partial class GlobalData : Node
 			}
 		}
 		return "";
+	}
+
+
+	public Dictionary GetAvailableConnections()
+	{
+		var dict = new Dictionary();
+		var cueLights = CueLightManager.GetCueLights();
+		foreach (var cueLight in cueLights)
+		{
+			dict.Add("Cue Light", cueLight);
+		}
+		
+		return dict;
 	}
 
 	/*public string Version()

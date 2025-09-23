@@ -38,6 +38,7 @@ public partial class ActiveCue : GodotObject
     
     private Dictionary<PanelContainer, ActiveAudioPlayback> _activeAudioComponents = new Dictionary<PanelContainer, ActiveAudioPlayback>();
     private Dictionary<PanelContainer, AudioComponent> _componentToAudio = new Dictionary<PanelContainer, AudioComponent>();
+    private Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new Dictionary<PanelContainer, CueLightComponent>();
     
     [Signal]
     public delegate void CompletedEventHandler();
@@ -113,8 +114,6 @@ public partial class ActiveCue : GodotObject
         _componentProgressBarScene = SceneLoader.LoadPackedScene("uid://cb7g4xgryo2dg", out _);
 
         
-
-
     }
     
 
@@ -248,6 +247,12 @@ public partial class ActiveCue : GodotObject
             {
                 tasks.Add(ActivateAudioComponent(audioComponent));
             }
+            else if (component is CueLightComponent cueLightComponent)
+            {
+                tasks.Add(SetupCueLightComponent(cueLightComponent));
+                //var cueLightComp = component as CueLightComponent;
+                //tasks.Add(cueLightComp.ExecuteAsync(_cue.CueNum));
+            }
         }
         await Task.WhenAll(tasks);
     }
@@ -259,6 +264,17 @@ public partial class ActiveCue : GodotObject
         foreach (var audio in _activeAudioComponents)
         {
             audio.Value.Resume();
+        }
+
+        foreach (var activeCueLightComponent in _activeCueLightComponents)
+        {
+            await activeCueLightComponent.Value.ExecuteAsync(_cue.CueNum);
+            activeCueLightComponent.Key.QueueFree();
+            _activeCueLightComponents.Remove(activeCueLightComponent.Key);
+        }
+        if (_activeAudioComponents.Count == 0)
+        {
+            Cleanup();
         }
     }
 
@@ -363,6 +379,34 @@ public partial class ActiveCue : GodotObject
             StopAll();
         }
         
+    }
+
+    private async Task SetupCueLightComponent(CueLightComponent cueLightComponent)
+    {
+        try
+        {
+            PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+            _progressBarContainer.AddChild(componentPanel);
+            var labelText = $"{cueLightComponent.CueLight.Name} : {cueLightComponent.Action.ToString()}";
+            componentPanel.GetNode<Label>("%ComponentLabel").Text = labelText;
+            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            componentPanel.GetNode<Button>("%ComponentPause").QueueFree(); // No pause implemented
+            var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
+            timeLabel.Text = UiUtilities.FormatTime(cueLightComponent.CountInTime);
+            
+            typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+            
+            _activeCueLightComponents.Add(componentPanel, cueLightComponent);
+            
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"ActiveCue:StartAsync - Exception: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
+        }
     }
 
     private async Task StopComponent(PanelContainer componentPanel)
@@ -529,6 +573,4 @@ public partial class ActiveCue : GodotObject
         Free();
         GD.Print($"ActiveCue:Cleanup - Cleaned up active cue: {_cue.Name}");
     }
-    
-    // What I want to do - take audio file, split the 2 ch's and compose to audio streams according to the device.
 }

@@ -460,6 +460,8 @@ public partial class CueList : ScrollContainer
 				}
 				Cue newCue = CreateCue(cueDict);
 				
+				
+				// Link component data
 				var newCueAudioComponent = newCue.GetAudioComponent();
 				if (newCueAudioComponent != null)
 				{
@@ -470,8 +472,18 @@ public partial class CueList : ScrollContainer
 						newCueAudioComponent.Patch = patch;
 					}
 				}
-				
-				
+
+				var cueLightComps = newCue.GetCueLightComponents();
+				if (cueLightComps != null)
+				{
+					foreach (var cueLightComp in cueLightComps)
+					{
+						var cuelight = _globalData.CueLightManager.GetCueLight(cueLightComp.CueLightId);
+						cueLightComp.CueLight = cuelight;
+					}
+				}
+
+
 			}
 		}
 

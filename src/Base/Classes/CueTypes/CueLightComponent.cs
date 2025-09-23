@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using System.Threading.Tasks;
+using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
 using Godot.Collections;
 
@@ -15,7 +16,8 @@ public enum CueLightAction
     Standby,
     CountIn,
     IdentifyStart,
-    IdentifyStop
+    IdentifyStop,
+    Cancel
 }
 
 /// <summary>
@@ -25,23 +27,18 @@ public class CueLightComponent : ICueComponent
 {
     public string Type => "CueLight"; 
     public int CueLightId;
-    private CueLightAction _action;
-    private float _countInTime; // For CountIn
-
-    public CueLightComponent(int cueLightId, CueLightAction action, float countInTime = 0f)
-    {
-        CueLightId = cueLightId;
-        _action = action;
-        _countInTime = countInTime;
-    }
+    public CueLightAction Action;
+    public float CountInTime; // For CountIn
+    public CueLight CueLight;
+    
+    [Signal] public delegate void CompletedEventHandler();
 
     /// <summary>
     /// Executes the action on the referenced cue light.
     /// </summary>
-    public async Task ExecuteAsync(CueLightManager manager) 
+    public async Task ExecuteAsync(string cueNum = "") 
     {
-        var cueLight = manager.GetCueLight(CueLightId);
-        if (cueLight == null)
+        if (CueLight == null)
         {
             GD.Print($"CueLightComponent:ExecuteAsync - CueLight {CueLightId} not found", 2);
             return;
@@ -49,21 +46,23 @@ public class CueLightComponent : ICueComponent
 
         try
         {
-            switch (_action)
+            switch (Action)
             {
-                case CueLightAction.Go: await cueLight.GoAsync(); break;
-                case CueLightAction.Standby: await cueLight.StandbyAsync(); break;
-                case CueLightAction.CountIn: await cueLight.CountInAsync(_countInTime); break;
-                case CueLightAction.IdentifyStart: await cueLight.IdentifyAsync(true); break;
-                case CueLightAction.IdentifyStop: await cueLight.IdentifyAsync(false); break;
+                case CueLightAction.Go: await CueLight.GoAsync(cueNum); break;
+                case CueLightAction.Standby: await CueLight.StandbyAsync(cueNum); break;
+                case CueLightAction.CountIn: await CueLight.CountInAsync(CountInTime, cueNum); break;
+                case CueLightAction.IdentifyStart: await CueLight.IdentifyAsync(true); break;
+                case CueLightAction.IdentifyStop: await CueLight.IdentifyAsync(false); break;
+                case CueLightAction.Cancel: await CueLight.CancelAsync(); break;
             }
+            
             GD.Print( 
-                $"CueLightComponent:ExecuteAsync - Executed {_action} on {CueLightId}", 0);
+                $"CueLightComponent:ExecuteAsync - Executed {Action} on {CueLightId}", 0);
         }
         catch (Exception ex)
         {
             GD.Print( 
-                $"CueLightComponent:ExecuteAsync - Execution failed for {_action} on {CueLightId}: {ex.Message}", 2);
+                $"CueLightComponent:ExecuteAsync - Execution failed for {Action} on {CueLightId}: {ex.Message}", 2);
         }
     }
 
@@ -72,15 +71,15 @@ public class CueLightComponent : ICueComponent
         return new Dictionary
         {
             { "CueLightId", CueLightId },
-            { "Action", (int)_action },
-            { "CountInTime", _countInTime }
+            { "Action", (int)Action },
+            { "CountInTime", CountInTime }
         };
     }
 
     public void LoadFromData(Dictionary data) 
     {
         if (data.ContainsKey("CueLightId")) CueLightId = data["CueLightId"].AsInt32();
-        if (data.ContainsKey("Action")) _action = (CueLightAction)data["Action"].AsInt32();
-        if (data.ContainsKey("CountInTime")) _countInTime = data["CountInTime"].AsSingle();
+        if (data.ContainsKey("Action")) Action = (CueLightAction)data["Action"].AsInt32();
+        if (data.ContainsKey("CountInTime")) CountInTime = data["CountInTime"].AsSingle();
     }
 }

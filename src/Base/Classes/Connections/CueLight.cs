@@ -320,6 +320,7 @@ public partial class CueLight : GodotObject, IDisposable
     
     // ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
     // Network Configuration Commands 
+    // THIS IS DRAFT CODE, NOT YET IMPLEMENTED WITH THE PROTOTYPE CUELIGHT ESP
     
     /// <summary>
     /// Sets the preferred network mode (WiFi or Ethernet).

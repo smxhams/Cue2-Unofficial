@@ -156,10 +156,8 @@ public partial class SettingsCueLights : ScrollContainer
 
     private void SetUpInstance(PanelContainer instance, CueLight cueLight)
     {
-        var collapseButton = instance.GetNode<Button>("%CueLightCollapseButton");
-        collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-        var configAccordian = instance.GetNode<HBoxContainer>("%ConfigAccordian");
-        configAccordian.Visible = false;
+
+        
         
         
         var nameLineEdit = instance.GetNode<LineEdit>("%NameLineEdit");
@@ -228,7 +226,21 @@ public partial class SettingsCueLights : ScrollContainer
             await DeleteCueLight(instance, cueLight);
         };
         
+        var collapseButton = instance.GetNode<Button>("%CueLightCollapseButton");
+        collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+        
+        var configAccordian = instance.GetNode<VBoxContainer>("%ConfigAccordian");
+        configAccordian.Visible = false;
+
+        collapseButton.Pressed += () =>
+        {
+            configAccordian.Visible = !configAccordian.Visible;
+            collapseButton.Icon = GetThemeIcon(configAccordian.Visible ? "Down" : "Right", "AtlasIcons");
+        };
+
     }
+    
+
     
 
     private async Task DeleteCueLight(PanelContainer instance, CueLight cueLight)

@@ -100,7 +100,7 @@ public class Cue : ICue
                     "Audio" => new AudioComponent(),
                     "Video" => new VideoComponent(),
                     "Network" => new NetworkComponent(),
-                    "CueLight" => new CueLightComponent(0, CueLightAction.Go),
+                    "CueLight" => new CueLightComponent(),
                     _ => null
                 };
                 if (comp != null)
@@ -168,6 +168,11 @@ public class Cue : ICue
     {
         Components.Add(component);
         GD.Print($"Cue:AddCueLightComponent - Added to Cue {Id}");
+    }
+    
+    public CueLightComponent[] GetCueLightComponents()
+    {
+        return Components.OfType<CueLightComponent>().ToArray();
     }
     
 
