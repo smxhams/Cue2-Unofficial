@@ -160,6 +160,7 @@ public partial class CueLight : GodotObject, IDisposable
                 if (response == "OK") 
                 { 
                     GD.Print($"CueLight:SendCommandAsync - Received OK from {Name}"); 
+                    CueLightIsConnected = true;
                     EmitSignal(SignalName.ConnectionChanged, true);
                     return true; 
                 } 
