@@ -16,15 +16,15 @@ public partial class GlobalStyles : Node
 	private static StyleBoxFlat _dangerStyle = new StyleBoxFlat();
 	
 	public static Color HighColor1 = new Color("#EB6F02");
-	private static Color _highColor2 = new Color("#BA5E0B");
-	private static Color _highColor3 = new Color("#974B08");
-	private static Color _highColor4 = new Color("#693200");
-	private static Color _highColor5 = new Color("#3E1D00");
-	private static Color _lowColor1 = new Color("#03838F");
-	private static Color _lowColor2 = new Color("#086871");
+	public static Color HighColor2 = new Color("#BA5E0B");
+	public static Color HighColor3 = new Color("#974B08");
+	public static Color HighColor4 = new Color("#693200");
+	public static Color HighColor5 = new Color("#3E1D00");
+	public static Color LowColor1 = new Color("#03838F");
+	public static Color LowColor2 = new Color("#086871");
 	public static Color LowColor3 = new Color("#06545C");
 	public static Color LowColor4 = new Color("#013B40");
-	private static Color _lowColor5 = new Color("#002326");
+	public static Color LowColor5 = new Color("#002326");
 	
 	public static Color Danger = new Color("#ff806f"); 
 	public static Color Warning = new Color("#ffb45d");
@@ -89,9 +89,9 @@ public partial class GlobalStyles : Node
 		_dangerStyle.BorderWidthRight = 2;
 		_dangerStyle.BorderWidthLeft = 2;
 		_dangerStyle.BorderWidthTop = 2;
-		_dangerStyle.BorderColor = _highColor2;
-		_highColor5.A = 0.5f;
-		_dangerStyle.BgColor = _highColor5;
+		_dangerStyle.BorderColor = HighColor2;
+		HighColor5.A = 0.5f;
+		_dangerStyle.BgColor = HighColor5;
 		
 		
 		// Zebra rows
