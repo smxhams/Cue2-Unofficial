@@ -67,11 +67,11 @@ public partial class ActiveAudioPlayback : GodotObject
             _startTimeMs = (long)(_audioComponent.StartTime * 1000);
         }
         _useCustomEnd = _audioComponent.EndTime >= 0;
-        _endTimeMs = _useCustomEnd ? (long)(_audioComponent.EndTime * 1000) : (long)(_audioComponent.FileDuration * 1000);
+        _endTimeMs = _useCustomEnd ? (long)(_audioComponent.EndTime * 1000) : (long)(_audioComponent.Metadata.Duration * 1000);
         _effectivePlayCount = _audioComponent.Loop ? int.MaxValue : _audioComponent.PlayCount;
         
         // Validate start time against file duration if availible
-        if (_audioComponent.FileDuration > 0 && _startTimeMs > (long)(_audioComponent.FileDuration * 1000))
+        if (_audioComponent.Metadata.Duration > 0 && _startTimeMs > (long)(_audioComponent.Metadata.Duration * 1000))
         {
             _startTimeMs = 0;
         }

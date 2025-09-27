@@ -354,6 +354,7 @@ public partial class AudioDevices : Node
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:PlayAudio - Invalid media path", 2);
 			return null;
 		}
+		
 		if (deviceNames.Count == 0)
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:PlayAudio - No output devices specified", 2);

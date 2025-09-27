@@ -173,7 +173,7 @@ public partial class AudioInspector : Control
             }
             else if (textField == _endTimeInput)
             {
-                _focusedAudioComponent.EndTime = timeSecs < 0 ? _focusedAudioComponent.FileDuration : timeSecs; // Handles -1 as full duration
+                _focusedAudioComponent.EndTime = timeSecs < 0 ? _focusedAudioComponent.Metadata.Duration : timeSecs; // Handles -1 as full duration
             }
             
             // Recalculate duration
@@ -345,7 +345,7 @@ public partial class AudioInspector : Control
         
         
         // Get ins and outs data
-        var inputChannels = _focusedAudioComponent.ChannelCount;
+        var inputChannels = _focusedAudioComponent.Metadata.Channels;
         var inputLabels = GetChannelLabels(inputChannels, isInput: true);
 
         int outputChannels;
@@ -558,6 +558,14 @@ public partial class AudioInspector : Control
         // Audio Component Found
         _focusedAudioComponent = _focusedCue.Components.OfType<AudioComponent>().First();
         var file = _focusedAudioComponent.AudioFile;
+        
+        if (_focusedAudioComponent.Metadata == null)
+        {
+            var refreshedMeta = await _mediaEngine.GetAudioFileMetadataAsync(file);
+            _focusedAudioComponent.Metadata = refreshedMeta;
+            GD.Print("AudioInspector:ShellSelected - Refreshed metadata from file.");
+        }
+        
         _selectFileContainer.Visible = true;
         _fileUrl.Text = file;
         _infoLabel.Text = "";
@@ -568,7 +576,7 @@ public partial class AudioInspector : Control
         _startTimeInput.TooltipText = startTip;
         _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
         _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
-        _fileDurationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.FileDuration);
+        _fileDurationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration);
         _loopInput.ButtonPressed = _focusedAudioComponent.Loop;
         _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
@@ -644,8 +652,8 @@ public partial class AudioInspector : Control
         float height = _waveformPanel.Size.Y / 2f;
         float binWidth = width / binCount;
 
-        float startNorm = (float)(_focusedAudioComponent.StartTime / _focusedAudioComponent.FileDuration);
-        float endNorm = (float)(_focusedAudioComponent.EndTime / _focusedAudioComponent.FileDuration);
+        float startNorm = (float)(_focusedAudioComponent.StartTime / _focusedAudioComponent.Metadata.Duration);
+        float endNorm = (float)(_focusedAudioComponent.EndTime / _focusedAudioComponent.Metadata.Duration);
         int startBin = (int)(startNorm * binCount);
         int endBin = (int)(endNorm * binCount);
         
@@ -722,7 +730,7 @@ public partial class AudioInspector : Control
             float newX = barPos + mouseX;
             newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
             float normX = newX / width;
-            _focusedAudioComponent.StartTime = normX * _focusedAudioComponent.FileDuration;
+            _focusedAudioComponent.StartTime = normX * _focusedAudioComponent.Metadata.Duration;
             _startTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.StartTime); // Update input
             DrawWaveform(); // Refresh
         }
@@ -756,7 +764,7 @@ public partial class AudioInspector : Control
             float newX = barPos + mouseX;
             newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
             float normX = newX / width;
-            _focusedAudioComponent.EndTime = normX * _focusedAudioComponent.FileDuration;
+            _focusedAudioComponent.EndTime = normX * _focusedAudioComponent.Metadata.Duration;
             _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime); // Update input
             DrawWaveform(); // Refresh
         }
@@ -802,8 +810,8 @@ public partial class AudioInspector : Control
         ClearFileDialog();
         if (!File.Exists(path))
         {
-            GD.Print($"Audio Inspector: Selected audio file not found: {path}");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio Inspector: Selected audio file not found: {path}", 2);
+            GD.Print("AudioInspector:FileSelected - Selected audio file not found.");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:FileSelected -  Selected audio file not found: {path}", 2);
             return;
         }
         
@@ -812,21 +820,14 @@ public partial class AudioInspector : Control
         _inspectorContent.Visible = true;
         
         // Fetch metadata asynchronously to avoid UI blocking
-            
-        var fileMetadata = await Task.Run(() => _mediaEngine.GetAudioFileMetadata(path));
-        _focusedAudioComponent.ChannelCount = fileMetadata.TryGetValue("Channels", out var value) ? (int)value : 0;
-        var vlcDuration = fileMetadata.TryGetValue("Duration", out var dur) ? (int)dur : 0;
-        var fileDuration = await Task.Run(() => _mediaEngine.GetFileDurationAsync(path));
-        if (fileDuration == 0.0 && vlcDuration > 0) // Fallback
-        {
-            fileDuration = vlcDuration;
-        }
-        _focusedAudioComponent.FileDuration = fileDuration > 0 ? fileDuration :0.0;
-        _focusedAudioComponent.EndTime = fileDuration > 0 ? fileDuration :0.0;
+        var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(path);
+        _focusedAudioComponent.Metadata = fileMetadata; // Set full metadata on component
+        var fileDuration = fileMetadata.Duration;
+        _focusedAudioComponent.EndTime = fileDuration > 0 ? fileDuration : 0.0;
         _focusedAudioComponent.StartTime = 0.0;
         
         ShellSelected(_focusedCue.Id);
-        GD.Print($"AudioInspector:FileSelected - File duration (seconds): {_focusedAudioComponent.FileDuration}");
+        GD.Print($"AudioInspector:FileSelected - Metadata loaded: Duration {fileDuration}s, Channels {fileMetadata.Channels}");
     }
 
     /// <summary>
