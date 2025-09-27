@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "/zM7wNFBhMo=",
+  "dgSpecHash": "CX6AzAVzg4I=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\smxham\\.nuget\\packages\\ffmpeg.autogen\\7.1.1\\ffmpeg.autogen.7.1.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.4.0\\godot.sourcegenerators.4.4.0.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.4.0\\godotsharp.4.4.0.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.4.0\\godotsharpeditor.4.4.0.nupkg.sha512",

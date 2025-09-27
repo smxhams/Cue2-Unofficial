@@ -2324,3 +2324,4 @@ C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\SDL3-CS.Native.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win-arm64\native\SDL3.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win-x64\native\SDL3.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win-x86\native\SDL3.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\FFmpeg.AutoGen.dll

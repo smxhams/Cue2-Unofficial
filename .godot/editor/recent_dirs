@@ -1,10 +1,10 @@
-res://src/UI/Scenes/Inspectors
 res://src/UI/Scenes/Settings
+res://src/Base/Settings
+res://src/UI/Scenes/Inspectors
 res://src/UI/Scenes
 res://src/Shared
 res://src/UI/Utilities
 res://src/UI/Assets
-res://src/Base/Settings
 res://src/ui/Scenes
 res://src/ui
 res://src/UI

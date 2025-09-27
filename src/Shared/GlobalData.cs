@@ -29,6 +29,7 @@ public partial class GlobalData : Node
 	public Settings Settings;
 	public Devices Devices;
 	public CueLightManager CueLightManager;
+	public Canvas VideoCanvas;
 	//public AudioDevices AudioDevices;
 	
 	
@@ -39,10 +40,7 @@ public partial class GlobalData : Node
 	public int CueTotal;
 	public int CueOrder;
 	public int NextCue = -1;
-
-	public Node VideoCanvas;
-	public Window VideoWindow;
-
+	
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;
 
@@ -81,6 +79,11 @@ public partial class GlobalData : Node
 		
 		CueLightManager = new CueLightManager();
 		AddChild(CueLightManager);
+
+		VideoCanvas = new Canvas();
+		AddChild(VideoCanvas);
+		
+		
 		
 		//AudioDevices = new AudioDevices();
 		//AddChild(AudioDevices);

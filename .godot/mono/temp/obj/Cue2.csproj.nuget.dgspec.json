@@ -43,6 +43,10 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "FFmpeg.AutoGen": {
+              "target": "Package",
+              "version": "[7.1.1, )"
+            },
             "Godot.SourceGenerators": {
               "target": "Package",
               "version": "[4.4.0, )"

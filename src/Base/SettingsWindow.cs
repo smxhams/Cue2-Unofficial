@@ -94,7 +94,7 @@ public partial class SettingsWindow : Window
 		action switch // Name corresponded to node name in UI.
 		{
 			"Audio Output Patch" => "AudioOutputPatch",
-			"Video Devices" => "VideoDevices",
+			"Canvas Editor" => "CanvasEditor",
 			"General" => "SettingsGeneral",
 			"Cue Lights" => "CueLights",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
@@ -123,9 +123,9 @@ public partial class SettingsWindow : Window
 		
 		// Output Devices
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);
-		tiOutputDevices.SetText(0, "Output Configuration");
+		tiOutputDevices.SetText(0, "Video/Image");
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
-		tiVideoDevice.SetText(0, "Video Devices");
+		tiVideoDevice.SetText(0, "Canvas Editor");
 		
 		// Routing
 		TreeItem tiRoutes = _setTree.CreateItem(root);

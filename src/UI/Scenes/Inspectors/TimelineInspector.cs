@@ -5,10 +5,16 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Scenes.Inspectors;
 
+
+/// <summary>
+/// Inspector for displaying and editing cue timelines, including hierarchical children.
+/// Allows visualization of cue durations, pre-waits, and interactive dragging to adjust timings.
+/// </summary>
 public partial class TimelineInspector : Control
 {
     private GlobalData _globalData;
@@ -34,7 +40,16 @@ public partial class TimelineInspector : Control
     private Dictionary<Cue, ColorRect> _cueToBar = new Dictionary<Cue, ColorRect>();
     private Dictionary<Cue, int> _cueToRow = new Dictionary<Cue, int>();
     private List<ColorRect> _rowBackgrounds = new List<ColorRect>();
+    
+    private float _prevOffset = 0f;
+    private float _prevScale = 0f;
+    private Vector2 _prevSize = Vector2.Zero;
 
+    
+    /// <summary>
+    /// Called when the node enters the scene tree for the first time.
+    /// Initializes references and connects signals.
+    /// </summary>
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
@@ -73,19 +88,49 @@ public partial class TimelineInspector : Control
         LoadTimeline();
     }
     
+    
+    /// <summary>
+    /// Called every frame. Updates the ruler's offset and scale for synchronization with scrolling and zooming.
+    /// </summary>
+    /// <param name="delta">The time elapsed since the previous frame.</param>
     public override void _Process(double delta)
     {
-        if (_ruler != null)
-        {
-            _ruler.Offset = _scrollContainer.GetHScroll();
-            _ruler.Scale = _scale;
-            _ruler.Size = new Vector2(_scrollContainer.Size.X, _ruler.Size.Y); // Sync width with scroll container
+        if (_ruler == null) return;
+
+        float currentOffset = _scrollContainer.GetHScroll();
+        float currentScale = _scale;
+        Vector2 currentSize = new Vector2(_scrollContainer.Size.X, _ruler.Size.Y);
+
+        bool needsRedraw = false;
+
+        if (Mathf.Abs(currentOffset - _prevOffset) > 0.001f) {  // Small epsilon for float comparison
+            _ruler.Offset = currentOffset;
+            _prevOffset = currentOffset;
+            needsRedraw = true;
+        }
+
+        if (Mathf.Abs(currentScale - _prevScale) > 0.001f) {
+            _ruler.Scale = currentScale;
+            _prevScale = currentScale;
+            needsRedraw = true;
+        }
+
+        if (currentSize != _prevSize) {
+            _ruler.Size = currentSize;
+            _prevSize = currentSize;
+            needsRedraw = true;
+        }
+
+        if (needsRedraw) {
             _ruler.QueueRedraw();
         }
     }
     
     
-
+    /// <summary>
+    /// Handles changes to the zoom slider value.
+    /// </summary>
+    /// <param name="value">The new zoom scale value.</param>
     private void OnZoomChanged(double value)
     {
         _scale = (float)value;
@@ -93,6 +138,11 @@ public partial class TimelineInspector : Control
         _ruler.QueueRedraw();
     }
 
+    
+    /// <summary>
+    /// Loads and renders the timeline for the focused cue.
+    /// Clears existing UI elements and rebuilds based on the cue hierarchy.
+    /// </summary>
     private void LoadTimeline()
     {
         if (!Visible || !_timeLineContainer.Visible) return;
@@ -186,6 +236,13 @@ public partial class TimelineInspector : Control
         UpdateAllPositionsAndSizes();
     }
 
+    /// <summary>
+    /// Recursively collects cues and their children into a list for timeline rendering.
+    /// </summary>
+    /// <param name="cue">The current cue to add.</param>
+    /// <param name="items">The list to populate with timeline items.</param>
+    /// <param name="row">The current row index, incremented for each cue.</param>
+    /// <param name="depth">The hierarchy depth (unused in current implementation).</param>
     private void CollectCues(Cue cue, List<TimelineItem> items, ref int row, int depth = 0)
     {
         items.Add(new TimelineItem { cue = cue, row = row++ });
@@ -200,6 +257,11 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Computes the absolute start time of a cue, including accumulated pre-waits from parents.
+    /// </summary>
+    /// <param name="cue">The cue to compute the start time for.</param>
+    /// <returns>The absolute start time in seconds.</returns>
     private double ComputeActionStart(Cue cue)
     {
         if (cue.ParentId == -1)
@@ -218,6 +280,11 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Computes the absolute start time of the parent cue.
+    /// </summary>
+    /// <param name="cue">The cue whose parent start time is needed.</param>
+    /// <returns>The parent's absolute start time, or 0 if no parent.</returns>
     private double ComputeParentActionStart(Cue cue)
     {
         if (cue.ParentId == -1)
@@ -231,6 +298,9 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Updates positions and sizes for all cue bars in the timeline.
+    /// </summary>
     private void UpdateAllPositionsAndSizes()
     {
         double maxTime = 0;
@@ -245,7 +315,7 @@ public partial class TimelineInspector : Control
             
             if (cue.Duration < 0)
             {
-                // Handle looping/infinite duration specially, e.g., fixed width
+                // Handle looping/infinite duration with a fixed arbitrary width
                 calculatedWidth = 100 * _scale; // Arbitrary fixed size for infinite
             }
             else
@@ -262,10 +332,9 @@ public partial class TimelineInspector : Control
             var endLine = bar.GetChild<ColorRect>(3); // Adjusted index after adding timeLabel
             endLine.Position = new Vector2(calculatedWidth - 2, 0); // Position at actual end, even if display is min
 
-            // Update time label
+            // Update time label with absolute start time
             var timeLabel = bar.GetChild<Label>(1);
             timeLabel.Text = $"{UiUtilities.FormatTime(start)} ({UiUtilities.FormatTime(cue.PreWait)})";
-
             
             maxTime = Math.Max(maxTime, start + (cue.Duration < 0 ? 100 : cue.Duration)); // Arbitrary for infinite
         }
@@ -285,6 +354,12 @@ public partial class TimelineInspector : Control
     private Vector2 _initialMousePos;
     private Cue _draggedCue;
 
+    /// <summary>
+    /// Handles input events for cue bars, including dragging to adjust pre-wait times.
+    /// </summary>
+    /// <param name="event">The input event.</param>
+    /// <param name="cue">The associated cue.</param>
+    /// <param name="bar">The visual bar representation.</param>
     private void HandleBarInput(InputEvent @event, Cue cue, ColorRect bar)
     {
         if (@event is InputEventMouseButton mouseButton)
@@ -302,7 +377,7 @@ public partial class TimelineInspector : Control
                 {
                     _dragging = false;
                     _draggedCue = null;
-                    // Finalize, perhaps emit signal to update shell or other UI
+                    // Emit signal to update external UI
                     _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
                 }
             }
@@ -348,6 +423,10 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Recalculates total durations for a cue and its ancestors.
+    /// </summary>
+    /// <param name="cue">The cue to start recalculating from.</param>
     private void RecalcDurationsUp(Cue cue)
     {
         cue.CalculateTotalDuration();
@@ -361,6 +440,10 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Updates positions and sizes for a cue and its child subtree.
+    /// </summary>
+    /// <param name="cue">The root cue of the subtree.</param>
     private void UpdateSubtreePositions(Cue cue)
     {
         if (!_cueToBar.TryGetValue(cue, out var bar)) return;
@@ -399,6 +482,10 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Updates sizes for a cue and its ancestors without repositioning.
+    /// </summary>
+    /// <param name="cue">The cue to update.</param>
     private void UpdateAncestorSizes(Cue cue)
     {
         if (cue == null) return;
@@ -434,6 +521,9 @@ public partial class TimelineInspector : Control
         }
     }
 
+    /// <summary>
+    /// Recalculates and sets the minimum size of the timeline area based on content.
+    /// </summary>
     private void UpdateTimelineSize()
     {
         double maxTime = 0;
@@ -455,6 +545,10 @@ public partial class TimelineInspector : Control
         
     }
 
+    /// <summary>
+    /// Handles selection of a new cue shell.
+    /// </summary>
+    /// <param name="cueId">The ID of the selected cue.</param>
     private void ShellSelected(int cueId)
     {
         _focusedCue = CueList.FetchCueFromId(cueId);
@@ -473,12 +567,18 @@ public partial class TimelineInspector : Control
         LoadTimeline();
     }
 
+    /// <summary>
+    /// Struct representing a cue and its row in the timeline.
+    /// </summary>
     private struct TimelineItem
     {
         public Cue cue;
         public int row;
     }
     
+    /// <summary>
+    /// Custom control for rendering the timeline ruler with time ticks.
+    /// </summary>
     private partial class Ruler : Control
     {
         public float Scale { get; set; }
@@ -502,11 +602,14 @@ public partial class TimelineInspector : Control
             for (float t = firstTick; t <= tEnd; t += interval)
             {
                 float x = t * Scale - Offset;
-                // Draw tick line
                 DrawLine(new Vector2(x, 0), new Vector2(x, Size.Y), Colors.White, 1.0f);
-                // Draw label
+
+                string labelText = string.Create(10, t, (span, value) => {  // Allocates only the final string
+                    value.TryFormat(span, out int charsWritten, "F1");  // Formats t into span
+                    span[charsWritten] = 's';
+                });
+
                 var font = ThemeDB.FallbackFont;
-                string labelText = $"{t:F1}s"; // Format to one decimal
                 DrawString(font, new Vector2(x + 2, Size.Y), labelText, HorizontalAlignment.Left, -1, 10);
             }
         }

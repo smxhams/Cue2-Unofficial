@@ -8,6 +8,7 @@
     ".NETCoreApp,Version=v8.0": {
       "Cue2/1.0.0": {
         "dependencies": {
+          "FFmpeg.AutoGen": "7.1.1",
           "Godot.SourceGenerators": "4.4.0",
           "GodotSharp": "4.4.0",
           "GodotSharpEditor": "4.4.0",
@@ -22,6 +23,14 @@
         },
         "runtime": {
           "Cue2.dll": {}
+        }
+      },
+      "FFmpeg.AutoGen/7.1.1": {
+        "runtime": {
+          "lib/netstandard2.1/FFmpeg.AutoGen.dll": {
+            "assemblyVersion": "7.1.1.0",
+            "fileVersion": "7.1.1.0"
+          }
         }
       },
       "Godot.SourceGenerators/4.4.0": {},
@@ -693,6 +702,13 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
+    },
+    "FFmpeg.AutoGen/7.1.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-p4FGdG654zut4Iseg7PeYo7sxFMOTuLTEKl/vX+44UQ6NmezF3wHcR6JzjH8xzK4VDPLJe5Xz563kXamMQj7Jg==",
+      "path": "ffmpeg.autogen/7.1.1",
+      "hashPath": "ffmpeg.autogen.7.1.1.nupkg.sha512"
     },
     "Godot.SourceGenerators/4.4.0": {
       "type": "package",
