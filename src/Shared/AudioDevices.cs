@@ -7,7 +7,6 @@ using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Base.Classes.Devices;
 using Godot;
-using LibVLCSharp.Shared;
 using SDL3;
 
 namespace Cue2.Shared;
@@ -26,10 +25,6 @@ public partial class AudioDevices : Node
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
 	private readonly Dictionary<uint, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<uint, List<ActiveAudioPlayback>>();
-
-	private int _bytesPerFrame;
-	private SDL.AudioSpec _audioSpec;
-	private static IntPtr _audioStream; 
 	
 	private Timer _pollTimer;
 	
@@ -313,8 +308,99 @@ public partial class AudioDevices : Node
     {
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
+    
+    
+    public async Task StartAudioPlayback(ActiveAudioPlayback playback, AudioComponent audioComponent)
+    {
+	    if (playback == null) 
+	    {
+		    GD.PrintErr("AudioDevices:StartAudioPlayback - Playback is null.");
+		    return;
+	    }
+	    
+	    if (playback.Patch == null)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No patch assigned to playback.", 2);
+		    return;
+	    }
+	    
+	    // Ensure DeviceStreams is initialized
+	    if (playback.DeviceStreams == null)
+	    {
+		    playback.DeviceStreams = new Dictionary<uint, IntPtr>();
+		    GD.Print("AudioDevices:StartAudioPlayback - Initialized DeviceStreams dictionary.");
+	    }
+	    
+	    // Open required devices based on routing
+	    var devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
+	    
+	    // Define source spec from FFmpeg decoder
+	    var sourceSpec = new SDL.AudioSpec
+	    {
+		    Freq = playback.SourceSampleRate,
+		    Format = playback.SourceFormat,
+		    Channels = (byte)playback.SourceChannels
+	    };
+	    
+	    foreach (var device in devicesToOpen)
+	    {
+		    if (!_openDevices.ContainsKey((int)device.LogicalId))
+		    {
+			    OpenAudioDevice(device.Name, out _);
+		    }
+		    SDL.GetAudioDeviceFormat(device.LogicalId, out var deviceSpec, out var _);
 
-    /// <summary>
+		    // Create and bind audio stream with conversion
+		    var stream = SDL.CreateAudioStream(sourceSpec, deviceSpec);
+		    if (stream == IntPtr.Zero)
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to create stream for {device.Name}: {SDL.GetError()}", 2);
+			    continue;
+		    }
+
+		    if (!SDL.BindAudioStream(device.LogicalId, stream))
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to bind stream for {device.Name}: {SDL.GetError()}", 2);
+			    SDL.DestroyAudioStream(stream);
+			    continue;
+		    }
+		    
+		    // Use LogicalId as key
+		    if (device.LogicalId == 0)
+		    {
+			    GD.PrintErr($"AudioDevices:StartAudioPlayback - Invalid LogicalId for device {device.Name}.");
+			    SDL.DestroyAudioStream(stream);
+			    continue;
+		    }
+
+		    playback.DeviceStreams[device.LogicalId] = stream;
+
+		    lock (_activePlaybacks)
+		    {
+			    if (!_activePlaybacks.ContainsKey(device.LogicalId))
+				    _activePlaybacks[device.LogicalId] = new List<ActiveAudioPlayback>();
+			    _activePlaybacks[device.LogicalId].Add(playback);
+		    }
+
+		    if (SDL.AudioDevicePaused(device.LogicalId) == true)
+		    {
+			    SDL.ResumeAudioDevice(device.LogicalId);
+			    GD.Print($"AudioDevices:StartAudioPlayback - Resumed device {device.Name}");
+		    }
+	    }
+	    
+	    GD.Print("AudioDevices:StartAudioPlayback - Audio playback started with FFmpeg.");
+    }
+    
+    
+    
+    private bool ShouldRouteToDevice(AudioDevice device, ActiveAudioPlayback playback)
+    {
+	    return playback.Patch.OutputDevices.ContainsKey(device.Name); // Simplified; expand if needed for channel routing
+    }
+    
+
+    /*/// <summary>
     /// Initiates audio playback for a cue, applying routing via CuePatch and AudioOutputPatch.
     /// Supports multiple devices and concurrent playbacks, creating per-device SDL audio streams.
     /// </summary>
@@ -646,7 +732,7 @@ public partial class AudioDevices : Node
                 Marshal.FreeHGlobal(tempPtr);
             }
         }
-    }
+    }*/
 
     /// <summary>
     /// Deinterleaves audio samples from VLC into per-channel float arrays, normalizing to [-1,1].
@@ -792,46 +878,7 @@ public partial class AudioDevices : Node
 		}
 	}
 
-
-	/// <summary>
-	/// Map VLC codec to SDL.AudioFormat
-	/// </summary>
-	private SDL.AudioFormat GetSdlFormatFromCodec(uint codec)
-	{
-		string codecName = System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(codec)).ToLower();
-		GD.Print($"AudioDevices:GetSdlFormatFromCodec - Mapping codec {codecName} to SDL format");
-		switch (codecName)
-		{
-			case "s16l": return SDL.AudioFormat.AudioS16LE;
-			case "s16b": return SDL.AudioFormat.AudioS16BE;
-			case "s32l": return SDL.AudioFormat.AudioS32LE;
-			case "s32b": return SDL.AudioFormat.AudioS32BE;
-			case "f32l": return SDL.AudioFormat.AudioF32LE;
-			case "f32b": return SDL.AudioFormat.AudioF32BE;
-			case "mp3": return SDL.AudioFormat.AudioS16LE;
-			case "mpeg": return SDL.AudioFormat.AudioS16LE; // Common for MP3
-			case "flac": return SDL.AudioFormat.AudioS32LE;
-			case "pcm": return SDL.AudioFormat.AudioS32LE; // Common for FLAC, high-quality PCM
-			default: return SDL.AudioFormat.AudioS16LE;
-		}
-	}
-
-	private string GetVlcFormat(SDL.AudioSpec sourceSpec)
-	{
-		switch (sourceSpec.Format)
-		{
-			case SDL.AudioFormat.AudioS16LE : return "S16L";
-			case SDL.AudioFormat.AudioS16BE : return "S16N";
-			case SDL.AudioFormat.AudioS32LE : return "S32N";
-			case SDL.AudioFormat.AudioS32BE : return "S32N";
-			case SDL.AudioFormat.AudioF32LE : return "f32n";
-			case SDL.AudioFormat.AudioF32BE : return "f32n"; 
-			default: return "S16N";
-		}
-
-	}
-
-
+    
 
 	public override void _ExitTree()
 	{

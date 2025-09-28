@@ -12,6 +12,7 @@ public class AudioComponent : ICueComponent
     public string AudioFile { get; set; }
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
+    public CuePatch Routing { get; set; }
 
     /// <summary>
     /// Duration is length of audio between start and endtime
@@ -28,7 +29,6 @@ public class AudioComponent : ICueComponent
     public int PlayCount { get; set; } = 1;
     
 
-    public CuePatch Routing { get; set; }
 
     public byte[] WaveformData { get; set; } // Serialised waveform for display
     

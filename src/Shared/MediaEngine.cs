@@ -21,10 +21,18 @@ public partial class MediaEngine : Node
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-        
-        GD.Print("MediaEngine:_Ready - Loading FFmpeg libs."); 
-        LoadFFmpegLibraries(); // From integration guide
-        GD.Print($"MediaEngine:_Ready - FFmpeg version: {ffmpeg.av_version_info()}");
+        try
+        {
+            GD.Print("MediaEngine:_Ready - Loading FFmpeg libs.");
+            LoadFFmpegLibraries(); // From integration guide
+            GD.Print($"MediaEngine:_Ready - FFmpeg version: {ffmpeg.av_version_info()}");
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"MediaEngine:_Ready - Failed to initialize MediaEngine: {ex.Message}", 2);
+            GD.PrintErr($"MediaEngine:_Ready - Initialization error: {ex.Message}");
+        }
         
     }
     
