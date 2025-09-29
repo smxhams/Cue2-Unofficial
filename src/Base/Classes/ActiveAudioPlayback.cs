@@ -75,8 +75,8 @@ public partial class ActiveAudioPlayback : GodotObject
             _startTimeMs = 0;
         }
         
-        Decoder.EndReached += OnEndReached;
-        Decoder.LengthChanged += OnLengthChanged;
+        //Decoder.EndReached += OnEndReached;
+        //Decoder.LengthChanged += OnLengthChanged;
     }
 
     public async Task InitAsync()
@@ -218,7 +218,7 @@ public partial class ActiveAudioPlayback : GodotObject
         lock (_lock)
         {
             _volume = Mathf.Clamp(volume, 0f, 1f);
-            Decoder.SetVolume(_volume);
+            //Decoder.SetVolume(_volume);
         }
     }
     
@@ -319,7 +319,7 @@ public partial class ActiveAudioPlayback : GodotObject
                 try
                 {
                     Decoder.EndReached -= OnEndReached;
-                    Decoder.LengthChanged -= OnLengthChanged;
+                    //Decoder.LengthChanged -= OnLengthChanged;
                     Decoder.Dispose();
                     GD.Print($"ActiveAudioPlayback:Clean - Decoder disposed");
                 }

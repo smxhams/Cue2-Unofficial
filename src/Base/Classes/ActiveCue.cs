@@ -74,7 +74,7 @@ public partial class ActiveCue : GodotObject
     public ActiveCue(Cue cue, PanelContainer activeCueBar, MediaEngine mediaEngine, AudioDevices audioDevices, GlobalSignals globalSignals)
     {
         _cue = cue ?? throw new ArgumentNullException(nameof(cue));
-        _activeCueBar = activeCueBar ?? throw new ArgumentNullException(nameof(activeCueBar));
+        _activeCueBar = activeCueBar;
         _mediaEngine = mediaEngine ?? throw new ArgumentNullException(nameof(mediaEngine));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
         _globalSignals = globalSignals ?? throw new ArgumentNullException(nameof(globalSignals));
@@ -200,6 +200,7 @@ public partial class ActiveCue : GodotObject
         await _audioDevices.StartAudioPlayback(playback, audioComp);
             
         playback.Play();
+        playback.Completed += Cleanup;
         try
         {
             /*// Preload metadata/waveform if not already (assuming done in inspector/load)
@@ -586,8 +587,8 @@ public partial class ActiveCue : GodotObject
             Cleanup();
         }
     }
-    
-    
+
+
     private void Cleanup()
     {
         lock (_lock) // Add lock for thread safety
@@ -597,18 +598,19 @@ public partial class ActiveCue : GodotObject
                 GD.Print("ActiveCue:Cleanup - Already cleaned");
                 return;
             }
+
             _isCleaned = true;
         }
 
         _updateTimer.Stop();
         _updateTimer.Timeout -= UpdateUi;
-    
+
         _globalSignals.StopAll -= StopAll;
         _globalSignals.PauseAll -= GlobalPauseAll;
         _globalSignals.ResumeAll -= GlobalResumeAll;
         _headPause.Pressed -= TogglePauseAll;
         _headStop.Pressed -= StopAll;
-    
+
         if (IsInstanceValid(_updateTimer))
             _updateTimer.QueueFree();
         if (IsInstanceValid(_preWaitTimer))
@@ -616,7 +618,10 @@ public partial class ActiveCue : GodotObject
         if (IsInstanceValid(_fadeTimer))
             _fadeTimer.QueueFree();
         if (IsInstanceValid(_activeCueBar))
+        {
             _activeCueBar.QueueFree();
+        }
+        
         EmitSignal(SignalName.Completed, this);
         Free();
         GD.Print($"ActiveCue:Cleanup - Cleaned up active cue: {_cue.Name}");

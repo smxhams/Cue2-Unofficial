@@ -43,6 +43,8 @@ public class FFmpegAudioDecoder : IDisposable
     public event EventHandler EndReached;
     public event EventHandler<long> LengthChanged;
 
+    private AVRational _timeBase;
+    
     public FFmpegAudioDecoder(AudioComponent component, ActiveAudioPlayback playback)
     {
         _component = component ?? throw new ArgumentNullException(nameof(component));
@@ -82,14 +84,13 @@ public class FFmpegAudioDecoder : IDisposable
                 if (_audioStreamIndex == -1) throw new Exception("FFmpegAudioDecoder:InitAsync - No audio stream."); 
 
                 AVStream* stream = _formatCtx->streams[(uint)_audioStreamIndex];
+                _timeBase = stream->time_base;
                 AVCodec* codec = ffmpeg.avcodec_find_decoder(stream->codecpar->codec_id); 
                 if (codec == null) throw new Exception("FFmpegAudioDecoder:InitAsync - Unsupported codec."); 
 
                 fixed (AVCodecContext** pCodecCtx = &_codecCtx)
                 {
                     _codecCtx = ffmpeg.avcodec_alloc_context3(codec);
-                    if (_codecCtx == null) throw new Exception("FFmpegAudioDecoder:InitAsync - Alloc codec context failed."); 
-                    
                     ret = ffmpeg.avcodec_parameters_to_context(_codecCtx, stream->codecpar);
                     if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - Params to context failed: {GetError(ret)}");
 
@@ -98,131 +99,230 @@ public class FFmpegAudioDecoder : IDisposable
                 }
                 
 
-                // Setup resampler
-                fixed (SwrContext** ppSwr = &_swrCtx)
+                // Setup resampler to target (mono? No, keep channels, but float)
+                fixed (AVChannelLayout* pInChLayout = &_inChLayout)
                 {
-                    _swrCtx = ffmpeg.swr_alloc();
-                    if (_swrCtx == null) throw new Exception("FFmpegAudioDecoder:InitAsync - Alloc Swr failed.");
-
-                    _inChLayout = _codecCtx->ch_layout;
-
-                    fixed (AVChannelLayout* pIn = &_inChLayout)
-                    fixed (AVChannelLayout* pOut = &_outChLayout)
+                    fixed (AVChannelLayout* pOutChLayout = &_outChLayout)
                     {
-                        ffmpeg.av_channel_layout_default(pOut, 2);
-                        
-                        ret = ffmpeg.av_opt_set_chlayout((void*)_swrCtx, "in_chlayout", pIn, 0);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - in_chlayout init failed: {GetError(ret)}");
-                        ret = ffmpeg.av_opt_set_chlayout((void*)_swrCtx, "out_chlayout", pOut, 0);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - out_chlayout init failed: {GetError(ret)}");
-                        ret = ffmpeg.av_opt_set_int((void*)_swrCtx, "in_sample_rate", _codecCtx->sample_rate, 0);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - in_sample_rate init failed: {GetError(ret)}");
-                        ret = ffmpeg.av_opt_set_int((void*)_swrCtx, "out_sample_rate", TargetSampleRate, 0);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - out_sample_rate init failed: {GetError(ret)}");
-                        ret = ffmpeg.av_opt_set_sample_fmt((void*)_swrCtx, "in_sample_fmt", _codecCtx->sample_fmt, 0);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - in_sample_fmt init failed: {GetError(ret)}");
-                        ret = ffmpeg.av_opt_set_sample_fmt((void*)_swrCtx, "out_sample_fmt", AVSampleFormat.AV_SAMPLE_FMT_FLT, 0); // F32
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - out_sample_fmt init failed: {GetError(ret)}");
+                        ffmpeg.av_channel_layout_copy(pInChLayout, &_codecCtx->ch_layout);
+                        _outChLayout = _inChLayout; // Keep channels
+                        ret = ffmpeg.av_channel_layout_copy(pOutChLayout, pInChLayout);
+                        if (ret < 0) throw new Exception("Channel layout copy failed");
 
-                        ret = ffmpeg.swr_init(_swrCtx);
-                        if (ret < 0) throw new Exception($"FFmpegAudioDecoder:InitAsync - Swr init failed: {GetError(ret)}");
-                    } 
+                        fixed (SwrContext** ppSwr = &_swrCtx)
+                        {
+                            ffmpeg.swr_alloc_set_opts2(
+                                ppSwr, pOutChLayout, AVSampleFormat.AV_SAMPLE_FMT_FLT, 
+                                TargetSampleRate, pInChLayout, _codecCtx->sample_fmt,
+                                _codecCtx->sample_rate, 0, null);
+                            if (_swrCtx == null) throw new Exception("Swr alloc failed");
+
+                            ret = ffmpeg.swr_init(_swrCtx);
+                            if (ret < 0) throw new Exception($"Swr init failed: {GetError(ret)}");
+                        }
+                    }
                 }
 
-                // Preload initial packets if needed (for low-latency start)
-                // For now, skip preload for simplicity; decode on play
+                // Invoke length changed with total duration ms
+                long totalDurationMs = (long)(_formatCtx->duration * 1000 / ffmpeg.AV_TIME_BASE);
+                LengthChanged?.Invoke(this, totalDurationMs);
+
+                GD.Print("FFmpegAudioDecoder:InitAsync - Initialized successfully.");
             }
         });
     }
 
-    /// <summary>
-    /// Starts decoding and pushing PCM to playback's SDL streams in a background task.
-    /// Handles loop/playcount via seek on end.
-    /// </summary>
-    public async Task Play()
+    public void Play()
     {
-        _cts = new CancellationTokenSource();
-        _isPlaying = true;
-        _isPaused = false;
-        _isStopped = false;
+        lock (_lock)
+        {
+            if (_isPlaying) return;
+            _isPlaying = true;
+            _isStopped = false;
+            _cts = new CancellationTokenSource();
+        }
 
-        await Task.Run(() =>
+        Task.Run(() =>
         {
             unsafe
             {
                 AVPacket* packet = ffmpeg.av_packet_alloc();
                 AVFrame* frame = ffmpeg.av_frame_alloc();
-
                 try
                 {
-                    int ret;
-                    long startTsUs = (long)(_component.StartTime * 1_000_000);
-                    long endTsUs = _component.EndTime >= 0 ? (long)(_component.EndTime * 1_000_000) : (long)(_component.Metadata.Duration * 1_000_000); 
-                    long relativeEndUs = endTsUs - startTsUs; 
-                    bool useCustomEnd = _component.EndTime >= 0; 
-
+                    // Validate pre-start
+                    if (_audioStreamIndex == -1 || _component.Metadata.Duration <= 0)
+                    {
+                        GD.Print("FFmpegAudioDecoder:Play - No audio stream or invalid duration; aborting playback.");
+                        EndReached?.Invoke(this, EventArgs.Empty);
+                        return;
+                    }
+                    
                     AVStream* stream = _formatCtx->streams[(uint)_audioStreamIndex];
-                    AVRational tb = stream->time_base;
-                    long startTs = ffmpeg.av_rescale_q(startTsUs, ffmpeg.av_get_time_base_q(), tb);
-                    long endTs = ffmpeg.av_rescale_q(endTsUs, ffmpeg.av_get_time_base_q(), tb);
+                    var tb = stream->time_base; // Cache timebase
+                    
+                    // Calculate seek timestamp in stream timebase
+                    long startTimeUs = (long)(_component.StartTime * 1000000);
+                    long seekTs = ffmpeg.av_rescale_q(startTimeUs, new AVRational { num = 1, den = 1000000 }, tb);
+                    GD.Print($"FFmpegAudioDecoder:Play - Seeking to {seekTs} in stream TB (num/den: {tb.num}/{tb.den}, startTime: {_component.StartTime}s)");
 
-                    GD.Print($"FFmpegAudioDecoder:Play - Seeking to {startTs} in stream TB (num/den: {tb.num}/{tb.den}, startTime: {_component.StartTime}s)");
-
-                    ret = ffmpeg.av_seek_frame(_formatCtx, -1, startTsUs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+                    int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+                    if (ret < 0)
+                    {
+                        GD.PrintErr($"FFmpegAudioDecoder:Play - Seek failed (ret: {ret}): {GetError(ret)}");
+                        EndReached?.Invoke(this, EventArgs.Empty);
+                        return;
+                    }
                     GD.Print($"FFmpegAudioDecoder:Play - Seek successful (ret: {ret})");
-                    _currentTs = startTsUs;
-
+                    
+                    // Flush decoder after seek
                     ffmpeg.avcodec_flush_buffers(_codecCtx);
                     GD.Print("FFmpegAudioDecoder:Play - Flushed decoder buffers post-seek");
-
-                    GD.Print($"FFmpegAudioDecoder:Play - End TS: {endTs} (stream dur: {stream->duration}, metadata dur: {_component.Metadata.Duration}s, relative end us: {relativeEndUs})");
-
-                    int playCount = 1; // Local tracking, but sync with playback if needed
-
-                    while (!_isStopped && !_cts.Token.IsCancellationRequested)
+                    
+                    // Discard packets until we reach or pass seek time
+                    long discardUntilTs = seekTs;
+                    while ((ret = ffmpeg.av_read_frame(_formatCtx, packet)) >= 0)
                     {
-                        lock (_lock)
+                        if (packet->stream_index != _audioStreamIndex || (packet->pts != ffmpeg.AV_NOPTS_VALUE && packet->pts < discardUntilTs))
                         {
-                            if (_isPaused)
+                            GD.Print($"FFmpegAudioDecoder:Play - Discarding packet (stream: {packet->stream_index}, PTS: {packet->pts} < {discardUntilTs})"); //!!!
+                            ffmpeg.av_packet_unref(packet);
+                            continue;
+                        }
+                        GD.Print($"FFmpegAudioDecoder:Play - Accepted first packet (PTS: {packet->pts})");
+                        break;
+                    }
+                    if (ret < 0)
+                    {
+                        GD.PrintErr($"FFmpegAudioDecoder:Play - No valid packet after seek (ret: {ret}): {GetError(ret)}");
+                        EndReached?.Invoke(this, EventArgs.Empty);
+                        return;
+                    }
+
+                    // Calculate end in stream timebase (relative to start for clips)
+                    long streamDuration = stream->duration > 0 ? stream->duration : ffmpeg.av_rescale_q((long)(_component.Metadata.Duration * 1000000), new AVRational { num = 1, den = 1000000 }, tb); // Fallback rescaled //!!!
+                    long endTimeUs = _component.EndTime >= 0 ? (long)(_component.EndTime * 1000000) : (long)(_component.Metadata.Duration * 1000000);
+                    long relativeEndUs = endTimeUs - startTimeUs;
+                    long endTsStream = seekTs + ffmpeg.av_rescale_q(relativeEndUs, new AVRational { num = 1, den = 1000000 }, tb);
+                    GD.Print($"FFmpegAudioDecoder:Play - End TS: {endTsStream} (stream dur: {streamDuration}, metadata dur: {_component.Metadata.Duration}s, relative end us: {relativeEndUs})");
+
+                    int playCount = 0;
+                    long currentStreamTs = seekTs; // Track in stream TB
+                    _currentTs = startTimeUs; // Start from actual seek time
+                    var effectivePlaycount = _component.Loop ? int.MaxValue : _component.PlayCount;
+                    while (!_isStopped && (playCount < effectivePlaycount)  && !_cts.IsCancellationRequested) // (handle PlayCount, Loop via infinite if Loop)
+                    {
+                        if (_component.Loop) playCount = 0; // Reset for infinite loop
+
+                        bool hasAudio = false; // Track if any audio processed this iteration
+                        
+                        while ((ret = ffmpeg.av_read_frame(_formatCtx, packet)) >= 0)
+                        {
+                            if (_isStopped || _cts.IsCancellationRequested) break;
+                            // Pause with Thread.Sleep (non-async, but safe in unsafe)
+                            while (_isPaused)
                             {
                                 Thread.Sleep(10);
-                                continue;
-                            }
-                        }
-
-                        ret = ffmpeg.av_read_frame(_formatCtx, packet);
-                        if (ret >= 0)
-                        {
-                            if (packet->stream_index != _audioStreamIndex)
-                            {
-                                ffmpeg.av_packet_unref(packet);
-                                continue;
+                                if (_isStopped || _cts.IsCancellationRequested) break;
                             }
 
-                            GD.Print($"FFmpegAudioDecoder:Play - Accepted packet (PTS: {packet->pts})"); // For debug
-
-                            ret = ffmpeg.avcodec_send_packet(_codecCtx, packet);
-                            if (ret < 0)
+                            if (packet->stream_index == _audioStreamIndex)
                             {
-                                GD.PrintErr($"FFmpegAudioDecoder:Play - Send failed: {GetError(ret)}");
-                                break;
-                            }
-                        }
-                        else if (ret == ffmpeg.AVERROR_EOF)
-                        {
-                            GD.Print("FFmpegAudioDecoder:Play - Hit EOF (ret: {ret})");
-                            _playback.CurrentPlayCount++;
-                            if (_playback.CurrentPlayCount < _playback.EffectivePlayCount)
-                            {
-                                ret = ffmpeg.av_seek_frame(_formatCtx, -1, startTsUs, ffmpeg.AVSEEK_FLAG_BACKWARD);
-                                if (ret < 0)
+                                // Send packet
+                                ret = ffmpeg.avcodec_send_packet(_codecCtx, packet);
+                                if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN)) 
                                 {
-                                    GD.PrintErr($"FFmpegAudioDecoder:Play - Loop seek failed: {GetError(ret)}");
+                                    GD.PrintErr($"FFmpegAudioDecoder:Play - Send packet failed (ret: {ret}): {GetError(ret)}");
                                     break;
                                 }
-                                _currentTs = startTsUs;
-                                GD.Print($"FFmpegAudioDecoder:Play - Looped to start (playCount: {_playback.CurrentPlayCount}, new TS: {startTs})");
-                                continue;
+                                
+                                // Receive frames
+                                while ((ret = ffmpeg.avcodec_receive_frame(_codecCtx, frame)) >= 0)
+                                {
+                                    
+                                    if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF) break;
+                                    if (ret < 0) 
+                                    {
+                                        GD.PrintErr($"FFmpegAudioDecoder:Play - Receive frame failed: {GetError(ret)}");
+                                        break;
+                                    }
+
+                                    hasAudio = true;
+                                    GD.Print($"FFmpegAudioDecoder:Play - Decoded frame: {frame->nb_samples} samples, PTS: {frame->pts}");
+                                    
+                                    // Resample
+                                    long maxOutSamples = ffmpeg.av_rescale_rnd(ffmpeg.swr_get_delay(_swrCtx, (int)frame->sample_rate) + frame->nb_samples, TargetSampleRate, (int)frame->sample_rate, AVRounding.AV_ROUND_UP);
+                                    byte* outBuffer = (byte*)ffmpeg.av_malloc((ulong)(maxOutSamples * _component.Metadata.Channels * _bytesPerSample));
+                                    byte** outBuffers = &outBuffer;
+
+                                    int outSamples = ffmpeg.swr_convert(_swrCtx, outBuffers, (int)maxOutSamples, frame->extended_data, frame->nb_samples);
+                                    if (outSamples < 0)
+                                    {
+                                        GD.PrintErr($"FFmpegAudioDecoder:Play - Resample error: {GetError(outSamples)}");
+                                        ffmpeg.av_freep(&outBuffer);
+                                        continue;
+                                    }
+
+                                    if (outSamples > 0)
+                                    {
+                                        GD.Print($"FFmpegAudioDecoder:Play - Resampled: {outSamples} samples");
+                                        // Apply volume
+                                        float* samples = (float*)outBuffer;
+                                        for (int i = 0; i < outSamples * _component.Metadata.Channels; i++)
+                                        {
+                                            samples[i] *= _currentVolume;
+                                        }
+
+                                        // Update timestamps
+                                        long frameDurationUs = (long)(outSamples * 1000000L / TargetSampleRate);
+                                        _currentTs += frameDurationUs;
+                                        currentStreamTs += ffmpeg.av_rescale_q(frameDurationUs, new AVRational { num = 1, den = 1000000 }, tb);
+                                        GD.Print($"FFmpegAudioDecoder:Play - Updated TS: us {_currentTs} (frame dur: {frameDurationUs}), stream {currentStreamTs} (end: {endTsStream})");
+
+                                        // Check for custom end
+                                        if (_component.EndTime >= 0 && currentStreamTs >= endTsStream)
+                                        {
+                                            GD.Print($"FFmpegAudioDecoder:Play - Reached custom end (stream TS: {currentStreamTs} >= {endTsStream})");
+                                            ffmpeg.av_freep(&outBuffer);
+                                            break;
+                                        }
+
+                                        // Create byte[] pcm and push to streams
+                                        byte[] pcm = new byte[outSamples * _component.Metadata.Channels * _bytesPerSample];
+                                        Marshal.Copy((IntPtr)outBuffer, pcm, 0, pcm.Length);
+                                        _playback.PushPcm(pcm);
+                                        GD.Print($"FFmpegAudioDecoder:Play - Pushed {pcm.Length} bytes");
+                                        
+                                    }
+
+                                    ffmpeg.av_freep(&outBuffer);
+                                }
+                            }
+                            ffmpeg.av_packet_unref(packet);
+                        }
+                        if (!hasAudio)
+                        {
+                            GD.Print("FFmpegAudioDecoder:Play - No audio processed this iteration; possible empty segment");
+                        }
+
+                        // Check EOF or end (in stream TB)
+                        if (ret == ffmpeg.AVERROR_EOF || currentStreamTs >= endTsStream)
+                        {
+                            GD.Print($"FFmpegAudioDecoder:Play - Hit EOF (ret: {ret}) or end (stream TS: {currentStreamTs} >= {endTsStream})");
+                            playCount++;
+                            if (playCount < _component.PlayCount || _component.Loop)
+                            {
+                                // Seek back for loop/replay
+                                ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+                                if (ret < 0) 
+                                {
+                                    GD.PrintErr($"FFmpegAudioDecoder:Play - Loop seek failed (ret: {ret}): {GetError(ret)}");
+                                    break;
+                                }
+                                ffmpeg.avcodec_flush_buffers(_codecCtx);
+                                currentStreamTs = startTimeUs;
+                                _currentTs = startTimeUs;
+                                GD.Print($"FFmpegAudioDecoder:Play - Looped to start (playCount: {playCount}, new TS: {currentStreamTs})");
                             }
                             else
                             {
@@ -230,92 +330,11 @@ public class FFmpegAudioDecoder : IDisposable
                                 break;
                             }
                         }
-                        else
+                        else if (ret < 0 && ret != ffmpeg.AVERROR_EOF)
                         {
                             GD.PrintErr($"FFmpegAudioDecoder:Play - Unexpected read error (ret: {ret}): {GetError(ret)}");
                             break;
                         }
-
-                        ffmpeg.av_packet_unref(packet);
-
-                        while (true)
-                        {
-                            ret = ffmpeg.avcodec_receive_frame(_codecCtx, frame);
-                            if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
-                                break;
-                            if (ret < 0)
-                            {
-                                GD.PrintErr($"FFmpegAudioDecoder:Play - Receive failed: {GetError(ret)}");
-                                break;
-                            }
-
-                            GD.Print($"FFmpegAudioDecoder:Play - Decoded frame: {frame->nb_samples} samples, PTS: {frame->pts}");
-
-                            long currentStreamTs = frame->pts;
-
-                            if (useCustomEnd && currentStreamTs >= endTs) 
-                            {
-                                GD.Print($"FFmpegAudioDecoder:Play - Reached custom end (stream TS: {currentStreamTs} >= {endTs})");
-                                ffmpeg.av_frame_unref(frame); 
-                                _playback.CurrentPlayCount++; 
-                                if (_playback.CurrentPlayCount < _playback.EffectivePlayCount) 
-                                {
-                                    ret = ffmpeg.av_seek_frame(_formatCtx, -1, startTsUs, ffmpeg.AVSEEK_FLAG_BACKWARD); 
-                                    if (ret < 0) 
-                                    {
-                                        GD.PrintErr($"FFmpegAudioDecoder:Play - Loop seek failed: {GetError(ret)}"); 
-                                        break; 
-                                    } 
-                                    _currentTs = startTsUs; 
-                                    GD.Print($"FFmpegAudioDecoder:Play - Looped to start (playCount: {_playback.CurrentPlayCount}, new TS: {startTs})"); 
-                                    break; // Break inner to continue outer 
-                                } 
-                                else 
-                                {
-                                    EndReached?.Invoke(this, EventArgs.Empty); 
-                                    _isStopped = true; // Ensure stop 
-                                    break; // Break inner 
-                                } 
-                            } 
-
-                            // Resample
-                            int bufferSize = ffmpeg.av_samples_get_buffer_size(null, _outChLayout.nb_channels, frame->nb_samples, (AVSampleFormat)TargetFormat, 1);
-                            byte[] outBuffer = new byte[bufferSize];
-                            fixed (byte* pOut = outBuffer) 
-                            { 
-                                byte** ppOut = stackalloc byte* [_outChLayout.nb_channels];
-                                ppOut[0] = pOut; 
-                                for (int i = 1; i < _outChLayout.nb_channels; i++) ppOut[i] = null; 
-
-                                byte** ppIn = &(frame->data.item0); //!!!
-
-                                int outSamples = ffmpeg.swr_convert(_swrCtx, ppOut, frame->nb_samples, ppIn, frame->nb_samples); 
-                                GD.Print($"FFmpegAudioDecoder:Play - Resampled: {outSamples} samples"); 
-
-                                // Apply volume
-                                lock (_lock)
-                                {
-                                    for (int i = 0; i < bufferSize / _bytesPerSample; i++)
-                                    {
-                                        float* fPtr = (float*)pOut + i;
-                                        *fPtr *= _currentVolume;
-                                    }
-                                }
-                            } 
-
-                            // Push to SDL streams via playback
-                            _playback.PushPcm(outBuffer);
-                            GD.Print($"FFmpegAudioDecoder:Play - Pushed {bufferSize} bytes");
-
-                            // Update TS
-                            long frameDurUs = (long)frame->nb_samples * 1_000_000 / TargetSampleRate;
-                            _currentTs += frameDurUs;
-                            GD.Print($"FFmpegAudioDecoder:Play - Updated TS: us {_currentTs} (frame dur: {frameDurUs}), stream {currentStreamTs} (end: {endTs})");
-
-                            ffmpeg.av_frame_unref(frame);
-                        }
-
-                        if (_isStopped) break; // Check after inner loop 
                     }
                 }
                 catch (Exception ex)
@@ -328,8 +347,6 @@ public class FFmpegAudioDecoder : IDisposable
                     ffmpeg.av_frame_free(&frame);
                 }
             }
-
-            _isPlaying = false;
         });
     }
 
@@ -363,13 +380,15 @@ public class FFmpegAudioDecoder : IDisposable
     {
         unsafe
         {
-            int ret = ffmpeg.av_seek_frame(_formatCtx, -1, timestampUs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+            long seekTs = ffmpeg.av_rescale_q(timestampUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase); // Rescale from microseconds to stream time_base units
+            int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use specific stream index for consistency
             if (ret < 0)
             {
-                GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetError(ret)}");
-            }
+                GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetError(ret)}"); }
             else
             {
+                ffmpeg.avformat_flush(_formatCtx);
+                ffmpeg.avcodec_flush_buffers(_codecCtx);
                 _currentTs = timestampUs;
             }
         }

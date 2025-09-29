@@ -16,7 +16,7 @@ namespace Cue2.Shared;
 /// Manages packet/frame lifecycle, threading for low-latency, and controls (pause, stop, fade).
 /// Designed for cue playback: Preload packets, decode on-demand.
 /// </summary>
-public class FFmpegAudioDecoderOld : IDisposable
+public class FFmpegAudioDecoderPre : IDisposable
 {
     private readonly AudioComponent _component; // For metadata/start/end times
     private readonly ActiveAudioPlayback _playback;
@@ -24,6 +24,7 @@ public class FFmpegAudioDecoderOld : IDisposable
     private unsafe AVCodecContext* _codecCtx;
     private unsafe SwrContext* _swrCtx;
     private AVChannelLayout _inChLayout, _outChLayout;
+    private AVRational _timeBase;
     private readonly object _lock = new object(); // Thread safety for state/controls
 
     private volatile bool _isPlaying = false; // Volatile for thread visibility
@@ -43,7 +44,7 @@ public class FFmpegAudioDecoderOld : IDisposable
     public event EventHandler EndReached;
     public event EventHandler<long> LengthChanged;
 
-    public FFmpegAudioDecoderOld(AudioComponent component, ActiveAudioPlayback playback)
+    public FFmpegAudioDecoderPre(AudioComponent component, ActiveAudioPlayback playback)
     {
         _component = component ?? throw new ArgumentNullException(nameof(component));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
@@ -82,6 +83,7 @@ public class FFmpegAudioDecoderOld : IDisposable
                 if (_audioStreamIndex == -1) throw new Exception("FFmpegAudioDecoder:InitAsync - No audio stream."); 
 
                 AVStream* stream = _formatCtx->streams[(uint)_audioStreamIndex];
+                _timeBase = stream->time_base;
                 AVCodec* codec = ffmpeg.avcodec_find_decoder(stream->codecpar->codec_id); 
                 if (codec == null) throw new Exception("FFmpegAudioDecoder:InitAsync - Unsupported codec."); 
 
@@ -273,7 +275,7 @@ public class FFmpegAudioDecoderOld : IDisposable
                                         // Update timestamps
                                         long frameDurationUs = (long)(outSamples * 1000000L / TargetSampleRate);
                                         _currentTs += frameDurationUs;
-                                        currentStreamTs += ffmpeg.av_rescale_q(frameDurationUs, new AVRational { num = 1, den = 1000000 }, tb); //!!!
+                                        currentStreamTs += ffmpeg.av_rescale_q(frameDurationUs, new AVRational { num = 1, den = 1000000 }, tb);
                                         GD.Print($"FFmpegAudioDecoder:Play - Updated TS: us {_currentTs} (frame dur: {frameDurationUs}), stream {currentStreamTs} (end: {endTsStream})");
 
                                         // Check for custom end
@@ -317,7 +319,7 @@ public class FFmpegAudioDecoderOld : IDisposable
                                     break;
                                 }
                                 ffmpeg.avcodec_flush_buffers(_codecCtx);
-                                currentStreamTs = seekTs;
+                                currentStreamTs = startTimeUs;
                                 _currentTs = startTimeUs;
                                 GD.Print($"FFmpegAudioDecoder:Play - Looped to start (playCount: {playCount}, new TS: {currentStreamTs})");
                             }
@@ -377,11 +379,11 @@ public class FFmpegAudioDecoderOld : IDisposable
     {
         unsafe
         {
-            int ret = ffmpeg.av_seek_frame(_formatCtx, -1, timestampUs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+            long seekTs = ffmpeg.av_rescale_q(timestampUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase); // Rescale from microseconds to stream time_base units
+            int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use specific stream index for consistency
             if (ret < 0)
             {
-                GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetError(ret)}");
-            }
+                GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetError(ret)}"); }
             else
             {
                 _currentTs = timestampUs;

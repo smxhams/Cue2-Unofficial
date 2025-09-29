@@ -16,6 +16,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     private AudioDevices _audioDevices;
 
     private VBoxContainer _activeCueList;
+
+    private PackedScene _activeCueBarScene;
     
     private readonly List<ActiveCue> _activeCues = new List<ActiveCue>();
     
@@ -25,6 +27,12 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+        
+        _activeCueBarScene = SceneLoader.LoadPackedScene("uid://dt7rlfag7yr2c", out string error); 
+        if (_activeCueBarScene == null || !string.IsNullOrEmpty(error))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load active cue bar: {error}", 2);
+        }
         
         _activeCueList = GetNode("/root/Cue2Base").GetNode<PanelContainer>("%ActiveCueContainer").GetNode<VBoxContainer>("%ActiveCueList");
         GD.Print("CueCommandExecutor:_Ready - Cue Command Executor Successfully added");
@@ -56,7 +64,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         try
         {
             // UI Element for active cue
-            var activeCueBar = LoadActiveCueBar();
+            var activeCueBar = _activeCueBarScene.Instantiate<PanelContainer>();
             _activeCueList.AddChild(activeCueBar);
             // Init active cue
             var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
@@ -91,18 +99,5 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         return;
     }
     
-    public PanelContainer LoadActiveCueBar()
-    {
-        // Load in a shell bar
-        PanelContainer activeBar = (PanelContainer)SceneLoader.LoadScene("uid://dt7rlfag7yr2c", out var error);
-        if (activeBar == null || !string.IsNullOrEmpty(error))
-        {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load active cue bar: {error}", 2);
-            return null;
-        }
-
-        return activeBar;
-    }
-
 }
 
