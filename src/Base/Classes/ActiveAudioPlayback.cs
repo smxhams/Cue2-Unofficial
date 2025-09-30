@@ -146,7 +146,7 @@ public partial class ActiveAudioPlayback : GodotObject
         {
             if (_hasStarted) return;
 
-            Decoder.Play();
+            Decoder.PlayAsync();
             _playTimer.Start();
             _hasStarted = true;
             GD.Print($"ActiveAudioPlayback:Play - Playback started");
