@@ -34,7 +34,7 @@ public partial class Devices : Node
             {
                 GD.Print("Selected device is: " + i);
                 device = i;
-            }
+            } 
         }
 
         if (device != null)

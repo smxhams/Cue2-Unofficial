@@ -7,6 +7,7 @@ using System.Linq;
 using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Cue2.Shared;
+using Cue2.UI.Utilities;
 using LibVLCSharp.Shared;
 // DOES THIS UPDATE?
 // This script handles:
@@ -39,35 +40,25 @@ public partial class Cue2Base : Control
 		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
-		_globalSignals.UiScaleChanged += _scaleUI;
+		_globalSignals.UiScaleChanged += ScaleUI;
 		
 		GD.Print("Main Window ID is: " + GetWindow().GetWindowId());
 
+		UiUtilities.RescaleWindow(GetWindow(), _globalData.BaseDisplayScale);
+		UiUtilities.RescaleUi(GetWindow(), _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		var uiScale = _globalData.BaseDisplayScale;
 
-		// Creation and assignment of test video output window - in future this will be created in settings
-		/*VideoWindow = new Window();
-		AddChild(VideoWindow);
-		VideoWindow.Name = "Test Video Output";
-		_globalData.VideoOutputWinNum = VideoWindow.GetWindowId();
-		DisplayServer.WindowSetCurrentScreen(1, _globalData.VideoOutputWinNum);
-		DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, _globalData.VideoOutputWinNum);*/
-
-		// Load in a test canvas - In future this will be created in settings
-		/*var videoCanvas = GD.Load<PackedScene>("res://src/Base/VideoCanvas.tscn").Instantiate();
-		VideoWindow.AddChild(videoCanvas);
-		_globalData.VideoCanvas = videoCanvas;
-		_globalData.VideoWindow = VideoWindow;*/
-
+		var windowDimensions = GetWindow().Size;
 	}
-	
-	
-	
 
-	private void _scaleUI(float value)
+	private void ScaleUI(float uiScale)
 	{
-		GetWindow().WrapControls = true;
-		GetWindow().ContentScaleFactor = value;
-		GetWindow().ChildControlsChanged();
+		UiUtilities.RescaleUi(GetWindow(), _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+	}
+
+	public override void _ExitTree()
+	{
+		_globalSignals.UiScaleChanged -= ScaleUI;
 	}
 	
 

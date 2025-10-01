@@ -341,7 +341,34 @@ public partial class UiUtilities : Node
             GD.PrintErr(message);
         }
     }
-    
-    
-    
+
+
+    public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)
+    {
+        try
+        {
+            var effectiveScale = scale * baseDisplayScale;
+            window.WrapControls = true;
+            window.ContentScaleFactor = (float)effectiveScale;
+            window.ChildControlsChanged();
+        } 
+        catch (Exception ex)
+        {
+            GD.PrintErr($"UiUtilities:RescaleUI - Error applying UI scale: {ex.Message}");
+            window.ContentScaleFactor = (float)scale; // Fallback to original value without multiplier
+        }
+    }
+
+    public static void RescaleWindow(Window window, double scale)
+    {
+        var oldSize = window.Size;
+        var newSize = new Vector2I((int)(window.Size.X * scale), (int)(window.Size.Y * scale));
+        window.Size = newSize;
+        var offsetX = window.Position.X + ((oldSize.X - newSize.X)/2);
+        var offsetY = window.Position.Y + ((oldSize.Y - newSize.Y)/2);
+        window.Position = new Vector2I((int)offsetX, (int)offsetY);
+    }
+
+
+
 }

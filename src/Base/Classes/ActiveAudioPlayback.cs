@@ -276,16 +276,17 @@ public partial class ActiveAudioPlayback : GodotObject
     }
 
 
-    private void ResetForLoop()
+    public void ResetForLoop()
     {
-        lock (_lock)
+        Decoder.Seek(_startTimeMs * 1000);
+        _playTimer.Reset();
+        _playTimer.Start();
+        _reachedEnd = false;
+        foreach (var stream in DeviceStreams.Values)
         {
-            Decoder.Seek(_startTimeMs * 1000);
-            _playTimer.Reset();
-            _playTimer.Start();
-            _reachedEnd = false;
-            GD.Print($"ActiveAudioPlayback:ResetForLoop - Reset for loop");
+            SDL.ClearAudioStream(stream); // New: Flush SDL buffers to prevent old data garbling loop
         }
+        GD.Print($"ActiveAudioPlayback:ResetForLoop - Reset for loop and cleared SDL streams");
     }
     
     public void Clean()

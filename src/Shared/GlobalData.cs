@@ -47,8 +47,8 @@ public partial class GlobalData : Node
 	public string LaunchLoadPath;
 
 	public static double StopFadeTime = 2.0; // Fade time in seconds
-
 	
+	public float BaseDisplayScale { get; private set; } = 1.0f;
 
 	// Settings
 	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
@@ -83,7 +83,12 @@ public partial class GlobalData : Node
 		VideoCanvas = new Canvas();
 		AddChild(VideoCanvas);
 		
-		
+		int currentScreen = DisplayServer.WindowGetCurrentScreen(GetWindow().GetWindowId());
+		BaseDisplayScale = DisplayServer.ScreenGetScale(currentScreen);
+		if (BaseDisplayScale <= 0f) {
+			BaseDisplayScale = 1.0f; // Fallback if invalid 
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to fetch display scale; using fallback 1.0", 1);
+		}
 		
 		//AudioDevices = new AudioDevices();
 		//AddChild(AudioDevices);

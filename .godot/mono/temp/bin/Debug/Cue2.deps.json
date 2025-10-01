@@ -16,8 +16,8 @@
           "LibVLCSharp": "3.9.3",
           "NAudio": "2.2.1",
           "Newtonsoft.Json": "13.0.3",
-          "SDL3-CS": "3.2.18",
-          "SDL3-CS.Native": "3.2.12",
+          "SDL3-CS": "3.2.20",
+          "SDL3-CS.Native": "3.2.20",
           "VLC.Native": "3.0.8",
           "VideoLAN.LibVLC.Windows": "3.0.18"
         },
@@ -206,36 +206,51 @@
       "runtime.ubuntu.14.04-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.2": {},
       "runtime.ubuntu.16.04-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.2": {},
       "runtime.ubuntu.16.10-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.2": {},
-      "SDL3-CS/3.2.18": {
+      "SDL3-CS/3.2.20": {
         "runtime": {
           "lib/net8.0/SDL3-CS.dll": {
-            "assemblyVersion": "3.2.18.0",
-            "fileVersion": "3.2.18.0"
+            "assemblyVersion": "3.2.20.0",
+            "fileVersion": "3.2.20.0"
           }
         }
       },
-      "SDL3-CS.Native/3.2.12": {
+      "SDL3-CS.Native/3.2.20": {
         "runtime": {
           "lib/net8.0/SDL3-CS.Native.dll": {
-            "assemblyVersion": "3.2.12.0",
-            "fileVersion": "3.2.12.0"
+            "assemblyVersion": "3.2.20.0",
+            "fileVersion": "3.2.20.0"
           }
         },
         "runtimeTargets": {
+          "runtimes/linux-arm64/native/libSDL3.so": {
+            "rid": "linux-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libSDL3.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-arm64/native/libSDL3.dylib": {
+            "rid": "osx-arm64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libSDL3.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
           "runtimes/win-arm64/native/SDL3.dll": {
             "rid": "win-arm64",
             "assetType": "native",
-            "fileVersion": "3.2.12.0"
+            "fileVersion": "0.0.0.0"
           },
           "runtimes/win-x64/native/SDL3.dll": {
             "rid": "win-x64",
             "assetType": "native",
-            "fileVersion": "3.2.12.0"
-          },
-          "runtimes/win-x86/native/SDL3.dll": {
-            "rid": "win-x86",
-            "assetType": "native",
-            "fileVersion": "3.2.12.0"
+            "fileVersion": "0.0.0.0"
           }
         }
       },
@@ -308,7 +323,7 @@
             "rid": "win",
             "assetType": "runtime",
             "assemblyVersion": "8.0.0.0",
-            "fileVersion": "0.0.0.0"
+            "fileVersion": "8.0.23.53103"
           },
           "runtimes/win/lib/net8.0/System.Diagnostics.EventLog.dll": {
             "rid": "win",
@@ -920,19 +935,19 @@
       "path": "runtime.ubuntu.16.10-x64.runtime.native.system.security.cryptography.openssl/4.3.2",
       "hashPath": "runtime.ubuntu.16.10-x64.runtime.native.system.security.cryptography.openssl.4.3.2.nupkg.sha512"
     },
-    "SDL3-CS/3.2.18": {
+    "SDL3-CS/3.2.20": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-q3fPfwajCTnhIi52b7I4e5aZT84KmAISM5QPlSX7OiJd+1NMw9IkZEj943PsJk421q3hK5L7/rDMRx3NI2rIdg==",
-      "path": "sdl3-cs/3.2.18",
-      "hashPath": "sdl3-cs.3.2.18.nupkg.sha512"
+      "sha512": "sha512-TUxCmFcXTzewI6TId1p+iky2lhQ7TPplUDDL4qdQpZ1aen8HzzYVsQRcFztxJEmq4ii22laApm/FdLjJEi5Z0A==",
+      "path": "sdl3-cs/3.2.20",
+      "hashPath": "sdl3-cs.3.2.20.nupkg.sha512"
     },
-    "SDL3-CS.Native/3.2.12": {
+    "SDL3-CS.Native/3.2.20": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-stNkflz3CqlYddVGBkDcvCsETWd2ljjuvqAKIewCwH86DPmTDCm93kuV7O21R/PblUpe7i3fVrrS2OOHTq9p2w==",
-      "path": "sdl3-cs.native/3.2.12",
-      "hashPath": "sdl3-cs.native.3.2.12.nupkg.sha512"
+      "sha512": "sha512-Py2wokXG8aPH00MjS25sNKQn8qComg+Wy90p6CnBn6zf20orMJcqudTjahcD6FwWDz97EEZ2u16QdWlN5SKyzA==",
+      "path": "sdl3-cs.native/3.2.20",
+      "hashPath": "sdl3-cs.native.3.2.20.nupkg.sha512"
     },
     "System.CodeDom/8.0.0": {
       "type": "package",

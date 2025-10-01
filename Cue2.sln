@@ -27,5 +27,6 @@ Global
 	EndGlobalSection
 	GlobalSection(RiderSharedRunConfigurations) = postSolution
 		File = Cue2.run\Player.run.xml
+		File = Cue2Mac.run\PlayerMac.run.xml
 	EndGlobalSection
 EndGlobal

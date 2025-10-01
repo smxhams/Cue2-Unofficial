@@ -77,11 +77,11 @@
             },
             "SDL3-CS": {
               "target": "Package",
-              "version": "[3.2.18, )"
+              "version": "[3.2.20, )"
             },
             "SDL3-CS.Native": {
               "target": "Package",
-              "version": "[3.2.12, )"
+              "version": "[3.2.20, )"
             },
             "VLC.Native": {
               "target": "Package",

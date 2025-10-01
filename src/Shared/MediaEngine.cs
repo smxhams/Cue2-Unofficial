@@ -55,17 +55,23 @@ public partial class MediaEngine : Node
             // Set RootPath for dynamic fallback 
             ffmpeg.RootPath = libPath; 
 
-            // Manual load order: avutil first (base), then dependents 
-            string[] coreLibs = { "avutil-59", "avcodec-61", "avformat-61", "swresample-5", "swscale-8" }; // Versions from gyan.dev FFmpeg 7.0 full static (adjust if your build differs)
+            // Base library names without prefix/extension (major versions from FFmpeg 7.1.x)
+            string[] baseLibs = { "avutil.59", "avcodec.61", "avformat.61", "swresample.5", "swscale.8" }; //!!!
 
-            foreach (string lib in coreLibs) 
+            foreach (string baseLib in baseLibs) 
             { 
+                // Platform-specific naming 
+                string libName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
+                    ? baseLib.Replace(".", "-")  // Windows: avutil-59 (replace . with -) //!!!
+                    : $"lib{baseLib}";           // macOS/Linux: libavutil.59 (major symlink) //!!!
+
                 string ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".dll" : 
-                             RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? ".dylib" : ".so"; 
-                string fullPath = $"{libPath}{lib}{ext}"; 
+                    RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? ".dylib" : ".so"; 
+            
+                string fullPath = $"{libPath}{libName}{ext}"; 
 
                 nint handle = NativeLibrary.Load(fullPath); // Explicit Load (throws on fail for early error)
-                GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {lib}{ext} (handle: {handle})");
+                GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {libName}{ext} (handle: {handle})");
             } 
 
             GD.Print("MediaEngine:LoadFFmpegLibraries - All FFmpeg libs loaded successfully.");

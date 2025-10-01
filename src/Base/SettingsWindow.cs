@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using Cue2.Shared;
+using Cue2.UI.Utilities;
 
 namespace Cue2.Base;
 public partial class SettingsWindow : Window
@@ -18,12 +19,13 @@ public partial class SettingsWindow : Window
 		//Global Signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		
-		
-		_scaleUI(_globalData.Settings.UiScale);
-		GD.Print("UI Scale: " + _globalData.Settings.UiScale);
+
+		GD.Print($"SettingsWindow:_Ready - UI Scale: " + _globalData.Settings.UiScale);
 		
 		GetNode<Button>("%SaveWithShow").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.SettingsSaveUserDir), _getFilters());
+		
+		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
+		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
 		
 		_generateTree();
 		_connectSignals();
@@ -31,7 +33,7 @@ public partial class SettingsWindow : Window
 
 	private void _connectSignals()
 	{
-		_globalSignals.UiScaleChanged += _scaleUI;
+		_globalSignals.UiScaleChanged += ScaleUi;
 		GetNode<Button>("%SaveFilterOptionButton").Pressed += () =>
 		{
 			GetNode<PanelContainer>("%DropMenuFilter").Visible = true;
@@ -43,7 +45,7 @@ public partial class SettingsWindow : Window
 			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
 		};
 		
-		TreeExiting += () => _globalSignals.UiScaleChanged -= _scaleUI; //TODO: This needs to be done to all signals that expect to be Freed.
+		TreeExiting += () => _globalSignals.UiScaleChanged -= ScaleUi; //TODO: This needs to be done to all signals that expect to be Freed.
 	}
 
 	private string _getFilters()
@@ -51,11 +53,9 @@ public partial class SettingsWindow : Window
 		return "";
 	}
 	
-	private void _scaleUI(float value)
+	private void ScaleUi(float value)
 	{
-		GetWindow().WrapControls = true;
-		GetWindow().ContentScaleFactor = value;
-		GetWindow().ChildControlsChanged();
+		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
 	}
 
 
@@ -85,9 +85,6 @@ public partial class SettingsWindow : Window
 		GetNode<ScrollContainer>("%" + menuNode).Show();
 		_currentDisplay = menuNode;
 		
-
-		
-
 	}
 
 	private string GetSelectedMenu(string action) =>
@@ -157,7 +154,10 @@ public partial class SettingsWindow : Window
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiAudioCueDafaults.SetText(0, "Defaults");
 		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for video cues.");
-		
-		
+	}
+
+	public override void _ExitTree()
+	{
+		_globalSignals.UiScaleChanged -= ScaleUi;
 	}
 }
