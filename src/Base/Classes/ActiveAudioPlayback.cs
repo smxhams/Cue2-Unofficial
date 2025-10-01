@@ -83,7 +83,7 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         await Decoder.InitAsync();
         SourceChannels = _audioComponent.Metadata.Channels;
-        SourceSampleRate = Decoder.TargetSampleRate;
+        SourceSampleRate = Decoder.OutputSampleRate;
         SourceFormat = Decoder.TargetFormat;
         SourceBytesPerFrame = SourceChannels * (GetBitDepth(SourceFormat) / 8);
         GD.Print("ActiveAudioPlayback:InitAsync - Initialized FFmpeg decoder with sample rate " + SourceSampleRate);
@@ -314,7 +314,6 @@ public partial class ActiveAudioPlayback : GodotObject
                 catch (Exception ex)
                 {
                     GD.Print($"ActiveAudioPlayback:Clean - Exception stopping Decoder: {ex.Message}");
-                    GD.Print($"ActiveAudioPlayback:Clean - Exception stopping Decoder: {ex.Message}");
                 }
 
                 try
@@ -326,7 +325,6 @@ public partial class ActiveAudioPlayback : GodotObject
                 }
                 catch (Exception ex)
                 {
-                    GD.Print($"ActiveAudioPlayback:Clean - Exception disposing Decoder: {ex.Message}");
                     GD.Print($"ActiveAudioPlayback:Clean - Exception disposing Decoder: {ex.Message}");
                 }
                 Decoder = null; // Prevent accidental reuse

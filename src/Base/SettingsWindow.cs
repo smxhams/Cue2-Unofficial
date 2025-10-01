@@ -44,8 +44,6 @@ public partial class SettingsWindow : Window
 			GetNode<PanelContainer>("%DropMenuFilter").Visible = false;
 			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
 		};
-		
-		TreeExiting += () => _globalSignals.UiScaleChanged -= ScaleUi; //TODO: This needs to be done to all signals that expect to be Freed.
 	}
 
 	private string _getFilters()

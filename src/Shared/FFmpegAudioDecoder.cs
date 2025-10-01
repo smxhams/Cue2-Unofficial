@@ -30,7 +30,6 @@ public class FFmpegAudioDecoder : IDisposable
     private volatile bool _isPlaying = false; // Volatile for thread visibility
     private volatile bool _isPaused = false;
     private volatile bool _isStopped = false;
-    private volatile bool _isLooping = false;
     private float _currentVolume = 1.0f; // For fade multipliers
     private CancellationTokenSource _cts; // For async cancel
     
@@ -41,16 +40,13 @@ public class FFmpegAudioDecoder : IDisposable
     private int _channels; // Cached from codecCtx after init
     
     private readonly ConcurrentQueue<byte[]> _preloadBuffer = new ConcurrentQueue<byte[]>(); // For preloading PCM chunks
-    public const int PreloadMs = 500; // Configurable preload time (ms) for low-latency start
+    public const int PreloadMs = 1000; // Configurable preload time (ms) for low-latency start
     
     private BlockingCollection<byte[]> _pcmQueue; // Bounded queue for producer-consumer
-    private const int MaxBufferedChunks = 100; // Cap buffered chunks
-
+    private const int MaxBufferedChunks = 1000; // Cap buffered chunks
     
-    /// <summary>
-    /// Gets the target sample rate for audio output, defaulting to 44100 Hz (SDL default).
-    /// </summary>
-    public int TargetSampleRate { get; } = 44100;
+    private int _outputSampleRate;
+    public int OutputSampleRate => _outputSampleRate;
     
     /// <summary>
     /// Gets the target audio format for SDL, set to Float 32-bit Little Endian for easy volume manipulation.
@@ -138,9 +134,9 @@ public class FFmpegAudioDecoder : IDisposable
                 }
                 
                 _channels = _codecCtx->ch_layout.nb_channels; // Cache channels after open
+                _outputSampleRate = _codecCtx->sample_rate;
 
-
-                // Setup resampler to target (mono? No, keep channels, but float)
+                // Setup resampler to target (keep channels, convert to float)
                 fixed (AVChannelLayout* pInChLayout = &_inChLayout)
                 {
                     fixed (AVChannelLayout* pOutChLayout = &_outChLayout)
@@ -154,7 +150,7 @@ public class FFmpegAudioDecoder : IDisposable
                         {
                             ffmpeg.swr_alloc_set_opts2(
                                 ppSwr, pOutChLayout, AVSampleFormat.AV_SAMPLE_FMT_FLT, 
-                                TargetSampleRate, pInChLayout, _codecCtx->sample_fmt,
+                                _outputSampleRate, pInChLayout, _codecCtx->sample_fmt,
                                 _codecCtx->sample_rate, 0, null);
                             if (_swrCtx == null) throw new Exception("FFmpegAudioDecoder:InitAsync - Swr alloc failed");
 
@@ -167,7 +163,7 @@ public class FFmpegAudioDecoder : IDisposable
                 // Initial seek before preload
                 long startUs = (long)(_component.StartTime * 1_000_000); // Assume seconds; revert to *1000 if ms
                 long seekTs = ffmpeg.av_rescale_q(startUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
-                ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_ANY);
+                ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
                 if (ret < 0) 
                 {
                     GD.PrintErr($"FFmpegAudioDecoder:InitAsync - Initial seek failed: {GetFFmpegError(ret)}");
@@ -181,6 +177,8 @@ public class FFmpegAudioDecoder : IDisposable
                 // Fire LengthChanged with stream duration (in ms)
                 long durationMs = (long)(stream->duration * ffmpeg.av_q2d(_timeBase) * 1000);
                 LengthChanged?.Invoke(this, durationMs);
+                
+                GD.Print($"FFmpegAudioDecoder:InitAsync - Decoded to original rate {_outputSampleRate} Hz, float32 format.");
             }
         });
     }
@@ -192,7 +190,7 @@ public class FFmpegAudioDecoder : IDisposable
     private unsafe void PreloadInitialBuffers()
     {
         // Calculate samples to preload
-        long preloadSamples = (long)(PreloadMs / 1000.0 * TargetSampleRate);
+        long preloadSamples = (long)(PreloadMs / 1000.0 * _outputSampleRate);
         long preloaded = 0;
         
         AVPacket* packet = ffmpeg.av_packet_alloc();
@@ -218,7 +216,7 @@ public class FFmpegAudioDecoder : IDisposable
                         _preloadBuffer.Enqueue(pcmBuffer);
                         int produced = pcmBuffer.Length / (_channels * _bytesPerSample);
                         preloaded += produced;
-                        _currentTs += (long)(produced * 1_000_000L / TargetSampleRate); // Advance ts during preload for sync
+                        _currentTs += (long)(produced * 1_000_000L / _outputSampleRate); // Advance ts during preload for sync
                     }
                     ffmpeg.av_frame_unref(frame);
                 }
@@ -239,38 +237,52 @@ public class FFmpegAudioDecoder : IDisposable
     private unsafe byte[] ProcessFrame(AVFrame* frame) 
     {
         long delay = ffmpeg.swr_get_delay(_swrCtx, _codecCtx->sample_rate);
-        long maxOutSamples = ffmpeg.av_rescale_rnd(delay + frame->nb_samples, TargetSampleRate, _codecCtx->sample_rate, AVRounding.AV_ROUND_UP);
-        int bufferSize = (int)maxOutSamples * _channels * _bytesPerSample;
-        byte[] pcmBuffer = ArrayPool<byte>.Shared.Rent(bufferSize); //  Use ArrayPool to reuse buffers, reduce allocations
-        try
+    long maxOutSamples = ffmpeg.av_rescale_rnd(delay + frame->nb_samples, _outputSampleRate, _codecCtx->sample_rate, AVRounding.AV_ROUND_UP);
+    int planeSize = (int)maxOutSamples * _bytesPerSample; // Per channel
+    byte** outPlanes = stackalloc byte*[_channels]; // Planar output
+    for (int ch = 0; ch < _channels; ch++) outPlanes[ch] = (byte*)ffmpeg.av_malloc((ulong)planeSize); // Alloc planes
+    try
+    {
+        int produced = ffmpeg.swr_convert(_swrCtx, outPlanes, (int)maxOutSamples, (byte**)&frame->data, frame->nb_samples);
+        if (produced < 0)
         {
-            fixed (byte* pBuffer = pcmBuffer)
+            GD.PrintErr($"FFmpegAudioDecoder:ProcessFrame - Swr convert failed: {GetFFmpegError(produced)}");
+            return null;
+        }
+
+        //!!! NEW: Interleave planar to single buffer for easy mixing
+        int interleavedSize = produced * _channels * _bytesPerSample;
+        byte[] pcmBuffer = ArrayPool<byte>.Shared.Rent(interleavedSize);
+        Span<float> interleaved = MemoryMarshal.Cast<byte, float>(pcmBuffer);
+        for (int i = 0; i < produced; i++)
+        {
+            for (int ch = 0; ch < _channels; ch++)
             {
-                byte** outPtrs = &pBuffer;
-                int produced = ffmpeg.swr_convert(_swrCtx, outPtrs, (int)maxOutSamples, (byte**)&frame->data, frame->nb_samples);
-                if (produced < 0)
+                unsafe
                 {
-                    GD.PrintErr($"FFmpegAudioDecoder:ProcessFrame - Swr convert failed: {GetFFmpegError(produced)}");
-                    return null;
+                    float* planeData = (float*)outPlanes[ch];
+                    interleaved[i * _channels + ch] = planeData[i];
                 }
-
-                // Apply volume using Span for perf
-                Span<float> samples = MemoryMarshal.Cast<byte, float>(pcmBuffer.AsSpan(0, produced * _channels * _bytesPerSample));
-                for (int i = 0; i < samples.Length; i++)
-                {
-                    samples[i] *= _currentVolume;
-                }
-
-                // Create trimmed copy and return buffer to pool
-                byte[] trimmed = new byte[produced * _channels * _bytesPerSample];
-                Buffer.BlockCopy(pcmBuffer, 0, trimmed, 0, trimmed.Length);
-                return trimmed;
             }
         }
-        finally
+
+        // Apply volume (on interleaved)
+        for (int i = 0; i < interleaved.Length; i++)
         {
-            ArrayPool<byte>.Shared.Return(pcmBuffer, clearArray: true); // Return in finally for all paths
+            interleaved[i] *= _currentVolume;
         }
+
+        // Trimmed copy (no need; return rented, but copy for safety as pool may reuse)
+        byte[] trimmed = new byte[interleavedSize];
+        Buffer.BlockCopy(pcmBuffer, 0, trimmed, 0, interleavedSize);
+        ArrayPool<byte>.Shared.Return(pcmBuffer, clearArray: true);
+        return trimmed;
+    }
+    finally
+    {
+        // Free planes
+        for (int ch = 0; ch < _channels; ch++) ffmpeg.av_free(outPlanes[ch]);
+    }
     }
 
 
@@ -307,7 +319,6 @@ public class FFmpegAudioDecoder : IDisposable
             
             try
             {
-                // Assume seconds for times, changed multipliers
                 long startTimeUs = (long)(_component.StartTime * 1_000_000); // seconds to us
                 long endTimeUs = (long)(_component.EndTime * 1_000_000);
                 long endTsStream = ffmpeg.av_rescale_q(endTimeUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
@@ -391,7 +402,7 @@ public class FFmpegAudioDecoder : IDisposable
                             _pcmQueue.Add(pcmBuffer, token);
                             // Advance ts for live chunk
                             int produced = pcmBuffer.Length / (_channels * _bytesPerSample);
-                            _currentTs += (long)(produced * 1_000_000L / TargetSampleRate);
+                            _currentTs += (long)(produced * 1_000_000L / _outputSampleRate);
                         }
                         ffmpeg.av_frame_unref(frame);
 
@@ -408,7 +419,7 @@ public class FFmpegAudioDecoder : IDisposable
                     if (_component.Loop || playCount < _component.PlayCount)
                     {
                         long seekTs = ffmpeg.av_rescale_q(startTimeUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
-                        ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_ANY); // Use AVSEEK_FLAG_ANY for non-keyframe seek
+                        ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use AVSEEK_FLAG_ANY for non-keyframe seek
                         if (ret < 0)
                         {
                             GD.PrintErr($"FFmpegAudioDecoder:ProducerLoop - Loop seek failed: {GetFFmpegError(ret)}"); 
@@ -416,7 +427,7 @@ public class FFmpegAudioDecoder : IDisposable
                         }
                         ffmpeg.avformat_flush(_formatCtx); // Extra flush to clear demuxer buffers
                         ffmpeg.avcodec_flush_buffers(_codecCtx);
-
+                        
                         // Drain and discard frames after seek until PTS >= seekTs (skip partial/skipped samples)
                         long targetPts = seekTs;
                         int discardedFrames = 0;
@@ -437,7 +448,7 @@ public class FFmpegAudioDecoder : IDisposable
                             ffmpeg.av_packet_unref(packet);
                             if (ret < 0) 
                             {
-                                GD.PrintErr($"FFmpegAudioDecoder:PlayAsync - Send packet in drain failed: {GetFFmpegError(ret)}");
+                                GD.PrintErr($"FFmpegAudioDecoder:ProducerLoop - Send packet in drain failed: {GetFFmpegError(ret)}");
                                 break;
                             }
 
@@ -456,13 +467,13 @@ public class FFmpegAudioDecoder : IDisposable
                                 else if (framePts > targetPts)
                                 {
                                     // Trim overage from first frame if PTS > target
-                                    long overageUs = framePts - targetPts;
-                                    int overageSamples = (int)ffmpeg.av_rescale_q(overageUs, new AVRational { num = 1, den = 1_000_000 }, new AVRational { num = _codecCtx->sample_rate, den = 1 });
+                                    long overageTicks = framePts - targetPts;// (fixed: ticks, not us)
+                                    int overageSamples = (int)ffmpeg.av_rescale_q(overageTicks, _timeBase, new AVRational { num = _codecCtx->sample_rate, den = 1 });// (fixed rescale for samples)
                                     if (overageSamples > 0 && overageSamples < frame->nb_samples)
                                     {
                                         // Trim frame input samples
                                         frame->nb_samples -= overageSamples;
-                                        for (uint ch = 0; ch < _channels; ch++)
+                                        for (uint ch = 0; ch < (uint)_channels; ch++)// (cast to uint for safety)
                                         {
                                             frame->data[ch] += overageSamples * _bytesPerSample;
                                         }
@@ -473,7 +484,7 @@ public class FFmpegAudioDecoder : IDisposable
                                             _pcmQueue.Add(trimmedPcm); // Add trimmed to queue
                                             // Advance ts for trimmed part only
                                             int produced = trimmedPcm.Length / (_channels * _bytesPerSample);
-                                            _currentTs += (long)(produced * 1_000_000L / TargetSampleRate);
+                                            _currentTs += (long)(produced * 1_000_000L / _outputSampleRate);
                                         }
                                         ffmpeg.av_frame_unref(frame);
                                         goto DrainEnd; // Proceed with next frames normally
@@ -488,7 +499,7 @@ public class FFmpegAudioDecoder : IDisposable
                         {
                             GD.Print($"FFmpegAudioDecoder:ProducerLoop - Discarded {discardedFrames} frames post-seek for sync.");
                         }
-                        _currentTs = startTimeUs; // Reset to exact start after compensation
+                        _currentTs = startTimeUs; // Reset to exact start
                         GC.Collect(2, GCCollectionMode.Forced, true); // Force full GC at loop end to reclaim memory
                     }
                     else
@@ -528,7 +539,7 @@ public class FFmpegAudioDecoder : IDisposable
 
                 // Pace to real-time: Sleep ~chunk duration (ms)
                 int produced = pcmChunk.Length / (_channels * _bytesPerSample);
-                long chunkMs = (long)(produced * 1000L / TargetSampleRate);
+                long chunkMs = (long)(produced * 1000L / _outputSampleRate);
                 await Task.Delay((int)chunkMs, token); // Approximate; for better, use Timer
             }
         }
@@ -586,7 +597,7 @@ public class FFmpegAudioDecoder : IDisposable
             unsafe
             {
                 long seekTs = ffmpeg.av_rescale_q(timestampUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
-                int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_ANY); // Use AVSEEK_FLAG_ANY for non-keyframe seek
+                int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use AVSEEK_FLAG_ANY for non-keyframe seek
                 if (ret < 0)
                 {
                     GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetFFmpegError(ret)}"); // GD.PrintErr
