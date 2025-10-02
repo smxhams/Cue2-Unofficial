@@ -237,52 +237,37 @@ public class FFmpegAudioDecoder : IDisposable
     private unsafe byte[] ProcessFrame(AVFrame* frame) 
     {
         long delay = ffmpeg.swr_get_delay(_swrCtx, _codecCtx->sample_rate);
-    long maxOutSamples = ffmpeg.av_rescale_rnd(delay + frame->nb_samples, _outputSampleRate, _codecCtx->sample_rate, AVRounding.AV_ROUND_UP);
-    int planeSize = (int)maxOutSamples * _bytesPerSample; // Per channel
-    byte** outPlanes = stackalloc byte*[_channels]; // Planar output
-    for (int ch = 0; ch < _channels; ch++) outPlanes[ch] = (byte*)ffmpeg.av_malloc((ulong)planeSize); // Alloc planes
-    try
-    {
-        int produced = ffmpeg.swr_convert(_swrCtx, outPlanes, (int)maxOutSamples, (byte**)&frame->data, frame->nb_samples);
-        if (produced < 0)
+        long maxOutSamples = ffmpeg.av_rescale_rnd(delay + frame->nb_samples, _outputSampleRate, _codecCtx->sample_rate, AVRounding.AV_ROUND_UP);        int bufferSize = (int)maxOutSamples * _channels * _bytesPerSample;
+        byte[] pcmBuffer = ArrayPool<byte>.Shared.Rent(bufferSize); // Use ArrayPool to reuse buffers, reduce allocations
+        try
         {
-            GD.PrintErr($"FFmpegAudioDecoder:ProcessFrame - Swr convert failed: {GetFFmpegError(produced)}");
-            return null;
-        }
-
-        //!!! NEW: Interleave planar to single buffer for easy mixing
-        int interleavedSize = produced * _channels * _bytesPerSample;
-        byte[] pcmBuffer = ArrayPool<byte>.Shared.Rent(interleavedSize);
-        Span<float> interleaved = MemoryMarshal.Cast<byte, float>(pcmBuffer);
-        for (int i = 0; i < produced; i++)
-        {
-            for (int ch = 0; ch < _channels; ch++)
+            fixed (byte* pBuffer = pcmBuffer)
             {
-                unsafe
+                byte** outPtrs = &pBuffer;
+                int produced = ffmpeg.swr_convert(_swrCtx, outPtrs, (int)maxOutSamples, (byte**)&frame->data, frame->nb_samples);
+                if (produced < 0)
                 {
-                    float* planeData = (float*)outPlanes[ch];
-                    interleaved[i * _channels + ch] = planeData[i];
+                    GD.PrintErr($"FFmpegAudioDecoder:ProcessFrame - Swr convert failed: {GetFFmpegError(produced)}");
+                    return null;
                 }
+
+                // Apply volume using Span for perf
+                Span<float> samples = MemoryMarshal.Cast<byte, float>(pcmBuffer.AsSpan(0, produced * _channels * _bytesPerSample));
+                for (int i = 0; i < samples.Length; i++)
+                {
+                    samples[i] *= _currentVolume;
+                }
+
+                // Create trimmed copy and return buffer to pool
+                byte[] trimmed = new byte[produced * _channels * _bytesPerSample];
+                Buffer.BlockCopy(pcmBuffer, 0, trimmed, 0, trimmed.Length);
+                return trimmed;
             }
         }
-
-        // Apply volume (on interleaved)
-        for (int i = 0; i < interleaved.Length; i++)
+        finally
         {
-            interleaved[i] *= _currentVolume;
+            ArrayPool<byte>.Shared.Return(pcmBuffer, clearArray: true); // Return in finally for all paths
         }
-
-        // Trimmed copy (no need; return rented, but copy for safety as pool may reuse)
-        byte[] trimmed = new byte[interleavedSize];
-        Buffer.BlockCopy(pcmBuffer, 0, trimmed, 0, interleavedSize);
-        ArrayPool<byte>.Shared.Return(pcmBuffer, clearArray: true);
-        return trimmed;
-    }
-    finally
-    {
-        // Free planes
-        for (int ch = 0; ch < _channels; ch++) ffmpeg.av_free(outPlanes[ch]);
-    }
     }
 
 

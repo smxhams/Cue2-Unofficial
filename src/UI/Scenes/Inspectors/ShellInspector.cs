@@ -28,7 +28,7 @@ public partial class ShellInspector : Control
 	private LineEdit _durationValue;
 	private LineEdit _postWaitInput;
 	private OptionButton _followOption;
-	
+	private ColorPickerButton _colorPicker;
 	
 	
 	public override void _Ready()
@@ -47,6 +47,7 @@ public partial class ShellInspector : Control
 		_durationValue = GetNode<LineEdit>("%DurationValue");
 		_postWaitInput = GetNode<LineEdit>("%PostWaitInput");
 		_followOption = GetNode<OptionButton>("%FollowOption");
+		_colorPicker = GetNode<ColorPickerButton>("%ColourPickerButton");
 		
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
 		
@@ -54,6 +55,8 @@ public partial class ShellInspector : Control
 		_cueName.TextChanged += _onCueNameTextChanged;
 		_cueNum.TextSubmitted += _ => { _cueNum.ReleaseFocus(); };
 		_cueName.TextSubmitted += _ => { _cueName.ReleaseFocus(); };
+
+		_colorPicker.PopupClosed += AssignColor;
 		
 		_preWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _preWaitInput);
 		_postWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _postWaitInput);
@@ -179,7 +182,10 @@ public partial class ShellInspector : Control
 		_focusedCue.Follow = (FollowType)selectedValue;
 	}
 
-
+	private void AssignColor()
+	{
+		GD.Print($"ShellInspector:AsignColor - Assigning color. {_colorPicker.Color.R}, {_colorPicker.Color.G}, {_colorPicker.Color.B}");
+	}
 
 	// Handling the updating of fields
 	private void _onCueNumTextChanged(string data)

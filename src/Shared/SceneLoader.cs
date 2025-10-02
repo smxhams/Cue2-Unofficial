@@ -3,10 +3,22 @@ using Godot;
 
 namespace Cue2.Shared;
 
+
+/// <summary>
+/// Provides utility methods for loading and instantiating Godot scenes in a cross-platform compatible manner.
+/// This class handles scene loading with caching support, error handling, and logging via GlobalSignals.
+/// </summary>
 public static class SceneLoader
 {
     
-    // Loads or retrieves a cached PackedScene and instantiates it.
+    /// <summary>
+    /// Loads a Godot scene from the specified path, retrieves it from cache if available, and instantiates it.
+    /// </summary>
+    /// <param name="path">The file path to the scene resource (e.g., .tscn file).</param>
+    /// <param name="errorMessage">An output parameter that contains an error message if the operation fails.</param>
+    /// <returns>The instantiated <see cref="Node"/> from the scene, or <c>null</c> if loading or instantiation fails.</returns>
+    /// <exception cref="ArgumentException">Thrown if the path is null or empty.</exception>
+    /// <exception cref="Exception">Thrown for other unexpected errors during scene instantiation.</exception>
     public static Node LoadScene(string path, out string errorMessage)
     {
         PackedScene scene = LoadPackedSceneInternal(path, out errorMessage);
@@ -34,15 +46,20 @@ public static class SceneLoader
     }
 
 
-    // Loads or retrieves a cached PackedScene without instantiating it.
-
+    /// <summary>
+    /// Loads a Godot <see cref="PackedScene"/> from the specified path or retrieves it from cache if available.
+    /// This method does not instantiate the scene.
+    /// </summary>
+    /// <param name="path">The file path to the scene resource (e.g., .tscn file).</param>
+    /// <param name="errorMessage">An output parameter that contains an error message if the operation fails.</param>
+    /// <returns>The loaded <see cref="PackedScene"/>, or <c>null</c> if loading fails.</returns>
+    /// <exception cref="ArgumentException">Thrown if the path is null or empty.</exception>
+    /// <exception cref="Exception">Thrown for other unexpected errors during scene loading.</exception>
     public static PackedScene LoadPackedScene(string path, out string errorMessage)
     {
         return LoadPackedSceneInternal(path, out errorMessage);
     }
-
-
-    // Internal helper method to load or retrieve a cached PackedScene.
+    
     private static PackedScene LoadPackedSceneInternal(string path, out string errorMessage)
     {
         errorMessage = null;

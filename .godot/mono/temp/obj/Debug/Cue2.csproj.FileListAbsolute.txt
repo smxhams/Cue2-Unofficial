@@ -2327,6 +2327,53 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/refint/Cue2.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.pdb
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.deps.json
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.runtimeconfig.json
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.pdb
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharp.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Hardware.Info.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/LibVLCSharp.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Asio.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Core.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Midi.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Wasapi.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.WinMM.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Newtonsoft.Json.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.Native.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.CodeDom.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Configuration.ConfigurationManager.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Diagnostics.EventLog.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Diagnostics.PerformanceCounter.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Management.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Security.Cryptography.ProtectedData.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-arm64/native/SDL3.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL3.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.EventLog.Messages.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.EventLog.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.PerformanceCounter.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Management.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.AssemblyReference.cache
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.GeneratedMSBuildEditorConfig.editorconfig
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfoInputs.cache
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfo.cs
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.CoreCompileInputs.cache
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.sourcelink.json
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.Up2Date
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.genruntimeconfig.cache
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/ref/Cue2.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
+C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
+C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
+C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
+C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/vlc/x64/AUTHORS.txt
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/vlc/x64/axvlc.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/vlc/x64/COPYING.txt
@@ -4611,53 +4658,6 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/libvlc/win-x86/plugins/visualization/libgoom_plugin.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/libvlc/win-x86/plugins/visualization/libprojectm_plugin.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/libvlc/win-x86/plugins/visualization/libvisual_plugin.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.deps.json
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.runtimeconfig.json
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.pdb
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharp.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Hardware.Info.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/LibVLCSharp.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Asio.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Core.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Midi.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.Wasapi.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/NAudio.WinMM.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Newtonsoft.Json.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.Native.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.CodeDom.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Configuration.ConfigurationManager.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Diagnostics.EventLog.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Diagnostics.PerformanceCounter.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Management.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/System.Security.Cryptography.ProtectedData.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-arm64/native/SDL3.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL3.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.EventLog.Messages.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.EventLog.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Diagnostics.PerformanceCounter.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win/lib/net8.0/System.Management.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.AssemblyReference.cache
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.GeneratedMSBuildEditorConfig.editorconfig
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfoInputs.cache
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfo.cs
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.CoreCompileInputs.cache
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.sourcelink.json
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.Up2Date
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.genruntimeconfig.cache
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/ref/Cue2.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\vlc\x64\AUTHORS.txt
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\vlc\x64\axvlc.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\vlc\x64\COPYING.txt

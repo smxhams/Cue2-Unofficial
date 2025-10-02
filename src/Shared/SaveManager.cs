@@ -15,21 +15,32 @@ public partial class SaveManager : Node
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
 	private AudioDevices _audioDevices;
+
+	private PackedScene _saveDialogScene;
+	private PackedScene _openDialogScene;
+	private FileDialog _saveDialog;
+	private FileDialog _openDialog;
+	
+	
 	
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
 	public override void _Ready()
 	{
+		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+		
+		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
+		// TODO: _openDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
+		
 		
 		_globalSignals.Save += Save;
 		_globalSignals.SaveAs += SaveAs;
 		_globalSignals.OpenSession += OpenSession;
 		_globalSignals.OpenSelectedSession += OpenSelectedSession;
 		
-		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
-
+		
 		if (_globalData.LaunchLoadPath != null)
 		{
 			LoadOnLaunch();
@@ -70,8 +81,25 @@ public partial class SaveManager : Node
 	/// </summary>
 	private void SaveAs()
 	{
-		GetNode<FileDialog>("/root/Cue2Base/SaveDialog").Visible = true;
+		_saveDialog = _saveDialogScene.Instantiate<FileDialog>();
+		AddChild(_saveDialog);
+		_saveDialog.FileSelected += OnSaveFileSelected;
+		_saveDialog.FileMode = FileDialog.FileModeEnum.SaveFile;
+		_saveDialog.AddFilter("*.c2 ; Cue2 Session");
+		_saveDialog.Visible = true;
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
+	}
+
+	private void OnSaveFileSelected(string path)
+	{
+		string sessionName = Path.GetFileNameWithoutExtension(@path);
+		string sessionPath = Path.GetDirectoryName(@path);
+		GD.Print($"SaveManager:OnSaveFileSelected - {sessionPath} and filename : {sessionName}");
+		//_globalData.SessionName = sessionName; // OLD
+		//_globalData.SessionPath = @sessionPath; // OLD
+
+		// URL and showname made to continue Save process		
+		//_globalSignals.EmitSignal(nameof(GlobalSignals.Save)); // OLD
 	}
 	
 	

@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj": {}
+    "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj": {}
   },
   "projects": {
-    "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj": {
+    "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
+        "projectUniqueName": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
         "projectName": "Cue2",
-        "projectPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
-        "packagesPath": "C:\\Users\\smxham\\.nuget\\packages\\",
-        "outputPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\.godot\\mono\\temp\\obj\\",
+        "projectPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
+        "packagesPath": "/Users/smxham/.nuget/packages/",
+        "outputPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\smxham\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/Users/smxham/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -37,7 +37,8 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -103,12 +104,22 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[8.0.20, 8.0.20]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[8.0.20, 8.0.20]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.303/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.305/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

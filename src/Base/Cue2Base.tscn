@@ -1,4 +1,4 @@
-[gd_scene load_steps=32 format=4 uid="uid://begopskfmco7t"]
+[gd_scene load_steps=31 format=4 uid="uid://begopskfmco7t"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -14,7 +14,6 @@
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
 [ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
-[ext_resource type="Script" uid="uid://crc7u0mdel1jo" path="res://src/Base/SaveDialog.cs" id="13_03w3m"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
@@ -2591,6 +2590,7 @@ use_native_dialog = true
 script = ExtResource("12_6nwf4")
 
 [node name="OpenDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open a File"
 initial_position = 2
@@ -2602,15 +2602,6 @@ access = 2
 filters = PackedStringArray("*C2; Cue2 Session Data")
 use_native_dialog = true
 script = ExtResource("14_5gc0s")
-
-[node name="SaveDialog" type="FileDialog" parent="."]
-title = "Save Session"
-initial_position = 2
-size = Vector2i(600, 400)
-popup_window = true
-access = 2
-use_native_dialog = true
-script = ExtResource("13_03w3m")
 
 [connection signal="gui_input" from="MainWindowHandles/DragBar" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
 [connection signal="gui_input" from="MainWindowHandles/Right" to="MainWindowHandles" method="_on_right_gui_input"]
