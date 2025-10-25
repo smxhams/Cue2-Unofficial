@@ -2,6 +2,7 @@ using System;
 using Godot;
 using System.IO;
 using System.Threading.Tasks;
+using Cue2.UI.Utilities;
 using Godot.Collections;
 
 namespace Cue2.Shared;
@@ -33,8 +34,8 @@ public partial class SaveManager : Node
 		
 		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
 		// TODO: _openDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
-		
-		
+
+		_globalSignals.NewSession += ResetSession;
 		_globalSignals.Save += Save;
 		_globalSignals.SaveAs += SaveAs;
 		_globalSignals.OpenSession += OpenSession;
@@ -72,7 +73,7 @@ public partial class SaveManager : Node
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
 				$"Saving session to: {_globalData.SessionPath} with name: {_globalData.SessionName}:", 0);
-			SaveSession(_globalData.SessionPath, _globalData.SessionName);
+			SaveSession(_globalData.SessionPath);
 		}
 	}
 
@@ -86,20 +87,33 @@ public partial class SaveManager : Node
 		_saveDialog.FileSelected += OnSaveFileSelected;
 		_saveDialog.FileMode = FileDialog.FileModeEnum.SaveFile;
 		_saveDialog.AddFilter("*.c2 ; Cue2 Session");
+		if (!string.IsNullOrEmpty(_globalData.SessionPath))
+		{
+			try
+			{
+				string baseDir = _globalData.SessionPath.GetBaseDir();
+				if (DirAccess.DirExistsAbsolute(baseDir))
+				{
+					_saveDialog.CurrentDir = baseDir;
+					GD.Print($"Set save dialog initial directory to existing session path: {baseDir}");
+				}
+				else
+				{
+					GD.Print($"Stored session directory does not exist: {baseDir}. Using default directory.");
+				}
+			}
+			catch (Exception ex)
+			{
+				GD.Print($"Error setting initial directory from session path: {ex.Message}");
+			}
+		}
 		_saveDialog.Visible = true;
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
 	}
 
 	private void OnSaveFileSelected(string path)
 	{
-		string sessionName = Path.GetFileNameWithoutExtension(@path);
-		string sessionPath = Path.GetDirectoryName(@path);
-		GD.Print($"SaveManager:OnSaveFileSelected - {sessionPath} and filename : {sessionName}");
-		//_globalData.SessionName = sessionName; // OLD
-		//_globalData.SessionPath = @sessionPath; // OLD
-
-		// URL and showname made to continue Save process		
-		//_globalSignals.EmitSignal(nameof(GlobalSignals.Save)); // OLD
+		SaveSession(path);
 	}
 	
 	
@@ -109,9 +123,12 @@ public partial class SaveManager : Node
 	/// </summary>
 	/// <param name="selectedPath">The full path where the session file will be saved.</param>
 	/// <param name="sessionName">The name of the session (used for logging).</param>
-	private void SaveSession(string selectedPath, string sessionName)
+	private void SaveSession(string selectedPath)
 	{
-		GD.Print($"SaveManager:SaveSession - SessionFolder: {selectedPath}, SessionName: {sessionName}");
+		// Verify save folder structure
+		var sessionPath = DirectoryUtils.PrepareSessionDirectory(selectedPath, out var mediaPath, out var waveFormPath);
+		GD.Print($"SaveManager:SaveSession - Session path: {sessionPath}");
+		
 		
 		// SAVE DATA
 		var saveData = new Dictionary(); // Save type (cues, cue data)
@@ -122,21 +139,12 @@ public partial class SaveManager : Node
 		var settingsData = _globalData.Settings.GetData();
 		saveData.Add("settings", settingsData);
 		
-		// Create folder if needed
-		string baseDir = Path.GetDirectoryName(selectedPath);
-		if (string.IsNullOrEmpty(baseDir))
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Invalid save path provided.", 2);
-			GD.PrintErr("SaveManager:SaveSession - Invalid save path: " + selectedPath);
-			return;
-		}
-		FolderCreator(baseDir);
 		
 		// Serialize to JSON
 		string jsonString = Json.Stringify(saveData);
 		
 		// Write encrypted file directly (no temp file)
-		using var file = Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
+		using var file = Godot.FileAccess.OpenEncryptedWithPass(sessionPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
 		if (file == null)
 		{
 			Error err = Godot.FileAccess.GetOpenError();
@@ -150,8 +158,10 @@ public partial class SaveManager : Node
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to {selectedPath}", 0);
         
 		// Update session info
-		_globalData.SessionPath = selectedPath;
-		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
+		_globalData.SessionPath = sessionPath;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(sessionPath);
+		_globalData.SessionMediaPath = mediaPath;
+		_globalData.SessionWaveformsPath = waveFormPath;
 	}
 	
 	/// <summary>
@@ -176,10 +186,7 @@ public partial class SaveManager : Node
 			return;
 		}
 		
-		// Reset session
-		_globalData.Cuelist.ResetCuelist();
-		_globalData.Devices.ResetAudioDevices();
-		_globalData.Settings.ResetSettings();
+		ResetSession();
 		
 		LoadSession(selectedPath);
 		
@@ -189,6 +196,14 @@ public partial class SaveManager : Node
 		
 	}
 
+	private void ResetSession()
+	{
+		// Reset session
+		_globalData.Cuelist.ResetCuelist();
+		_globalData.Devices.ResetAudioDevices();
+		_globalData.Settings.ResetSettings();
+	}
+	
 	
 	/// <summary>
 	/// Loads the session data from the encrypted file, parses JSON, and delegates loading to settings and cuelist.

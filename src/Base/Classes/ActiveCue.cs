@@ -511,6 +511,7 @@ public partial class ActiveCue : GodotObject
         {
             playback.Play(); // Resumes if paused
         }
+        
         _updateTimer.Start();
         _headPause.Text = "Pause";
     }

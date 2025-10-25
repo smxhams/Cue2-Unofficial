@@ -218,6 +218,14 @@ theme_override_constants/margin_bottom = 1
 [node name="dmFileContainer" type="VBoxContainer" parent="DropMenuFile/MarginContainer"]
 layout_mode = 2
 
+[node name="FileNew" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "New Session"
+alignment = 0
+
 [node name="FileSave" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -245,6 +253,17 @@ alignment = 0
 [node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer"]
 layout_mode = 2
 mouse_filter = 2
+
+[node name="FileNewHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
+theme_override_font_sizes/font_size = 8
+text = "Hotkey"
+horizontal_alignment = 2
+vertical_alignment = 1
 
 [node name="FileSaveHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
 unique_name_in_owner = true

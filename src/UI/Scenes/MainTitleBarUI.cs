@@ -35,6 +35,11 @@ public partial class MainTitleBarUI : Control
     
         // Drop down menu button behavior
         // File drop down
+        GetNode<Button>("%FileNew").Pressed += () =>
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
+            _mainMenuButton.ButtonPressed = false;
+        };
         GetNode<Button>("%FileSave").Pressed += () =>
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Save));
@@ -72,6 +77,7 @@ public partial class MainTitleBarUI : Control
 
     private void _syncHotkeys()
     {
+        GetNode<Label>("%FileNewHotkey").Text = GlobalData.ParseHotkey("NewSession");
         GetNode<Label>("%FileSaveHotkey").Text = GlobalData.ParseHotkey("SaveSession");
         GetNode<Label>("%FileSaveAsHotkey").Text = GlobalData.ParseHotkey("SaveAsSession");
         GetNode<Label>("%FileOpenHotkey").Text = GlobalData.ParseHotkey("OpenSession");

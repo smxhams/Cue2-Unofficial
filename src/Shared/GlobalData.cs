@@ -56,6 +56,8 @@ public partial class GlobalData : Node
 	public string ActiveShowFile; // URL of current show file to save to
 	public string SessionName;
 	public string SessionPath;
+	public string SessionMediaPath;
+	public string SessionWaveformsPath;
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()

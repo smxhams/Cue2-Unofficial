@@ -30,18 +30,25 @@ public partial class InputActionsListener : Node
     
     private void Actions()
     {
-        if (Input.IsActionJustPressed("OpenSession"))
+        if (Input.IsActionJustPressed("NewSession", true))
         {
-            GD.Print("Input Action: Open Session");
+            GD.Print("InputActionsListener:Actions - Input Action: New Session");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
         }
         
-        if (Input.IsActionJustPressed("SaveSession"))
+        if (Input.IsActionJustPressed("OpenSession", true))
+        {
+            GD.Print("Input Action: Open Session");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));
+        }
+        
+        if (Input.IsActionJustPressed("SaveSession", true))
         {
             GD.Print("Input Action: Save");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Save));
         }
         
-        if (Input.IsActionJustPressed("SaveAsSession"))
+        if (Input.IsActionJustPressed("SaveAsSession", true))
         {
             GD.Print("Input Action: Save As");
             _globalSignals.EmitSignal(nameof(GlobalSignals.SaveAs));
@@ -59,13 +66,13 @@ public partial class InputActionsListener : Node
             _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
         }
 
-        if (Input.IsActionJustPressed("CreateCue"))
+        if (Input.IsActionJustPressed("CreateCue", true))
         {
             GD.Print("Input Action: Create Cue");
             _globalSignals.EmitSignal(nameof(GlobalSignals.CreateCue));
         }
 
-        if (Input.IsActionJustPressed("CreateGroup"))
+        if (Input.IsActionJustPressed("CreateGroup", true))
         {
             GD.Print("Input Action: Create Group");
             _globalSignals.EmitSignal(nameof(GlobalSignals.CreateGroup));
