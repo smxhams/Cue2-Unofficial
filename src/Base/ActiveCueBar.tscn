@@ -38,7 +38,8 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 
-[node name="Panel" type="Panel" parent="PanelContainer"]
+[node name="ColorBar" type="Panel" parent="PanelContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(4, 0)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_4ndav")
@@ -219,6 +220,14 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="ComponentProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer" instance=ExtResource("1_4ndav")]
+[node name="ComponentList" type="VBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ComponentProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/ComponentList" instance=ExtResource("1_4ndav")]
 visible = false
+layout_mode = 2
+
+[node name="ChildCuelist" type="VBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+unique_name_in_owner = true
 layout_mode = 2

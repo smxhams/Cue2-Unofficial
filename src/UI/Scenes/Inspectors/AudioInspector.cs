@@ -205,7 +205,13 @@ public partial class AudioInspector : Control
             if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid volume format: {text}", 1);
+                textField.Text = $"{UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume)}dB";
+                textField.ReleaseFocus();
                 return;
+            }
+            if (dbValue > 0)
+            {
+                dbValue = -dbValue;
             }
             var volume = UiUtilities.DbToLinear(dbValue.ToString());
             var dbReturn = UiUtilities.LinearToDb(volume);

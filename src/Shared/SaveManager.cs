@@ -95,20 +95,20 @@ public partial class SaveManager : Node
 				if (DirAccess.DirExistsAbsolute(baseDir))
 				{
 					_saveDialog.CurrentDir = baseDir;
-					GD.Print($"Set save dialog initial directory to existing session path: {baseDir}");
+					GD.Print($"SaveManager:SaveAs - Set save dialog initial directory to existing session path: {baseDir}");
 				}
 				else
 				{
-					GD.Print($"Stored session directory does not exist: {baseDir}. Using default directory.");
+					GD.Print($"SaveManager:SaveAs - Stored session directory does not exist: {baseDir}. Using default directory.");
 				}
 			}
 			catch (Exception ex)
 			{
-				GD.Print($"Error setting initial directory from session path: {ex.Message}");
+				GD.Print($"SaveManager:SaveAs - Error setting initial directory from session path: {ex.Message}");
 			}
 		}
 		_saveDialog.Visible = true;
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Waiting on save directory and show name to continue save", 0);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "SaveManager:SaveAs - Waiting on save directory and show name to continue save", 0);
 	}
 
 	private void OnSaveFileSelected(string path)

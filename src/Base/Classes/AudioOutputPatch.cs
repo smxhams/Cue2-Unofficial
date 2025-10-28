@@ -35,6 +35,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
     // <Device name, device output channnel, list of audio channel ID's>>
     public System.Collections.Generic.Dictionary<int, string> Channels { get; set; } // List of audio channels>
     private int _channelId { get; set; } = 0;
+    public float Volume { get; set; } = 1.0f; // Master volume of patch
 
 
     /// <summary>
@@ -90,6 +91,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
         {
             int id = dataDict["Id"].AsInt32();
             string name = dataDict["Name"].AsString();
+            float volume = dataDict.ContainsKey("Volume") ? (float)dataDict["Volume"] : 1.0f;
             GD.Print("Got ID and Name");
 
             var channels = new System.Collections.Generic.Dictionary<int, string>();
@@ -134,6 +136,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
             if (id >= _nextId) _nextId = id + 1;
             patch.Channels = channels;
             patch.OutputDevices = outputDevices;
+            patch.Volume = volume;
             patch._channelId = channels.Any() ? channels.Keys.Max() + 1 : 0;
 
             return patch;

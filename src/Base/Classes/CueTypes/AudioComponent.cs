@@ -10,6 +10,10 @@ public class AudioComponent : ICueComponent
     public int PatchId { get; set; } = -1; // This value is used to link patch whence loaded
     public string DirectOutput { get; set; }
     public string AudioFile { get; set; }
+    
+    /// <summary>
+    /// Start time, double in seconds. 
+    /// </summary>
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
     public CuePatch Routing { get; set; }
@@ -28,7 +32,8 @@ public class AudioComponent : ICueComponent
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
     
-
+    public double FadeInDuration { get; set; } = 0.0; // In seconds
+    public double FadeOutDuration { get; set; } = 0.0; // In seconds
 
     public byte[] WaveformData { get; set; } // Serialised waveform for display
     
@@ -50,6 +55,8 @@ public class AudioComponent : ICueComponent
         data.Add("Loop", Loop);
         data.Add("Volume", Volume);
         data.Add("PlayCount", PlayCount);
+        data.Add("FadeInDuration", FadeInDuration);
+        data.Add("FadeOutDuration", FadeOutDuration);
         if (Routing != null)
         {
             data.Add("Routing", Routing.GetData());
@@ -95,6 +102,8 @@ public class AudioComponent : ICueComponent
         Loop = data.ContainsKey("Loop") ? (bool)data["Loop"] : false;
         Volume = data.ContainsKey("Volume") ? (float)data["Volume"] : 1.0f;
         PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
+        FadeInDuration = data.ContainsKey("FadeInDuration") ? (double)data["FadeInDuration"] : 0.0;
+        FadeOutDuration = data.ContainsKey("FadeOutDuration") ? (double)data["FadeOutDuration"] : 0.0;
         WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
         PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
         if (data.ContainsKey("Routing"))

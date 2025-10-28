@@ -103,6 +103,7 @@ public partial class ShellInspector : Control
 		_durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
 		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
 		
+		_colorPicker.Color = _focusedCue.Color;
 
 	}
 	
@@ -185,6 +186,7 @@ public partial class ShellInspector : Control
 	private void AssignColor()
 	{
 		GD.Print($"ShellInspector:AsignColor - Assigning color. {_colorPicker.Color.R}, {_colorPicker.Color.G}, {_colorPicker.Color.B}");
+		_focusedCue.Color = _colorPicker.Color;
 	}
 
 	// Handling the updating of fields

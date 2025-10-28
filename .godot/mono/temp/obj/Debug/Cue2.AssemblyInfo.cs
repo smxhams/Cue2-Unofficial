@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Cue2")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+603f0b70cfdcfed4bbf583a51924e7629520a0bd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bb4519dcaf37ba45af824793d41636032159632d")]
 [assembly: System.Reflection.AssemblyProductAttribute("Cue2")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Cue2")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

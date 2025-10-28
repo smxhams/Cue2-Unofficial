@@ -27,9 +27,9 @@ public class FFmpegAudioDecoder : IDisposable
     private AVChannelLayout _inChLayout, _outChLayout;
     private readonly object _lock = new object(); // Thread safety for state/controls
 
-    private volatile bool _isPlaying = false; // Volatile for thread visibility
-    private volatile bool _isPaused = false;
-    private volatile bool _isStopped = false;
+    public volatile bool IsPlaying = false; // Volatile for thread visibility
+    public volatile bool IsPaused = false;
+    public volatile bool IsStopped = false;
     private float _currentVolume = 1.0f; // For fade multipliers
     private CancellationTokenSource _cts; // For async cancel
     
@@ -43,7 +43,10 @@ public class FFmpegAudioDecoder : IDisposable
     public const int PreloadMs = 1000; // Configurable preload time (ms) for low-latency start
     
     private BlockingCollection<byte[]> _pcmQueue; // Bounded queue for producer-consumer
-    private const int MaxBufferedChunks = 1000; // Cap buffered chunks
+    private const int MaxBufferedChunks = 100; // Cap buffered chunks
+    private long _queuedBytes = 0; // Track total bytes in _pcmQueue for actual time estimation
+    
+    private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true); // (for pause waiting without holding lock)
     
     private int _outputSampleRate;
     public int OutputSampleRate => _outputSampleRate;
@@ -55,9 +58,9 @@ public class FFmpegAudioDecoder : IDisposable
     public SDL.AudioFormat TargetFormat { get; } = SDL.AudioFormat.AudioF32LE; // Float for easy volume (resample to S16 if needed)
     
     /// <summary>
-    /// Gets the current playback time in milliseconds.
+    /// Gets the current playback time in microseconds : us.
     /// </summary>
-    public long CurrentTime => _currentTs / 1000; // ms
+    public long CurrentTime => _currentTs;
 
     /// <summary>
     /// Event raised when the end of the audio is reached.
@@ -222,6 +225,10 @@ public class FFmpegAudioDecoder : IDisposable
                 }
             }
         }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"FFmpegAudioDecoder:PreloadInitialBuffers - Preload error: {ex.Message}");
+        }
         finally
         {
             ffmpeg.av_packet_free(&packet);
@@ -251,7 +258,7 @@ public class FFmpegAudioDecoder : IDisposable
                     return null;
                 }
 
-                // Apply volume using Span for perf
+                // Apply per-channel volume using Span for perf
                 Span<float> samples = MemoryMarshal.Cast<byte, float>(pcmBuffer.AsSpan(0, produced * _channels * _bytesPerSample));
                 for (int i = 0; i < samples.Length; i++)
                 {
@@ -280,9 +287,9 @@ public class FFmpegAudioDecoder : IDisposable
     {
         _cts = new CancellationTokenSource(); 
         _pcmQueue = new BlockingCollection<byte[]>(MaxBufferedChunks);
-        _isPlaying = true;
-        _isPaused = false;
-        _isStopped = false;
+        IsPlaying = true;
+        IsPaused = false;
+        IsStopped = false;
         
         // Start consumer task to dequeue and push paced
         var consumerTask = Task.Run(() => ConsumerLoopAsync(_cts.Token));
@@ -312,15 +319,16 @@ public class FFmpegAudioDecoder : IDisposable
                 bool done = false;
 
                 // Enqueue preloaded to queue for consumer
-                while (!_preloadBuffer.IsEmpty && !_isStopped && !token.IsCancellationRequested)
+                while (!_preloadBuffer.IsEmpty && !IsStopped && !token.IsCancellationRequested)
                 {
                     if (_preloadBuffer.TryDequeue(out byte[] preloadChunk))
                     {
                         _pcmQueue.Add(preloadChunk, token); // Blocks if full
+                        Interlocked.Add(ref _queuedBytes, preloadChunk.Length);
                     }
                 }
 
-                while (!done && !_isStopped && !token.IsCancellationRequested)
+                while (!done && !IsStopped && !token.IsCancellationRequested)
                 {
                     bool eof = false;
 
@@ -328,9 +336,11 @@ public class FFmpegAudioDecoder : IDisposable
                     {
                         lock (_lock)
                         {
-                            while (_isPaused && !_isStopped) Thread.Sleep(10);
-                            if (_isStopped || token.IsCancellationRequested) break;
+                            //while (IsPaused && !IsStopped) Thread.Sleep(10); // _pauseEvent below used in place now
+                            if (IsStopped || token.IsCancellationRequested) break;
                         }
+
+                        _pauseEvent.Wait(); //(wait for resume without holding lock)
 
                         if (!eof)
                         {
@@ -385,6 +395,7 @@ public class FFmpegAudioDecoder : IDisposable
                         if (pcmBuffer != null && pcmBuffer.Length > 0)
                         {
                             _pcmQueue.Add(pcmBuffer, token);
+                            Interlocked.Add(ref _queuedBytes, pcmBuffer.Length);
                             // Advance ts for live chunk
                             int produced = pcmBuffer.Length / (_channels * _bytesPerSample);
                             _currentTs += (long)(produced * 1_000_000L / _outputSampleRate);
@@ -467,6 +478,7 @@ public class FFmpegAudioDecoder : IDisposable
                                         if (trimmedPcm != null)
                                         {
                                             _pcmQueue.Add(trimmedPcm); // Add trimmed to queue
+                                            Interlocked.Add(ref _queuedBytes, trimmedPcm.Length);
                                             // Advance ts for trimmed part only
                                             int produced = trimmedPcm.Length / (_channels * _bytesPerSample);
                                             _currentTs += (long)(produced * 1_000_000L / _outputSampleRate);
@@ -485,13 +497,12 @@ public class FFmpegAudioDecoder : IDisposable
                             GD.Print($"FFmpegAudioDecoder:ProducerLoop - Discarded {discardedFrames} frames post-seek for sync.");
                         }
                         _currentTs = startTimeUs; // Reset to exact start
-                        GC.Collect(2, GCCollectionMode.Forced, true); // Force full GC at loop end to reclaim memory
+                        //GC.Collect(2, GCCollectionMode.Forced, true); // Force full GC at loop end to reclaim memory
                     }
                     else
                     {
                         done = true;
                         _pcmQueue.CompleteAdding(); 
-                        EndReached?.Invoke(this, EventArgs.Empty);
                     }
                 }
             }
@@ -516,36 +527,75 @@ public class FFmpegAudioDecoder : IDisposable
             {
                 lock (_lock)
                 {
-                    while (_isPaused && !_isStopped) Thread.Sleep(10);
-                    if (_isStopped || token.IsCancellationRequested) break;
+                    //while (IsPaused && !IsStopped) Thread.Sleep(10); // Now _pauseEvent below
+                    if (IsStopped || token.IsCancellationRequested) break;
                 }
-
+                _pauseEvent.Wait(); // (wait for resume without holding lock)
                 _playback.PushPcm(pcmChunk); // Push to SDL
+                Interlocked.Add(ref _queuedBytes, -pcmChunk.Length); // (update after push, as now in SDL queue)
 
                 // Pace to real-time: Sleep ~chunk duration (ms)
                 int produced = pcmChunk.Length / (_channels * _bytesPerSample);
                 long chunkMs = (long)(produced * 1000L / _outputSampleRate);
                 await Task.Delay((int)chunkMs, token); // Approximate; for better, use Timer
             }
+            if (!IsStopped) // emit only if natural end, not stop
+            {
+                EndReached?.Invoke(this, EventArgs.Empty); // emit when consumer finishes
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            GD.PrintErr($"FFmpegAudioDecoder:ConsumerLoopAsync - Error: {ex.Message}");
+            GD.PrintErr($"FFmpegAudioDecoder:ConsumerLoopAsync - Error: {ex.Message}, {ex.Source}, {ex.StackTrace}");
         }
     }
+    
+    /// <summary>
+    /// Clears the PCM queue, returning buffers to the pool. Used during pause to avoid stale data.
+    /// </summary>
+    public void ClearQueues()
+    {
+        while (_pcmQueue.TryTake(out byte[] buffer))
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            Interlocked.Add(ref _queuedBytes, -buffer.Length);
+        }
+    }
+    
+    /// <summary>
+    /// Gets the total queued bytes in the PCM queue (thread-safe snapshot).
+    /// </summary>
+    public long QueuedBytes => Interlocked.Read(ref _queuedBytes); //(use Interlocked for safe read)
+
     
     /// <summary>
     /// Pauses the playback.
     /// </summary>
     public void Pause()
     {
+        GD.Print($"FFmpegAudioDecoder:Pause - Pause called.");
         lock (_lock)
         {
-            _isPaused = true;
+            if (IsPaused) return;
+            IsPaused = true;
         }
+        _pauseEvent.Reset(); 
     }
 
+    /// <summary>
+    /// Resumes paused playback.
+    /// </summary>
+    public void Resume()
+    {
+        lock (_lock)
+        {
+            if (!IsPaused) return;
+            IsPaused = false;
+        }
+        _pauseEvent.Set();
+    }
+    
     /// <summary>
     /// Stops the playback and cancels any ongoing operations.
     /// </summary>
@@ -553,10 +603,11 @@ public class FFmpegAudioDecoder : IDisposable
     {
         lock (_lock)
         {
-            _isStopped = true;
-            _isPlaying = false;
+            IsStopped = true;
+            IsPlaying = false;
             _cts?.Cancel();
         }
+        _pauseEvent.Set(); // Unblock waiting threads
     }
 
     /// <summary>
@@ -577,23 +628,38 @@ public class FFmpegAudioDecoder : IDisposable
     /// <param name="timestampUs">The target timestamp in microseconds.</param>
     public void Seek(long timestampUs)
     {
-        lock (_lock) // Added lock for thread safety
+        GD.Print($"FFmpegAudioDecoder:Seek - Attempting to acquire lock for seek to {timestampUs}");
+        if (Monitor.TryEnter(_lock, TimeSpan.FromSeconds(2))) // (timeout to prevent deadlock hang)
         {
-            unsafe
+            try
             {
-                long seekTs = ffmpeg.av_rescale_q(timestampUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
-                int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use AVSEEK_FLAG_ANY for non-keyframe seek
-                if (ret < 0)
+                GD.Print($"FFmpegAudioDecoder:Seek - Acquired lock");
+                unsafe
                 {
-                    GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetFFmpegError(ret)}"); // GD.PrintErr
-                }
-                else
-                {
-                    ffmpeg.avformat_flush(_formatCtx);
-                    ffmpeg.avcodec_flush_buffers(_codecCtx);
-                    _currentTs = timestampUs;
+                    long seekTs = ffmpeg.av_rescale_q(timestampUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
+                    int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD); // Use AVSEEK_FLAG_ANY for non-keyframe seek
+                    if (ret < 0)
+                    {
+                        GD.PrintErr($"FFmpegAudioDecoder:Seek - Failed: {GetFFmpegError(ret)}"); // GD.PrintErr
+                    }
+                    else
+                    {
+                        ffmpeg.avformat_flush(_formatCtx);
+                        ffmpeg.avcodec_flush_buffers(_codecCtx);
+                        _currentTs = timestampUs;
+                        GD.Print($"FFmpegAudioDecoder:Seek - Seek successful to {timestampUs}");
+                    }
                 }
             }
+            finally
+            {
+                Monitor.Exit(_lock);
+                GD.Print($"FFmpegAudioDecoder:Seek - Released lock");
+            }
+        }
+        else
+        {
+            GD.PrintErr($"FFmpegAudioDecoder:Seek - Lock acquisition timeout - potential deadlock");
         }
     }
 
@@ -631,6 +697,7 @@ public class FFmpegAudioDecoder : IDisposable
             {
                 // Drain queue and return to ArrayPool on dispose
                 ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+                Interlocked.Add(ref _queuedBytes, -buffer.Length); // (consistent tracking)
             }
             _pcmQueue.Dispose();
         }
@@ -677,6 +744,7 @@ public class FFmpegAudioDecoder : IDisposable
             }
         }
         _cts?.Dispose();
+        _pauseEvent.Dispose();
         GD.Print("FFmpegAudioDecoder:Dispose - Cleaned up.");
     }
 }

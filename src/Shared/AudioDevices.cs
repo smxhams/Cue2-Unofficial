@@ -318,12 +318,6 @@ public partial class AudioDevices : Node
 		    return;
 	    }
 	    
-	    if (playback.Patch == null)
-	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No patch assigned to playback.", 2);
-		    return;
-	    }
-	    
 	    // Ensure DeviceStreams is initialized
 	    if (playback.DeviceStreams == null)
 	    {
@@ -331,8 +325,6 @@ public partial class AudioDevices : Node
 		    GD.Print("AudioDevices:StartAudioPlayback - Initialized DeviceStreams dictionary.");
 	    }
 	    
-	    // Open required devices based on routing
-	    var devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
 	    
 	    // Define source spec from FFmpeg decoder
 	    var sourceSpec = new SDL.AudioSpec
@@ -341,6 +333,40 @@ public partial class AudioDevices : Node
 		    Format = playback.SourceFormat,
 		    Channels = (byte)playback.SourceChannels
 	    };
+	    
+	    // Open required devices based on routing
+	    //var devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
+	    List<AudioDevice> devicesToOpen;
+	    
+	    if (!string.IsNullOrEmpty(audioComponent.DirectOutput)) // Handle direct output
+	    {
+		    var device = OpenAudioDevice(audioComponent.DirectOutput, out string error);
+		    if (device == null)
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to open direct output device {audioComponent.DirectOutput}: {error}", 2);
+			    return;
+		    }
+		    devicesToOpen = new List<AudioDevice> { device }; // Single device for direct output
+		    if (device.Channels != playback.SourceChannels) // Validate channel count
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {audioComponent.DirectOutput} has {device.Channels} channels, audio has {playback.SourceChannels}", 2);
+			    return;
+		    }
+	    }
+	    else if (playback.Patch != null) // Fallback to patch routing
+	    {
+		    devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
+		    if (devicesToOpen.Count == 0)
+		    {
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No valid devices found for patch.", 2);
+			    return;
+		    }
+	    }
+	    else
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No patch or direct output assigned.", 2); //!!!
+		    return;
+	    }
 	    
 	    foreach (var device in devicesToOpen)
 	    {

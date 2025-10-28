@@ -37,7 +37,7 @@ public class Cue : ICue
     public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
     public double TotalDuration { get; set; } = 0.0;
     public double PostWait { get; set; } = 0.0;
-    public Color Color { get; set; }
+    public Color Color { get; set; } = new Color(1.0f, 1.0f, 1.0f, 1.0f);
     public FollowType Follow = FollowType.None;
 
     

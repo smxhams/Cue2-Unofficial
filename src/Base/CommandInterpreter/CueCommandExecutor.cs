@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
@@ -28,12 +29,6 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         
-        _activeCueBarScene = SceneLoader.LoadPackedScene("uid://dt7rlfag7yr2c", out string error); 
-        if (_activeCueBarScene == null || !string.IsNullOrEmpty(error))
-        {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load active cue bar: {error}", 2);
-        }
-        
         _activeCueList = GetNode("/root/Cue2Base").GetNode<PanelContainer>("%ActiveCueContainer").GetNode<VBoxContainer>("%ActiveCueList");
         GD.Print("CueCommandExecutor:_Ready - Cue Command Executor Successfully added");
         
@@ -41,6 +36,8 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         
         _globalSignals.Go += GoCommand;
         _globalSignals.StopAll += StopAllCommand;
+
+        TreeExiting += CleanUp;
     }
 
     public void GoCommand()
@@ -63,12 +60,12 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         
         try
         {
-            // UI Element for active cue
-            var activeCueBar = _activeCueBarScene.Instantiate<PanelContainer>();
-            _activeCueList.AddChild(activeCueBar);
-            // Init active cue
-            var activeCue = new ActiveCue(cue, activeCueBar, _mediaEngine, _audioDevices, _globalSignals);
-            //_activeCues.Add(activeCue);
+            var activeCue = new ActiveCue(cue, _activeCueList, _mediaEngine, _audioDevices, _globalSignals);
+            _activeCues.Add(activeCue);
+            activeCue.Completed += () =>
+            {
+                _activeCues.Remove(activeCue);
+            };
             await activeCue.StartAsync();
             
             
@@ -81,7 +78,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
         
         
         // TODO: This needs to move to active cue so UI can show children of main and main cue controls children. 
-        if (cue.ChildCues.Count() != 0)
+        /*if (cue.ChildCues.Count() != 0)
         {
             foreach (var child in cue.ChildCues)
             {
@@ -89,7 +86,7 @@ public partial class CueCommandExectutor : CueCommandInterpreter
                 ActivateCue(childCue);
 
             }
-        }
+        }*/
         
     }
     
@@ -97,6 +94,17 @@ public partial class CueCommandExectutor : CueCommandInterpreter
     private void StopAllCommand()
     {
         return;
+    }
+
+    private void CleanUp()
+    {
+        foreach (var activeCue in _activeCues)
+        {
+            activeCue.Cleanup();
+            activeCue.Dispose();
+        }
+        _activeCues.Clear();
+        
     }
     
 }

@@ -29,7 +29,7 @@ public static class DirectoryUtils
             
             if (string.IsNullOrEmpty(userSavePath))
             {
-                GD.Print($"Invalid input: userSavePath is null or empty.");
+                GD.Print($"DirectoryUtils:PrepareSessionDirectory - Invalid input: userSavePath is null or empty.");
                 return string.Empty;
             }
             
@@ -48,7 +48,7 @@ public static class DirectoryUtils
             string sessionDir;
             if (baseDirLastSegment == fileNameWithoutExt)
             {
-                GD.Print($"Base directory '{baseDir}' already matches session name '{fileNameWithoutExt}'. Using existing directory without nesting.");
+                GD.Print($"DirectoryUtils:PrepareSessionDirectory - Base directory '{baseDir}' already matches session name '{fileNameWithoutExt}'. Using existing directory without nesting.");
                 sessionDir = baseDir;
             }
             else
@@ -61,7 +61,7 @@ public static class DirectoryUtils
             if (err != Error.Ok && err != Error.AlreadyInUse) // AlreadyInUse means it exists
             {
                 GD.Print($"DirectoryUtils:PrepareSessionDirectory - Failed to create or verify session directory '{sessionDir}': {err}");
-                return string.Empty;
+                //return string.Empty;
             }
             
             // Create or verify subfolders
@@ -70,7 +70,7 @@ public static class DirectoryUtils
             if (err != Error.Ok && err != Error.AlreadyInUse)
             {
                 GD.Print($"DirectoryUtils:PrepareSessionDirectory - Failed to create or verify Media directory '{mediaDir}': {err}");
-                return string.Empty;
+                //return string.Empty;
             }
             mediaPath = mediaDir;
 
@@ -79,7 +79,7 @@ public static class DirectoryUtils
             if (err != Error.Ok && err != Error.AlreadyInUse)
             {
                 GD.Print($"DirectoryUtils:PrepareSessionDirectory - Failed to create or verify Waveforms directory '{waveformsDir}': {err}");
-                return string.Empty;
+                //return string.Empty;
             }
             waveFormPath = waveformsDir;
 

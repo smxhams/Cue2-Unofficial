@@ -457,7 +457,7 @@ public partial class CueList : ScrollContainer
 					string keyStr = key.ToString();
 						
 					cueDict[keyStr] = value;
-				}
+				} 
 				Cue newCue = CreateCue(cueDict);
 				
 				
