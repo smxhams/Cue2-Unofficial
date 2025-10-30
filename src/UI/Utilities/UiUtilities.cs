@@ -91,10 +91,19 @@ public partial class UiUtilities : Node
 
             if (match.Success)
             {
-                double hour = match.Groups[1].Success ? double.Parse(match.Groups[1].Value) : 0;
-                double min = match.Groups[1].Success ? double.Parse(match.Groups[1].Value) : 0;
-                string secStr = match.Groups[2].Value;
-                string msStr = match.Groups[3].Value;
+                double hour = 0;
+                double min = 0;
+                if (match.Groups[2].Success)
+                {
+                    hour = double.Parse(match.Groups[1].Value);
+                    min = double.Parse(match.Groups[2].Value);
+                }
+                else if (match.Groups[1].Success)
+                {
+                    min = double.Parse(match.Groups[1].Value);
+                }
+                string secStr = match.Groups[3].Value;
+                string msStr = match.Groups[4].Value;
 
                 double sec = string.IsNullOrEmpty(secStr) ? 0 : double.Parse(secStr);
                 double fracSec = 0.0;

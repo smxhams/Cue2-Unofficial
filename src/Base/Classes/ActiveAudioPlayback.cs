@@ -38,6 +38,7 @@ public partial class ActiveAudioPlayback : GodotObject
     private bool _isFadingIn = false;
     public bool IsStopped = false;
     public bool IsPaused = false;
+    public bool IsSeeking = false;
     private CancellationTokenSource _fadeCts;
     
     private long _startTimeMs;
@@ -58,13 +59,14 @@ public partial class ActiveAudioPlayback : GodotObject
         // Blank constructor for Godot
     }
     
-    public ActiveAudioPlayback(AudioComponent audioComponent)
+    public ActiveAudioPlayback(AudioComponent audioComponent, AudioDevices audioDevices)
     {
         _audioComponent = audioComponent ?? throw new ArgumentNullException(nameof(audioComponent));
+        _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
         Patch = _audioComponent.Patch;
         CuePatch = _audioComponent.Routing;
         Decoder = new FFmpegAudioDecoder(audioComponent, this);
-        
+
         // Validate and set start time
         if (_audioComponent.StartTime < 0)
         {
@@ -77,13 +79,13 @@ public partial class ActiveAudioPlayback : GodotObject
         _useCustomEnd = _audioComponent.EndTime >= 0;
         _endTimeMs = _useCustomEnd ? (long)(_audioComponent.EndTime * 1000) : (long)(_audioComponent.Metadata.Duration * 1000);
         EffectivePlayCount = _audioComponent.Loop ? int.MaxValue : _audioComponent.PlayCount;
-        
+
         // Validate start time against file duration if available
         if (_audioComponent.Metadata.Duration > 0 && _startTimeMs > (long)(_audioComponent.Metadata.Duration * 1000))
         {
             _startTimeMs = 0;
         }
-        
+
         Decoder.EndReached += OnEndReached;
         Decoder.LengthChanged += OnLengthChanged;
     }
@@ -101,46 +103,36 @@ public partial class ActiveAudioPlayback : GodotObject
     }
     
     /// <summary>
-    /// Updates channel gains based on AudioComponent, CuePatch, and AudioOutputPatch.
+    /// Updates channel gains based on AudioComponent and CuePatch (if present).
     /// </summary>
     private void UpdateChannelGains()
     {
         lock (_lock)
         {
-            if (_audioComponent.DirectOutput != null && !string.IsNullOrEmpty(_audioComponent.DirectOutput))
+            if (CuePatch != null) // (apply CuePatch for both direct and patched output)
             {
-                // Direct output: Apply AudioComponent.Volume only
+                // Apply AudioComponent.Volume * _volume * CuePatch matrix
                 for (int i = 0; i < SourceChannels; i++)
                 {
-                    _channelGains[i] = (float)_audioComponent.Volume * _volume;
-                }
-            }
-            else if (Patch != null && CuePatch != null)
-            {
-                // Patched output: Apply AudioComponent.Volume, CuePatch, and Patch volumes
-                for (int i = 0; i < SourceChannels; i++)
-                {
-                    float gain = (float)_audioComponent.Volume * _volume; // Start with master volume
+                    float gain = (float)_audioComponent.Volume * _volume;
                     float cuePatchGain = 0f;
                     for (int j = 0; j < CuePatch.OutputChannels; j++)
                     {
                         cuePatchGain += CuePatch.GetVolume(i, j); // Sum contributions to patch channels
                     }
-                    gain *= cuePatchGain;
-                    _channelGains[i] = gain;
+                    _channelGains[i] = gain * cuePatchGain;
                 }
             }
-            else
+            else // (fallback if no CuePatch)
             {
-                // Fallback: Apply AudioComponent.Volume only
+                // Apply AudioComponent.Volume * _volume only
                 for (int i = 0; i < SourceChannels; i++)
                 {
                     _channelGains[i] = (float)_audioComponent.Volume * _volume;
                 }
             }
-            GD.Print($"ActiveAudioPlayback:UpdateChannelGains - Updated gains for {SourceChannels} channels");
         }
-    } 
+    }
     
     
     /// <summary>
@@ -250,11 +242,9 @@ public partial class ActiveAudioPlayback : GodotObject
         {
             if (_pausedAtUs > 0)
             {
-                GD.Print($"ActiveAudioPlayback:Resume - Seeking to {_pausedAtUs / 1000} ms");
                 Decoder.Seek(_pausedAtUs); // Seek back to paused position
-                _pausedAtUs = 0; // Reset
+                _pausedAtUs = 0;
             }
-            
             Decoder.Resume();
             IsPaused = false;
             _playTimer.Start();
@@ -269,12 +259,26 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         bool needFade;
         double fadeDuration;
+        bool wasFadingOut;
         lock (_lock)
         {
             if (IsStopped) return;
+            wasFadingOut = _isFadingOut;
             _fadeCts?.Cancel();
             needFade = fadeTime > 0 || _audioComponent.FadeOutDuration > 0;
             fadeDuration = fadeTime > 0 ? fadeTime : _audioComponent.FadeOutDuration;
+        }
+
+        if (wasFadingOut)
+        {
+            // If already fading out, immediately stop and clean
+            foreach (var stream in DeviceStreams.Values)
+            {
+                SDL.ClearAudioStream(stream);
+            }
+            Decoder.Stop();
+            Clean();
+            return;
         }
 
         if (needFade) // Use component duration if set
@@ -415,14 +419,9 @@ public partial class ActiveAudioPlayback : GodotObject
         }
     }
     
-    /// <summary>
-    /// Gets the estimated actual playback time in milliseconds, accounting for buffered/queued data.
-    /// This is the decoded time minus queued in PCM queue and SDL streams (averaged across devices).
-    /// </summary>
-    /// <returns>Actual playback time in ms.</returns>
     public long GetPlaybackTimeMs()
     {
-        if (Decoder.QueuedBytes < 1) return 0;
+        if (DeviceStreams == null || Decoder == null) return 0;
         long queuedPcmUs = Decoder.QueuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
         long queuedSdlUs = 0;
         foreach (var stream in DeviceStreams.Values)
@@ -431,20 +430,15 @@ public partial class ActiveAudioPlayback : GodotObject
             queuedSdlUs += queuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
         }
         if (DeviceStreams.Count > 0) queuedSdlUs /= DeviceStreams.Count; // Average for multi-device
-        
+
         long totalQueuedUs = queuedPcmUs + queuedSdlUs;
         return (Decoder.CurrentTime - totalQueuedUs) / 1000;
     }
     
-    /// <summary>
-    /// Gets the total queued time in microseconds (PCM queue + SDL streams average).
-    /// Used internally for actual time calculation.
-    /// </summary>
-    /// <returns>Queued time in us.</returns>
-    private long GetQueuedUs() 
+    private long GetQueuedUs()
     {
         long queuedPcmUs = Decoder.QueuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
-        long queuedSdlUs = 0; 
+        long queuedSdlUs = 0;
         foreach (var stream in DeviceStreams.Values)
         {
             long queuedBytes = (long)SDL.GetAudioStreamQueued(stream);
@@ -502,8 +496,9 @@ public partial class ActiveAudioPlayback : GodotObject
         _reachedEnd = false;
         foreach (var stream in DeviceStreams.Values)
         {
-            SDL.ClearAudioStream(stream); // New: Flush SDL buffers to prevent old data garbling loop
+            SDL.ClearAudioStream(stream);
         }
+        if (_audioComponent.FadeInDuration > 0)
         {
             _ = FadeInAsync(_audioComponent.FadeInDuration);
         }
@@ -527,6 +522,7 @@ public partial class ActiveAudioPlayback : GodotObject
             }
             Decoder.ClearQueues(); // (clear PCM queue)
             Decoder.Seek(timestampUs);
+            _pausedAtUs = timestampUs; // Set paused position to the seek target
             if (wasPlaying) Resume(); // (resume if was playing)
             GD.Print($"ActiveAudioPlayback:Seek - Sought to {timestampUs} us");
         }
@@ -543,21 +539,37 @@ public partial class ActiveAudioPlayback : GodotObject
     {
         int samples = pcm.Length / (SourceChannels * sizeof(float));
         Span<float> pcmSpan = MemoryMarshal.Cast<byte, float>(pcm.AsSpan());
-        
-        if (_audioComponent.DirectOutput != null && !string.IsNullOrEmpty(_audioComponent.DirectOutput))
+        Span<float> outputSpan = MemoryMarshal.Cast<byte, float>(outputBuffer.AsSpan());
+        outputSpan.Clear();
+
+        string deviceName = GetDeviceName(deviceId);
+        if (!string.IsNullOrEmpty(_audioComponent.DirectOutput))
         {
-            // Direct output: Apply global volume to all channels
-            for (int i = 0; i < pcmSpan.Length; i++)
+            // Direct output: Apply channel gains (including CuePatch if present)
+            var device = _audioDevices.GetAudioDevice((int)deviceId);
+            if (device == null)
             {
-                pcmSpan[i] *= _channelGains[i % SourceChannels];
+                GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Device {deviceId} not found for direct output");
+                return;
             }
-            Buffer.BlockCopy(pcm, 0, outputBuffer, 0, pcm.Length);
+            int deviceChannels = device.Channels;
+            int outputChannels = CuePatch != null ? CuePatch.OutputChannels : SourceChannels;
+            if (outputChannels != deviceChannels) // (validate channel count)
+            {
+                GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Channel mismatch for direct output: {outputChannels} vs {deviceChannels}");
+                return;
+            }
+            for (int s = 0; s < samples; s++)
+            {
+                for (int ch = 0; ch < SourceChannels; ch++)
+                {
+                    outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
+                }
+            }
         }
-        else if (Patch != null && CuePatch != null)
+        else if (deviceName != null && Patch != null && Patch.OutputDevices.TryGetValue(deviceName, out var outputChannels)) // (patched output, no CuePatch check here)
         {
-            // Patched output: Route audio channels to device channels via Patch
-            Span<float> outputSpan = MemoryMarshal.Cast<byte, float>(outputBuffer.AsSpan());
-            outputSpan.Fill(0f); // Clear output buffer
+            // Patched output: Route via AudioOutputPatch, using _channelGains (includes CuePatch if present)
             for (int s = 0; s < samples; s++)
             {
                 for (int outCh = 0; outCh < outputChannels.Count; outCh++)
@@ -567,8 +579,12 @@ public partial class ActiveAudioPlayback : GodotObject
                     {
                         for (int inCh = 0; inCh < SourceChannels; inCh++)
                         {
-                            //float gain = _channelGains[inCh] * CuePatch.GetVolume(inCh, patchCh) * outputChannels[outCh].Volume;
-                            //sample += pcmSpan[s * SourceChannels + inCh] * gain;
+                            float gain = _channelGains[inCh]; // (_channelGains includes CuePatch)
+                            if (CuePatch != null) // (apply CuePatch matrix if present)
+                            {
+                                gain *= CuePatch.GetVolume(inCh, patchCh);
+                            }
+                            sample += pcmSpan[s * SourceChannels + inCh] * gain;
                         }
                     }
                     outputSpan[s * outputChannels.Count + outCh] = sample;
@@ -577,21 +593,31 @@ public partial class ActiveAudioPlayback : GodotObject
         }
         else
         {
-            // Fallback: Copy input to output with global volume
-            for (int i = 0; i < pcmSpan.Length; i++)
+            // Fallback: Apply _channelGains directly
+            for (int s = 0; s < samples; s++)
             {
-                pcmSpan[i] *= _channelGains[i % SourceChannels];
+                for (int ch = 0; ch < SourceChannels; ch++)
+                {
+                    outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
+                }
             }
-            Buffer.BlockCopy(pcm, 0, outputBuffer, 0, pcm.Length);
         }
     }
     
     
-    private void EmitCompletedSignal()
+    private string GetDeviceName(uint deviceId)
     {
-        EmitSignal(SignalName.Completed);
-        GD.Print($"ActiveAudioPlayback:EmitCompletedSignal - Completed signal emitted");
+        foreach (var device in _audioDevices.GetOpenAudioDevicesNames())
+        {
+            if (_audioDevices.GetAudioDeviceIdFromName(device) == (int)deviceId)
+            {
+                return device;
+            }
+        }
+        return null;
     }
+
+
 
     public unsafe void PushPcm(byte[] pcm)
     {
@@ -660,6 +686,7 @@ public partial class ActiveAudioPlayback : GodotObject
                 catch (Exception ex)
                 {
                     GD.Print($"ActiveAudioPlayback:Clean - Exception stopping Decoder: {ex.Message}");
+                    GD.PrintErr($"ActiveAudioPlayback:Clean - Decoder stop failed: {ex.Message}");
                 }
 
                 try
@@ -672,6 +699,7 @@ public partial class ActiveAudioPlayback : GodotObject
                 catch (Exception ex)
                 {
                     GD.Print($"ActiveAudioPlayback:Clean - Exception disposing Decoder: {ex.Message}");
+                    GD.PrintErr($"ActiveAudioPlayback:Clean - Decoder dispose failed: {ex.Message}");
                 }
                 Decoder = null; // Prevent accidental reuse
             }
@@ -687,12 +715,14 @@ public partial class ActiveAudioPlayback : GodotObject
                 catch (Exception ex)
                 {
                     GD.Print($"ActiveAudioPlayback:Clean - Exception destroying SDL stream: {ex.Message}");
+                    GD.PrintErr($"ActiveAudioPlayback:Clean - SDL stream destroy failed: {ex.Message}");
                 }
             }
             DeviceStreams.Clear();
             GD.Print($"ActiveAudioPlayback:Clean - DeviceStreams cleared");
         }
     
-        CallDeferred(nameof(EmitCompletedSignal)); // Defer signal emission
+        EmitSignal(SignalName.Completed); // Emit signal immediately before freeing
+        CallDeferred("free");
     }
 }

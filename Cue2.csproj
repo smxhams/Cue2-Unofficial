@@ -18,10 +18,11 @@
     <PackageReference Include="VLC.Native" Version="3.0.8" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="src\Learning\Links.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <Compile Remove="src\Base\Classes\PlaybackPRE_TEXTRECT_CHANGE.cs" />
     <Compile Remove="src\Dumper.cs" />
+    <Compile Remove="src\Learning\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Remove="src\Learning\**" />
   </ItemGroup>
 </Project>
