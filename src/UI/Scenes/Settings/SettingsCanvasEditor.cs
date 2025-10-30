@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Cue2.Base.Classes;
 using Cue2.Shared;
 using SDL3;
@@ -21,16 +22,34 @@ public partial class SettingsCanvasEditor : ScrollContainer
     
     private VBoxContainer _targetLayersContainer;
     private VBoxContainer _outputDeviceContainer;
-    private PanelContainer _canvasContainer;
+    private Panel _canvasOutlinePanel;
+    private SubViewportContainer _subViewportContainer;
+    private SubViewport _viewport;
+    private Control _control;
+    private ScrollContainer _scrollContainer;
+    private CanvasLayer _canvasLayer;
+    private ColorRect _backgroundRect;
+    private Button _zoomInButton;
+    private Button _zoomOutButton;
+    private LineEdit _zoomPercentLineEdit;
 
-    private MeshInstance3D _testMesh;
-    
+    private float _zoom = 0.2f;
+    private const float MIN_ZOOM = 0.05f;
+    private const float MAX_ZOOM = 3.0f;
+    private const int VIEWPORT_WIDTH = 10000;
+    private const int VIEWPORT_HEIGHT = 10000;
+
+    private bool _isPanning = false;
+
 
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _canvas = _globalData.VideoCanvas;
+
+        GetWindow().SizeChanged += UpdateZoom;
+        TreeExiting += Cleanup;
         
         _videoOutputDeviceCardScene = SceneLoader.LoadPackedScene("uid://cafctoouo75sh", out string _);
         
@@ -39,8 +58,53 @@ public partial class SettingsCanvasEditor : ScrollContainer
         
         _targetLayersContainer = GetNode<VBoxContainer>("%TargetLayersContainer");
         _outputDeviceContainer = GetNode<VBoxContainer>("%OutputDevicesContainer");
-        _canvasContainer = GetNode<PanelContainer>("%CanvasContainer");
-        
+        _canvasOutlinePanel = GetNode<Panel>("%CanvasOutlinePanel");
+        _subViewportContainer = GetNode<SubViewportContainer>("%SubViewportContainer");
+        _viewport = GetNode<SubViewport>("%Viewport");
+        _control = GetNode<Control>("%CanvasControl");
+        _scrollContainer = GetNode<ScrollContainer>("%ScrollContainer");
+        _canvasLayer = GetNode<CanvasLayer>("%CanvasLayer");
+
+        // Add background with diagonal lines
+        var backgroundRect = new ColorRect();
+        backgroundRect.Size = new Vector2(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+        backgroundRect.Position = new Vector2(-500, -500);
+        backgroundRect.ZIndex = -1; // Behind other elements
+
+        var shader = new Shader();
+        shader.Code = @"
+            shader_type canvas_item;
+
+            void fragment() {
+                vec2 uv = UV * 600.0; // Scale for line density
+                float diagonal1 = mod(uv.x + uv.y, 2.0);
+                float diagonal2 = mod(uv.x - uv.y, 2.0);
+                if (diagonal1 < 0.07 || diagonal2 < 0.07) {
+                    COLOR = vec4(0.05, 0.05, 0.05, 1.0); // Grey diagonal lines both ways
+                } else {
+                    COLOR = vec4(0.0, 0.0, 0.0, 0.0); // Transparent
+                }
+            }
+            ";
+        var material = new ShaderMaterial();
+        material.Shader = shader;
+        backgroundRect.Material = material;
+
+        _backgroundRect = backgroundRect;
+        _canvasLayer.AddChild(_backgroundRect);
+        _canvasLayer.MoveChild(_backgroundRect, 0);
+        _zoomInButton = GetNode<Button>("%ZoomInButton");
+        _zoomOutButton = GetNode<Button>("%ZoomOutButton");
+        _zoomPercentLineEdit = GetNode<LineEdit>("%ZoomPercentLabel");
+
+        // Set canvas container size to represent the canvas
+        _canvasOutlinePanel.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+        _subViewportContainer.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+        _viewport.Size = new Vector2I(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+
+        // Set initial zoom
+        UpdateZoom();
+
         // Load current canvas size into line edits
         _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
         _canvasSizeYLineEdit.Text = _canvas.CanvasSize.Y.ToString();
@@ -48,18 +112,76 @@ public partial class SettingsCanvasEditor : ScrollContainer
         // Connect text submitted signals
         _canvasSizeXLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
         _canvasSizeYLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
+
+        // Connect zoom signals
+        _zoomInButton.Pressed += ZoomIn;
+        _zoomOutButton.Pressed += ZoomOut;
+        _zoomPercentLineEdit.TextSubmitted += OnZoomPercentSubmitted;
         
         // Create preview
         
         
         PopulateOutputDevices();
 
-        _testMesh = GetNode<MeshInstance3D>("%MeshInstance3D");
+
+    }
+
+
+    public override void _Input(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton mouseEvent)
+        {
+            if (mouseEvent.ButtonIndex == MouseButton.Middle)
+            {
+                if (mouseEvent.Pressed)
+                {
+                    var mousePos = GetViewport().GetMousePosition();
+                    var rect = _scrollContainer.GetGlobalRect();
+                    if (rect.HasPoint(mousePos))
+                    {
+                        _isPanning = true;
+                    }
+                }
+                else
+                {
+                    _isPanning = false;
+                }
+            }
+            else
+            {
+                var mousePos = GetViewport().GetMousePosition();
+                var rect = _scrollContainer.GetGlobalRect();
+                if (rect.HasPoint(mousePos))
+                {
+                    if (mouseEvent.ButtonIndex == MouseButton.WheelUp && Input.IsKeyPressed(Key.Ctrl))
+                    {
+                        ZoomIn();
+                        GetViewport().SetInputAsHandled();
+                    }
+                    else if (mouseEvent.ButtonIndex == MouseButton.WheelDown && Input.IsKeyPressed(Key.Ctrl))
+                    {
+                        ZoomOut();
+                        GetViewport().SetInputAsHandled();
+                    }
+                }
+            }
+        }
+        else if (@event is InputEventMouseMotion motionEvent && _isPanning)
+        {
+            _canvasLayer.Offset += motionEvent.Relative;
+            // Clamp to keep outline in view
+            Vector2 zoomedSize = new Vector2(_canvas.CanvasSize.X * _zoom, _canvas.CanvasSize.Y * _zoom);
+            _canvasLayer.Offset = new Vector2(
+                Mathf.Clamp(_canvasLayer.Offset.X, 0, zoomedSize.X * 2 - 50),
+                Mathf.Clamp(_canvasLayer.Offset.Y, 0, zoomedSize.Y * 2 - 50)
+            );
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     public override void _Process(double delta)
     {
-        _testMesh.RotateZ(0.001f);
+        // _testMesh.RotateZ(0.001f); // Commented out for 2D canvas focus
     }
 
 
@@ -186,7 +308,15 @@ public partial class SettingsCanvasEditor : ScrollContainer
             int y = int.Parse(_canvasSizeYLineEdit.Text);
             
             _canvas.SetCanvasSize(new Vector2I(x, y));
-            
+
+            // Update canvas container size
+            _canvasOutlinePanel.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+            _subViewportContainer.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+            _viewport.Size = new Vector2I(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+
+            // Update zoom display
+            UpdateZoom();
+
             // Update line edits in case validation changed values
             _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
             _canvasSizeYLineEdit.Text = _canvas.CanvasSize.Y.ToString();
@@ -207,4 +337,59 @@ public partial class SettingsCanvasEditor : ScrollContainer
                 $"Error updating canvas size: {ex.Message}", 2);
         }
     }
+
+    private void ZoomIn()
+    {
+        float increment = _zoom * 0.1f; // Relative increment
+        _zoom = Mathf.Clamp(_zoom + increment, MIN_ZOOM, MAX_ZOOM);
+        UpdateZoom();
+    }
+
+    private void ZoomOut()
+    {
+        float increment = _zoom * 0.1f; // Relative increment
+        _zoom = Mathf.Clamp(_zoom - increment, MIN_ZOOM, MAX_ZOOM);
+        UpdateZoom();
+    }
+
+    private void UpdateZoom()
+    {
+        Vector2 zoomedSize = new Vector2(_canvas.CanvasSize.X * _zoom, _canvas.CanvasSize.Y * _zoom);
+        Vector2 margin = new Vector2(100, 100);
+        Vector2 panArea = zoomedSize * 2 + margin;
+        Vector2 minSize = new Vector2(Mathf.Max(panArea.X, _scrollContainer.Size.X), Mathf.Max(panArea.Y, _scrollContainer.Size.Y));
+        _control.Size = zoomedSize;
+        _control.Position = Vector2.Zero;
+        _subViewportContainer.CustomMinimumSize = minSize;
+        _viewport.Size = new Vector2I((int)minSize.X, (int)minSize.Y);
+        //_backgroundRect.Size = minSize;
+        _canvasOutlinePanel.CustomMinimumSize = zoomedSize;
+        UpdateZoomLabel();
+    }
+
+    private void UpdateZoomLabel()
+    {
+        _zoomPercentLineEdit.Text = $"{_zoom * 100:F0}";
+    }
+
+    private void OnZoomPercentSubmitted(string newText)
+    {
+        try
+        {
+            float percent = float.Parse(newText);
+            _zoom = Mathf.Clamp(percent / 100f, MIN_ZOOM, MAX_ZOOM);
+            UpdateZoom();
+        }
+        catch
+        {
+            UpdateZoomLabel(); // Reset to current value
+        }
+        _zoomPercentLineEdit.ReleaseFocus();
+    }
+    
+    private void Cleanup()
+    {
+        GetWindow().SizeChanged -= UpdateZoom;
+    }
+
 }

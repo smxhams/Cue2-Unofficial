@@ -1,0 +1,151 @@
+[gd_scene load_steps=5 format=3 uid="uid://ceydom3514ip"]
+
+[ext_resource type="Script" uid="uid://c8tujh2ove2m6" path="res://src/UI/Scenes/Settings/SettingsCanvasEditor.cs" id="1_r0ob0"]
+[ext_resource type="PackedScene" uid="uid://cafctoouo75sh" path="res://src/UI/Scenes/Settings/VideoOutputDevicesCard.tscn" id="2_dwex0"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uxven"]
+bg_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wntir"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.0113369, 0.218073, 0.244462, 1)
+
+[node name="CanvasEditor" type="ScrollContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_r0ob0")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="HeaderLabel" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "CANVAS EDITOR"
+vertical_alignment = 1
+uppercase = true
+
+[node name="CanvasSizeX" type="LineEdit" parent="MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "X"
+
+[node name="CanvasSizeY" type="LineEdit" parent="MarginContainer/VBoxContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Y"
+
+[node name="Control" type="Control" parent="MarginContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+
+[node name="ZoomControlHBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="ZoomOutButton" type="Button" parent="MarginContainer/VBoxContainer/HBoxContainer/ZoomControlHBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+focus_mode = 0
+text = "-"
+
+[node name="ZoomPercentLabel" type="LineEdit" parent="MarginContainer/VBoxContainer/HBoxContainer/ZoomControlHBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Canvas Zoom. Ctrl + Scroll"
+text = "100"
+placeholder_text = "Zoom %"
+
+[node name="ZoomInButton" type="Button" parent="MarginContainer/VBoxContainer/HBoxContainer/ZoomControlHBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+focus_mode = 0
+text = "+"
+
+[node name="HBoxContainer2" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 0
+text = "Target Layers"
+
+[node name="TargetLayersContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_uxven")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Viewport" type="SubViewport" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer/SubViewportContainer"]
+unique_name_in_owner = true
+transparent_bg = true
+handle_input_locally = false
+render_target_update_mode = 4
+
+[node name="CanvasLayer" type="CanvasLayer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer/SubViewportContainer/Viewport"]
+unique_name_in_owner = true
+
+[node name="CanvasControl" type="Control" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer/SubViewportContainer/Viewport/CanvasLayer"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="CanvasOutlinePanel" type="Panel" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer/SubViewportContainer/Viewport/CanvasLayer/CanvasControl"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(10, 10)
+layout_mode = 0
+offset_right = 10.0
+offset_bottom = 10.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_wntir")
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+layout_mode = 2
+
+[node name="Label3" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2"]
+layout_mode = 2
+size_flags_vertical = 0
+text = "Output Devices"
+
+[node name="OutputDevicesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="VideoOutputDevicesCard" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2/OutputDevicesContainer" instance=ExtResource("2_dwex0")]
+visible = false
+layout_mode = 2
