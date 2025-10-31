@@ -72,6 +72,7 @@ layout_mode = 2
 tooltip_text = "Canvas Zoom. Ctrl + Scroll"
 text = "100"
 placeholder_text = "Zoom %"
+alignment = 1
 
 [node name="ZoomInButton" type="Button" parent="MarginContainer/VBoxContainer/HBoxContainer/ZoomControlHBoxContainer"]
 unique_name_in_owner = true
@@ -84,15 +85,28 @@ text = "+"
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+[node name="ScrollContainer3" type="ScrollContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 
-[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer3"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer3/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 0
 text = "Target Layers"
 
-[node name="TargetLayersContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer"]
+[node name="TargetLayersContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer3/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="VideoOutputsLabel" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer3/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 0
+text = "Video Outputs"
+
+[node name="VideoOutputsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer3/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -134,18 +148,24 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_wntir")
 
-[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+[node name="ScrollContainer2" type="ScrollContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2"]
+custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 
-[node name="Label3" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2"]
+[node name="VBoxContainer2" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer2"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label3" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer2/VBoxContainer2"]
 layout_mode = 2
 size_flags_vertical = 0
 text = "Output Devices"
 
-[node name="OutputDevicesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2"]
+[node name="OutputDevicesContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer2/VBoxContainer2"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="VideoOutputDevicesCard" parent="MarginContainer/VBoxContainer/HBoxContainer2/VBoxContainer2/OutputDevicesContainer" instance=ExtResource("2_dwex0")]
+[node name="VideoOutputDevicesCard" parent="MarginContainer/VBoxContainer/HBoxContainer2/ScrollContainer2/VBoxContainer2/OutputDevicesContainer" instance=ExtResource("2_dwex0")]
 visible = false
 layout_mode = 2

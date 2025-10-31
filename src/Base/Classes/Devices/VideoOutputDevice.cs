@@ -1,17 +1,15 @@
 using Godot;
 using System;
-using Cue2.Shared;
 
 namespace Cue2.Base.Classes;
 
 public partial class VideoOutputDevice : Window
 {
-    private GlobalSignals _globalSignals;
 
     /// <summary>
     /// Unique ID for the output device.
     /// </summary>
-    public int OutputId { get; private set; }
+    public int OutputId { get; set; }
 
     /// <summary>
     /// Name of the output device.
@@ -21,7 +19,7 @@ public partial class VideoOutputDevice : Window
     /// <summary>
     /// Position on the canvas (top-left corner).
     /// </summary>
-    public Vector2 Position { get; set; } = Vector2.Zero;
+    public Vector2 CanvasPosition { get; set; } = Vector2.Zero;
 
     /// <summary>
     /// Size of the output region on the canvas.
@@ -45,23 +43,16 @@ public partial class VideoOutputDevice : Window
 
     private static int _nextOutputId = 0;
 
-    public override void _Ready()
+    public VideoOutputDevice()
     {
-        _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-
         OutputId = _nextOutputId++;
-        Mode = ModeEnum.Fullscreen; // Default to fullscreen; can be configured
-
+        Mode = ModeEnum.Windowed; // Windowed for proper sizing and positioning
         _outputRect = new TextureRect();
         _outputRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _outputRect.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
         AddChild(_outputRect);
-
-        UpdateOutputRegion();
-
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-            $"VideoOutputDevice '{OutputName}' initialized.", 0);
     }
+    
 
     /// <summary>
     /// Sets the reference to the parent canvas.
@@ -80,8 +71,7 @@ public partial class VideoOutputDevice : Window
     {
         if (_canvas == null)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                "VideoOutputDevice:UpdateOutputRegion - No canvas reference set.", 1);
+            GD.Print("VideoOutputDevice:UpdateOutputRegion - No canvas reference set.");
             return;
         }
 
@@ -90,35 +80,97 @@ public partial class VideoOutputDevice : Window
             var canvasTexture = _canvas.GetCanvasTexture();
             if (canvasTexture == null)
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                    "VideoOutputDevice:UpdateOutputRegion - Canvas texture not available.", 1);
+                GD.Print("VideoOutputDevice:UpdateOutputRegion - Canvas texture not available.");
+                return;
+            }
+
+            // Calculate clipped region within canvas bounds
+            Rect2 canvasRect = new Rect2(0, 0, _canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+            Rect2 outputRect = new Rect2(CanvasPosition, Size);
+            Rect2 clippedRect = canvasRect.Intersection(outputRect);
+
+            if (clippedRect.Size.X <= 0 || clippedRect.Size.Y <= 0)
+            {
+                // No valid region to display
+                _outputRect.Texture = null;
+                DisplayServer.WindowSetSize(new Vector2I(0, 0), this.GetWindow().GetWindowId());
+                GD.Print($"VideoOutputDevice: No valid region for output '{OutputName}' within canvas bounds.");
                 return;
             }
 
             // Create an Image from the canvas texture
             var image = canvasTexture.GetImage();
 
-            // Crop the region
+            // Crop the clipped region
             var croppedImage = new Image();
-            croppedImage = image.GetRegion(new Rect2I((Vector2I)Position, (Vector2I)Size));
+            croppedImage = image.GetRegion(new Rect2I((Vector2I)clippedRect.Position, (Vector2I)clippedRect.Size));
 
             // Set to TextureRect
             _outputRect.Texture = ImageTexture.CreateFromImage(croppedImage);
 
-            // Position window on target monitor
-            DisplayServer.WindowSetCurrentScreen(GetWindowId(), TargetMonitor);
+            // Position and size window based on clipped region, clamped to monitor bounds
+            var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
+            var monitorSize = DisplayServer.ScreenGetSize(TargetMonitor);
+            var monitorRect = new Rect2(monitorPos, monitorSize);
+            var windowPos = monitorPos + (clippedRect.Position - CanvasPosition);
+            var windowRect = new Rect2(windowPos, clippedRect.Size);
+            var clampedRect = monitorRect.Intersection(windowRect);
 
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                $"Updated output '{OutputName}' to region {Position}-{Size}.", 0);
+            if (clampedRect.Size.X > 0 && clampedRect.Size.Y > 0)
+            {
+                DisplayServer.WindowSetPosition(new Vector2I((int)clampedRect.Position.X, (int)clampedRect.Position.Y), this.GetWindow().GetWindowId());
+                DisplayServer.WindowSetSize(new Vector2I((int)clampedRect.Size.X, (int)clampedRect.Size.Y), this.GetWindow().GetWindowId());
+            }
+            else
+            {
+                DisplayServer.WindowSetSize(new Vector2I(0, 0), this.GetWindow().GetWindowId());
+            }
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true, this.GetWindow().GetWindowId());
+
+            GD.Print($"VideoOutputDevice: Updated output '{OutputName}' to clipped region {clippedRect.Position}-{clippedRect.Size} from canvas {CanvasPosition}-{Size}.");
         }
         catch (Exception ex)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                $"Error updating output region: {ex.Message}", 2);
+            GD.Print($"VideoOutputDevice: Error updating output region: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Serializes the output device data.
+    /// </summary>
+    /// <returns>Dictionary containing output data.</returns>
+    public Godot.Collections.Dictionary GetData()
+    {
+        var data = new Godot.Collections.Dictionary();
+        data.Add("OutputId", OutputId);
+        data.Add("OutputName", OutputName);
+        data.Add("CanvasPosition", CanvasPosition);
+        data.Add("Size", Size);
+        data.Add("TargetMonitor", TargetMonitor);
+        return data;
+    }
+
+    /// <summary>
+    /// Loads the output device data from a dictionary.
+    /// </summary>
+    /// <param name="data">Dictionary containing output data.</param>
+    public void LoadFromData(Godot.Collections.Dictionary data)
+    {
+        OutputId = (int)data["OutputId"];
+        OutputName = (string)data["OutputName"];
+        // Backward compatibility: try "CanvasPosition" first, then "Position"
+        if (data.ContainsKey("CanvasPosition"))
+        {
+            CanvasPosition = (Vector2)data["CanvasPosition"];
+        }
+        else if (data.ContainsKey("Position"))
+        {
+            CanvasPosition = (Vector2)data["Position"];
+        }
+        Size = (Vector2)data["Size"];
+        TargetMonitor = (int)data["TargetMonitor"];
     }
 
     // TODO: Handle window resizing/moving for non-fullscreen modes
     // TODO: Integration with LibVLCSharp for direct rendering if needed
-    // TODO: Serialization for saving output configuration
 }

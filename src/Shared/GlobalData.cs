@@ -30,6 +30,7 @@ public partial class GlobalData : Node
 	public Devices Devices;
 	public CueLightManager CueLightManager;
 	public Canvas VideoCanvas;
+	public DisplaysManager DisplaysManager;
 	//public AudioDevices AudioDevices;
 	
 	
@@ -84,6 +85,8 @@ public partial class GlobalData : Node
 
 		VideoCanvas = new Canvas();
 		AddChild(VideoCanvas);
+
+		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 		
 		int currentScreen = DisplayServer.WindowGetCurrentScreen(GetWindow().GetWindowId());
 		BaseDisplayScale = DisplayServer.ScreenGetScale(currentScreen);

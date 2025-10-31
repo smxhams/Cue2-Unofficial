@@ -378,6 +378,111 @@ public partial class MediaEngine : Node
     }
     
     /// <summary>
+    /// Gets metadata for a video file using FFmpeg (duration, width, height, frame rate, codec/format).
+    /// Fast extraction without full decoding; supports broad formats (MP4, AVI, etc.).
+    /// Returns default-initialized metadata on failure.
+    /// </summary>
+    /// <param name="path">Video file path.</param>
+    /// <returns>VideoFileMetadata with extracted values.</returns>
+    public async Task<VideoFileMetadata> GetVideoFileMetadataAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            GD.PrintErr("MediaEngine:GetVideoFileMetadataAsync - File not found.");
+            return new VideoFileMetadata(); // Default empty on fail
+        }
+
+        GD.Print("MediaEngine:GetVideoFileMetadataAsync - Extracting metadata.");
+
+        return await Task.Run(() =>
+        {
+            unsafe
+            {
+                AVFormatContext* formatCtx = null;
+
+                var metadata = new VideoFileMetadata();
+
+                try
+                {
+                    // Open input
+                    int ret = ffmpeg.avformat_open_input(&formatCtx, path, null, null);
+                    if (ret < 0) throw new Exception($"Failed to open file: {GetFFmpegError(ret)}");
+
+                    ret = ffmpeg.avformat_find_stream_info(formatCtx, null);
+                    if (ret < 0) throw new Exception($"Failed to find stream info: {GetFFmpegError(ret)}");
+
+                    // Duration from container
+                    long durationTicks = formatCtx->duration;
+                    if (durationTicks != -9223372036854775807L) // AV_NOPTS_VALUE
+                    {
+                        metadata.Duration = durationTicks / (double)ffmpeg.AV_TIME_BASE;
+                    }
+                    else
+                    {
+                        GD.PrintErr("MediaEngine:GetVideoFileMetadataAsync - Duration unknown.");
+                    }
+
+                    int videoStreamIndex = -1;
+                    for (uint i = 0; i < formatCtx->nb_streams; i++)
+                    {
+                        if (formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO)
+                        {
+                            videoStreamIndex = (int)i;
+                            break;
+                        }
+                    }
+
+                    if (videoStreamIndex == -1)
+                    {
+                        throw new Exception("No video stream found.");
+                    }
+
+                    AVCodecParameters* codecPar = formatCtx->streams[(uint)videoStreamIndex]->codecpar;
+
+                    // Width and height
+                    metadata.Width = codecPar->width;
+                    metadata.Height = codecPar->height;
+
+                    // Frame rate
+                    AVRational frameRate = formatCtx->streams[(uint)videoStreamIndex]->r_frame_rate;
+                    if (frameRate.den != 0)
+                    {
+                        metadata.FrameRate = (float)frameRate.num / frameRate.den;
+                    }
+
+                    // Codec name
+                    AVCodec* codec = ffmpeg.avcodec_find_decoder(codecPar->codec_id);
+                    metadata.Codec = codec != null ? ffmpeg.avcodec_get_name(codec->id) : "unknown";
+
+                    // Format from container
+                    string ext = Path.GetExtension(path).TrimStart('.');
+                    AVOutputFormat* fmtPtr = ffmpeg.av_guess_format(null, ext, null);
+                    if (fmtPtr != null)
+                    {
+                        metadata.Format = Marshal.PtrToStringAnsi((IntPtr)fmtPtr->name) ?? "unknown";
+                    }
+                    else
+                    {
+                        metadata.Format = "unknown";
+                    }
+
+                    GD.Print("MediaEngine:GetVideoFileMetadataAsync - Metadata extracted successfully.");
+                    return metadata;
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"MediaEngine:GetVideoFileMetadataAsync - Error: {ex.Message}");
+                    return new VideoFileMetadata(); // Default on fail
+                }
+                finally
+                {
+                    if (formatCtx != null) ffmpeg.avformat_close_input(&formatCtx);
+                }
+            }
+        });
+    }
+
+    /// <summary>
     /// Retrieves a human-readable error message from an FFmpeg return code.
     /// </summary>
     /// <param name="ret">The FFmpeg error code (negative value).</param>

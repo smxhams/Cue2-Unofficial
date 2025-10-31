@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Cue2.Base.Classes;
 using Cue2.Shared;
-using SDL3;
 
 namespace Cue2.UI.Scenes.Settings;
 
@@ -13,6 +12,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
     private Canvas _canvas;
+    private DisplaysManager _displaysManager;
 
     private PackedScene _videoOutputDeviceCardScene;
     
@@ -40,6 +40,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private const int VIEWPORT_HEIGHT = 10000;
 
     private bool _isPanning = false;
+    private Dictionary<int, VideoOutputDevice> _activeOutputs = new();
+    private List<ColorRect> _outputOutlines = new();
 
 
     public override void _Ready()
@@ -47,6 +49,10 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _canvas = _globalData.VideoCanvas;
+        _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
+
+        _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), Callable.From(OnDisplaysChanged));
+        _globalSignals.Connect(nameof(GlobalSignals.CanvasSizeChanged), Callable.From<Vector2I>(OnCanvasSizeChanged));
 
         GetWindow().SizeChanged += UpdateZoom;
         TreeExiting += Cleanup;
@@ -119,9 +125,12 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _zoomPercentLineEdit.TextSubmitted += OnZoomPercentSubmitted;
         
         // Create preview
-        
-        
+
+
+
         PopulateOutputDevices();
+        PopulateTargetLayers();
+        UpdateCanvasOutlines();
 
 
     }
@@ -192,106 +201,144 @@ public partial class SettingsCanvasEditor : ScrollContainer
     {
         try
         {
-            // To get display names - must use SDL. To match SDL video output to a Godot Display we compare display position.
-            
-            // Calculate display position offset
-            var gPrimI = DisplayServer.GetPrimaryScreen();
-            var gPrimPos = DisplayServer.ScreenGetPosition(gPrimI);
+            var displays = _displaysManager.GetAvailableDisplays();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Detected {displays.Count} output devices (monitors).", 0);
 
-            var sPrimI = SDL.GetPrimaryDisplay();
-            SDL.GetDisplayBounds(sPrimI, out SDL.Rect sPrimRect);
-            
-            var offsetX = gPrimPos.X - sPrimRect.X;
-            var offsetY = gPrimPos.Y - sPrimRect.Y;
-
-            
-            int screenCount = DisplayServer.GetScreenCount();
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                $"Detected {screenCount} output devices (monitors).", 0);
-
-            var displayIDs = SDL.GetDisplays(out var sdlCount);
-            if (sdlCount != screenCount)
+            foreach (var display in displays)
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                    $"Mismatch in display counts: Godot {screenCount}, SDL {sdlCount}. Using Godot count.", 1);
-            }
-            
-            // Get SDL display data
-            var sdlDisplays = new List<(uint ID, Vector2I Position, Vector2I Size)>();
-            for (int j = 0; j < sdlCount; j++)
-            {
-                var id = displayIDs[j];
-                if (SDL.GetDisplayBounds(id, out SDL.Rect bounds) != true)
-                {
-                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-                        $"SDL_GetDisplayBounds failed for SDL index {j}: {SDL.GetError()}", 2);
-                    continue;
-                }
-
-                Vector2I pos = new Vector2I(bounds.X, bounds.Y);
-                Vector2I size = new Vector2I(bounds.W, bounds.H);
-                
-                sdlDisplays.Add((id, pos, size));
-            }
-            
-            // Compare SDL displays to Godot and name
-            for (int i = 0; i < screenCount; i++)
-            {
-                Vector2I gPos = DisplayServer.ScreenGetPosition(i);
-                Vector2I gSize = DisplayServer.ScreenGetSize(i);
-                int gDpi = DisplayServer.ScreenGetDpi(i);
-                float gRefresh = DisplayServer.ScreenGetRefreshRate(i);
-                
-                // Find matching SDL display
-                uint matchedID = 0;
-                bool found = false;
-                for (int k = 0; k < sdlDisplays.Count; k++)
-                {
-                    var sdl = sdlDisplays[k];
-                    if (sdl.Position.X == (gPos.X - offsetX) && sdl.Position.Y == (gPos.Y - offsetY) && sdl.Size.X == gSize.X && sdl.Size.Y == gSize.Y)
-                    {
-                        matchedID = sdl.ID;
-                        found = true;
-                        // Remove to avoid duplicate matches
-                        sdlDisplays.RemoveAt(k);
-                        break;
-                    }
-                }
-                
-                // Try to get actual name via SDL
-                string displayName = $"Display {i}";
-                if (found)
-                {
-                    var namePtr = SDL.GetDisplayName(matchedID);
-                    if (namePtr != null)
-                    {
-                        displayName = namePtr;
-                    }
-                    else
-                    {
-                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                            $"SDL_GetDisplayName failed for display {i}: {SDL.GetError()}", 1);
-                    }
-                }
-
                 // Load UI
                 PanelContainer instance = _videoOutputDeviceCardScene.Instantiate<PanelContainer>();
                 _outputDeviceContainer.AddChild(instance);
-                
+
                 // Name label
                 var nameLabel = instance.GetNode<Label>("%DisplayName");
-                nameLabel.Text = displayName;
+                nameLabel.Text = display.Name;
                 nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
-                
+
                 // Resolution label
                 var resLabel = instance.GetNode<Label>("%DisplayResolution");
-                resLabel.Text = $"Resolution: {gSize.X} x {gSize.Y}";
+                resLabel.Text = $"{display.Size.X} x {display.Size.Y}";
                 resLabel.HorizontalAlignment = HorizontalAlignment.Center;
+
+                // Get input fields
+                var posXLineEdit = instance.GetNode<LineEdit>("%PosXLineEdit");
+                var posYLineEdit = instance.GetNode<LineEdit>("%PosYLineEdit");
+                var sizeXLineEdit = instance.GetNode<LineEdit>("%SizeXLineEdit");
+                var sizeYLineEdit = instance.GetNode<LineEdit>("%SizeYLineEdit");
+
+                // Set defaults
+                posXLineEdit.Text = "0";
+                posYLineEdit.Text = "0";
+                sizeXLineEdit.Text = display.Size.X.ToString();
+                sizeYLineEdit.Text = display.Size.Y.ToString();
+
+                // Check for existing output
+                var useOutputCheckButton = instance.GetNode<CheckButton>("%UseOutputCheckButton");
+                var existing = _displaysManager.Outputs.Find(o => o.TargetMonitor == display.Index);
+                if (existing != null)
+                {
+                    posXLineEdit.Text = existing.CanvasPosition.X.ToString();
+                    posYLineEdit.Text = existing.CanvasPosition.Y.ToString();
+                    sizeXLineEdit.Text = existing.Size.X.ToString();
+                    sizeYLineEdit.Text = existing.Size.Y.ToString();
+                    useOutputCheckButton.ButtonPressed = true;
+                    _activeOutputs[display.Index] = existing;
+                    UpdateUIForUseOutput(instance, true);
+                }
+
+                // Accordion
+                var accordianCollapseButton = instance.GetNode<Button>("%AccordianCollapseButton");
+                accordianCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+                var displaySettingsAccordianContainer = instance.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
+                displaySettingsAccordianContainer.Visible = false;
+                accordianCollapseButton.Pressed += () => ToggleAccordian(displaySettingsAccordianContainer, accordianCollapseButton);
+
+                // UseOutputCheckButton
+                useOutputCheckButton.Toggled += (bool toggled) => {
+                    UpdateUIForUseOutput(instance, toggled);
+                    // Update border color
+                    var style = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
+                    style.BorderColor = toggled ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
+                    instance.AddThemeStyleboxOverride("panel", style);
+                    if (toggled) {
+                        try {
+                            float px = float.Parse(posXLineEdit.Text);
+                            float py = float.Parse(posYLineEdit.Text);
+                            float sx = float.Parse(sizeXLineEdit.Text);
+                            float sy = float.Parse(sizeYLineEdit.Text);
+                            var canvasPos = new Vector2(px, py);
+                            var size = new Vector2(sx, sy);
+                            var output = _displaysManager.AddOutput(display.Index, canvasPos, size, display.Name);
+                            _activeOutputs[display.Index] = output;
+                        } catch (FormatException) {
+                            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                                $"Invalid input for display {display.Index}: Position and size must be numbers.", 2);
+                        }
+                    } else {
+                        if (_activeOutputs.TryGetValue(display.Index, out var output)) {
+                            _displaysManager.RemoveOutput(output.OutputId);
+                            _activeOutputs.Remove(display.Index);
+                        }
+                    }
+                };
+                // Connect LineEdit submissions
+                posXLineEdit.TextSubmitted += (text) => {
+                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
+                        try {
+                            float val = float.Parse(text);
+                            _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(val, outp.CanvasPosition.Y));
+                        } catch (FormatException) {
+                            posXLineEdit.Text = outp.CanvasPosition.X.ToString();
+                        }
+                    }
+                    posXLineEdit.ReleaseFocus();
+                };
+                posYLineEdit.TextSubmitted += (text) => {
+                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
+                        try {
+                            float val = float.Parse(text);
+                            _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(outp.CanvasPosition.X, val));
+                        } catch (FormatException) {
+                            posYLineEdit.Text = outp.CanvasPosition.Y.ToString();
+                        }
+                    }
+                    posYLineEdit.ReleaseFocus();
+                };
+                sizeXLineEdit.TextSubmitted += (text) => {
+                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
+                        try {
+                            float val = float.Parse(text);
+                            _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2(val, outp.Size.Y));
+                        } catch (FormatException) {
+                            sizeXLineEdit.Text = outp.Size.X.ToString();
+                        }
+                    }
+                    sizeXLineEdit.ReleaseFocus();
+                };
+                sizeYLineEdit.TextSubmitted += (text) => {
+                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
+                        try {
+                            float val = float.Parse(text);
+                            _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2(outp.Size.X, val));
+                        } catch (FormatException) {
+                            sizeYLineEdit.Text = outp.Size.Y.ToString();
+                        }
+                    }
+                    sizeYLineEdit.ReleaseFocus();
+                };
+
+                // Initial check
+                UpdateUIForUseOutput(instance, useOutputCheckButton.ButtonPressed);
+                // Set initial border color
+                var initialStyle = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
+                initialStyle.BorderColor = useOutputCheckButton.ButtonPressed ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
+                instance.AddThemeStyleboxOverride("panel", initialStyle);
             }
         }
         catch (Exception ex)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error populating output devices: {ex.Message}", 2);
         }
     }
@@ -365,11 +412,60 @@ public partial class SettingsCanvasEditor : ScrollContainer
         //_backgroundRect.Size = minSize;
         _canvasOutlinePanel.CustomMinimumSize = zoomedSize;
         UpdateZoomLabel();
+        UpdateCanvasOutlines();
     }
 
     private void UpdateZoomLabel()
     {
         _zoomPercentLineEdit.Text = $"{_zoom * 100:F0}";
+    }
+
+    /// <summary>
+    /// Toggles visibility of an accordion container and updates button icon.
+    /// </summary>
+    /// <param name="accordian">The VBoxContainer to toggle.</param>
+    /// <param name="button">The Button controlling the toggle.</param>
+    private void ToggleAccordian(VBoxContainer accordian, Button button)
+    {
+        accordian.Visible = !accordian.Visible;
+        button.Icon = GetThemeIcon(accordian.Visible ? "Down" : "Right", "AtlasIcons");
+    }
+
+    /// <summary>
+    /// Updates UI elements in the display settings accordion based on UseOutputCheckButton state.
+    /// </summary>
+    /// <param name="card">The card PanelContainer.</param>
+    /// <param name="enabled">Whether output is enabled.</param>
+    private void UpdateUIForUseOutput(PanelContainer card, bool enabled)
+    {
+        var accordianContainer = card.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
+        UpdateChildrenRecursively(accordianContainer, enabled);
+    }
+
+    /// <summary>
+    /// Recursively updates LineEdits and Labels in the node tree.
+    /// </summary>
+    /// <param name="node">The root node to traverse.</param>
+    /// <param name="enabled">Whether to enable or disable.</param>
+    private void UpdateChildrenRecursively(Node node, bool enabled)
+    {
+        foreach (var child in node.GetChildren())
+        {
+            if (child is LineEdit le)
+            {
+                le.Editable = enabled;
+                le.AddThemeColorOverride("font_color", enabled ? Colors.White : Colors.Black);
+                le.AddThemeColorOverride("font_placeholder_color", enabled ? Colors.Gray : Colors.Black);
+            }
+            else if (child is Label label)
+            {
+                label.AddThemeColorOverride("font_color", enabled ? Colors.White : Colors.DarkGray);
+            }
+            else
+            {
+                UpdateChildrenRecursively(child, enabled);
+            }
+        }
     }
 
     private void OnZoomPercentSubmitted(string newText)
@@ -387,9 +483,54 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _zoomPercentLineEdit.ReleaseFocus();
     }
     
+    /// <summary>
+    /// Populates the target layers container with labels for each layer.
+    /// </summary>
+    private void PopulateTargetLayers()
+    {
+        // Clear existing
+        foreach (var child in _targetLayersContainer.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        foreach (var layer in _displaysManager.Layers)
+        {
+            var label = new Label();
+            label.Text = layer.LayerName;
+            _targetLayersContainer.AddChild(label);
+        }
+    }
+
     private void Cleanup()
     {
         GetWindow().SizeChanged -= UpdateZoom;
+    }
+
+    private void OnDisplaysChanged()
+    {
+        UpdateCanvasOutlines();
+    }
+
+    private void OnCanvasSizeChanged(Vector2I newSize)
+    {
+        _canvasSizeXLineEdit.Text = newSize.X.ToString();
+        _canvasSizeYLineEdit.Text = newSize.Y.ToString();
+    }
+
+    private void UpdateCanvasOutlines()
+    {
+        foreach (var rect in _outputOutlines) { _canvasLayer.RemoveChild(rect); rect.QueueFree(); }
+        _outputOutlines.Clear();
+        foreach (var output in _displaysManager.Outputs)
+        {
+            var outline = new ColorRect();
+            outline.Position = output.CanvasPosition * _zoom;
+            outline.Size = output.Size * _zoom;
+            outline.Color = new Color(1, 0, 0, 0.5f); // semi-transparent red
+            _canvasLayer.AddChild(outline);
+            _outputOutlines.Add(outline);
+        }
     }
 
 }

@@ -54,6 +54,8 @@ public partial class GlobalSignals : Node
 	
 	// Signals associated with devices
 	[Signal] public delegate void AudioDevicesChangedEventHandler();
+	[Signal] public delegate void DisplaysChangedEventHandler();
+	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
 	
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing

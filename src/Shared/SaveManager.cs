@@ -239,7 +239,7 @@ public partial class SaveManager : Node
 				var settingsData = saveData["settings"].AsGodotDictionary();
 				_globalData.Settings.LoadSettings(settingsData);
 			}
-			
+
 			if (saveData.ContainsKey("cues"))
 			{
 				GD.Print("SaveManager:LoadSession - Loading Cues");

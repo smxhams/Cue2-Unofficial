@@ -72,6 +72,30 @@ public partial class VideoTargetLayer : GodotObject
         GD.Print($"Removed content from layer '{LayerName}'.");
     }
 
+    /// <summary>
+    /// Serializes the layer data.
+    /// </summary>
+    /// <returns>Dictionary containing layer data.</returns>
+    public Godot.Collections.Dictionary GetData()
+    {
+        var data = new Godot.Collections.Dictionary();
+        data.Add("LayerId", LayerId);
+        data.Add("LayerName", LayerName);
+        data.Add("ZIndex", ZIndex);
+        return data;
+    }
+
+    /// <summary>
+    /// Loads the layer data from a dictionary.
+    /// </summary>
+    /// <param name="data">Dictionary containing layer data.</param>
+    public void LoadFromData(Godot.Collections.Dictionary data)
+    {
+        LayerId = (int)data["LayerId"];
+        LayerName = (string)data["LayerName"];
+        ZIndex = (int)data["ZIndex"];
+    }
+
     // TODO: Methods for positioning/scaling content within the layer
     // TODO: Extension for 3D (e.g., replace LayerNode with a 3D node)
 }

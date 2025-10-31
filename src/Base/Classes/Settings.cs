@@ -10,6 +10,7 @@ public partial class Settings : Node
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
+    private DisplaysManager _displaysManager;
 
     public float UiScale = 1.0f;
     public float GoScale = 1.0f;
@@ -31,6 +32,7 @@ public partial class Settings : Node
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+        _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;
@@ -122,6 +124,7 @@ public partial class Settings : Node
 
         saveTable.Add("AudioPatch", patchTable);
         saveTable.Add("AudioDevices", devices);
+        saveTable.Add("Displays", _displaysManager.GetData());
         saveTable.Add("CueLights", _globalData.CueLightManager.GetData());
         
         saveTable.Add("UiScale", UiScale);
@@ -161,6 +164,13 @@ public partial class Settings : Node
                 var patchObj = AudioOutputPatch.FromData(patchAsDict);
                 _globalData.Settings.AddPatch(patchObj);
             }
+        }
+        
+        if (settingsData.TryGetValue("Displays", out var displays))
+        {
+            GD.Print($"Settings:LoadSettings - Loading Displays");
+            var displaysAsDict = displays.AsGodotDictionary();
+            _displaysManager.LoadFromData(displaysAsDict);
         }
 
         if (settingsData.TryGetValue("CueLights", out var cueLights))
