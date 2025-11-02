@@ -24,7 +24,7 @@ public partial class VideoOutputDevice : Window
     /// <summary>
     /// Size of the output region on the canvas.
     /// </summary>
-    public Vector2 Size { get; set; } = new Vector2(1920, 1080);
+    public Vector2I Size { get; set; } = new Vector2I(1920, 1080);
 
     /// <summary>
     /// Target display monitor index (for multi-monitor setups).
@@ -167,7 +167,7 @@ public partial class VideoOutputDevice : Window
         {
             CanvasPosition = (Vector2)data["Position"];
         }
-        Size = (Vector2)data["Size"];
+        Size = (Vector2I)data["Size"];
         TargetMonitor = (int)data["TargetMonitor"];
     }
 

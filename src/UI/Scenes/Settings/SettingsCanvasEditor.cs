@@ -195,152 +195,194 @@ public partial class SettingsCanvasEditor : ScrollContainer
 
 
     /// <summary>
-    /// Populates the output devices container with cards for each detected display.
+    /// Populates the output devices container with cards for each detected display and saved outputs.
     /// </summary>
     private void PopulateOutputDevices()
     {
         try
         {
+            // Clear existing cards
+            foreach (var child in _outputDeviceContainer.GetChildren())
+            {
+                child.QueueFree();
+            }
+            _activeOutputs.Clear();
+
             var displays = _displaysManager.GetAvailableDisplays();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Detected {displays.Count} output devices (monitors).", 0);
 
+            // Create cards for current displays
             foreach (var display in displays)
             {
-                // Load UI
-                PanelContainer instance = _videoOutputDeviceCardScene.Instantiate<PanelContainer>();
-                _outputDeviceContainer.AddChild(instance);
-
-                // Name label
-                var nameLabel = instance.GetNode<Label>("%DisplayName");
-                nameLabel.Text = display.Name;
-                nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
-
-                // Resolution label
-                var resLabel = instance.GetNode<Label>("%DisplayResolution");
-                resLabel.Text = $"{display.Size.X} x {display.Size.Y}";
-                resLabel.HorizontalAlignment = HorizontalAlignment.Center;
-
-                // Get input fields
-                var posXLineEdit = instance.GetNode<LineEdit>("%PosXLineEdit");
-                var posYLineEdit = instance.GetNode<LineEdit>("%PosYLineEdit");
-                var sizeXLineEdit = instance.GetNode<LineEdit>("%SizeXLineEdit");
-                var sizeYLineEdit = instance.GetNode<LineEdit>("%SizeYLineEdit");
-
-                // Set defaults
-                posXLineEdit.Text = "0";
-                posYLineEdit.Text = "0";
-                sizeXLineEdit.Text = display.Size.X.ToString();
-                sizeYLineEdit.Text = display.Size.Y.ToString();
-
-                // Check for existing output
-                var useOutputCheckButton = instance.GetNode<CheckButton>("%UseOutputCheckButton");
-                var existing = _displaysManager.Outputs.Find(o => o.TargetMonitor == display.Index);
-                if (existing != null)
-                {
-                    posXLineEdit.Text = existing.CanvasPosition.X.ToString();
-                    posYLineEdit.Text = existing.CanvasPosition.Y.ToString();
-                    sizeXLineEdit.Text = existing.Size.X.ToString();
-                    sizeYLineEdit.Text = existing.Size.Y.ToString();
-                    useOutputCheckButton.ButtonPressed = true;
-                    _activeOutputs[display.Index] = existing;
-                    UpdateUIForUseOutput(instance, true);
-                }
-
-                // Accordion
-                var accordianCollapseButton = instance.GetNode<Button>("%AccordianCollapseButton");
-                accordianCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-                var displaySettingsAccordianContainer = instance.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
-                displaySettingsAccordianContainer.Visible = false;
-                accordianCollapseButton.Pressed += () => ToggleAccordian(displaySettingsAccordianContainer, accordianCollapseButton);
-
-                // UseOutputCheckButton
-                useOutputCheckButton.Toggled += (bool toggled) => {
-                    UpdateUIForUseOutput(instance, toggled);
-                    // Update border color
-                    var style = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
-                    style.BorderColor = toggled ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
-                    instance.AddThemeStyleboxOverride("panel", style);
-                    if (toggled) {
-                        try {
-                            float px = float.Parse(posXLineEdit.Text);
-                            float py = float.Parse(posYLineEdit.Text);
-                            float sx = float.Parse(sizeXLineEdit.Text);
-                            float sy = float.Parse(sizeYLineEdit.Text);
-                            var canvasPos = new Vector2(px, py);
-                            var size = new Vector2(sx, sy);
-                            var output = _displaysManager.AddOutput(display.Index, canvasPos, size, display.Name);
-                            _activeOutputs[display.Index] = output;
-                        } catch (FormatException) {
-                            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                                $"Invalid input for display {display.Index}: Position and size must be numbers.", 2);
-                        }
-                    } else {
-                        if (_activeOutputs.TryGetValue(display.Index, out var output)) {
-                            _displaysManager.RemoveOutput(output.OutputId);
-                            _activeOutputs.Remove(display.Index);
-                        }
-                    }
-                };
-                // Connect LineEdit submissions
-                posXLineEdit.TextSubmitted += (text) => {
-                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
-                        try {
-                            float val = float.Parse(text);
-                            _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(val, outp.CanvasPosition.Y));
-                        } catch (FormatException) {
-                            posXLineEdit.Text = outp.CanvasPosition.X.ToString();
-                        }
-                    }
-                    posXLineEdit.ReleaseFocus();
-                };
-                posYLineEdit.TextSubmitted += (text) => {
-                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
-                        try {
-                            float val = float.Parse(text);
-                            _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(outp.CanvasPosition.X, val));
-                        } catch (FormatException) {
-                            posYLineEdit.Text = outp.CanvasPosition.Y.ToString();
-                        }
-                    }
-                    posYLineEdit.ReleaseFocus();
-                };
-                sizeXLineEdit.TextSubmitted += (text) => {
-                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
-                        try {
-                            float val = float.Parse(text);
-                            _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2(val, outp.Size.Y));
-                        } catch (FormatException) {
-                            sizeXLineEdit.Text = outp.Size.X.ToString();
-                        }
-                    }
-                    sizeXLineEdit.ReleaseFocus();
-                };
-                sizeYLineEdit.TextSubmitted += (text) => {
-                    if (_activeOutputs.TryGetValue(display.Index, out var outp)) {
-                        try {
-                            float val = float.Parse(text);
-                            _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2(outp.Size.X, val));
-                        } catch (FormatException) {
-                            sizeYLineEdit.Text = outp.Size.Y.ToString();
-                        }
-                    }
-                    sizeYLineEdit.ReleaseFocus();
-                };
-
-                // Initial check
-                UpdateUIForUseOutput(instance, useOutputCheckButton.ButtonPressed);
-                // Set initial border color
-                var initialStyle = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
-                initialStyle.BorderColor = useOutputCheckButton.ButtonPressed ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
-                instance.AddThemeStyleboxOverride("panel", initialStyle);
+                CreateOutputDeviceCard(display.Index, display.Name, display.Size, true);
             }
+
+            // Create cards for saved outputs not matching current displays
+            foreach (var output in _displaysManager.Outputs)
+            {
+                if (!_activeOutputs.ContainsKey(output.TargetMonitor))
+                {
+                    CreateOutputDeviceCard(output.TargetMonitor, output.OutputName, output.Size, false, output);
+                }
+            }
+
+            UpdateCanvasOutlines();
         }
         catch (Exception ex)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error populating output devices: {ex.Message}", 2);
         }
+    }
+
+    /// <summary>
+    /// Creates a VideoOutputDevicesCard for the given display or saved output.
+    /// </summary>
+    /// <param name="monitorIndex">The monitor index.</param>
+    /// <param name="name">The display/output name.</param>
+    /// <param name="size">The display size.</param>
+    /// <param name="isCurrent">Whether this is a current display.</param>
+    /// <param name="savedOutput">The saved VideoOutputDevice if not current.</param>
+    private void CreateOutputDeviceCard(int monitorIndex, string name, Vector2I size, bool isCurrent, VideoOutputDevice savedOutput = null)
+    {
+        // Load UI
+        PanelContainer instance = _videoOutputDeviceCardScene.Instantiate<PanelContainer>();
+        _outputDeviceContainer.AddChild(instance);
+
+        // Name label
+        var nameLabel = instance.GetNode<Label>("%DisplayName");
+        if (!isCurrent)
+        {
+            nameLabel.Text = $"Not Found - {name}";
+            nameLabel.AddThemeFontSizeOverride("font_size", 12); // Smaller font
+            nameLabel.AddThemeColorOverride("font_color", Colors.Gray);
+        }
+        else
+        {
+            nameLabel.Text = name;
+        }
+        nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+
+        // Resolution label
+        var resLabel = instance.GetNode<Label>("%DisplayResolution");
+        resLabel.Text = $"{size.X} x {size.Y}";
+        resLabel.HorizontalAlignment = HorizontalAlignment.Center;
+
+        // Get input fields
+        var posXLineEdit = instance.GetNode<LineEdit>("%PosXLineEdit");
+        var posYLineEdit = instance.GetNode<LineEdit>("%PosYLineEdit");
+        var sizeXLineEdit = instance.GetNode<LineEdit>("%SizeXLineEdit");
+        var sizeYLineEdit = instance.GetNode<LineEdit>("%SizeYLineEdit");
+
+        // Set defaults or from saved
+        VideoOutputDevice output = savedOutput ?? _displaysManager.Outputs.Find(o => o.TargetMonitor == monitorIndex);
+        if (output != null)
+        {
+            posXLineEdit.Text = output.CanvasPosition.X.ToString();
+            posYLineEdit.Text = output.CanvasPosition.Y.ToString();
+            sizeXLineEdit.Text = output.Size.X.ToString();
+            sizeYLineEdit.Text = output.Size.Y.ToString();
+            _activeOutputs[monitorIndex] = output;
+        }
+        else
+        {
+            posXLineEdit.Text = "0";
+            posYLineEdit.Text = "0";
+            sizeXLineEdit.Text = size.X.ToString();
+            sizeYLineEdit.Text = size.Y.ToString();
+        }
+
+        // Accordion
+        var accordianCollapseButton = instance.GetNode<Button>("%AccordianCollapseButton");
+        accordianCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+        var displaySettingsAccordianContainer = instance.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
+        displaySettingsAccordianContainer.Visible = false;
+        accordianCollapseButton.Pressed += () => ToggleAccordian(displaySettingsAccordianContainer, accordianCollapseButton);
+
+        // UseOutputCheckButton
+        var useOutputCheckButton = instance.GetNode<CheckButton>("%UseOutputCheckButton");
+        useOutputCheckButton.ButtonPressed = output != null;
+        useOutputCheckButton.Toggled += (bool toggled) => {
+            UpdateUIForUseOutput(instance, toggled);
+            // Update border color
+            var style = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
+            style.BorderColor = toggled ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
+            instance.AddThemeStyleboxOverride("panel", style);
+            if (toggled) {
+                try {
+                    float px = float.Parse(posXLineEdit.Text);
+                    float py = float.Parse(posYLineEdit.Text);
+                    float sx = float.Parse(sizeXLineEdit.Text);
+                    float sy = float.Parse(sizeYLineEdit.Text);
+                    var canvasPos = new Vector2I((int)px, (int)py);
+                    var sizeVec = new Vector2I((int)sx, (int)sy);
+                    var newOutput = _displaysManager.AddOutput(monitorIndex, canvasPos, sizeVec, name);
+                    _activeOutputs[monitorIndex] = newOutput;
+                } catch (FormatException) {
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                        $"Invalid input for display {monitorIndex}: Position and size must be numbers.", 2);
+                }
+            } else {
+                if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                    _displaysManager.RemoveOutput(outp.OutputId);
+                    _activeOutputs.Remove(monitorIndex);
+                }
+            }
+        };
+
+        // Connect LineEdit submissions
+        posXLineEdit.TextSubmitted += (text) => {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                try {
+                    float val = float.Parse(text);
+                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(val, outp.CanvasPosition.Y));
+                } catch (FormatException) {
+                    posXLineEdit.Text = outp.CanvasPosition.X.ToString();
+                }
+            }
+            posXLineEdit.ReleaseFocus();
+        };
+        posYLineEdit.TextSubmitted += (text) => {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                try {
+                    float val = float.Parse(text);
+                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(outp.CanvasPosition.X, val));
+                } catch (FormatException) {
+                    posYLineEdit.Text = outp.CanvasPosition.Y.ToString();
+                }
+            }
+            posYLineEdit.ReleaseFocus();
+        };
+        sizeXLineEdit.TextSubmitted += (text) => {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                try {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(val, outp.Size.Y));
+                } catch (FormatException) {
+                    sizeXLineEdit.Text = outp.Size.X.ToString();
+                }
+            }
+            sizeXLineEdit.ReleaseFocus();
+        };
+        sizeYLineEdit.TextSubmitted += (text) => {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                try {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(outp.Size.X, val));
+                } catch (FormatException) {
+                    sizeYLineEdit.Text = outp.Size.Y.ToString();
+                }
+            }
+            sizeYLineEdit.ReleaseFocus();
+        };
+
+        // Initial UI update
+        UpdateUIForUseOutput(instance, useOutputCheckButton.ButtonPressed);
+        // Set initial border color
+        var initialStyle = (StyleBoxFlat) instance.GetThemeStylebox("panel").Duplicate();
+        initialStyle.BorderColor = useOutputCheckButton.ButtonPressed ? Colors.Red : new Color(0.349484f, 0.349484f, 0.349484f, 1);
+        instance.AddThemeStyleboxOverride("panel", initialStyle);
     }
     
     /// <summary>
@@ -509,13 +551,21 @@ public partial class SettingsCanvasEditor : ScrollContainer
 
     private void OnDisplaysChanged()
     {
-        UpdateCanvasOutlines();
+        PopulateOutputDevices();
     }
 
     private void OnCanvasSizeChanged(Vector2I newSize)
     {
         _canvasSizeXLineEdit.Text = newSize.X.ToString();
         _canvasSizeYLineEdit.Text = newSize.Y.ToString();
+    }
+
+    /// <summary>
+    /// Refreshes the video outputs by re-populating the devices.
+    /// </summary>
+    public void RefreshOutputs()
+    {
+        PopulateOutputDevices();
     }
 
     private void UpdateCanvasOutlines()
@@ -526,7 +576,9 @@ public partial class SettingsCanvasEditor : ScrollContainer
         {
             var outline = new ColorRect();
             outline.Position = output.CanvasPosition * _zoom;
-            outline.Size = output.Size * _zoom;
+            var sizex = output.Size.X * _zoom;
+            var sizey = output.Size.Y * _zoom;
+            outline.Size = new Vector2I((int)sizex, (int)sizey);
             outline.Color = new Color(1, 0, 0, 0.5f); // semi-transparent red
             _canvasLayer.AddChild(outline);
             _outputOutlines.Add(outline);

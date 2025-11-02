@@ -55,7 +55,7 @@ public partial class DisplaysManager : Node
     /// <param name="size">Size of the output region.</param>
     /// <param name="name">Name of the output.</param>
     /// <returns>The created VideoOutputDevice.</returns>
-    public VideoOutputDevice AddOutput(int monitorIndex, Vector2 canvasPosition, Vector2 size, string name = null)
+    public VideoOutputDevice AddOutput(int monitorIndex, Vector2 canvasPosition, Vector2I size, string name = null)
     {
         var output = new VideoOutputDevice();
         output.OutputName = name ?? $"Output {monitorIndex}";
@@ -131,7 +131,7 @@ public partial class DisplaysManager : Node
     /// </summary>
     /// <param name="outputId">The output ID.</param>
     /// <param name="newSize">The new size.</param>
-    public void UpdateOutputSize(int outputId, Vector2 newSize)
+    public void UpdateOutputSize(int outputId, Vector2I newSize)
     {
         var output = Outputs.Find(o => o.OutputId == outputId);
         if (output != null)
