@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Shared;
-using LibVLCSharp.Shared;
 
 namespace Cue2.Base;
 

@@ -1,15 +1,11 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using Cue2.Base;
 using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Godot;
 using Godot.Collections;
-using LibVLCSharp.Shared;
-using SDL3;
 
 namespace Cue2.Shared;
 // This script manages global data it contains:

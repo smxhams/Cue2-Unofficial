@@ -1,10 +1,6 @@
 using System.Collections.Generic;
-using System.Linq;
-using Cue2.Base.Classes;
-using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 using Godot;
-using LibVLCSharp.Shared;
 
 namespace Cue2.Base.Settings;
 

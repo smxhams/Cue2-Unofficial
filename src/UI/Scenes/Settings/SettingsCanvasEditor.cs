@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 
 namespace Cue2.UI.Scenes.Settings;
@@ -223,7 +224,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             {
                 if (!_activeOutputs.ContainsKey(output.TargetMonitor))
                 {
-                    CreateOutputDeviceCard(output.TargetMonitor, output.OutputName, output.Size, false, output);
+                    CreateOutputDeviceCard(output.TargetMonitor, output.OutputName, output.OutputSize, false, output);
                 }
             }
 
@@ -281,8 +282,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
         {
             posXLineEdit.Text = output.CanvasPosition.X.ToString();
             posYLineEdit.Text = output.CanvasPosition.Y.ToString();
-            sizeXLineEdit.Text = output.Size.X.ToString();
-            sizeYLineEdit.Text = output.Size.Y.ToString();
+            sizeXLineEdit.Text = output.OutputSize.X.ToString();
+            sizeYLineEdit.Text = output.OutputSize.Y.ToString();
             _activeOutputs[monitorIndex] = output;
         }
         else
@@ -335,8 +336,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
         posXLineEdit.TextSubmitted += (text) => {
             if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
                 try {
-                    float val = float.Parse(text);
-                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(val, outp.CanvasPosition.Y));
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2I(val, outp.CanvasPosition.Y));
                 } catch (FormatException) {
                     posXLineEdit.Text = outp.CanvasPosition.X.ToString();
                 }
@@ -346,8 +347,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
         posYLineEdit.TextSubmitted += (text) => {
             if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
                 try {
-                    float val = float.Parse(text);
-                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2(outp.CanvasPosition.X, val));
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateOutputCanvasPosition(outp.OutputId, new Vector2I(outp.CanvasPosition.X, val));
                 } catch (FormatException) {
                     posYLineEdit.Text = outp.CanvasPosition.Y.ToString();
                 }
@@ -358,9 +359,9 @@ public partial class SettingsCanvasEditor : ScrollContainer
             if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
                 try {
                     int val = int.Parse(text);
-                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(val, outp.Size.Y));
+                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(val, outp.OutputSize.Y));
                 } catch (FormatException) {
-                    sizeXLineEdit.Text = outp.Size.X.ToString();
+                    sizeXLineEdit.Text = outp.OutputSize.X.ToString();
                 }
             }
             sizeXLineEdit.ReleaseFocus();
@@ -369,9 +370,9 @@ public partial class SettingsCanvasEditor : ScrollContainer
             if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
                 try {
                     int val = int.Parse(text);
-                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(outp.Size.X, val));
+                    _displaysManager.UpdateOutputSize(outp.OutputId, new Vector2I(outp.OutputSize.X, val));
                 } catch (FormatException) {
-                    sizeYLineEdit.Text = outp.Size.Y.ToString();
+                    sizeYLineEdit.Text = outp.OutputSize.Y.ToString();
                 }
             }
             sizeYLineEdit.ReleaseFocus();
@@ -575,9 +576,11 @@ public partial class SettingsCanvasEditor : ScrollContainer
         foreach (var output in _displaysManager.Outputs)
         {
             var outline = new ColorRect();
-            outline.Position = output.CanvasPosition * _zoom;
-            var sizex = output.Size.X * _zoom;
-            var sizey = output.Size.Y * _zoom;
+            var posX = output.CanvasPosition.X * _zoom;
+            var posY = output.CanvasPosition.Y * _zoom;
+            outline.Position = new Vector2I((int)posX, (int)posY);
+            var sizex = output.OutputSize.X * _zoom;
+            var sizey = output.OutputSize.Y * _zoom;
             outline.Size = new Vector2I((int)sizex, (int)sizey);
             outline.Color = new Color(1, 0, 0, 0.5f); // semi-transparent red
             _canvasLayer.AddChild(outline);

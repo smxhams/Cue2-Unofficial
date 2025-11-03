@@ -3,7 +3,6 @@ using System.Linq;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 using Godot;
-using LibVLCSharp.Shared.Structures;
 
 namespace Cue2.Base;
 

@@ -2,6 +2,7 @@ using System;
 using Godot;
 using System.Collections.Generic;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.Devices;
 using SDL3;
 
 namespace Cue2.Shared;
@@ -55,12 +56,12 @@ public partial class DisplaysManager : Node
     /// <param name="size">Size of the output region.</param>
     /// <param name="name">Name of the output.</param>
     /// <returns>The created VideoOutputDevice.</returns>
-    public VideoOutputDevice AddOutput(int monitorIndex, Vector2 canvasPosition, Vector2I size, string name = null)
+    public VideoOutputDevice AddOutput(int monitorIndex, Vector2I canvasPosition, Vector2I size, string name = null)
     {
         var output = new VideoOutputDevice();
         output.OutputName = name ?? $"Output {monitorIndex}";
         output.CanvasPosition = canvasPosition;
-        output.Size = size;
+        output.OutputSize = size;
         output.TargetMonitor = monitorIndex;
         AddChild(output);
         
@@ -115,7 +116,7 @@ public partial class DisplaysManager : Node
     /// </summary>
     /// <param name="outputId">The output ID.</param>
     /// <param name="newCanvasPosition">The new canvas position.</param>
-    public void UpdateOutputCanvasPosition(int outputId, Vector2 newCanvasPosition)
+    public void UpdateOutputCanvasPosition(int outputId, Vector2I newCanvasPosition)
     {
         var output = Outputs.Find(o => o.OutputId == outputId);
         if (output != null)
@@ -136,7 +137,7 @@ public partial class DisplaysManager : Node
         var output = Outputs.Find(o => o.OutputId == outputId);
         if (output != null)
         {
-            output.Size = newSize;
+            output.OutputSize = newSize;
             output.UpdateOutputRegion();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
@@ -185,7 +186,6 @@ public partial class DisplaysManager : Node
             // Calculate display position offset
             var gPrimI = DisplayServer.GetPrimaryScreen();
             var gPrimPos = DisplayServer.ScreenGetPosition(gPrimI);
-
             var sPrimI = SDL.GetPrimaryDisplay();
             SDL.GetDisplayBounds(sPrimI, out SDL.Rect sPrimRect);
 
@@ -327,7 +327,7 @@ public partial class DisplaysManager : Node
             {
                 var name = (string)layerData["LayerName"];
                 var zIndex = (int)layerData["ZIndex"];
-                AddLayer(name, zIndex);
+                //AddLayer(name, zIndex);
             }
         }
 
@@ -338,9 +338,10 @@ public partial class DisplaysManager : Node
             {
                 var output = new VideoOutputDevice();
                 output.LoadFromData(outputData);
+                AddChild(output);
                 Outputs.Add(output);
-                output.Show();
                 output.SetCanvasReference(Canvas);
+                output.Show();
             }
         }
     }

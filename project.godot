@@ -24,12 +24,12 @@ GlobalData="*res://src/Shared/GlobalData.cs"
 GlobalSignals="*res://src/Shared/GlobalSignals.cs"
 GlobalStyles="*res://src/Shared/GlobalStyles.cs"
 EventLogger="*res://src/Shared/EventLogger.cs"
+DisplaysManager="*res://src/Shared/DisplaysManager.cs"
 SaveManager="*res://src/Shared/SaveManager.cs"
 InputActionsListener="*res://src/Shared/InputActionsListener.cs"
 UiUtilities="*res://src/UI/Utilities/UiUtilities.cs"
 MediaEngine="*res://src/Shared/MediaEngine.cs"
 AudioDevices="*res://src/Shared/AudioDevices.cs"
-DisplaysManager="*res://src/Shared/DisplaysManager.cs"
 
 [display]
 

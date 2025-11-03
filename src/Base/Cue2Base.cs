@@ -1,14 +1,6 @@
 using Godot;
-using Godot.NativeInterop;
-using System;
-using System.Collections;
-using System.ComponentModel;
-using System.Linq;
-using Cue2.Base.Classes;
-using Cue2.Base.CommandInterpreter;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
-using LibVLCSharp.Shared;
 // DOES THIS UPDATE?
 // This script handles:
 // -Activation of cues
