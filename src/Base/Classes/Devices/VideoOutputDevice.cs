@@ -1,5 +1,7 @@
 using Godot;
 using System;
+using Cue2.UI.Utilities;
+using Godot.Collections;
 
 namespace Cue2.Base.Classes.Devices;
 
@@ -34,6 +36,11 @@ public partial class VideoOutputDevice : Window, IDisposable
     public int TargetMonitor { get; set; } = 0;
 
     /// <summary>
+    /// Whether the output window is transparent.
+    /// </summary>
+    public bool OutputTransparent { get; set; } = false;
+
+    /// <summary>
     /// Reference to the parent canvas.
     /// </summary>
     private Canvas _canvas;
@@ -44,6 +51,9 @@ public partial class VideoOutputDevice : Window, IDisposable
     private TextureRect _outputRect;
 
     private static int _nextOutputId = 0;
+
+    private TestPattern _testPattern;
+    private Dictionary<int, TestPattern> _layerTestPatterns = new();
 
     /// <summary>
     /// Cached last clipped rectangle to avoid unnecessary updates.
@@ -57,8 +67,10 @@ public partial class VideoOutputDevice : Window, IDisposable
         _outputRect = new TextureRect();
         _outputRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
         _outputRect.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+        //AlwaysOnTop = true;
         AddChild(_outputRect);
         Borderless = true;
+        DisplayServer.ScreenSetKeepOn(true);
         GD.Print($"VideoOutputDevice:Constructor - Initialized output device '{OutputName}' with ID {OutputId}.");
     }
     
@@ -80,6 +92,7 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// </summary>
     public void UpdateOutputRegion()
     {
+        GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updating output region '{OutputName}'.");
         if (_canvas == null)
         {
             GD.Print("VideoOutputDevice:UpdateOutputRegion - No canvas reference set.");
@@ -132,23 +145,37 @@ public partial class VideoOutputDevice : Window, IDisposable
 
             // Set to TextureRect
             _outputRect.Texture = ImageTexture.CreateFromImage(croppedImage);
-
-            // Position and size window based on clipped region, clamped to monitor bounds
-            var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
-            var monitorSize = DisplayServer.ScreenGetSize(TargetMonitor);
-            var monitorRect = new Rect2(monitorPos, monitorSize);
-            var windowPos = monitorPos + (clippedRect.Position - CanvasPosition);
-            var windowRect = new Rect2(windowPos, clippedRect.Size);
-            var clampedRect = monitorRect.Intersection(windowRect);
             
-            if (clampedRect.Size.X > 0 && clampedRect.Size.Y > 0)
+            // Position and size window based on clipped region
+            if (Mode == ModeEnum.ExclusiveFullscreen)
             {
-                DisplayServer.WindowSetPosition(new Vector2I((int)clampedRect.Position.X, (int)clampedRect.Position.Y), GetWindow().GetWindowId());
-                DisplayServer.WindowSetSize(new Vector2I((int)clampedRect.Size.X, (int)clampedRect.Size.Y), GetWindow().GetWindowId());
+                Borderless = false;
+                this.SetSize(new Vector2I(Size.X - 1, Size.Y));
+                SetMode(ModeEnum.Windowed);
+                this.SetSize(new Vector2I(Size.X - 1, Size.Y));
+            }
+            Transparent = OutputTransparent;
+            var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
+            var windowPos = monitorPos + (clippedRect.Position - CanvasPosition);
+
+            if (clippedRect.Size.X > 0 && clippedRect.Size.Y > 0)
+            {
+                Borderless = true;
+                DisplayServer.WindowSetPosition(new Vector2I((int)windowPos.X, (int)windowPos.Y), GetWindowId());
+                DisplayServer.WindowSetSize(OutputSize, GetWindowId());
             }
             else
             {
-                DisplayServer.WindowSetSize(new Vector2I(0, 0), GetWindow().GetWindowId());
+                DisplayServer.WindowSetSize(new Vector2I(0, 0), GetWindowId());
+            }
+
+            
+            GD.Print($"Mode after update: {Mode}, Borderless: {Borderless.ToString()}, Transparent: {Transparent}");
+
+            if (TestPatternStatus())
+            {
+                ToggleTestPattern(false);
+                ToggleTestPattern(true);
             }
 
             GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updated '{OutputName}' to clipped region {clippedRect.Position}-{clippedRect.Size} from canvas {CanvasPosition}-{OutputSize}.");
@@ -157,6 +184,84 @@ public partial class VideoOutputDevice : Window, IDisposable
         {
             GD.Print($"VideoOutputDevice:UpdateOutputRegion - Error: {ex.Message}. Stack trace: {ex.StackTrace}");
         }
+    }
+
+    public void ToggleTestPattern(bool toggle)
+    {
+        SetTestPatternRect(toggle, new Rect2(Vector2.Zero, Size));
+    }
+
+    public void SetTestPatternRect(bool enable, Rect2 rect)
+    {
+        if (enable)
+        {
+            if (_testPattern == null)
+            {
+                GD.Print($"VideoOutputDevice:SetTestPatternRect - Adding test pattern to {OutputName} at {rect}.");
+                _testPattern = new TestPattern((Vector2I)rect.Size, (Vector2I)rect.Position, OutputName);
+                AddChild(_testPattern);
+            }
+            else
+            {
+                _testPattern.PatternSize = (Vector2I)rect.Size;
+                _testPattern.PatternPosition = (Vector2I)rect.Position;
+                _testPattern.QueueRedraw();
+                GD.Print($"VideoOutputDevice:SetTestPatternRect - Updating test pattern to {rect}.");
+            }
+        }
+        else
+        {
+            if (_testPattern != null)
+            {
+                RemoveChild(_testPattern);
+                _testPattern.QueueFree();
+                _testPattern = null;
+                GD.Print($"VideoOutputDevice:SetTestPatternRect - Removing test pattern from {OutputName}.");
+            }
+        }
+    }
+
+    public void AddLayerTestPattern(int layerId, string layerName, Rect2 rect)
+    {
+        if (!_layerTestPatterns.ContainsKey(layerId))
+        {
+            GD.Print($"VideoOutputDevice:AddLayerTestPattern - Adding layer test pattern '{layerName}' to {OutputName} at {rect}.");
+            var tp = new TestPattern((Vector2I)rect.Size, (Vector2I)rect.Position, layerName);
+            AddChild(tp);
+            _layerTestPatterns[layerId] = tp;
+        }
+        else
+        {
+            var tp = _layerTestPatterns[layerId];
+            tp.PatternSize = (Vector2I)rect.Size;
+            tp.PatternPosition = (Vector2I)rect.Position;
+            tp.Position = (Vector2I)rect.Position;
+            tp.QueueRedraw();
+            GD.Print($"VideoOutputDevice:AddLayerTestPattern - Updating layer test pattern '{layerName}' to {rect}.");
+        }
+    }
+
+    public void RemoveLayerTestPattern(int layerId)
+    {
+        if (_layerTestPatterns.TryGetValue(layerId, out var tp))
+        {
+            RemoveChild(tp);
+            tp.QueueFree();
+            _layerTestPatterns.Remove(layerId);
+            GD.Print($"VideoOutputDevice:RemoveLayerTestPattern - Removing layer test pattern for layer ID {layerId} from {OutputName}.");
+        }
+    }
+
+    public bool TestPatternStatus()
+    {
+        if (_testPattern != null) return true;
+        return false;
+    }
+
+    public void SetTransparent(bool state)
+    {
+        OutputTransparent = state;
+        this.Transparent = state;
     }
 
     /// <summary>
@@ -173,6 +278,7 @@ public partial class VideoOutputDevice : Window, IDisposable
         data.Add("OutputSizeX", OutputSize.X);
         data.Add("OutputSizeY", OutputSize.Y);
         data.Add("TargetMonitor", TargetMonitor);
+        data.Add("Transparent", OutputTransparent);
         return data;
     }
 
@@ -185,14 +291,16 @@ public partial class VideoOutputDevice : Window, IDisposable
         OutputId = (int)data["OutputId"];
         OutputName = (string)data["OutputName"];
         TargetMonitor = (int)data["TargetMonitor"];
-        
+
         var canvPosX = data.ContainsKey("CanvasPositionX") ? (int)data["CanvasPositionX"] : 0;
         var canvPosY = data.ContainsKey("CanvasPositionY") ? (int)data["CanvasPositionY"] : 0;
         CanvasPosition = new Vector2I(canvPosX, canvPosY);
-        
+
         var outSizeX = data.ContainsKey("OutputSizeX") ? (int)data["OutputSizeX"] : 1920;
         var outSizeY = data.ContainsKey("OutputSizeY") ? (int)data["OutputSizeY"] : 1080;
         OutputSize = new Vector2I(outSizeX, outSizeY);
+
+        OutputTransparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
     }
     
     public override void _ExitTree()
@@ -214,8 +322,24 @@ public partial class VideoOutputDevice : Window, IDisposable
             _outputRect = null;
         }
 
+        // Remove test patterns
+        if (_testPattern != null)
+        {
+            RemoveChild(_testPattern);
+            _testPattern.QueueFree();
+            _testPattern = null;
+        }
+        foreach (var kvp in _layerTestPatterns)
+        {
+            RemoveChild(kvp.Value);
+            kvp.Value.QueueFree();
+        }
+        _layerTestPatterns.Clear();
+
         // Clear canvas reference
         _canvas = null;
+        
+        QueueFree();
 
         GD.Print($"VideoOutputDevice:Dispose - Disposed output device '{OutputName}'.");
     }

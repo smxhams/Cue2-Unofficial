@@ -43,7 +43,7 @@ public partial class DisplaysManager : Node
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 
         // Add default layer
-        AddLayer("Default Layer", 0);
+        AddLayer("Default", 0);
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
     }
@@ -68,6 +68,7 @@ public partial class DisplaysManager : Node
         Outputs.Add(output);
         output.Show();
         output.SetCanvasReference(Canvas);
+        UpdateAllLayerTestPatterns();
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added video output '{output.OutputName}' for monitor {monitorIndex}.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -83,6 +84,14 @@ public partial class DisplaysManager : Node
         var output = Outputs.Find(o => o.OutputId == outputId);
         if (output != null)
         {
+            // Remove layer test patterns from this output
+            foreach (var layer in Layers)
+            {
+                if (layer.TestPatternEnabled)
+                {
+                    output.RemoveLayerTestPattern(layer.LayerId);
+                }
+            }
             Outputs.Remove(output);
             output.QueueFree();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed video output '{output.OutputName}'.", 0);
@@ -123,6 +132,7 @@ public partial class DisplaysManager : Node
         {
             output.CanvasPosition = newCanvasPosition;
             output.UpdateOutputRegion();
+            UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
     }
@@ -139,6 +149,7 @@ public partial class DisplaysManager : Node
         {
             output.OutputSize = newSize;
             output.UpdateOutputRegion();
+            UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
     }
@@ -152,8 +163,10 @@ public partial class DisplaysManager : Node
     public VideoTargetLayer AddLayer(string name, int zIndex)
     {
         var layer = new VideoTargetLayer(name, zIndex);
+        layer.Size = Canvas.CanvasSize;
+        layer.CanvasPosition = Vector2I.Zero;
         Layers.Add(layer);
-        Canvas.AddChild(layer.LayerNode);
+        Canvas.AddChild(layer);
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added layer '{name}' to canvas.", 0);
         return layer;
     }
@@ -167,10 +180,151 @@ public partial class DisplaysManager : Node
         var layer = Layers.Find(l => l.LayerId == layerId);
         if (layer != null)
         {
+            // Remove test patterns from all outputs
+            foreach (var output in Outputs)
+            {
+                output.RemoveLayerTestPattern(layer.LayerId);
+            }
             Layers.Remove(layer);
-            Canvas.RemoveChild(layer.LayerNode);
-            layer.LayerNode.QueueFree();
+            Canvas.RemoveChild(layer);
+            layer.QueueFree();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed layer '{layer.LayerName}'.", 0);
+        }
+    }
+
+    /// <summary>
+    /// Updates the name of a layer.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="newName">The new name.</param>
+    public void UpdateLayerName(int layerId, string newName)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+        {
+            layer.LayerName = newName;
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer name to '{newName}'.", 0);
+        }
+    }
+
+    /// <summary>
+    /// Updates the canvas position of a layer.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="newPosition">The new canvas position.</param>
+    public void UpdateLayerCanvasPosition(int layerId, Vector2I newPosition)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+        {
+            layer.CanvasPosition = newPosition;
+            UpdateLayerTestPatterns(layerId);
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer position to {newPosition}.", 0);
+        }
+    }
+
+    /// <summary>
+    /// Updates the size of a layer.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="newSize">The new size.</param>
+    public void UpdateLayerSize(int layerId, Vector2I newSize)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+        {
+            layer.Size = newSize;
+            UpdateLayerTestPatterns(layerId);
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer size to {newSize}.", 0);
+        }
+    }
+
+    /// <summary>
+    /// Updates the transparency of a layer.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="transparent">Whether the layer is transparent.</param>
+    public void UpdateLayerTransparent(int layerId, bool transparent)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+        {
+            layer.Transparent = transparent;
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer transparency to {transparent}.", 0);
+        }
+    }
+
+    /// <summary>
+    /// Toggles the test pattern for a layer on intersecting outputs.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="toggle">Whether to enable or disable.</param>
+    public void ToggleLayerTestPattern(int layerId, bool toggle)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer == null) return;
+
+        layer.TestPatternEnabled = toggle;
+        Rect2 layerRect = new Rect2(layer.CanvasPosition, layer.Size);
+        Rect2 canvasRect = new Rect2(0, 0, Canvas.CanvasSize.X, Canvas.CanvasSize.Y);
+        foreach (var output in Outputs)
+        {
+            Rect2 outputRect = new Rect2(output.CanvasPosition, output.OutputSize);
+            Rect2 intersection = layerRect.Intersection(outputRect);
+            if (intersection.Size.X > 0 && intersection.Size.Y > 0)
+            {
+                Rect2 clippedRect = canvasRect.Intersection(outputRect);
+                // Convert to output local coordinates
+                Vector2 localPos = layer.CanvasPosition - clippedRect.Position;
+                if (toggle)
+                {
+                    output.AddLayerTestPattern(layer.LayerId, layer.LayerName, new Rect2(localPos, layer.Size));
+                }
+                else
+                {
+                    output.RemoveLayerTestPattern(layer.LayerId);
+                }
+            }
+        }
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"{(toggle ? "Enabled" : "Disabled")} test pattern for layer '{layer.LayerName}'.", 0);
+    }
+
+    /// <summary>
+    /// Updates the test patterns for a layer on intersecting outputs.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    public void UpdateLayerTestPatterns(int layerId)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer == null || !layer.TestPatternEnabled) return;
+
+        Rect2 layerRect = new Rect2(layer.CanvasPosition, layer.Size);
+        Rect2 canvasRect = new Rect2(0, 0, Canvas.CanvasSize.X, Canvas.CanvasSize.Y);
+        foreach (var output in Outputs)
+        {
+            Rect2 outputRect = new Rect2(output.CanvasPosition, output.OutputSize);
+            Rect2 intersection = layerRect.Intersection(outputRect);
+            if (intersection.Size.X > 0 && intersection.Size.Y > 0)
+            {
+                Rect2 clippedRect = canvasRect.Intersection(outputRect);
+                // Convert to output local coordinates
+                Vector2 localPos = layer.CanvasPosition - clippedRect.Position;
+                output.AddLayerTestPattern(layer.LayerId, layer.LayerName, new Rect2(localPos, layer.Size));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the test patterns for all layers on all outputs.
+    /// </summary>
+    public void UpdateAllLayerTestPatterns()
+    {
+        foreach (var layer in Layers)
+        {
+            if (layer.TestPatternEnabled)
+            {
+                UpdateLayerTestPatterns(layer.LayerId);
+            }
         }
     }
 
@@ -319,16 +473,27 @@ public partial class DisplaysManager : Node
             var canvasData = (Godot.Collections.Dictionary) data["Canvas"];
             Canvas.LoadFromData(canvasData);
         }
+
+        foreach (var layer in Layers)
+        {
+            layer.Dispose();
+        }
+        Layers.Clear();
         
         if (data.ContainsKey("Layers"))
         {
             var layersData = (Godot.Collections.Array) data["Layers"];
             foreach (Godot.Collections.Dictionary layerData in layersData)
             {
-                var name = (string)layerData["LayerName"];
-                var zIndex = (int)layerData["ZIndex"];
-                //AddLayer(name, zIndex);
+                var layer = new VideoTargetLayer();
+                layer.LoadFromData(layerData);
+                Layers.Add(layer);
             }
+        }
+
+        if (Layers.Count == 0)
+        {
+            AddLayer("Default", 0);
         }
 
         if (data.ContainsKey("Outputs"))
@@ -344,5 +509,7 @@ public partial class DisplaysManager : Node
                 output.Show();
             }
         }
+
+        UpdateAllLayerTestPatterns();
     }
 }

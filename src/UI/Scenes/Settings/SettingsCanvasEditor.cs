@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Scenes.Settings;
 
@@ -16,6 +17,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private DisplaysManager _displaysManager;
 
     private PackedScene _videoOutputDeviceCardScene;
+    private PackedScene _videoTargetLayerCardScene;
     
     // UI
     private LineEdit _canvasSizeXLineEdit;
@@ -33,17 +35,52 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private Button _zoomInButton;
     private Button _zoomOutButton;
     private LineEdit _zoomPercentLineEdit;
+    private Button _newTargetLayerButton;
 
     private float _zoom = 0.2f;
     private const float MIN_ZOOM = 0.05f;
     private const float MAX_ZOOM = 3.0f;
-    private const int VIEWPORT_WIDTH = 10000;
-    private const int VIEWPORT_HEIGHT = 10000;
+
 
     private bool _isPanning = false;
     private Dictionary<int, VideoOutputDevice> _activeOutputs = new();
-    private List<ColorRect> _outputOutlines = new();
+    private List<Control> _outputOutlines = new();
 
+    private partial class DashedOutline : Control
+    {
+        public Color BorderColor = Colors.Red;
+        public float DashLength = 10f;
+        public bool OffsetDash = false;
+
+        public override void _Draw()
+        {
+            Vector2 size = Size;
+            float offset = OffsetDash ? DashLength / 2 : 0;
+            // Top
+            DrawDashedLine(new Vector2(0, 0), new Vector2(size.X, 0), BorderColor, 2, DashLength, offset);
+            // Right
+            DrawDashedLine(new Vector2(size.X, 0), new Vector2(size.X, size.Y), BorderColor, 2, DashLength, offset);
+            // Bottom
+            DrawDashedLine(new Vector2(size.X, size.Y), new Vector2(0, size.Y), BorderColor, 2, DashLength, offset);
+            // Left
+            DrawDashedLine(new Vector2(0, size.Y), new Vector2(0, 0), BorderColor, 2, DashLength, offset);
+        }
+
+        private void DrawDashedLine(Vector2 from, Vector2 to, Color color, float width, float dashLength, float startOffset)
+        {
+            Vector2 dir = (to - from).Normalized();
+            float length = (to - from).Length();
+            float current = startOffset;
+            while (current < length)
+            {
+                Vector2 start = from + dir * current;
+                float endDist = Mathf.Min(current + dashLength, length);
+                Vector2 end = from + dir * endDist;
+                DrawLine(start, end, color, width);
+                current += dashLength * 2; // skip gap
+            }
+        }
+    }
 
     public override void _Ready()
     {
@@ -59,6 +96,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         TreeExiting += Cleanup;
         
         _videoOutputDeviceCardScene = SceneLoader.LoadPackedScene("uid://cafctoouo75sh", out string _);
+        _videoTargetLayerCardScene = SceneLoader.LoadPackedScene("uid://duk02eyqpwjxe", out _);
         
         _canvasSizeXLineEdit = GetNode<LineEdit>("%CanvasSizeX");
         _canvasSizeYLineEdit = GetNode<LineEdit>("%CanvasSizeY");
@@ -71,23 +109,32 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _control = GetNode<Control>("%CanvasControl");
         _scrollContainer = GetNode<ScrollContainer>("%ScrollContainer");
         _canvasLayer = GetNode<CanvasLayer>("%CanvasLayer");
+        _newTargetLayerButton = GetNode<Button>("%AddTargetLayerButton");
+        
 
         // Add background with diagonal lines
         var backgroundRect = new ColorRect();
-        backgroundRect.Size = new Vector2(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-        backgroundRect.Position = new Vector2(-500, -500);
         backgroundRect.ZIndex = -1; // Behind other elements
 
         var shader = new Shader();
         shader.Code = @"
             shader_type canvas_item;
 
+            uniform vec2 rect_size;
+
             void fragment() {
-                vec2 uv = UV * 600.0; // Scale for line density
-                float diagonal1 = mod(uv.x + uv.y, 2.0);
-                float diagonal2 = mod(uv.x - uv.y, 2.0);
+                vec2 uv = UV;
+                float aspect = max(rect_size.x, rect_size.y) / min(rect_size.x, rect_size.y);
+                if (rect_size.x > rect_size.y) {
+                    uv.x *= aspect;
+                } else {
+                    uv.y *= aspect;
+                }
+                vec2 scaled_uv = uv * 20.0;
+                float diagonal1 = mod(scaled_uv.x + scaled_uv.y, 2.0);
+                float diagonal2 = mod(scaled_uv.x - scaled_uv.y, 2.0);
                 if (diagonal1 < 0.07 || diagonal2 < 0.07) {
-                    COLOR = vec4(0.05, 0.05, 0.05, 1.0); // Grey diagonal lines both ways
+                    COLOR = vec4(0.2, 0.2, 0.2, 1.0); // Grey diagonal lines both ways
                 } else {
                     COLOR = vec4(0.0, 0.0, 0.0, 0.0); // Transparent
                 }
@@ -95,11 +142,14 @@ public partial class SettingsCanvasEditor : ScrollContainer
             ";
         var material = new ShaderMaterial();
         material.Shader = shader;
+        material.SetShaderParameter("rect_size", _scrollContainer.Size);
         backgroundRect.Material = material;
 
         _backgroundRect = backgroundRect;
-        _canvasLayer.AddChild(_backgroundRect);
-        _canvasLayer.MoveChild(_backgroundRect, 0);
+        var backgroundLayer = new CanvasLayer();
+        backgroundLayer.Layer = -1; // Render behind canvas layer
+        _viewport.AddChild(backgroundLayer);
+        backgroundLayer.AddChild(_backgroundRect);
         _zoomInButton = GetNode<Button>("%ZoomInButton");
         _zoomOutButton = GetNode<Button>("%ZoomOutButton");
         _zoomPercentLineEdit = GetNode<LineEdit>("%ZoomPercentLabel");
@@ -110,7 +160,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _viewport.Size = new Vector2I(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
 
         // Set initial zoom
-        UpdateZoom();
+        CallDeferred(nameof(UpdateZoom));
 
         // Load current canvas size into line edits
         _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
@@ -125,15 +175,15 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _zoomOutButton.Pressed += ZoomOut;
         _zoomPercentLineEdit.TextSubmitted += OnZoomPercentSubmitted;
         
-        // Create preview
-
+        // Connect 
+        _newTargetLayerButton.Pressed += OnNewTargetLayerPressed;
 
 
         PopulateOutputDevices();
         PopulateTargetLayers();
         UpdateCanvasOutlines();
 
-
+        GD.Print($"SettingsCanvasEditor:_ready - Initialised");
     }
 
 
@@ -179,27 +229,17 @@ public partial class SettingsCanvasEditor : ScrollContainer
         else if (@event is InputEventMouseMotion motionEvent && _isPanning)
         {
             _canvasLayer.Offset += motionEvent.Relative;
-            // Clamp to keep outline in view
-            Vector2 zoomedSize = new Vector2(_canvas.CanvasSize.X * _zoom, _canvas.CanvasSize.Y * _zoom);
-            _canvasLayer.Offset = new Vector2(
-                Mathf.Clamp(_canvasLayer.Offset.X, 0, zoomedSize.X * 2 - 50),
-                Mathf.Clamp(_canvasLayer.Offset.Y, 0, zoomedSize.Y * 2 - 50)
-            );
+            // Allow free panning
             GetViewport().SetInputAsHandled();
         }
     }
-
-    public override void _Process(double delta)
-    {
-        // _testMesh.RotateZ(0.001f); // Commented out for 2D canvas focus
-    }
-
 
     /// <summary>
     /// Populates the output devices container with cards for each detected display and saved outputs.
     /// </summary>
     private void PopulateOutputDevices()
     {
+        GD.Print($"SettingsCanvasEditor:PopulateOutputDevices - Populating output devices");
         try
         {
             // Clear existing cards
@@ -247,6 +287,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
     /// <param name="savedOutput">The saved VideoOutputDevice if not current.</param>
     private void CreateOutputDeviceCard(int monitorIndex, string name, Vector2I size, bool isCurrent, VideoOutputDevice savedOutput = null)
     {
+        GD.Print($"SettingsCanvasEditor:CreateOutputDeviceCard - Loading card: MonitorIndex: {monitorIndex}, Name: {name}, Size: {size}");
+        
         // Load UI
         PanelContainer instance = _videoOutputDeviceCardScene.Instantiate<PanelContainer>();
         _outputDeviceContainer.AddChild(instance);
@@ -332,6 +374,15 @@ public partial class SettingsCanvasEditor : ScrollContainer
             }
         };
 
+        // TransparentCheckButton
+        var transparentCheckButton = instance.GetNode<CheckBox>("%TransparentCheckBox");
+        transparentCheckButton.ButtonPressed = output?.Transparent ?? false;
+        transparentCheckButton.Toggled += (bool toggled) => {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
+                outp.SetTransparent(toggled);
+            }
+        };
+        
         // Connect LineEdit submissions
         posXLineEdit.TextSubmitted += (text) => {
             if (_activeOutputs.TryGetValue(monitorIndex, out var outp)) {
@@ -377,6 +428,17 @@ public partial class SettingsCanvasEditor : ScrollContainer
             }
             sizeYLineEdit.ReleaseFocus();
         };
+        
+        // Test Pattern
+        var testButton = instance.GetNode<Button>("%TestPatternCheckBox");
+        if (output != null) testButton.ButtonPressed = output.TestPatternStatus();
+        testButton.Toggled += (toggled) =>
+        {
+            if (_activeOutputs.TryGetValue(monitorIndex, out var outp))
+            {
+                outp.ToggleTestPattern(toggled);
+            }
+        };
 
         // Initial UI update
         UpdateUIForUseOutput(instance, useOutputCheckButton.ButtonPressed);
@@ -411,6 +473,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
             _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
             _canvasSizeYLineEdit.Text = _canvas.CanvasSize.Y.ToString();
             
+            _canvasSizeXLineEdit.ReleaseFocus();
+            _canvasSizeYLineEdit.ReleaseFocus();
             // Preview updates automatically via texture reference
             
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
@@ -428,6 +492,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
         }
     }
 
+    
+    
     private void ZoomIn()
     {
         float increment = _zoom * 0.1f; // Relative increment
@@ -445,14 +511,13 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private void UpdateZoom()
     {
         Vector2 zoomedSize = new Vector2(_canvas.CanvasSize.X * _zoom, _canvas.CanvasSize.Y * _zoom);
-        Vector2 margin = new Vector2(100, 100);
-        Vector2 panArea = zoomedSize * 2 + margin;
-        Vector2 minSize = new Vector2(Mathf.Max(panArea.X, _scrollContainer.Size.X), Mathf.Max(panArea.Y, _scrollContainer.Size.Y));
         _control.Size = zoomedSize;
         _control.Position = Vector2.Zero;
-        _subViewportContainer.CustomMinimumSize = minSize;
-        _viewport.Size = new Vector2I((int)minSize.X, (int)minSize.Y);
-        //_backgroundRect.Size = minSize;
+        Vector2 viewportSize = _scrollContainer.Size;
+        _subViewportContainer.CustomMinimumSize = viewportSize;
+        _viewport.Size = new Vector2I((int)viewportSize.X, (int)viewportSize.Y);
+        _backgroundRect.Size = viewportSize;
+        (_backgroundRect.Material as ShaderMaterial).SetShaderParameter("rect_size", viewportSize);
         _canvasOutlinePanel.CustomMinimumSize = zoomedSize;
         UpdateZoomLabel();
         UpdateCanvasOutlines();
@@ -504,6 +569,10 @@ public partial class SettingsCanvasEditor : ScrollContainer
             {
                 label.AddThemeColorOverride("font_color", enabled ? Colors.White : Colors.DarkGray);
             }
+            else if (child is CheckButton cb)
+            {
+                cb.Disabled = !enabled;
+            }
             else
             {
                 UpdateChildrenRecursively(child, enabled);
@@ -526,8 +595,18 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _zoomPercentLineEdit.ReleaseFocus();
     }
     
+    private void OnNewTargetLayerPressed()
+    {
+        string name = $"Layer {_displaysManager.Layers.Count + 1}";
+        int zIndex = _displaysManager.Layers.Count;
+        _displaysManager.AddLayer(name, zIndex);
+        PopulateTargetLayers();
+        UpdateCanvasOutlines();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added new target layer '{name}'.", 0);
+    }
+
     /// <summary>
-    /// Populates the target layers container with labels for each layer.
+    /// Populates the target layers container with cards for each layer.
     /// </summary>
     private void PopulateTargetLayers()
     {
@@ -536,13 +615,135 @@ public partial class SettingsCanvasEditor : ScrollContainer
         {
             child.QueueFree();
         }
-
+        
         foreach (var layer in _displaysManager.Layers)
         {
-            var label = new Label();
-            label.Text = layer.LayerName;
-            _targetLayersContainer.AddChild(label);
+            CreateTargetLayerCard(layer);
         }
+    }
+
+    /// <summary>
+    /// Creates a card for the given target layer.
+    /// </summary>
+    /// <param name="layer">The VideoTargetLayer to create a card for.</param>
+    private void CreateTargetLayerCard(VideoTargetLayer layer)
+    {
+        var instance = _videoTargetLayerCardScene.Instantiate<PanelContainer>();
+        _targetLayersContainer.AddChild(instance);
+
+        // Name LineEdit
+        var nameLineEdit = instance.GetNode<LineEdit>("%DisplayNameLineEdit");
+        nameLineEdit.Text = layer.LayerName;
+        nameLineEdit.TextSubmitted += (text) => {
+            _displaysManager.UpdateLayerName(layer.LayerId, text);
+            nameLineEdit.ReleaseFocus();
+        };
+
+        // Delete Button
+        var deleteButton = instance.GetNode<Button>("%DeleteLayerButton");
+        deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        deleteButton.Pressed += () => {
+            _displaysManager.RemoveLayer(layer.LayerId);
+            PopulateTargetLayers();
+            UpdateCanvasOutlines();
+        };
+
+        // Accordion
+        var accordianCollapseButton = instance.GetNode<Button>("%AccordianCollapseButton");
+        accordianCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+        var displaySettingsAccordianContainer = instance.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
+        displaySettingsAccordianContainer.Visible = false;
+        accordianCollapseButton.Pressed += () => ToggleAccordian(displaySettingsAccordianContainer, accordianCollapseButton);
+
+        // Canvas Position
+        var posXLineEdit = instance.GetNode<LineEdit>("%PosXLineEdit");
+        var posYLineEdit = instance.GetNode<LineEdit>("%PosYLineEdit");
+        posXLineEdit.Text = layer.CanvasPosition.X.ToString();
+        posYLineEdit.Text = layer.CanvasPosition.Y.ToString();
+        posXLineEdit.TextSubmitted += (text) => {
+            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            {
+                try
+                {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateLayerCanvasPosition(layer.LayerId, new Vector2I(val, layer.CanvasPosition.Y));
+                    UpdateCanvasOutlines();
+                }
+                catch (FormatException)
+                {
+                    posXLineEdit.Text = layer.CanvasPosition.X.ToString();
+                }
+            }
+            posXLineEdit.ReleaseFocus();
+        };
+        posYLineEdit.TextSubmitted += (text) => {
+            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            {
+                try
+                {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateLayerCanvasPosition(layer.LayerId, new Vector2I(layer.CanvasPosition.X, val));
+                    UpdateCanvasOutlines();
+                }
+                catch (FormatException)
+                {
+                    posYLineEdit.Text = layer.CanvasPosition.Y.ToString();
+                }
+            }
+            posYLineEdit.ReleaseFocus();
+        };
+
+        // Size
+        var sizeXLineEdit = instance.GetNode<LineEdit>("%SizeXLineEdit");
+        var sizeYLineEdit = instance.GetNode<LineEdit>("%SizeYLineEdit");
+        sizeXLineEdit.Text = layer.Size.X.ToString();
+        sizeYLineEdit.Text = layer.Size.Y.ToString();
+        sizeXLineEdit.TextSubmitted += (text) => {
+            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            {
+                try
+                {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateLayerSize(layer.LayerId, new Vector2I(val, layer.Size.Y));
+                    UpdateCanvasOutlines();
+                }
+                catch (FormatException)
+                {
+                    sizeXLineEdit.Text = layer.Size.X.ToString();
+                }
+            }
+            sizeXLineEdit.ReleaseFocus();
+        };
+        sizeYLineEdit.TextSubmitted += (text) => {
+            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            {
+                try
+                {
+                    int val = int.Parse(text);
+                    _displaysManager.UpdateLayerSize(layer.LayerId, new Vector2I(layer.Size.X, val));
+                    UpdateCanvasOutlines();
+                }
+                catch (FormatException)
+                {
+                    sizeYLineEdit.Text = layer.Size.Y.ToString();
+                }
+            }
+            sizeYLineEdit.ReleaseFocus();
+        };
+
+        // Transparent CheckBox
+        var transparentCheckBox = instance.GetNode<CheckBox>("%TransparentCheckBox");
+        transparentCheckBox.ButtonPressed = layer.Transparent;
+        transparentCheckBox.Toggled += (bool toggled) => {
+            _displaysManager.UpdateLayerTransparent(layer.LayerId, toggled);
+        };
+
+        // Test Pattern CheckBox
+        var testPatternCheckBox = instance.GetNode<CheckBox>("%TestPatternCheckBox");
+        testPatternCheckBox.ButtonPressed = layer.TestPatternEnabled;
+        testPatternCheckBox.Toggled += (bool toggled) => {
+            _displaysManager.ToggleLayerTestPattern(layer.LayerId, toggled);
+        };
     }
 
     private void Cleanup()
@@ -552,7 +753,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
 
     private void OnDisplaysChanged()
     {
-        PopulateOutputDevices();
+        UpdateCanvasOutlines();
     }
 
     private void OnCanvasSizeChanged(Vector2I newSize)
@@ -560,14 +761,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _canvasSizeXLineEdit.Text = newSize.X.ToString();
         _canvasSizeYLineEdit.Text = newSize.Y.ToString();
     }
-
-    /// <summary>
-    /// Refreshes the video outputs by re-populating the devices.
-    /// </summary>
-    public void RefreshOutputs()
-    {
-        PopulateOutputDevices();
-    }
+    
 
     private void UpdateCanvasOutlines()
     {
@@ -575,17 +769,34 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _outputOutlines.Clear();
         foreach (var output in _displaysManager.Outputs)
         {
-            var outline = new ColorRect();
+            var outline = new DashedOutline();
             var posX = output.CanvasPosition.X * _zoom;
             var posY = output.CanvasPosition.Y * _zoom;
             outline.Position = new Vector2I((int)posX, (int)posY);
             var sizex = output.OutputSize.X * _zoom;
             var sizey = output.OutputSize.Y * _zoom;
             outline.Size = new Vector2I((int)sizex, (int)sizey);
-            outline.Color = new Color(1, 0, 0, 0.5f); // semi-transparent red
+            outline.BorderColor = new Color(1, 0, 0, 0.8f); // red
+            outline.OffsetDash = false;
+            _canvasLayer.AddChild(outline);
+            _outputOutlines.Add(outline);
+        }
+        foreach (var layer in _displaysManager.Layers)
+        {
+            var outline = new DashedOutline();
+            var posX = layer.CanvasPosition.X * _zoom;
+            var posY = layer.CanvasPosition.Y * _zoom;
+            outline.Position = new Vector2I((int)posX, (int)posY);
+            var sizex = layer.Size.X * _zoom;
+            var sizey = layer.Size.Y * _zoom;
+            outline.Size = new Vector2I((int)sizex, (int)sizey);
+            outline.BorderColor = new Color(0, 0, 1, 0.8f); // blue
+            outline.OffsetDash = true;
             _canvasLayer.AddChild(outline);
             _outputOutlines.Add(outline);
         }
     }
+
+    
 
 }

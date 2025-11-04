@@ -3,7 +3,7 @@ using System;
 
 namespace Cue2.Base.Classes;
 
-public partial class VideoTargetLayer : GodotObject
+public partial class VideoTargetLayer : CanvasLayer
 {
     private static int _nextLayerId = 0;
 
@@ -23,15 +23,29 @@ public partial class VideoTargetLayer : GodotObject
     public int ZIndex { get; set; } = 0;
 
     /// <summary>
-    /// The Godot node representing this layer (e.g., CanvasLayer or Control for 2D).
+    /// Position on the canvas (top-left corner).
     /// </summary>
-    public Node LayerNode { get; private set; }
+    public Vector2I CanvasPosition { get; set; } = Vector2I.Zero;
+
+    /// <summary>
+    /// Size of the layer on the canvas.
+    /// </summary>
+    public Vector2I Size { get; set; } = new Vector2I(1920, 1080);
+
+    /// <summary>
+    /// Whether the layer is transparent.
+    /// </summary>
+    public bool Transparent { get; set; } = false;
+
+    /// <summary>
+    /// Whether the test pattern is enabled for this layer.
+    /// </summary>
+    public bool TestPatternEnabled { get; set; } = false;
+    
 
     public VideoTargetLayer()
     {
         LayerId = _nextLayerId++;
-        LayerNode = new CanvasLayer(); // Default to 2D CanvasLayer
-        // For 3D extension: Could be a Spatial or MeshInstance
     }
 
     public VideoTargetLayer(string name, int zIndex) : this()
@@ -52,7 +66,7 @@ public partial class VideoTargetLayer : GodotObject
             return;
         }
 
-        LayerNode.AddChild(child);
+        AddChild(child);
         GD.Print($"Added content to layer '{LayerName}'.");
     }
 
@@ -62,13 +76,13 @@ public partial class VideoTargetLayer : GodotObject
     /// <param name="child">The node to remove.</param>
     public void RemoveContent(Node child)
     {
-        if (child == null || !LayerNode.IsAncestorOf(child))
+        if (child == null || !IsAncestorOf(child))
         {
             GD.PrintErr("VideoTargetLayer:RemoveContent - Child not found in layer.");
             return;
         }
 
-        LayerNode.RemoveChild(child);
+        RemoveChild(child);
         GD.Print($"Removed content from layer '{LayerName}'.");
     }
 
@@ -82,6 +96,12 @@ public partial class VideoTargetLayer : GodotObject
         data.Add("LayerId", LayerId);
         data.Add("LayerName", LayerName);
         data.Add("ZIndex", ZIndex);
+        data.Add("CanvasPositionX", CanvasPosition.X);
+        data.Add("CanvasPositionY", CanvasPosition.Y);
+        data.Add("SizeX", Size.X);
+        data.Add("SizeY", Size.Y);
+        data.Add("Transparent", Transparent);
+        GD.Print($"SAVING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
         return data;
     }
 
@@ -94,8 +114,18 @@ public partial class VideoTargetLayer : GodotObject
         LayerId = (int)data["LayerId"];
         LayerName = (string)data["LayerName"];
         ZIndex = (int)data["ZIndex"];
-    }
+        
+        var outSizeX = data.ContainsKey("SizeX") ? (int)data["SizeX"] : 1920;
+        var outSizeY = data.ContainsKey("SizeY") ? (int)data["SizeY"] : 1080;
+        Size = new Vector2I(outSizeX, outSizeY);
+        
+        var canvPosX = data.ContainsKey("CanvasPositionX") ? (int)data["CanvasPositionX"] : 0;
+        var canvPosY = data.ContainsKey("CanvasPositionY") ? (int)data["CanvasPositionY"] : 0;
+        CanvasPosition = new Vector2I(canvPosX, canvPosY);
 
-    // TODO: Methods for positioning/scaling content within the layer
-    // TODO: Extension for 3D (e.g., replace LayerNode with a 3D node)
+        Transparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
+        GD.Print($"LOADING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
+
+    }
+    
 }

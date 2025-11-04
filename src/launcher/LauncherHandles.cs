@@ -32,6 +32,7 @@ public partial class LauncherHandles : Control
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
+		//TODO: Implement  DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Top, 0); for edge control, it works!
 		
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
