@@ -31,6 +31,7 @@ public partial class MainWindowHandles: Control
 
 	private Control _headerHandle;
 	private Control _rightHandle;
+	private Control _topHandle;
 	private Control _leftHandle;
 	private Control _bottomHandle;
 	private Control _bottomRightHandle;
@@ -46,6 +47,12 @@ public partial class MainWindowHandles: Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_windowId = GetWindow().GetWindowId();
 
+		// Set window size constraints
+		var window = GetWindow();
+		window.MinSize = _minWindowSize;
+		var displaySize = DisplayServer.ScreenGetSize(0); // Primary display
+		window.MaxSize = displaySize;
+
 		_globalSignals.LogAlert += _alertReceived;
 		
 		// Border variables for event highlighting
@@ -57,6 +64,7 @@ public partial class MainWindowHandles: Control
 		
 		_headerHandle = GetNode<Control>("%HeaderHandle");
 		_rightHandle = GetNode<Control>("%RightHandle");
+		_topHandle = GetNode<Control>("%TopHandle");
 		_leftHandle = GetNode<Control>("%LeftHandle");
 		_bottomHandle = GetNode<Control>("%BottomHandle");
 		_bottomRightHandle = GetNode<Control>("%BottomRightCornerHandle");
@@ -66,6 +74,7 @@ public partial class MainWindowHandles: Control
 
 		_headerHandle.GuiInput += OnHeaderHandleGuiInput;
 		_rightHandle.GuiInput += OnRightHandleGuiInput;
+		_topHandle.GuiInput += OnTopHandleGuiInput;
 		_leftHandle.GuiInput += OnLeftHandleGuiInput;
 		_bottomHandle.GuiInput += OnBottomHandleGuiInput;
 		_topRightHandle.GuiInput += OnTopRightHandleGuiInput;
@@ -86,9 +95,25 @@ public partial class MainWindowHandles: Control
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)
 	{
-		if (@event is InputEventMouseButton { Pressed: true })
+		if (@event is InputEventMouseButton mouseEvent)
 		{
-			DisplayServer.WindowStartDrag(_windowId);
+			if (mouseEvent.DoubleClick && mouseEvent.ButtonIndex == MouseButton.Left)
+			{
+				// Toggle maximize on double click
+				var window = GetWindow();
+				if (window.Mode == Window.ModeEnum.Maximized)
+				{
+					window.Mode = Window.ModeEnum.Windowed;
+				}
+				else
+				{
+					window.Mode = Window.ModeEnum.Maximized;
+				}
+			}
+			else if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
+			{
+				DisplayServer.WindowStartDrag(_windowId);
+			}
 		}
 	}
 
@@ -96,6 +121,13 @@ public partial class MainWindowHandles: Control
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
 			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Right, _windowId);
+		}
+	}
+	
+	private void OnTopHandleGuiInput(InputEvent @event){
+		if (@event is InputEventMouseButton { Pressed: true })
+		{
+			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Top, _windowId);
 		}
 	}
 

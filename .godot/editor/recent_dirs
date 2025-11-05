@@ -1,3 +1,4 @@
+res://src/UI/Scenes/Inspectors
 /Users/smxham/Documents/MyFiles/Cue2_Home/Ext/godot-minimal-theme-main/godot-minimal-theme-main
 res://src/UI/Scenes
 res://src/Shared
@@ -6,7 +7,6 @@ res://src/UI/Utilities
 /Users/smxham/Documents/MyFiles/Cue2_Home/Ext
 res://src/UI/Scenes/Settings
 res://src/Base/Settings
-res://src/UI/Scenes/Inspectors
 res://src/UI/Assets
 res://src/ui/Scenes
 res://src/ui

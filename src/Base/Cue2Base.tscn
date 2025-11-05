@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=4 uid="uid://begopskfmco7t"]
+[gd_scene load_steps=33 format=4 uid="uid://begopskfmco7t"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -11,7 +11,9 @@
 [ext_resource type="PackedScene" uid="uid://c2oerlmq8wmp7" path="res://src/UI/Scenes/Inspectors/AudioInspector.tscn" id="8_7gle1"]
 [ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
 [ext_resource type="PackedScene" uid="uid://ghgo66ss8d58" path="res://src/UI/Scenes/Inspectors/ConnectionInspector.tscn" id="9_7xm62"]
+[ext_resource type="PackedScene" uid="uid://d6ybxbmxkpib" path="res://src/UI/Scenes/Inspectors/VideoInspector.tscn" id="9_ht2vi"]
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
+[ext_resource type="Script" uid="uid://b54ov4k1klk3j" path="res://src/UI/Scenes/Inspectors/VideoInspector.cs" id="10_ht2vi"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
@@ -2474,10 +2476,9 @@ metadata/_tab_index = 0
 visible = false
 layout_mode = 2
 
-[node name="Video" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
+[node name="Video" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("9_ht2vi")]
 layout_mode = 2
-tooltip_text = "A shells video content and parameters."
-metadata/_tab_index = 2
+script = ExtResource("10_ht2vi")
 
 [node name="Timeline" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("9_r56tl")]
 visible = false
@@ -2515,7 +2516,7 @@ script = ExtResource("12_7xm62")
 
 [node name="HeaderHandle" type="Control" parent="MainWindowHandles"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(10, 22)
+custom_minimum_size = Vector2(10, 28)
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -2564,6 +2565,15 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 0
+mouse_default_cursor_shape = 9
+
+[node name="TopHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
 mouse_default_cursor_shape = 9
 
 [node name="BottomRightCornerHandle" type="Control" parent="MainWindowHandles"]
