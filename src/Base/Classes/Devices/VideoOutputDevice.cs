@@ -162,7 +162,7 @@ public partial class VideoOutputDevice : Window, IDisposable
             {
                 Borderless = true;
                 DisplayServer.WindowSetPosition(new Vector2I((int)windowPos.X, (int)windowPos.Y), GetWindowId());
-                DisplayServer.WindowSetSize(OutputSize, GetWindowId());
+                DisplayServer.WindowSetSize((Vector2I)clippedRect.Size, GetWindowId());
             }
             else
             {
@@ -188,7 +188,7 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     public void ToggleTestPattern(bool toggle)
     {
-        SetTestPatternRect(toggle, new Rect2(Vector2.Zero, Size));
+        SetTestPatternRect(toggle, new Rect2(Vector2.Zero, OutputSize));
     }
 
     public void SetTestPatternRect(bool enable, Rect2 rect)

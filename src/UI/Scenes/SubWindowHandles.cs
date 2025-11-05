@@ -7,20 +7,8 @@ namespace Cue2.UI.Scenes;
 public partial class SubWindowHandles : Control
 {
 	private GlobalData _globalData;
-    	//Variables
-	private bool _dragging;
-	private bool _resizing;
-	private Vector2I _initialMouse;
-	private Vector2I _initialWindow;
-
-	private int _offsetX;
-	private int _offsetY;
-	private Control _resizeNode;
+	
 	private int _windowId;
-
-	private Vector2I _dragOffset;
-
-	private Vector2I _minWindowSize = new Vector2I(600, 370);
 	
 	//Handles
 	private Control _headerHandle;
@@ -66,7 +54,7 @@ public partial class SubWindowHandles : Control
 	
 	private void _onExitButtonPressed()
 	{
-		GetParent().QueueFree();
+		GetParent().GetParent().QueueFree();
 	}
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)

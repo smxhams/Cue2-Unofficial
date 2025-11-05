@@ -72,7 +72,7 @@ public partial class SettingsWindow : Window
 		{
 			// Checks all settings displays incase one is already open
 			foreach (var node in GetNode<MarginContainer>("%RightSide")
-				         .GetChildren())
+						 .GetChildren())
 			{
 				var child = (ScrollContainer)node;
 				if (child.IsVisible()) child.Hide();

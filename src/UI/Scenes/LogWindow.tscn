@@ -6,8 +6,9 @@
 
 [node name="LogWindow" type="Window"]
 disable_3d = true
+oversampling_override = 1.0
 title = "Cue2 Log"
-initial_position = 2
+initial_position = 4
 size = Vector2i(800, 500)
 borderless = true
 theme = ExtResource("1_6ks4u")

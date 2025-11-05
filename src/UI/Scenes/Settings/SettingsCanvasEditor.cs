@@ -547,7 +547,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
     private void UpdateUIForUseOutput(PanelContainer card, bool enabled)
     {
         var accordianContainer = card.GetNode<VBoxContainer>("%DisplaySettingsAccordianContainer");
-        UpdateChildrenRecursively(accordianContainer, enabled);
+        //UpdateChildrenRecursively(accordianContainer, enabled);
     }
 
     /// <summary>

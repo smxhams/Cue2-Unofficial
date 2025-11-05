@@ -354,13 +354,14 @@ public partial class UiUtilities : Node
 
     public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)
     {
+        GD.Print($"UiUtilities:RescaleUi - Scale: {scale}, Display Scale: {baseDisplayScale}");
         try
         {
             var effectiveScale = scale * baseDisplayScale;
             window.WrapControls = true;
             window.ContentScaleFactor = (float)effectiveScale;
             window.ChildControlsChanged();
-        } 
+        }
         catch (Exception ex)
         {
             GD.PrintErr($"UiUtilities:RescaleUI - Error applying UI scale: {ex.Message}");

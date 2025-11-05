@@ -67,7 +67,6 @@ public partial class DisplaysManager : Node
         
         Outputs.Add(output);
         output.Show();
-        DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
         output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
         

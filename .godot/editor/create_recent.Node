@@ -1,3 +1,4 @@
+Control
 Label
 Button
 CheckButton
@@ -7,7 +8,6 @@ CheckBox
 HBoxContainer
 VBoxContainer
 Panel
-Control
 SubViewportContainer
 OmniLight3D
 MeshInstance3D

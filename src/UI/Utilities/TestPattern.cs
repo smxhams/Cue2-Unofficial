@@ -47,10 +47,10 @@ public partial class TestPattern : Control
     public override void _Draw()
     {
         Vector2 size = Size;
-        DrawLine(new Vector2(0, 0), new Vector2(size.X, 0), Colors.Red, 4);
-        DrawLine(new Vector2(size.X, 0), new Vector2(size.X, size.Y), Colors.Red, 4);
-        DrawLine(new Vector2(size.X, size.Y), new Vector2(0, size.Y), Colors.Red, 4);
-        DrawLine(new Vector2(0, size.Y), new Vector2(0, 0), Colors.Red, 4);
+        DrawLine(new Vector2(0, 0), new Vector2(size.X, 0), Colors.Red, 10);
+        DrawLine(new Vector2(size.X, 0), new Vector2(size.X, size.Y), Colors.Red, 10);
+        DrawLine(new Vector2(size.X, size.Y), new Vector2(0, size.Y), Colors.Red, 10);
+        DrawLine(new Vector2(0, size.Y), new Vector2(0, 0), Colors.Red, 10);
 
         float minDim = Mathf.Min(size.X, size.Y);
         float radius = 0.2f * minDim;

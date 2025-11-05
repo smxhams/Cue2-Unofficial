@@ -30,14 +30,26 @@ border_color = Color(0.00392157, 0.231373, 0.25098, 1)
 
 [node name="Settings" type="Window"]
 disable_3d = true
+oversampling_override = 1.0
 title = "Cue2 Settings"
-initial_position = 2
+initial_position = 4
 size = Vector2i(800, 500)
 borderless = true
 theme = ExtResource("1_5fbwj")
 script = ExtResource("2_xuilu")
 
-[node name="Panel" type="Panel" parent="."]
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Panel" type="Panel" parent="Control"]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -47,7 +59,8 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_hpi7s")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="Control"]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -56,14 +69,14 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Label" type="Label" parent="VBoxContainer"]
+[node name="Label" type="Label" parent="Control/VBoxContainer"]
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 text = "Settings"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="Control/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -72,23 +85,23 @@ theme_override_constants/margin_top = 5
 theme_override_constants/margin_right = 5
 theme_override_constants/margin_bottom = 5
 
-[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/MarginContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="Control/VBoxContainer/MarginContainer"]
 clip_contents = true
 layout_mode = 2
 split_offset = 20
 
-[node name="Container" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer"]
+[node name="Container" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Container"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container"]
 clip_contents = false
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="SettingsTree" type="Tree" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer"]
+[node name="SettingsTree" type="Tree" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
@@ -96,51 +109,51 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
 
-[node name="SaveOptionsContainer" type="GridContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Container"]
+[node name="SaveOptionsContainer" type="GridContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container"]
 layout_mode = 2
 columns = 2
 
-[node name="SaveFilterLabel" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="SaveFilterLabel" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 layout_mode = 2
 text = "Save filter:"
 horizontal_alignment = 1
 
-[node name="SaveFilterOptionButton" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="SaveFilterOptionButton" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 theme_override_styles/normal = SubResource("StyleBoxFlat_gmb81")
 text = "Select Here"
 
-[node name="SettingsSaveAs" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="SettingsSaveAs" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Save a settings.conf file in a chosen location"
 text = "Save As"
 
-[node name="SaveWithShow" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="SaveWithShow" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Saves settings with show data and overrides settings "
 text = "Save with Show"
 
-[node name="Button3" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="Button3" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Save for All"
 
-[node name="Button4" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
+[node name="Button4" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Load"
 
-[node name="Panel" type="Panel" parent="VBoxContainer/MarginContainer/HSplitContainer"]
+[node name="Panel" type="Panel" parent="Control/VBoxContainer/MarginContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="RightSide" type="MarginContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel"]
+[node name="RightSide" type="MarginContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -154,45 +167,45 @@ theme_override_constants/margin_top = 15
 theme_override_constants/margin_right = 15
 theme_override_constants/margin_bottom = 15
 
-[node name="SettingsGeneral" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
+[node name="SettingsGeneral" type="ScrollContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("3_jdmuw")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral"]
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Header" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="Header" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "General Settings"
 vertical_alignment = 1
 uppercase = true
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 
-[node name="Row1" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="Row1" type="HBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row1"]
+[node name="Label" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row1"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "Interface"
 
-[node name="Row2" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="Row2" type="HBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 
-[node name="UiScaling" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+[node name="UiScaling" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "UI Scaling"
 vertical_alignment = 1
 
-[node name="UiScaleNum" type="LineEdit" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+[node name="UiScaleNum" type="LineEdit" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
@@ -203,7 +216,7 @@ text = "100%"
 alignment = 1
 max_length = 4
 
-[node name="UiScaleSlider" type="HSlider" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
+[node name="UiScaleSlider" type="HSlider" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row2"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -217,16 +230,16 @@ max_value = 200.0
 value = 100.0
 rounded = true
 
-[node name="Row3" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="Row3" type="HBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 
-[node name="Go Button Scale" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
+[node name="Go Button Scale" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "Go Button Scale"
 vertical_alignment = 1
 
-[node name="GoScaleOptionButton" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
+[node name="GoScaleOptionButton" type="OptionButton" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row3"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
@@ -247,16 +260,16 @@ popup/item_4/id = 5
 popup/item_5/text = "Nothing but Go"
 popup/item_5/id = 6
 
-[node name="Row4" type="HBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
+[node name="Row4" type="HBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer"]
 layout_mode = 2
 
-[node name="Go Button Scale" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row4"]
+[node name="Go Button Scale" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row4"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "CueListScale"
 vertical_alignment = 1
 
-[node name="GoScaleOptionButton" type="OptionButton" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row4"]
+[node name="GoScaleOptionButton" type="OptionButton" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/SettingsGeneral/VBoxContainer/Row4"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 tooltip_text = "Go button size."
@@ -270,58 +283,60 @@ popup/item_1/id = 1
 popup/item_2/text = "Large"
 popup/item_2/id = 2
 
-[node name="AudioOutputPatch" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
+[node name="AudioOutputPatch" type="ScrollContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("3_pnmd8")
 
-[node name="HeaderContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch"]
+[node name="HeaderContainer" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="AudioPatchTitle" type="Label" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="AudioPatchTitle" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 text = "Audio Output Patch"
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="HSeparator" type="HSeparator" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PatchesVBoxContainer" type="VBoxContainer" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
+[node name="PatchesVBoxContainer" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="NewPatchButton" type="Button" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
+[node name="NewPatchButton" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide/AudioOutputPatch/HeaderContainer/ScrollContainer/VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 focus_mode = 0
 text = "New Patch"
 
-[node name="CueLights" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("5_uxven")]
+[node name="CueLights" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("5_uxven")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="CanvasEditor" parent="VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("6_uxven")]
+[node name="CanvasEditor" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("6_uxven")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 
-[node name="DropMenuFilter" type="PanelContainer" parent="."]
+[node name="DropMenuFilter" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(100, 78)
+layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -332,17 +347,17 @@ offset_bottom = -81.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_jdmuw")
 
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuFilter"]
+[node name="MarginContainer" type="MarginContainer" parent="Control/DropMenuFilter"]
 layout_mode = 2
 theme_override_constants/margin_left = 1
 theme_override_constants/margin_top = 1
 theme_override_constants/margin_right = 1
 theme_override_constants/margin_bottom = 1
 
-[node name="dmSaveFilterContainer" type="VBoxContainer" parent="DropMenuFilter/MarginContainer"]
+[node name="dmSaveFilterContainer" type="VBoxContainer" parent="Control/DropMenuFilter/MarginContainer"]
 layout_mode = 2
 
-[node name="FilterAllCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+[node name="FilterAllCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -350,20 +365,21 @@ mouse_filter = 1
 button_pressed = true
 text = "All"
 
-[node name="FilterGeneralSettingsCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+[node name="FilterGeneralSettingsCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 mouse_filter = 1
 text = "General Settings"
 
-[node name="FilterAudioPatchCheckBox" type="CheckBox" parent="DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
+[node name="FilterAudioPatchCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 mouse_filter = 1
 text = "Audio Patch"
 
-[node name="SubWindowHandles" parent="." instance=ExtResource("4_r2cu3")]
+[node name="SubWindowHandles" parent="Control" instance=ExtResource("4_r2cu3")]
+layout_mode = 1
 
-[connection signal="item_selected" from="VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer/SettingsTree" to="." method="_on_tree_item_selected"]
+[connection signal="item_selected" from="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/ScrollContainer/SettingsTree" to="." method="_on_tree_item_selected"]

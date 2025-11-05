@@ -13,10 +13,9 @@
           "GodotSharp": "4.5.1",
           "GodotSharpEditor": "4.5.1",
           "Hardware.Info": "101.0.0",
-          "NAudio": "2.2.1",
           "Newtonsoft.Json": "13.0.3",
-          "SDL3-CS": "3.3.2.1",
-          "SDL3-CS.Native": "3.3.2"
+          "SDL3-CS": "3.2.20",
+          "SDL3-CS.Native": "3.2.20"
         },
         "runtime": {
           "Cue2.dll": {}
@@ -70,75 +69,6 @@
           "System.Security.Principal.Windows": "5.0.0"
         }
       },
-      "NAudio/2.2.1": {
-        "dependencies": {
-          "NAudio.Asio": "2.2.1",
-          "NAudio.Core": "2.2.1",
-          "NAudio.Midi": "2.2.1",
-          "NAudio.Wasapi": "2.2.1",
-          "NAudio.WinMM": "2.2.1"
-        },
-        "runtime": {
-          "lib/net6.0/NAudio.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
-      "NAudio.Asio/2.2.1": {
-        "dependencies": {
-          "Microsoft.Win32.Registry": "5.0.0",
-          "NAudio.Core": "2.2.1"
-        },
-        "runtime": {
-          "lib/netstandard2.0/NAudio.Asio.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
-      "NAudio.Core/2.2.1": {
-        "runtime": {
-          "lib/netstandard2.0/NAudio.Core.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
-      "NAudio.Midi/2.2.1": {
-        "dependencies": {
-          "NAudio.Core": "2.2.1"
-        },
-        "runtime": {
-          "lib/netstandard2.0/NAudio.Midi.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
-      "NAudio.Wasapi/2.2.1": {
-        "dependencies": {
-          "NAudio.Core": "2.2.1"
-        },
-        "runtime": {
-          "lib/netstandard2.0/NAudio.Wasapi.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
-      "NAudio.WinMM/2.2.1": {
-        "dependencies": {
-          "Microsoft.Win32.Registry": "5.0.0",
-          "NAudio.Core": "2.2.1"
-        },
-        "runtime": {
-          "lib/netstandard2.0/NAudio.WinMM.dll": {
-            "assemblyVersion": "2.2.1.0",
-            "fileVersion": "2.2.1.0"
-          }
-        }
-      },
       "Newtonsoft.Json/13.0.3": {
         "runtime": {
           "lib/net6.0/Newtonsoft.Json.dll": {
@@ -147,19 +77,19 @@
           }
         }
       },
-      "SDL3-CS/3.3.2.1": {
+      "SDL3-CS/3.2.20": {
         "runtime": {
           "lib/net8.0/SDL3-CS.dll": {
-            "assemblyVersion": "3.3.2.1",
-            "fileVersion": "3.3.2.1"
+            "assemblyVersion": "3.2.20.0",
+            "fileVersion": "3.2.20.0"
           }
         }
       },
-      "SDL3-CS.Native/3.3.2": {
+      "SDL3-CS.Native/3.2.20": {
         "runtime": {
           "lib/net8.0/SDL3-CS.Native.dll": {
-            "assemblyVersion": "3.3.2.0",
-            "fileVersion": "3.3.2.0"
+            "assemblyVersion": "3.2.20.0",
+            "fileVersion": "3.2.20.0"
           }
         },
         "runtimeTargets": {
@@ -186,12 +116,12 @@
           "runtimes/win-arm64/native/SDL3.dll": {
             "rid": "win-arm64",
             "assetType": "native",
-            "fileVersion": "3.3.2.0"
+            "fileVersion": "0.0.0.0"
           },
           "runtimes/win-x64/native/SDL3.dll": {
             "rid": "win-x64",
             "assetType": "native",
-            "fileVersion": "3.3.2.0"
+            "fileVersion": "0.0.0.0"
           }
         }
       },
@@ -227,7 +157,7 @@
             "rid": "win",
             "assetType": "runtime",
             "assemblyVersion": "8.0.0.0",
-            "fileVersion": "0.0.0.0"
+            "fileVersion": "8.0.23.53103"
           },
           "runtimes/win/lib/net8.0/System.Diagnostics.EventLog.dll": {
             "rid": "win",
@@ -347,48 +277,6 @@
       "path": "microsoft.win32.registry/5.0.0",
       "hashPath": "microsoft.win32.registry.5.0.0.nupkg.sha512"
     },
-    "NAudio/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-c0DzwiyyklM0TP39Y7RObwO3QkWecgM6H60ikiEnsV/aEAJPbj5MFCLaD8BSfKuZe0HGuh9GRGWWlJmSxDc9MA==",
-      "path": "naudio/2.2.1",
-      "hashPath": "naudio.2.2.1.nupkg.sha512"
-    },
-    "NAudio.Asio/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-hQglyOT5iT3XuGpBP8ZG0+aoqwRfidHjTNehpoWwX0g6KJEgtH2VaqM2nuJ2mheKZa/IBqB4YQTZVvrIapzfOA==",
-      "path": "naudio.asio/2.2.1",
-      "hashPath": "naudio.asio.2.2.1.nupkg.sha512"
-    },
-    "NAudio.Core/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-GgkdP6K/7FqXFo7uHvoqGZTJvW4z8g2IffhOO4JHaLzKCdDOUEzVKtveoZkCuUX8eV2HAINqi7VFqlFndrnz/g==",
-      "path": "naudio.core/2.2.1",
-      "hashPath": "naudio.core.2.2.1.nupkg.sha512"
-    },
-    "NAudio.Midi/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-6r23ylGo5aeP02WFXsPquz0T0hFJWyh+7t++tz19tc3Kr38NHm+Z9j+FiAv+xkH8tZqXJqus9Q8p6u7bidIgbw==",
-      "path": "naudio.midi/2.2.1",
-      "hashPath": "naudio.midi.2.2.1.nupkg.sha512"
-    },
-    "NAudio.Wasapi/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-lFfXoqacZZe0WqNChJgGYI+XV/n/61LzPHT3C1CJp4khoxeo2sziyX5wzNYWeCMNbsWxFvT3b3iXeY1UYjBhZw==",
-      "path": "naudio.wasapi/2.2.1",
-      "hashPath": "naudio.wasapi.2.2.1.nupkg.sha512"
-    },
-    "NAudio.WinMM/2.2.1": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-xFHRFwH4x6aq3IxRbewvO33ugJRvZFEOfO62i7uQJRUNW2cnu6BeBTHUS0JD5KBucZbHZaYqxQG8dwZ47ezQuQ==",
-      "path": "naudio.winmm/2.2.1",
-      "hashPath": "naudio.winmm.2.2.1.nupkg.sha512"
-    },
     "Newtonsoft.Json/13.0.3": {
       "type": "package",
       "serviceable": true,
@@ -396,19 +284,19 @@
       "path": "newtonsoft.json/13.0.3",
       "hashPath": "newtonsoft.json.13.0.3.nupkg.sha512"
     },
-    "SDL3-CS/3.3.2.1": {
+    "SDL3-CS/3.2.20": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-Ux0C+5TrCoXbgY+tng6xcNDlRY19at08USzfvO+xdXQJKWvFfWK9cwhkHXYlJANLhz5IALWZkuiahQwwe8VS0Q==",
-      "path": "sdl3-cs/3.3.2.1",
-      "hashPath": "sdl3-cs.3.3.2.1.nupkg.sha512"
+      "sha512": "sha512-TUxCmFcXTzewI6TId1p+iky2lhQ7TPplUDDL4qdQpZ1aen8HzzYVsQRcFztxJEmq4ii22laApm/FdLjJEi5Z0A==",
+      "path": "sdl3-cs/3.2.20",
+      "hashPath": "sdl3-cs.3.2.20.nupkg.sha512"
     },
-    "SDL3-CS.Native/3.3.2": {
+    "SDL3-CS.Native/3.2.20": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-W48m97wQVanfkYm42X05fCnAVhcol9HHBNSPx4ceXa+S0mjilyyo5iBNbn5Hw9ojTW01CD+aqDA3wYYdVTN/Kw==",
-      "path": "sdl3-cs.native/3.3.2",
-      "hashPath": "sdl3-cs.native.3.3.2.nupkg.sha512"
+      "sha512": "sha512-Py2wokXG8aPH00MjS25sNKQn8qComg+Wy90p6CnBn6zf20orMJcqudTjahcD6FwWDz97EEZ2u16QdWlN5SKyzA==",
+      "path": "sdl3-cs.native/3.2.20",
+      "hashPath": "sdl3-cs.native.3.2.20.nupkg.sha512"
     },
     "System.CodeDom/8.0.0": {
       "type": "package",
