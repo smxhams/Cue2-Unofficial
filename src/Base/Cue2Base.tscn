@@ -12,8 +12,8 @@
 [ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
 [ext_resource type="PackedScene" uid="uid://ghgo66ss8d58" path="res://src/UI/Scenes/Inspectors/ConnectionInspector.tscn" id="9_7xm62"]
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
-[ext_resource type="Script" uid="uid://blrla7wswmdn4" path="res://src/launcher/LauncherHandles.cs" id="11_bmgx0"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
+[ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
@@ -2511,9 +2511,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-script = ExtResource("11_bmgx0")
+script = ExtResource("12_7xm62")
 
-[node name="DragBar" type="Control" parent="MainWindowHandles"]
+[node name="HeaderHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(10, 22)
 layout_mode = 1
 anchors_preset = 10
@@ -2532,7 +2533,8 @@ anchors_preset = 10
 anchor_bottom = 0.0
 grow_vertical = 1
 
-[node name="Right" type="Control" parent="MainWindowHandles"]
+[node name="RightHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 11
@@ -2543,7 +2545,17 @@ grow_horizontal = 0
 grow_vertical = 2
 mouse_default_cursor_shape = 10
 
-[node name="Bottom" type="Control" parent="MainWindowHandles"]
+[node name="LeftHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+grow_vertical = 2
+mouse_default_cursor_shape = 10
+
+[node name="BottomHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 12
@@ -2554,7 +2566,8 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_default_cursor_shape = 9
 
-[node name="Corner" type="Control" parent="MainWindowHandles"]
+[node name="BottomRightCornerHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
 anchors_preset = 3
@@ -2566,6 +2579,39 @@ offset_left = -5.0
 offset_top = -5.0
 grow_horizontal = 0
 grow_vertical = 0
+mouse_default_cursor_shape = 12
+
+[node name="BottomLeftCornerHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -5.0
+offset_right = 5.0
+grow_vertical = 0
+mouse_default_cursor_shape = 11
+
+[node name="TopRightCornerHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -5.0
+offset_bottom = 5.0
+grow_horizontal = 0
+mouse_default_cursor_shape = 11
+
+[node name="TopLeftCornerHandle" type="Control" parent="MainWindowHandles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 0
+offset_right = 5.0
+offset_bottom = 5.0
 mouse_default_cursor_shape = 12
 
 [node name="Border" type="Panel" parent="MainWindowHandles"]
@@ -2603,8 +2649,5 @@ filters = PackedStringArray("*C2; Cue2 Session Data")
 use_native_dialog = true
 script = ExtResource("14_5gc0s")
 
-[connection signal="gui_input" from="MainWindowHandles/DragBar" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
-[connection signal="gui_input" from="MainWindowHandles/Right" to="MainWindowHandles" method="_on_right_gui_input"]
-[connection signal="gui_input" from="MainWindowHandles/Bottom" to="MainWindowHandles" method="_on_bottom_gui_input"]
-[connection signal="gui_input" from="MainWindowHandles/Corner" to="MainWindowHandles" method="_on_corner_gui_input"]
+[connection signal="gui_input" from="MainWindowHandles/HeaderHandle" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
 [connection signal="file_selected" from="FileDialog" to="FileDialog" method="_on_file_selected"]

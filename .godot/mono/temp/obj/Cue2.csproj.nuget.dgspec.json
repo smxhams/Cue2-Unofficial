@@ -49,15 +49,18 @@
             },
             "Godot.SourceGenerators": {
               "target": "Package",
-              "version": "[4.4.0, )"
+              "version": "[4.5.1, )",
+              "autoReferenced": true
             },
             "GodotSharp": {
               "target": "Package",
-              "version": "[4.4.0, )"
+              "version": "[4.5.1, )",
+              "autoReferenced": true
             },
             "GodotSharpEditor": {
               "target": "Package",
-              "version": "[4.4.0, )"
+              "version": "[4.5.1, )",
+              "autoReferenced": true
             },
             "Hardware.Info": {
               "target": "Package",

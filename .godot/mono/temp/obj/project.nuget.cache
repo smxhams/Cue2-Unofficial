@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "vrZvy0c9J+w=",
+  "dgSpecHash": "kH7mVU9v7h8=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\smxham\\.nuget\\packages\\ffmpeg.autogen\\7.1.1\\ffmpeg.autogen.7.1.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.4.0\\godot.sourcegenerators.4.4.0.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.4.0\\godotsharp.4.4.0.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.4.0\\godotsharpeditor.4.4.0.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.5.1\\godot.sourcegenerators.4.5.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.5.1\\godotsharp.4.5.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.5.1\\godotsharpeditor.4.5.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\hardware.info\\101.0.0\\hardware.info.101.0.0.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\microsoft.netcore.platforms\\5.0.0\\microsoft.netcore.platforms.5.0.0.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\microsoft.win32.registry\\5.0.0\\microsoft.win32.registry.5.0.0.nupkg.sha512",

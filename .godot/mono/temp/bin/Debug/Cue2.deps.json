@@ -9,9 +9,9 @@
       "Cue2/1.0.0": {
         "dependencies": {
           "FFmpeg.AutoGen": "7.1.1",
-          "Godot.SourceGenerators": "4.4.0",
-          "GodotSharp": "4.4.0",
-          "GodotSharpEditor": "4.4.0",
+          "Godot.SourceGenerators": "4.5.1",
+          "GodotSharp": "4.5.1",
+          "GodotSharpEditor": "4.5.1",
           "Hardware.Info": "101.0.0",
           "NAudio": "2.2.1",
           "Newtonsoft.Json": "13.0.3",
@@ -30,23 +30,23 @@
           }
         }
       },
-      "Godot.SourceGenerators/4.4.0": {},
-      "GodotSharp/4.4.0": {
+      "Godot.SourceGenerators/4.5.1": {},
+      "GodotSharp/4.5.1": {
         "runtime": {
           "lib/net8.0/GodotSharp.dll": {
-            "assemblyVersion": "4.4.0.0",
-            "fileVersion": "4.4.0.0"
+            "assemblyVersion": "4.5.1.0",
+            "fileVersion": "4.5.1.0"
           }
         }
       },
-      "GodotSharpEditor/4.4.0": {
+      "GodotSharpEditor/4.5.1": {
         "dependencies": {
-          "GodotSharp": "4.4.0"
+          "GodotSharp": "4.5.1"
         },
         "runtime": {
           "lib/net8.0/GodotSharpEditor.dll": {
-            "assemblyVersion": "4.4.0.0",
-            "fileVersion": "4.4.0.0"
+            "assemblyVersion": "4.5.1.0",
+            "fileVersion": "4.5.1.0"
           }
         }
       },
@@ -305,26 +305,26 @@
       "path": "ffmpeg.autogen/7.1.1",
       "hashPath": "ffmpeg.autogen.7.1.1.nupkg.sha512"
     },
-    "Godot.SourceGenerators/4.4.0": {
+    "Godot.SourceGenerators/4.5.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-eoC+ccuHNDvOqb+8AKsAAOhVYfk+/zZwUhTYazMOfZoHdQnx8eWI6iHECBPVwxtR9sSsp68ovLoJAIv4xYOKpA==",
-      "path": "godot.sourcegenerators/4.4.0",
-      "hashPath": "godot.sourcegenerators.4.4.0.nupkg.sha512"
+      "sha512": "sha512-HOHYJQO5A/kzf5CUobeTPOX+JawSvjkDE0v/Fyo4EMYEC2MvCTGUvpJFjqQQmHYLNsiiB7RLVilcnup+jiVfdA==",
+      "path": "godot.sourcegenerators/4.5.1",
+      "hashPath": "godot.sourcegenerators.4.5.1.nupkg.sha512"
     },
-    "GodotSharp/4.4.0": {
+    "GodotSharp/4.5.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-4CQWLbgUVXU/yQjKafkIs204kVd3R4D6qnYcwC9HHv33xfAninl3j0AcPQgFU2eVmGYNEHnIXUZtrZh7WU5tig==",
-      "path": "godotsharp/4.4.0",
-      "hashPath": "godotsharp.4.4.0.nupkg.sha512"
+      "sha512": "sha512-5CFnEHT+FByv5desNHMipz/209SCrWR9CGWFZjGHnXupl1Rw8U8q4nf65/unqZVL97Rx+3J5hskPMoDGaiZL9g==",
+      "path": "godotsharp/4.5.1",
+      "hashPath": "godotsharp.4.5.1.nupkg.sha512"
     },
-    "GodotSharpEditor/4.4.0": {
+    "GodotSharpEditor/4.5.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-vX6aagWM2VsKYd1QqyqY+Cz1rkA5Dq0tgnxl0VYMolpQoOsdtz71yGQxoE1pdqOqatardg9e951GXK5Zz6nnbg==",
-      "path": "godotsharpeditor/4.4.0",
-      "hashPath": "godotsharpeditor.4.4.0.nupkg.sha512"
+      "sha512": "sha512-8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
+      "path": "godotsharpeditor/4.5.1",
+      "hashPath": "godotsharpeditor.4.5.1.nupkg.sha512"
     },
     "Hardware.Info/101.0.0": {
       "type": "package",

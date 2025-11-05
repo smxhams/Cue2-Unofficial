@@ -67,8 +67,10 @@ public partial class DisplaysManager : Node
         
         Outputs.Add(output);
         output.Show();
+        DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
         output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
+        
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added video output '{output.OutputName}' for monitor {monitorIndex}.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -507,6 +509,7 @@ public partial class DisplaysManager : Node
                 Outputs.Add(output);
                 output.SetCanvasReference(Canvas);
                 output.Show();
+                DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
             }
         }
 

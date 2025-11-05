@@ -1879,7 +1879,7 @@ size_flags_vertical = 3
 mouse_filter = 2
 script = ExtResource("1_a3t1e")
 
-[node name="DragBar" type="Control" parent="."]
+[node name="HeaderHandle" type="Control" parent="."]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 10)
 layout_mode = 1
@@ -1930,6 +1930,17 @@ theme_override_icons/icon = SubResource("AtlasTexture_x7bw5")
 icon_alignment = 1
 expand_icon = true
 
+[node name="Border" type="Panel" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_a3t1e")
+
 [node name="RightHandle" type="Control" parent="."]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
@@ -1939,6 +1950,15 @@ anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 0
+grow_vertical = 2
+mouse_default_cursor_shape = 10
+
+[node name="LeftHandle" type="Control" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
 grow_vertical = 2
 mouse_default_cursor_shape = 10
 
@@ -1954,7 +1974,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_default_cursor_shape = 9
 
-[node name="CornerHandle" type="Control" parent="."]
+[node name="BottomRightCornerHandle" type="Control" parent="."]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -1969,13 +1989,34 @@ grow_horizontal = 0
 grow_vertical = 0
 mouse_default_cursor_shape = 12
 
-[node name="Border" type="Panel" parent="."]
+[node name="BottomLeftCornerHandle" type="Control" parent="."]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
+anchors_preset = 2
+anchor_top = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_a3t1e")
+offset_top = -5.0
+offset_right = 5.0
+grow_vertical = 0
+mouse_default_cursor_shape = 11
+
+[node name="TopRightCornerHandle" type="Control" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -5.0
+offset_bottom = 5.0
+grow_horizontal = 0
+mouse_default_cursor_shape = 11
+
+[node name="TopLeftCornerHandle" type="Control" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(5, 5)
+anchors_preset = 0
+offset_right = 5.0
+offset_bottom = 5.0
+mouse_default_cursor_shape = 12

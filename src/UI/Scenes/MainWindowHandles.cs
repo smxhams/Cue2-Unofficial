@@ -1,13 +1,12 @@
-using Godot;
-using System;
 using Cue2.Shared;
+using Godot;
 
-namespace Cue2.UI.Scenes;
-
-public partial class SubWindowHandles : Control
+namespace Cue2.launcher;
+public partial class MainWindowHandles: Control
 {
 	private GlobalData _globalData;
-    	//Variables
+	
+	//Variables
 	private bool _dragging;
 	private bool _resizing;
 	private Vector2I _initialMouse;
@@ -22,7 +21,14 @@ public partial class SubWindowHandles : Control
 
 	private Vector2I _minWindowSize = new Vector2I(600, 370);
 	
-	//Handles
+	private GlobalSignals _globalSignals;
+
+	private Color _originalBorderColor;
+	private bool _isFading;
+	private float _fadeProgress;
+	private Color _highlightColor;
+	private StyleBoxFlat _boarderStylebox;
+
 	private Control _headerHandle;
 	private Control _rightHandle;
 	private Control _leftHandle;
@@ -33,14 +39,22 @@ public partial class SubWindowHandles : Control
 	private Control _topLeftHandle;
 
 
-
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_windowId = GetWindow().GetWindowId();
 
+		_globalSignals.LogAlert += _alertReceived;
+		
+		// Border variables for event highlighting
+		var border = GetNode<Panel>("%Border");
+		_boarderStylebox = border.GetThemeStylebox("panel") as StyleBoxFlat;
+		if (_boarderStylebox == null) return;
+		_originalBorderColor = _boarderStylebox.BorderColor;
+		_highlightColor = new Color(1,0,0,1);//GlobalStyles.Danger;
+		
 		_headerHandle = GetNode<Control>("%HeaderHandle");
 		_rightHandle = GetNode<Control>("%RightHandle");
 		_leftHandle = GetNode<Control>("%LeftHandle");
@@ -58,15 +72,16 @@ public partial class SubWindowHandles : Control
 		_bottomLeftHandle.GuiInput += OnBottomLeftHandleGuiInput;
 		_topLeftHandle.GuiInput += OnTopLeftHandleGuiInput;
 		_bottomRightHandle.GuiInput += OnBottomRightHandleGuiInput;
-		
-		GetNode<Button>("%ExitButton").Pressed += _onExitButtonPressed;
 	}
-	
-	
-	
-	private void _onExitButtonPressed()
+
+	private async void _alertReceived()
 	{
-		GetParent().QueueFree();
+		if (_boarderStylebox == null) return;
+		
+		_boarderStylebox.BorderColor = _highlightColor;
+		await ToSignal(GetTree().CreateTimer(0.5), "timeout");
+		_fadeProgress = 0.0f;
+		_isFading = true;  
 	}
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)
@@ -124,6 +139,26 @@ public partial class SubWindowHandles : Control
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
 			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.TopLeft, _windowId);
+		}
+	}
+	
+
+	public override void _Process(double delta)
+	{
+		if (_isFading)
+		{
+			_fadeProgress += (float)delta / 1.0f; // 1-second fade duration
+			if (_fadeProgress >= 1.0f)
+			{
+				_fadeProgress = 1.0f;
+				_isFading = false; // Stop fading
+			}
+
+
+			// Interpolate between highlight color and original color
+			Color lerpedColor = _highlightColor.Lerp(_originalBorderColor, _fadeProgress);
+
+			_boarderStylebox.BorderColor = lerpedColor;
 		}
 	}
 }

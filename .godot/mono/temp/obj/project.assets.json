@@ -15,13 +15,13 @@
           }
         }
       },
-      "Godot.SourceGenerators/4.4.0": {
+      "Godot.SourceGenerators/4.5.1": {
         "type": "package",
         "build": {
           "build/Godot.SourceGenerators.props": {}
         }
       },
-      "GodotSharp/4.4.0": {
+      "GodotSharp/4.5.1": {
         "type": "package",
         "compile": {
           "lib/net8.0/GodotSharp.dll": {
@@ -34,10 +34,10 @@
           }
         }
       },
-      "GodotSharpEditor/4.4.0": {
+      "GodotSharpEditor/4.5.1": {
         "type": "package",
         "dependencies": {
-          "GodotSharp": "4.4.0"
+          "GodotSharp": "4.5.1"
         },
         "compile": {
           "lib/net8.0/GodotSharpEditor.dll": {
@@ -458,40 +458,40 @@
         "lib/netstandard2.1/FFmpeg.AutoGen.xml"
       ]
     },
-    "Godot.SourceGenerators/4.4.0": {
-      "sha512": "eoC+ccuHNDvOqb+8AKsAAOhVYfk+/zZwUhTYazMOfZoHdQnx8eWI6iHECBPVwxtR9sSsp68ovLoJAIv4xYOKpA==",
+    "Godot.SourceGenerators/4.5.1": {
+      "sha512": "HOHYJQO5A/kzf5CUobeTPOX+JawSvjkDE0v/Fyo4EMYEC2MvCTGUvpJFjqQQmHYLNsiiB7RLVilcnup+jiVfdA==",
       "type": "package",
-      "path": "godot.sourcegenerators/4.4.0",
+      "path": "godot.sourcegenerators/4.5.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "analyzers/dotnet/cs/Godot.SourceGenerators.dll",
         "build/Godot.SourceGenerators.props",
-        "godot.sourcegenerators.4.4.0.nupkg.sha512",
+        "godot.sourcegenerators.4.5.1.nupkg.sha512",
         "godot.sourcegenerators.nuspec"
       ]
     },
-    "GodotSharp/4.4.0": {
-      "sha512": "4CQWLbgUVXU/yQjKafkIs204kVd3R4D6qnYcwC9HHv33xfAninl3j0AcPQgFU2eVmGYNEHnIXUZtrZh7WU5tig==",
+    "GodotSharp/4.5.1": {
+      "sha512": "5CFnEHT+FByv5desNHMipz/209SCrWR9CGWFZjGHnXupl1Rw8U8q4nf65/unqZVL97Rx+3J5hskPMoDGaiZL9g==",
       "type": "package",
-      "path": "godotsharp/4.4.0",
+      "path": "godotsharp/4.5.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
-        "godotsharp.4.4.0.nupkg.sha512",
+        "godotsharp.4.5.1.nupkg.sha512",
         "godotsharp.nuspec",
         "lib/net8.0/GodotSharp.dll",
         "lib/net8.0/GodotSharp.xml"
       ]
     },
-    "GodotSharpEditor/4.4.0": {
-      "sha512": "vX6aagWM2VsKYd1QqyqY+Cz1rkA5Dq0tgnxl0VYMolpQoOsdtz71yGQxoE1pdqOqatardg9e951GXK5Zz6nnbg==",
+    "GodotSharpEditor/4.5.1": {
+      "sha512": "8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
       "type": "package",
-      "path": "godotsharpeditor/4.4.0",
+      "path": "godotsharpeditor/4.5.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
-        "godotsharpeditor.4.4.0.nupkg.sha512",
+        "godotsharpeditor.4.5.1.nupkg.sha512",
         "godotsharpeditor.nuspec",
         "lib/net8.0/GodotSharpEditor.dll",
         "lib/net8.0/GodotSharpEditor.xml"
@@ -1055,9 +1055,9 @@
   "projectFileDependencyGroups": {
     "net8.0": [
       "FFmpeg.AutoGen >= 7.1.1",
-      "Godot.SourceGenerators >= 4.4.0",
-      "GodotSharp >= 4.4.0",
-      "GodotSharpEditor >= 4.4.0",
+      "Godot.SourceGenerators >= 4.5.1",
+      "GodotSharp >= 4.5.1",
+      "GodotSharpEditor >= 4.5.1",
       "Hardware.Info >= 101.0.0",
       "NAudio >= 2.2.1",
       "Newtonsoft.Json >= 13.0.3",
@@ -1113,15 +1113,18 @@
           },
           "Godot.SourceGenerators": {
             "target": "Package",
-            "version": "[4.4.0, )"
+            "version": "[4.5.1, )",
+            "autoReferenced": true
           },
           "GodotSharp": {
             "target": "Package",
-            "version": "[4.4.0, )"
+            "version": "[4.5.1, )",
+            "autoReferenced": true
           },
           "GodotSharpEditor": {
             "target": "Package",
-            "version": "[4.4.0, )"
+            "version": "[4.5.1, )",
+            "autoReferenced": true
           },
           "Hardware.Info": {
             "target": "Package",
