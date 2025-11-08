@@ -1,12 +1,12 @@
 Control
-Label
-Button
-CheckButton
 LineEdit
+Label
+HBoxContainer
+CheckButton
+VBoxContainer
+Button
 ScrollContainer
 CheckBox
-HBoxContainer
-VBoxContainer
 Panel
 SubViewportContainer
 OmniLight3D

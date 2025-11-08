@@ -143,7 +143,7 @@ public class Cue : ICue
         return Components.FirstOrDefault(c => c.Type == "Audio", defaultValue:null) as AudioComponent;
     }
 
-    public VideoComponent AddVideoComponent(string videoFile, GlobalSignals globalSignals)
+    public VideoComponent AddVideoComponent(string videoFile)
     {
         if (Components.FirstOrDefault(c => c.Type == "Video") is VideoComponent existing)
         {

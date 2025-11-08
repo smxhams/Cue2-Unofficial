@@ -378,7 +378,7 @@ public partial class MediaEngine : Node
     }
     
     /// <summary>
-    /// Gets metadata for a video file using FFmpeg (duration, width, height, frame rate, codec/format).
+    /// Gets metadata for a video file using FFmpeg (duration, width, height, frame rate, codec/format, and audio metadata if present).
     /// Fast extraction without full decoding; supports broad formats (MP4, AVI, etc.).
     /// Returns default-initialized metadata on failure.
     /// </summary>
@@ -464,6 +464,37 @@ public partial class MediaEngine : Node
                     else
                     {
                         metadata.Format = "unknown";
+                    }
+
+                    // Check for audio stream and extract audio metadata if present
+                    int audioStreamIndex = -1;
+                    for (uint i = 0; i < formatCtx->nb_streams; i++)
+                    {
+                        if (formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
+                        {
+                            audioStreamIndex = (int)i;
+                            break;
+                        }
+                    }
+
+                    if (audioStreamIndex != -1)
+                    {
+                        AVCodecParameters* audioCodecPar = formatCtx->streams[(uint)audioStreamIndex]->codecpar;
+
+                        // Audio channels from layout
+                        metadata.AudioChannels = (int)audioCodecPar->ch_layout.nb_channels;
+
+                        // Audio sample rate
+                        metadata.AudioSampleRate = audioCodecPar->sample_rate;
+
+                        // Audio bit depth from sample format
+                        AVSampleFormat audioSampleFmt = (AVSampleFormat)audioCodecPar->format;
+                        int audioBytesPerSample = ffmpeg.av_get_bytes_per_sample(audioSampleFmt);
+                        metadata.AudioBitDepth = audioBytesPerSample * 8; // Bytes to bits; 0 if unknown
+
+                        // Audio codec name
+                        AVCodec* audioCodec = ffmpeg.avcodec_find_decoder(audioCodecPar->codec_id);
+                        metadata.AudioCodec = audioCodec != null ? ffmpeg.avcodec_get_name(audioCodec->id) : "unknown";
                     }
 
                     GD.Print("MediaEngine:GetVideoFileMetadataAsync - Metadata extracted successfully.");

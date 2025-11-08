@@ -14,8 +14,11 @@ namespace Cue2.Shared;
 
 public partial class GlobalData : Node
 {
-	public static string Version { get; } = "0.0.1-alpha";
+	public static string Version { get; } = "0.1-StripyHat";
 
+	public static readonly List<string> PreviousVersions = ["0.0-Dev"];
+
+	
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
 	
@@ -55,8 +58,18 @@ public partial class GlobalData : Node
 	public string SessionPath;
 	public string SessionMediaPath;
 	public string SessionWaveformsPath;
+	
+	// File filters for media files (FFmpeg compatible)
+	public static readonly string VideoFileFilters = "*.mp4,*.avi,*.mkv,*.mov,*.flv,*.webm,*.m4v,*.3gp,*.asf," +
+	                                                 "*.wmv,*.mpg,*.mpeg,*.ts,*.mts,*.vob,*.ogv,*.rm,*.rmvb," +
+	                                                 "*.divx,*.xvid";
+	public static readonly string ImageFileFilters = "*.png,*.jpg,*.jpeg,*.bmp,*.tiff,*.tif,*.gif,*.webp,*.tga," +
+	                                                 "*.dds,*.exr,*.hdr,*.svg";
+	public static readonly string AudioFileFilters = "*.mp3,*.wav,*.flac,*.aac,*.ogg,*.m4a,*.wma,*.aiff,*.au,*.ra," +
+	                                                 "*.ape,*.ac3,*.dts,*.pcm";
+	public static readonly string AllSupportedFileFilters = VideoFileFilters + "," + ImageFileFilters + "," + AudioFileFilters;
 
-	// Called when the node enters the scene tree for the first time.
+
 	public override void _Ready()
 	{
 		// Init MediaManager class so can be referenced everywhere

@@ -87,12 +87,12 @@ public partial class AudioInspector : Control
         _routingCollapseButton = GetNode<Button>("%RoutingCollapseButton");
         _routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
         _routingAccordian = GetNode<VBoxContainer>("%RoutingAccordian");
-        _routingAccordian.Visible = false;
+        _routingContainer = GetNode<VBoxContainer>("%RoutingContainer");
+        _routingMatrixGrid = GetNode<GridContainer>("%RoutingMatrixGrid");
         
         _waveformCollapseButton = GetNode<Button>("%WaveformCollapseButton");
         _waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
         _waveformAccordian = GetNode<VBoxContainer>("%WaveformAccordian");
-        _waveformAccordian.Visible = false;
         
         _startTimeInput = GetNode<LineEdit>("%StartTimeInput");
         _endTimeInput = GetNode<LineEdit>("%EndTimeInput");
@@ -120,20 +120,12 @@ public partial class AudioInspector : Control
         
         
         
-        _startTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _startTimeInput);
-        _endTimeInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _endTimeInput);
-        _volumeInput.TextSubmitted += (string newText) => VolumeInputSubmitted(newText, _volumeInput);
-        _loopInput.Toggled += (bool state) => { _focusedAudioComponent.Loop = state; SyncDuration();};
-        //_playCountInput.TextChanged += (string newText) => { _focusedAudioComponent.PlayCount = int.Parse(newText); };
-        _playCountInput.TextSubmitted+= OnPlayCountSubmitted;
+        _startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
+        _endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
+        _volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
+        _loopInput.Toggled += state => { _focusedAudioComponent.Loop = state; SyncDuration();};
+        _playCountInput.TextSubmitted += OnPlayCountSubmitted;
         _outputOptionButton.ItemSelected += OutputOptionSelected;
-        
-        
-        
-        _routingContainer = GetNode<VBoxContainer>("%RoutingContainer");
-        _routingMatrixGrid = GetNode<GridContainer>("%RoutingMatrixGrid");
-        _routingContainer.Visible = false; // Hidden until needed.
-        
         
         UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
         
@@ -142,6 +134,11 @@ public partial class AudioInspector : Control
         // Ensure content is hidden at start up
         _inspectorContent.Visible = false;
         _selectFileContainer.Visible = false;
+        _routingAccordian.Visible = false;
+        _routingContainer.Visible = false;
+        _waveformAccordian.Visible = false;
+
+
         
         _routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
         _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
