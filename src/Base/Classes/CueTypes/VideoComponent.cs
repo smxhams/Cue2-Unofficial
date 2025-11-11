@@ -7,6 +7,7 @@ public class VideoComponent : ICueComponent
 {
     public string Type => "Video";
     public string VideoFile { get; set; }
+    /// <summary>Start Time in seconds</summary>
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
     public int TargetLayerId { get; set; } = 0; // ID of the target layer to render on

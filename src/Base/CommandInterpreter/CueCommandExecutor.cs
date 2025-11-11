@@ -76,18 +76,6 @@ public partial class CueCommandExectutor : CueCommandInterpreter
             GD.PrintErr($"CueCommandExecutor:ActivateCue - {ex.Message}");
         }
         
-        
-        // TODO: This needs to move to active cue so UI can show children of main and main cue controls children. 
-        /*if (cue.ChildCues.Count() != 0)
-        {
-            foreach (var child in cue.ChildCues)
-            {
-                var childCue = CueList.FetchCueFromId(child);
-                ActivateCue(childCue);
-
-            }
-        }*/
-        
     }
     
     

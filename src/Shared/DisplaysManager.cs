@@ -9,6 +9,7 @@ namespace Cue2.Shared;
 
 /// <summary>
 /// Manages video output devices for displaying canvas regions on monitors.
+/// This is Autoloaded by project.
 /// </summary>
 public partial class DisplaysManager : Node
 {
@@ -31,12 +32,12 @@ public partial class DisplaysManager : Node
     /// <summary>
     /// List of active video output devices.
     /// </summary>
-    public List<VideoOutputDevice> Outputs { get; } = new List<VideoOutputDevice>();
+    public static List<VideoOutputDevice> Outputs { get; } = new List<VideoOutputDevice>();
 
     /// <summary>
     /// List of video target layers.
     /// </summary>
-    public List<VideoTargetLayer> Layers { get; } = new List<VideoTargetLayer>();
+    public static List<VideoTargetLayer> Layers { get; } = new List<VideoTargetLayer>();
 
     public override void _Ready()
     {

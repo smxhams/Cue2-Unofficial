@@ -37,7 +37,11 @@ public partial class ActiveCue : GodotObject
     
     private Dictionary<PanelContainer, ActiveAudioPlayback> _activeAudioComponents = new Dictionary<PanelContainer, ActiveAudioPlayback>();
     private Dictionary<PanelContainer, AudioComponent> _componentToAudio = new Dictionary<PanelContainer, AudioComponent>();
+    private Dictionary<PanelContainer, ActiveAudioPlayback> _activeVideoComponents = new Dictionary<PanelContainer, ActiveAudioPlayback>();
+    private Dictionary<PanelContainer, VideoComponent> _componentToVideo = new Dictionary<PanelContainer, VideoComponent>();
     private Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new Dictionary<PanelContainer, CueLightComponent>();
+
+    private int _activeComponentCount = 0;
     
     /// <summary>
     /// Event raised when the cue playback is completed.
@@ -175,7 +179,6 @@ public partial class ActiveCue : GodotObject
         }
     }
     
-    
     /// <summary>
     /// Starts the cue playback asynchronously, setting up UI and triggering components.
     /// </summary>
@@ -189,7 +192,7 @@ public partial class ActiveCue : GodotObject
         SetupUi();
         SetupSignals();
         SetupTimers();
-
+        
         foreach (var childId in _cue.ChildCues)
         {
             var child = CueList.FetchCueFromId(childId);
@@ -203,8 +206,8 @@ public partial class ActiveCue : GodotObject
         // Set up components
         await SetupComponents();
 
-        // If no audio components, mark as finished
-        if (_activeAudioComponents.Count == 0)
+        // If no components or children, mark as finished
+        if (_activeComponentCount == 0)
         {
             _isFinished = true;
             if (_childActiveCues.Count == 0)
@@ -350,6 +353,10 @@ public partial class ActiveCue : GodotObject
             {
                 tasks.Add(SetupAudioComponent(audioComponent));
             }
+            else if (component is VideoComponent videoComponent)
+            {
+                tasks.Add(SetupVideoComponent(videoComponent));
+            }
             else if (component is CueLightComponent cueLightComponent)
             {
                 tasks.Add(SetupCueLightComponent(cueLightComponent));
@@ -365,7 +372,7 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
-            // Preload metadata/waveform if not already (assuming done in inspector/load)
+            // Preload metadata if not already (assuming done in inspector/load)
             if (audioComponent.Metadata == null)
             {
                 audioComponent.Metadata = await _mediaEngine.GetAudioFileMetadataAsync(audioComponent.AudioFile);
@@ -462,14 +469,36 @@ public partial class ActiveCue : GodotObject
         }
         catch (Exception ex)
         {
-            GD.Print($"ActiveCue:StartAsync - Exception: {ex.Message}");
+            GD.Print($"ActiveCue:SetupAudioComponent - Exception: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
-            StopAll();
+            //StopAll(); //Can't remember why this failing will call a stopall
         }
-        
     }
-    
+
+    private async Task SetupVideoComponent(VideoComponent videoComponent)
+    {
+        try
+        {
+            // Preload metadata if not already (assuming done in inspector/load)
+            if (videoComponent.Metadata == null)
+            {
+                videoComponent.Metadata = await _mediaEngine.GetVideoFileMetadataAsync(videoComponent.VideoFile);
+            }
+            
+            var playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
+            await playback.InitAsync();
+            
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"ActiveCue:SetupVideoComponent - Exception: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error activating video component for cue {_cue.Name}: {ex.Message}", 2);
+            //StopAll(); //Can't remember why this failing will call a stopall
+        }
+    }
+
     /// <summary>
     /// Handles seek calculation and execution from UI input.
     /// </summary>

@@ -1,10 +1,10 @@
-OptionButton
+VBoxContainer
 Control
+HBoxContainer
+OptionButton
 LineEdit
 Label
-HBoxContainer
 CheckButton
-VBoxContainer
 Button
 ScrollContainer
 CheckBox
@@ -12,4 +12,3 @@ Panel
 SubViewportContainer
 OmniLight3D
 MeshInstance3D
-Camera3D

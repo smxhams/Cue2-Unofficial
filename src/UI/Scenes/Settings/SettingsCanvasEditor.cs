@@ -260,7 +260,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             }
 
             // Create cards for saved outputs not matching current displays
-            foreach (var output in _displaysManager.Outputs)
+            foreach (var output in DisplaysManager.Outputs)
             {
                 if (!_activeOutputs.ContainsKey(output.TargetMonitor))
                 {
@@ -319,7 +319,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         var sizeYLineEdit = instance.GetNode<LineEdit>("%SizeYLineEdit");
 
         // Set defaults or from saved
-        VideoOutputDevice output = savedOutput ?? _displaysManager.Outputs.Find(o => o.TargetMonitor == monitorIndex);
+        VideoOutputDevice output = savedOutput ?? DisplaysManager.Outputs.Find(o => o.TargetMonitor == monitorIndex);
         if (output != null)
         {
             posXLineEdit.Text = output.CanvasPosition.X.ToString();
@@ -597,8 +597,8 @@ public partial class SettingsCanvasEditor : ScrollContainer
     
     private void OnNewTargetLayerPressed()
     {
-        string name = $"Layer {_displaysManager.Layers.Count + 1}";
-        int zIndex = _displaysManager.Layers.Count;
+        string name = $"Layer {DisplaysManager.Layers.Count + 1}";
+        int zIndex = DisplaysManager.Layers.Count;
         _displaysManager.AddLayer(name, zIndex);
         PopulateTargetLayers();
         UpdateCanvasOutlines();
@@ -616,7 +616,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             child.QueueFree();
         }
         
-        foreach (var layer in _displaysManager.Layers)
+        foreach (var layer in DisplaysManager.Layers)
         {
             CreateTargetLayerCard(layer);
         }
@@ -661,7 +661,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         posXLineEdit.Text = layer.CanvasPosition.X.ToString();
         posYLineEdit.Text = layer.CanvasPosition.Y.ToString();
         posXLineEdit.TextSubmitted += (text) => {
-            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            if (DisplaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
             {
                 try
                 {
@@ -677,7 +677,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             posXLineEdit.ReleaseFocus();
         };
         posYLineEdit.TextSubmitted += (text) => {
-            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            if (DisplaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
             {
                 try
                 {
@@ -699,7 +699,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         sizeXLineEdit.Text = layer.Size.X.ToString();
         sizeYLineEdit.Text = layer.Size.Y.ToString();
         sizeXLineEdit.TextSubmitted += (text) => {
-            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            if (DisplaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
             {
                 try
                 {
@@ -715,7 +715,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             sizeXLineEdit.ReleaseFocus();
         };
         sizeYLineEdit.TextSubmitted += (text) => {
-            if (_displaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
+            if (DisplaysManager.Layers.Find(l => l.LayerId == layer.LayerId) != null)
             {
                 try
                 {
@@ -767,7 +767,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
     {
         foreach (var rect in _outputOutlines) { _canvasLayer.RemoveChild(rect); rect.QueueFree(); }
         _outputOutlines.Clear();
-        foreach (var output in _displaysManager.Outputs)
+        foreach (var output in DisplaysManager.Outputs)
         {
             var outline = new DashedOutline();
             var posX = output.CanvasPosition.X * _zoom;
@@ -781,7 +781,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
             _canvasLayer.AddChild(outline);
             _outputOutlines.Add(outline);
         }
-        foreach (var layer in _displaysManager.Layers)
+        foreach (var layer in DisplaysManager.Layers)
         {
             var outline = new DashedOutline();
             var posX = layer.CanvasPosition.X * _zoom;

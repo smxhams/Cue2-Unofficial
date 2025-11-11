@@ -47,7 +47,7 @@ public partial class VideoInspector : Control
     
 	// Audio
 	private Button _audioCollapseButton;
-	private VBoxContainer _audioAccordian;
+	private HBoxContainer _audioAccordian;
 	private CheckButton _useAudioCheckButton;
 	private Label _useAudioLabel;
 	private OptionButton _outputOptionButton;
@@ -109,7 +109,7 @@ public partial class VideoInspector : Control
 	    
 		// Audio
 		_audioCollapseButton  = GetNode<Button>("%AudioCollapseButton");
-		_audioAccordian = GetNode<VBoxContainer>("%AudioAccordian");
+		_audioAccordian = GetNode<HBoxContainer>("%AudioAccordian");
 		_useAudioCheckButton = GetNode<CheckButton>("%UseAudioCheckButton");
 		_useAudioLabel = GetNode<Label>("%UseAudioLabel");
 		_outputOptionButton = GetNode<OptionButton>("%OutputOptionButton");
@@ -249,7 +249,7 @@ public partial class VideoInspector : Control
 
 		// Populate target layer options
 		_targetLayerOptionButton.Clear();
-		foreach (var layer in _globalData.DisplaysManager.Layers)
+		foreach (var layer in DisplaysManager.Layers)
 		{
 			_targetLayerOptionButton.AddItem(layer.LayerName, layer.LayerId);
 		}
