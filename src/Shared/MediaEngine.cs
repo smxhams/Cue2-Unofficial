@@ -31,7 +31,7 @@ public partial class MediaEngine : Node
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"MediaEngine:_Ready - Failed to initialize MediaEngine: {ex.Message}", 2);
-            GD.PrintErr($"MediaEngine:_Ready - Initialization error: {ex.Message}");
+            GD.PrintErr($"MediaEngine:_Ready - Initialization error: {ex.Message}, {ex.StackTrace}");
         }
         
     }
@@ -44,10 +44,35 @@ public partial class MediaEngine : Node
     {
         try 
         {
-            string basePath = "res://ffmpeg/bin/"; 
-            string platformDir = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "windows" : 
-                                  RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : 
-                                  "linux"; 
+            string basePath = "res://bin/";
+            string platformDir;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var arch = RuntimeInformation.ProcessArchitecture;
+                if (arch == Architecture.Arm64)
+                {
+                    platformDir = "winarm64";
+                    GD.Print("MediaEngine:LoadFFmpegLibraries - Using ARM64 Windows DLLs.");
+                }
+                else if (arch == Architecture.X64)
+                {
+                    platformDir = "win64";
+                    GD.Print("MediaEngine:LoadFFmpegLibraries - Using x64 Windows DLLs.");
+                }
+                else
+                {
+                    platformDir = "win64"; // Fallback
+                    GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Unsupported Windows architecture {arch}; defaulting to win64.");
+                }
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                platformDir = "macos";
+            }
+            else
+            {
+                platformDir = "linux";
+            }
             string libPath = ProjectSettings.GlobalizePath($"{basePath}{platformDir}/"); // Absolute path
 
             GD.Print($"MediaEngine:LoadFFmpegLibraries - Loading from: {libPath}"); // Prefixed debug path (minimal)
@@ -55,8 +80,8 @@ public partial class MediaEngine : Node
             // Set RootPath for dynamic fallback 
             ffmpeg.RootPath = libPath; 
 
-            // Base library names without prefix/extension (major versions from FFmpeg 7.1.x)
-            string[] baseLibs = { "avutil.59", "avcodec.61", "avformat.61", "swresample.5", "swscale.8" }; //!!!
+            // Base library names without prefix/extension (major versions from FFmpeg 8.0)
+            string[] baseLibs = { "avutil.60", "avcodec.62", "avformat.62", "swresample.6", "swscale.9" }; //!!!
 
             foreach (string baseLib in baseLibs) 
             { 
@@ -71,6 +96,7 @@ public partial class MediaEngine : Node
                 string fullPath = $"{libPath}{libName}{ext}"; 
 
                 nint handle = NativeLibrary.Load(fullPath); // Explicit Load (throws on fail for early error)
+                
                 GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {libName}{ext} (handle: {handle})");
             } 
 

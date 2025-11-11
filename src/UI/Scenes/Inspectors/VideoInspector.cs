@@ -1,8 +1,10 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
@@ -14,6 +16,7 @@ public partial class VideoInspector : Control
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	private MediaEngine _mediaEngine;
+	private AudioDevices _audioDevices;
 	
 	private Cue _focusedCue;
 	private VideoComponent _focusedVideoComponent;
@@ -33,17 +36,20 @@ public partial class VideoInspector : Control
 	private LineEdit _playCountInput;
 
 	private Label _fileMetadataLabel;
+	private OptionButton _targetLayerOptionButton;
 	private LineEdit _scaleWidthLineEdit;
 	private LineEdit _scaleHeightLineEdit;
-	private LineEdit _scaleXLineEdit;
-	private LineEdit _scaleYLineEdit;
+	private LineEdit _offsetXLineEdit;
+	private LineEdit _offsetYLineEdit;
 
 	private Button _previewCollapseButton;
 	private HBoxContainer _previewContainer;
     
 	// Audio
 	private Button _audioCollapseButton;
+	private VBoxContainer _audioAccordian;
 	private CheckButton _useAudioCheckButton;
+	private Label _useAudioLabel;
 	private OptionButton _outputOptionButton;
 	private LineEdit _volumeInput;
 	
@@ -73,6 +79,7 @@ public partial class VideoInspector : Control
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalSignals= GetNode<GlobalSignals>("/root/GlobalSignals");
 		_mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
+		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
 
 		_globalSignals.ShellFocused += ShellSelected;
 
@@ -91,22 +98,56 @@ public partial class VideoInspector : Control
 		_playCountInput  = GetNode<LineEdit>("%PlayCountInput");
 		
 		_fileMetadataLabel = GetNode<Label>("%FileMetadataLabel");
+		_targetLayerOptionButton = GetNode<OptionButton>("%TargetLayerOptionButton");
 		_scaleWidthLineEdit  = GetNode<LineEdit>("%ScaleWidthLineEdit");
 		_scaleHeightLineEdit  = GetNode<LineEdit>("%ScaleHeightLineEdit");
+		_offsetXLineEdit  = GetNode<LineEdit>("%OffsetXLineEdit");
+		_offsetYLineEdit  = GetNode<LineEdit>("%OffsetYLineEdit");
 
 		_previewCollapseButton = GetNode<Button>("%PreviewCollapseButton");
 		_previewContainer = GetNode<HBoxContainer>("%PreviewContainer");
 	    
 		// Audio
 		_audioCollapseButton  = GetNode<Button>("%AudioCollapseButton");
+		_audioAccordian = GetNode<VBoxContainer>("%AudioAccordian");
 		_useAudioCheckButton = GetNode<CheckButton>("%UseAudioCheckButton");
+		_useAudioLabel = GetNode<Label>("%UseAudioLabel");
 		_outputOptionButton = GetNode<OptionButton>("%OutputOptionButton");
+		_routingCollapseButton = GetNode<Button>("%RoutingCollapseButton");
+		_routingAccordian =  GetNode<VBoxContainer>("%RoutingAccordian");
+		_routingMatrixGrid = GetNode<GridContainer>("%RoutingMatrixGrid");
+		_routingContainer = GetNode<VBoxContainer>("%RoutingContainer");
+		_waveformCollapseButton  = GetNode<Button>("%WaveformCollapseButton");
+		_waveformAccordian =   GetNode<VBoxContainer>("%WaveformAccordian");
 		_volumeInput = GetNode<LineEdit>("%VolumeInput");
+
+		// Waveform UI setup
+		_waveformPanel = GetNode<PanelContainer>("%WaveformPanel");
+		_waveformLineLeftGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
+		_waveformLineMiddle = new Line2D { DefaultColor = GlobalStyles.HighColor1, Width = 1.0f };
+		_waveformLineRightGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
+		_waveformPanel.AddChild(_waveformLineLeftGrey);
+		_waveformPanel.AddChild(_waveformLineMiddle);
+		_waveformPanel.AddChild(_waveformLineRightGrey);
+
+		// Draggable handles (assume as children of a Control under %WaveformPanel
+		_startDragHandle = GetNode<Button>("%StartDragHandle");
+		_endDragHandle = GetNode<Button>("%EndDragHandle");
+		_startDragHandle.GuiInput += OnStartHandleInput;
+		_endDragHandle.GuiInput += OnEndHandleInput;
+		
 
 		_startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
 		_endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
 		_loopInput.Toggled += state => { _focusedVideoComponent.Loop = state; SyncDuration(); };
 		_playCountInput.TextSubmitted += OnPlayCountSubmitted;
+		_scaleWidthLineEdit.TextSubmitted += newText => OnScaleWidthSubmitted(newText);
+		_scaleHeightLineEdit.TextSubmitted += newText => OnScaleHeightSubmitted(newText);
+		_offsetXLineEdit.TextSubmitted += newText => OnOffsetXSubmitted(newText);
+		_offsetYLineEdit.TextSubmitted += newText => OnOffsetYSubmitted(newText);
+		_useAudioCheckButton.Toggled += OnUseAudioToggled;
+		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
+		_outputOptionButton.ItemSelected += OutputOptionSelected;
 		
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
         
@@ -115,9 +156,24 @@ public partial class VideoInspector : Control
 		// Ensure content is hidden at start up
 		_inspectorContent.Visible = false;
 		_selectFileContainer.Visible = false;
-
+		_previewContainer.Visible = false;
+		_audioAccordian.Visible = false;
+		_routingAccordian.Visible = false;
+		_waveformAccordian.Visible = false;
+		
+		_previewCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_audioCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		
 		// Connect Ui input methods.
 		_selectFileButton.Pressed += OpenFileDialog;
+
+		// Accordion connections
+		_previewCollapseButton.Pressed += () => ToggleAccordian(_previewContainer, _previewCollapseButton);
+		_audioCollapseButton.Pressed += () => ToggleAccordian(_audioAccordian, _audioCollapseButton);
+		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
+		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
 	}
 
 	/// <summary>
@@ -161,6 +217,7 @@ public partial class VideoInspector : Control
 		_inspectorContent.Visible = true;
 		
 		// Insert values from data
+		_fileUrl.Text = file;
 		_startTimeInput.Text =
 			UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out var startTip);
 		_startTimeInput.TooltipText = startTip;
@@ -169,10 +226,81 @@ public partial class VideoInspector : Control
 		_fileDurationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Metadata.Duration);
 		_loopInput.ButtonPressed = _focusedVideoComponent.Loop;
 		_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
+
+		// Populate metadata label
+		var meta = _focusedVideoComponent.Metadata;
+		string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)}. " +
+		                      $"Resolution: {meta.Width}x{meta.Height}. " +
+		                      $"Frame Rate: {meta.FrameRate:F1} fps. " +
+		                      $"Codec: {meta.Codec}. " +
+		                      $"Format: {meta.Format}";
+		if (meta.AudioChannels > 0)
+		{
+			metadataText += $"\nAudio Channels: {meta.AudioChannels}. " +
+			                $"Audio Sample Rate: {meta.AudioSampleRate} Hz. " +
+			                $"Audio Bit Depth: {meta.AudioBitDepth}. " +
+			                $"Audio Codec: {meta.AudioCodec}";
+		}
+		else
+		{
+			metadataText += "\nNo Audio";
+		}
+		_fileMetadataLabel.Text = metadataText;
+
+		// Populate target layer options
+		_targetLayerOptionButton.Clear();
+		foreach (var layer in _globalData.DisplaysManager.Layers)
+		{
+			_targetLayerOptionButton.AddItem(layer.LayerName, layer.LayerId);
+		}
+
+		// Set scale and offset values
+		_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString();
+		_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString();
+		_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString();
+		_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString();
+
 		var volumeDb = UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume);
 		_volumeInput.Text = $"{volumeDb}dB";
-		
-		
+
+		// Generate waveform data if not cached
+		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio && (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)) // Check cache
+		{
+			GD.Print($"VideoInspector:ShellSelected - No waveform found");
+			try
+			{
+				_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
+				if (_focusedVideoComponent.WaveformData.Length == 0)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
+				}
+			}
+			catch (Exception ex)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Error generating waveform: {ex.Message}", 2);
+			}
+		}
+		else if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Using cached waveform for {_focusedVideoComponent.VideoFile}", 0);
+		}
+		await DrawWaveform();
+
+		// Handle audio UI based on presence of audio in video file
+		if (_focusedVideoComponent.HasAudio)
+		{
+			_useAudioCheckButton.Visible = true;
+			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
+			_useAudioLabel.Text = "Use Audio";
+			PopulateOutputOptions();
+		}
+		else
+		{
+			_audioCollapseButton.Visible = false;
+			_useAudioCheckButton.Visible = false;
+			_useAudioLabel.Text = "No audio in file";
+		}
+
 	}
 
 	/// <summary>
@@ -222,6 +350,9 @@ public partial class VideoInspector : Control
 		_focusedVideoComponent.EndTime = fileDuration > 0 ? fileDuration : 0;
 		_focusedVideoComponent.StartTime = 0.0;
 		_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0 ? true : false; // If Audiochannels in metadata Audio is present.
+		_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio; // Enable by default if has audio
+		_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
+		_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
 		
 		ShellSelected(_focusedCue.Id);
 		GD.Print($"VideoInspector:FileSelected - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
@@ -257,11 +388,11 @@ public partial class VideoInspector : Control
             
 			// Recalculate duration
 			SyncDuration();
-            
+
 			textField.ReleaseFocus();
-            
+
 			// Update waveform
-			//DrawWaveform();
+			_ = DrawWaveform();
 
 		}
 		catch (Exception ex)
@@ -298,6 +429,589 @@ public partial class VideoInspector : Control
 			_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString(); // Revert to previous
 		}
 		_playCountInput.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Handles scaled width submission with validation.
+	/// </summary>
+	/// <param name="newText">The submitted text.</param>
+	private void OnScaleWidthSubmitted(string newText)
+	{
+		if (int.TryParse(newText, out var width) && width > 0)
+		{
+			_focusedVideoComponent.ScaledWidth = width;
+		}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid scaled width: {newText}. Must be positive integer.", 1);
+			_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString(); // Revert
+		}
+		_scaleWidthLineEdit.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Handles scaled height submission with validation.
+	/// </summary>
+	/// <param name="newText">The submitted text.</param>
+	private void OnScaleHeightSubmitted(string newText)
+	{
+		if (int.TryParse(newText, out var height) && height > 0)
+		{
+			_focusedVideoComponent.ScaledHeight = height;
+		}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid scaled height: {newText}. Must be positive integer.", 1);
+			_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString(); // Revert
+		}
+		_scaleHeightLineEdit.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Handles offset X submission with validation.
+	/// </summary>
+	/// <param name="newText">The submitted text.</param>
+	private void OnOffsetXSubmitted(string newText)
+	{
+		if (int.TryParse(newText, out var offsetX))
+		{
+			_focusedVideoComponent.OffsetX = offsetX;
+		}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid offset X: {newText}. Must be integer.", 1);
+			_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString(); // Revert
+		}
+		_offsetXLineEdit.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Handles offset Y submission with validation.
+	/// </summary>
+	/// <param name="newText">The submitted text.</param>
+	private void OnOffsetYSubmitted(string newText)
+	{
+		if (int.TryParse(newText, out var offsetY))
+		{
+			_focusedVideoComponent.OffsetY = offsetY;
+		}
+		else
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid offset Y: {newText}. Must be integer.", 1);
+			_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString(); // Revert
+		}
+		_offsetYLineEdit.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Handles toggling of the use audio checkbox. Expands audio accordion when enabled.
+	/// </summary>
+	/// <param name="state">The toggle state.</param>
+	private void OnUseAudioToggled(bool state)
+	{
+		_focusedVideoComponent.UseAudio = state;
+		if (state)
+		{
+			ToggleAccordian(_audioAccordian, _audioCollapseButton);
+		}
+	}
+
+	/// <summary>
+	/// Handles volume input submission with validation and conversion.
+	/// </summary>
+	/// <param name="text">The submitted text.</param>
+	/// <param name="textField">The LineEdit field.</param>
+	private void VolumeInputSubmitted(string text, LineEdit textField)
+	{
+		try
+		{
+			if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid volume format: {text}", 1);
+				textField.Text = $"{UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume)}dB";
+				textField.ReleaseFocus();
+				return;
+			}
+			if (dbValue > 0)
+			{
+				dbValue = -dbValue;
+			}
+			var volume = UiUtilities.DbToLinear(dbValue.ToString());
+			var dbReturn = UiUtilities.LinearToDb(volume);
+			textField.Text = $"{dbReturn}dB";
+			_focusedVideoComponent.Volume = volume;
+			textField.ReleaseFocus();
+		}
+		catch (Exception ex)
+		{
+			GD.Print($"VideoInspector:VolumeInputSubmitted - Error: {ex.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing volume: {ex.Message}", 2);
+		}
+	}
+
+	/// <summary>
+	/// Handles output option selection for audio routing.
+	/// </summary>
+	/// <param name="index">The selected index.</param>
+	private void OutputOptionSelected(long index)
+	{
+		var item = _outputOptionButton.GetItemText((int)index);
+		if (item.StartsWith("Patch"))
+		{
+			var patchId = (int)_outputOptionButton.GetItemMetadata((int)index);
+			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {patchId}");
+			if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
+			{
+				_focusedVideoComponent.Patch = patch;
+				_focusedVideoComponent.PatchId = patchId;
+				_focusedVideoComponent.DirectOutput = null;
+				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {patch.Name}");
+			}
+			else
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:OutputOptionSelected - Patch ID {patchId} not found, resetting output", 1);
+				_focusedVideoComponent.Patch = null;
+				_focusedVideoComponent.PatchId = -1;
+				_focusedVideoComponent.DirectOutput = null;
+				_outputOptionButton.Select(0); // Select "No output"
+			}
+			BuildRoutingMatrix();
+		}
+		else if (item.StartsWith("Direct Output"))
+		{
+			var dirOutName = item.Replace("Direct Output: ", "");
+			GD.Print($"VideoInspector:OutputOptionSelected - Direct output selected: {dirOutName}");
+			_focusedVideoComponent.DirectOutput = dirOutName;
+			_focusedVideoComponent.Patch = null;
+			_focusedVideoComponent.PatchId = -1;
+			BuildRoutingMatrix();
+		}
+		else
+		{
+			// No output
+			_focusedVideoComponent.DirectOutput = null;
+			_focusedVideoComponent.Patch = null;
+			_focusedVideoComponent.PatchId = -1;
+			_routingContainer.Visible = false;
+		}
+	}
+
+	/// <summary>
+	/// Populates the output option button with available audio outputs.
+	/// </summary>
+	private void PopulateOutputOptions()
+	{
+		// Remove items from output options
+		var itemCount = _outputOptionButton.GetItemCount();
+		for (int i = 0; i < itemCount; i++)
+		{
+			_outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount() - 1); // Removes last item
+		}
+		// Add patches as options
+		_outputOptionButton.AddItem("No output");
+		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+		{
+			_outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+			_outputOptionButton.SetItemMetadata(_outputOptionButton.GetItemCount() - 1, patch.Value.Id);
+			if (patch.Value.Id == _focusedVideoComponent.PatchId)
+			{
+				_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+			}
+		}
+
+		foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
+		{
+			_outputOptionButton.AddItem($"Direct Output: {output}");
+			if (output == _focusedVideoComponent.DirectOutput)
+			{
+				_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+			}
+		}
+
+		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.DirectOutput != null)
+		{
+			_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
+			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+		}
+		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.Patch != null)
+		{
+			_outputOptionButton.AddItem($"!!! Missing patch: {_focusedVideoComponent.Patch.Name}");
+			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+		}
+	}
+
+	/// <summary>
+	/// Builds the routing matrix for audio channels.
+	/// </summary>
+	private async void BuildRoutingMatrix()
+	{
+		foreach (var child in _routingMatrixGrid.GetChildren())
+		{
+			child.QueueFree();
+		}
+
+		if (_focusedVideoComponent == null || !_focusedVideoComponent.HasAudio || !_focusedVideoComponent.UseAudio)
+		{
+			GD.Print($"VideoInspector:BuildRoutingMatrix - No focused video component, no audio, or audio not enabled");
+			_routingContainer.Visible = false;
+			return;
+		}
+
+		await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
+
+		// Get ins and outs data
+		var inputChannels = _focusedVideoComponent.Metadata.AudioChannels;
+		var inputLabels = GetChannelLabels(inputChannels, isInput: true);
+
+		int outputChannels;
+		List<string> outputLabels = new List<string>();
+
+		// Audio Output Patch
+		if (_focusedVideoComponent.PatchId != -1)
+		{
+			// Check if selected patch exists, if not clean the video component of it.
+			if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out var patch))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
+				_focusedVideoComponent.Patch = null;
+				_focusedVideoComponent.PatchId = -1;
+				_focusedVideoComponent.Routing = null;
+				PopulateOutputOptions(); // Refresh UI to reflect missing patch
+				_routingContainer.Visible = false;
+				return;
+			}
+			outputChannels = patch.Channels.Count;
+			outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+		}
+
+		// Direct output
+		else if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
+		{
+			var device = _audioDevices.OpenAudioDevice(_focusedVideoComponent.DirectOutput, out var _);
+			if (device == null)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Direct output device not found: {_focusedVideoComponent.DirectOutput}", 2);
+				_focusedVideoComponent.DirectOutput = null;
+				PopulateOutputOptions(); // Refresh UI to reflect missing output
+				_routingContainer.Visible = false;
+				return;
+			}
+			outputChannels = device.Channels;
+			for (int i = 0; i < outputChannels; i++)
+			{
+				outputLabels.Add($"Channel {i}");
+			}
+		}
+		else
+		{
+			GD.Print($"VideoInspector:BuildRoutingMatrix - No output selected");
+			_routingContainer.Visible = false;
+			return;
+		}
+
+		_routingContainer.Visible = true;
+
+		// Validate routing (CuePatch) matches what is expected
+		var routing = _focusedVideoComponent.Routing;
+		bool needsUpdate = routing == null ||
+							routing.OutputChannels != outputChannels ||
+							!routing.OutputLabels.SequenceEqual(outputLabels) ||
+							routing.InputChannels != inputChannels ||
+							!routing.InputLabels.SequenceEqual(inputLabels);
+
+		if (needsUpdate)
+		{
+			// Preserve old volumes if possible
+			var oldRouting = routing;
+
+			// Create new CuePatch with current dimensions
+			routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+			_focusedVideoComponent.Routing = routing;
+
+			if (oldRouting != null)
+			{
+				// Copy over existing volumes for overlapping channels
+				int copyInputs = Math.Min(oldRouting.InputChannels, inputChannels);
+				int copyOutputs = Math.Min(oldRouting.OutputChannels, outputChannels);
+
+				for (int i = 0; i < copyInputs; i++)
+				{
+					for (int j = 0; j < copyOutputs; j++)
+					{
+						routing.SetVolume(i, j, oldRouting.GetVolume(i, j));
+					}
+				}
+			}
+
+			GD.Print($"VideoInspector:BuildRoutingMatrix - Resized/created CuePatch to inputs: {inputChannels}, outputs: {outputChannels}"); //!!!
+		}
+
+		// Create grid
+		_routingMatrixGrid.Columns = outputChannels + 1; // +1 for input labels
+
+		// Header row
+		_routingMatrixGrid.AddChild(new Label { Text = "" }); // Empty corner
+		foreach (var label in outputLabels)
+		{
+			_routingMatrixGrid.AddChild(new Label { Text = label, HorizontalAlignment = HorizontalAlignment.Center });
+		}
+
+		// Add rows: input label + volume fields
+		for (int row = 0; row < inputChannels; row++)
+		{
+			var inLabel = new Label { Text = inputLabels[row] };
+			_routingMatrixGrid.AddChild(inLabel);
+
+			for (int col = 0; col < outputChannels; col++)
+			{
+				var volumeEdit = new LineEdit();
+				var linearVol = _focusedVideoComponent.Routing.GetVolume(row, col);
+				if (linearVol > 0.0f)
+				{
+					var dbVol = UiUtilities.LinearToDb(linearVol);
+					volumeEdit.Text = $"{dbVol}dB";
+				}
+
+				var row1 = row;
+				var col1 = col;
+				volumeEdit.TextSubmitted += (string newText) => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
+				_routingMatrixGrid.AddChild(volumeEdit);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Handles matrix volume submission. Converts dB to linear and updates CuePatch.
+	/// </summary>
+	/// <param name="text">Submitted text.</param>
+	/// <param name="textField">LineEdit field.</param>
+	/// <param name="inputCh">Input channel index.</param>
+	/// <param name="outputCh">Output channel index.</param>
+	private void OnMatrixVolumeSubmitted(string text, LineEdit textField, int inputCh, int outputCh)
+	{
+		GD.Print($"In {inputCh}. Out {outputCh}");
+		try
+		{
+			float dbValue;
+			if (string.IsNullOrWhiteSpace(text.Replace("dB", "").Trim()))
+			{
+				dbValue = -60.0f;
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:OnMatrixVolumeSubmitted - Blank input treated as OFF for In {inputCh}, Out {outputCh}", 0);
+			}
+			else if (!float.TryParse(text.Replace("dB", "").Trim(), out dbValue))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:OnMatrixVolumeSubmitted - Invalid matrix volume: {text}", 1);
+				return;
+			}
+
+			var linear = UiUtilities.DbToLinear(dbValue.ToString());
+			_focusedVideoComponent.Routing.SetVolume(inputCh, outputCh, linear);
+			if (linear > 0.0f)
+			{
+				var dbReturn = UiUtilities.LinearToDb(linear);
+				textField.Text = $"{dbReturn}dB";
+			}
+			textField.ReleaseFocus();
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:OnMatrixVolumeSubmitted - Error: {ex.Message}", 2);
+		}
+	}
+
+	/// <summary>
+	/// Generates channel labels for routing matrix.
+	/// </summary>
+	/// <param name="channels">Number of channels.</param>
+	/// <param name="isInput">Whether these are input channels.</param>
+	/// <returns>List of channel labels.</returns>
+	private List<string> GetChannelLabels(int channels, bool isInput)
+	{
+		return channels switch
+		{
+			1 => new List<string> { "Mono" },
+			2 => new List<string> { "Left", "Right" },
+			4 => new List<string> { "Front Left", "Front Right", "Rear Left", "Rear Right" }, // Quad
+			6 => new List<string> { "Front Left", "Front Right", "Center", "LFE", "Surround Left", "Surround Right" }, // 5.1
+			8 => new List<string> { "Front Left", "Front Right", "Center", "LFE", "Surround Left", "Surround Right", "Surround Back Left", "Surround Back Right" }, // 7.1
+			_ => Enumerable.Range(1, channels).Select(i => $"Ch {i}").ToList() // Fallback for others
+		};
+	}
+
+	/// <summary>
+	/// Updates the waveform display based on current zoom and start/end times.
+	/// </summary>
+	private async Task DrawWaveform()
+	{
+		if (_waveformAccordian.Visible == false) return; // Don't bother drawing if not open.
+		if (!_focusedVideoComponent.UseAudio || _focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:DrawWaveform - No waveform data available or audio not enabled", 1);
+			return;
+		}
+
+		// Check UI has corrected it's size once made visible.
+		float width = _waveformPanel.Size.X;
+
+		await Task.Delay(50); // This for the most part corrects for width being wrong
+
+		// If width isn't correct, wait a bit before drawing.
+		if (width < 50)
+		{
+			width = _inspectorContent.Size.X-48; // Remove width of margin containers
+			GD.Print($"Width too small, checking it's parents width - Inspector Content width: {width}px");
+		}
+
+		if (width < 50)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:DrawWaveform - Waveform panel too small to draw", 1);
+			return;
+		}
+
+		// Deserialize
+
+		float[] minMax = new float[_focusedVideoComponent.WaveformData.Length / sizeof(float)];
+		Buffer.BlockCopy(_focusedVideoComponent.WaveformData, 0, minMax, 0, _focusedVideoComponent.WaveformData.Length);
+
+		int binCount = minMax.Length / 2;
+		var pointsLeft = new List<Vector2>();
+		var pointsMiddle = new List<Vector2>();
+		var pointsRight = new List<Vector2>();
+
+		float height = _waveformPanel.Size.Y / 2f;
+		float binWidth = width / binCount;
+
+		float startNorm = (float)(_focusedVideoComponent.StartTime / _focusedVideoComponent.Metadata.Duration);
+		float endNorm = (float)(_focusedVideoComponent.EndTime / _focusedVideoComponent.Metadata.Duration);
+		int startBin = (int)(startNorm * binCount);
+		int endBin = (int)(endNorm * binCount);
+
+
+		for (int i = 0; i < binCount; i++)
+		{
+			float x = i * binWidth;
+			float minVal = minMax[i * 2];
+			float maxVal = minMax[i * 2 + 1];
+
+			float yMin = height - (minVal * height); // Normalize [-1,1]
+			float yMax = height - (maxVal * height);
+
+			var pointMin = new Vector2(x, yMin);
+			var pointMax = new Vector2(x, yMax);
+
+			// Split sections based on bins
+			if (i < startBin)
+			{
+				pointsLeft.Add(pointMin);
+				pointsLeft.Add(pointMax);
+			}
+			else if (i >= endBin)
+			{
+				pointsRight.Add(pointMin);
+				pointsRight.Add(pointMax);
+			}
+			else
+			{
+				pointsMiddle.Add(pointMin);
+				pointsMiddle.Add(pointMax);
+			}
+		}
+
+		_waveformLineLeftGrey.Points = pointsLeft.ToArray();
+		_waveformLineMiddle.Points = pointsMiddle.ToArray();
+		_waveformLineRightGrey.Points = pointsRight.ToArray();
+
+		// Position handles
+		float startX = startNorm * width;
+		float endX = endNorm * width;
+		if (endX >= width - 2) endX -= 1;
+		_startDragHandle.Position = new Vector2(startX - 2 , 0); // Center on line
+		_endDragHandle.Position = new Vector2(endX - 2, 0);
+	}
+
+	private void OnStartHandleInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton mouseButton)
+		{
+			if (mouseButton.ButtonIndex == MouseButton.Left)
+			{
+				if (mouseButton.Pressed)
+				{
+					_isDraggingStart = true;
+				}
+				else // Released
+				{
+					if (_isDraggingStart)
+					{
+						//Recaluclate duration only on release
+						SyncDuration();
+						_isDraggingStart = false;
+					}
+				}
+			}
+		}
+		else if (@event is InputEventMouseMotion mouseMotion && _isDraggingStart)
+		{
+			var width = _waveformPanel.Size.X;
+			var mouseX = mouseMotion.Position.X;
+			var barPos = _startDragHandle.Position.X;
+			float newX = barPos + mouseX;
+			newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
+			float normX = newX / width;
+			_focusedVideoComponent.StartTime = normX * _focusedVideoComponent.Metadata.Duration;
+			_startTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.StartTime); // Update input
+			DrawWaveform(); // Refresh
+		}
+	}
+
+	private void OnEndHandleInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton mouseButton)
+		{
+			if (mouseButton.ButtonIndex == MouseButton.Left)
+			{
+				if (mouseButton.Pressed)
+				{
+					_isDraggingEnd = true;
+				}
+				else // Released
+				{
+					if (_isDraggingEnd)
+					{
+						SyncDuration();
+						_isDraggingEnd = false;
+					}
+				}
+			}
+		}
+		else if (@event is InputEventMouseMotion mouseMotion && _isDraggingEnd)
+		{
+			var width = _waveformPanel.Size.X;
+			var mouseX = mouseMotion.Position.X;
+			var barPos = _endDragHandle.Position.X;
+			float newX = barPos + mouseX;
+			newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
+			float normX = newX / width;
+			_focusedVideoComponent.EndTime = normX * _focusedVideoComponent.Metadata.Duration;
+			_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime); // Update input
+			DrawWaveform(); // Refresh
+		}
+	}
+
+	/// <summary>
+	/// Toggles the visibility of an accordion container and updates the button icon.
+	/// </summary>
+	/// <param name="accordian">The container to toggle.</param>
+	/// <param name="button">The button controlling the accordion.</param>
+	private async void ToggleAccordian(Control accordian, Button button)
+	{
+		accordian.Visible = !accordian.Visible;
+		button.Icon = GetThemeIcon(accordian.Visible ? "Down" : "Right", "AtlasIcons");
+
+		if (accordian.Name == "WaveformAccordian")
+		{
+			await DrawWaveform();
+		}
 	}
 
 	/// <summary>

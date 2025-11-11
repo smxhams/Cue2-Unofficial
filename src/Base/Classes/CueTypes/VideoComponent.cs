@@ -27,6 +27,28 @@ public class VideoComponent : ICueComponent
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
 
+    /// <summary>Scaled width in pixels</summary>
+    public int ScaledWidth { get; set; } = 0;
+    /// <summary>Scaled height in pixels</summary>
+    public int ScaledHeight { get; set; } = 0;
+    /// <summary>Offset X position in pixels</summary>
+    public int OffsetX { get; set; } = 0;
+    /// <summary>Offset Y position in pixels</summary>
+    public int OffsetY { get; set; } = 0;
+    /// <summary>Whether to use audio if available</summary>
+    public bool UseAudio { get; set; } = true;
+
+    /// <summary>Audio output patch</summary>
+    public AudioOutputPatch Patch { get; set; } = null;
+    /// <summary>Audio output patch ID</summary>
+    public int PatchId { get; set; } = -1;
+    /// <summary>Direct audio output device name</summary>
+    public string DirectOutput { get; set; } = null;
+    /// <summary>Audio routing matrix with volumes</summary>
+    public CuePatch Routing { get; set; } = null;
+    /// <summary>Serialised waveform data for display</summary>
+    public byte[] WaveformData { get; set; } = null;
+
     public double FadeInDuration { get; set; } = 0.0; // In seconds
     public double FadeOutDuration { get; set; } = 0.0; // In seconds
 
@@ -50,7 +72,25 @@ public class VideoComponent : ICueComponent
         data.Add("PlayCount", PlayCount);
         data.Add("FadeInDuration", FadeInDuration);
         data.Add("FadeOutDuration", FadeOutDuration);
+        data.Add("ScaledWidth", ScaledWidth);
+        data.Add("ScaledHeight", ScaledHeight);
+        data.Add("OffsetX", OffsetX);
+        data.Add("OffsetY", OffsetY);
         data.Add("HasAudio", HasAudio);
+        data.Add("UseAudio", UseAudio);
+        if (Patch != null)
+        {
+            data.Add("PatchId", PatchId);
+        }
+        if (DirectOutput != null)
+        {
+            data.Add("DirectOutput", DirectOutput);
+        }
+        if (Routing != null)
+        {
+            data.Add("Routing", Routing.GetData());
+        }
+        data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
         if (HasAudio && EmbeddedAudio != null)
         {
             data.Add("EmbeddedAudio", EmbeddedAudio.GetData());
@@ -65,6 +105,10 @@ public class VideoComponent : ICueComponent
             metaDict.Add("FrameRate", Metadata.FrameRate);
             metaDict.Add("Codec", Metadata.Codec);
             metaDict.Add("Format", Metadata.Format);
+            metaDict.Add("AudioChannels", Metadata.AudioChannels);
+            metaDict.Add("AudioSampleRate", Metadata.AudioSampleRate);
+            metaDict.Add("AudioBitDepth", Metadata.AudioBitDepth);
+            metaDict.Add("AudioCodec", Metadata.AudioCodec);
             data.Add("Metadata", metaDict);
         }
 
@@ -88,11 +132,22 @@ public class VideoComponent : ICueComponent
         PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
         FadeInDuration = data.ContainsKey("FadeInDuration") ? (double)data["FadeInDuration"] : 0.0;
         FadeOutDuration = data.ContainsKey("FadeOutDuration") ? (double)data["FadeOutDuration"] : 0.0;
+        ScaledWidth = data.ContainsKey("ScaledWidth") ? (int)data["ScaledWidth"] : 0;
+        ScaledHeight = data.ContainsKey("ScaledHeight") ? (int)data["ScaledHeight"] : 0;
+        OffsetX = data.ContainsKey("OffsetX") ? (int)data["OffsetX"] : 0;
+        OffsetY = data.ContainsKey("OffsetY") ? (int)data["OffsetY"] : 0;
         HasAudio = data.ContainsKey("HasAudio") ? (bool)data["HasAudio"] : false;
+        UseAudio = data.ContainsKey("UseAudio") ? (bool)data["UseAudio"] : true;
         if (HasAudio && data.ContainsKey("EmbeddedAudio"))
         {
             EmbeddedAudio = new AudioComponent();
             EmbeddedAudio.LoadFromData((Dictionary)data["EmbeddedAudio"]);
+        }
+        WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
+        if (data.ContainsKey("Routing"))
+        {
+            Routing = new CuePatch();
+            Routing.LoadFromData((Dictionary)data["Routing"]);
         }
 
         if (data.ContainsKey("Metadata"))
@@ -105,6 +160,10 @@ public class VideoComponent : ICueComponent
             Metadata.FrameRate = metaDict.ContainsKey("FrameRate") ? (float)metaDict["FrameRate"] : 0.0f;
             Metadata.Codec = metaDict.ContainsKey("Codec") ? (string)metaDict["Codec"] : "unknown";
             Metadata.Format = metaDict.ContainsKey("Format") ? (string)metaDict["Format"] : "unknown";
+            Metadata.AudioChannels = metaDict.ContainsKey("AudioChannels") ? (int)metaDict["AudioChannels"] : 0;
+            Metadata.AudioSampleRate = metaDict.ContainsKey("AudioSampleRate") ? (int)metaDict["AudioSampleRate"] : 0;
+            Metadata.AudioBitDepth = metaDict.ContainsKey("AudioBitDepth") ? (int)metaDict["AudioBitDepth"] : 0;
+            Metadata.AudioCodec = metaDict.ContainsKey("AudioCodec") ? (string)metaDict["AudioCodec"] : string.Empty;
             GD.Print("VideoComponent:LoadFromData - Metadata loaded from save data.");
         }
         else

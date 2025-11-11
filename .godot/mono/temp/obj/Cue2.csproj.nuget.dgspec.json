@@ -46,7 +46,7 @@
           "dependencies": {
             "FFmpeg.AutoGen": {
               "target": "Package",
-              "version": "[7.1.1, )"
+              "version": "[8.0.0, )"
             },
             "Godot.SourceGenerators": {
               "target": "Package",
@@ -63,21 +63,17 @@
               "version": "[4.5.1, )",
               "autoReferenced": true
             },
-            "Hardware.Info": {
-              "target": "Package",
-              "version": "[101.0.0, )"
-            },
             "Newtonsoft.Json": {
               "target": "Package",
-              "version": "[13.0.3, )"
+              "version": "[13.0.4, )"
             },
             "SDL3-CS": {
               "target": "Package",
-              "version": "[3.2.20, )"
+              "version": "[3.3.2.1, )"
             },
             "SDL3-CS.Native": {
               "target": "Package",
-              "version": "[3.2.20, )"
+              "version": "[3.3.2, )"
             }
           },
           "imports": [

@@ -5,26 +5,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FFmpeg.AutoGen" Version="7.1.1" />
-    <PackageReference Include="Hardware.Info" Version="101.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="SDL3-CS" Version="3.2.20" />
-    <PackageReference Include="SDL3-CS.Native" Version="3.2.20" />
-    <PackageReference Remove="GodotSharp" />
-    <PackageReference Remove="GodotSharpEditor" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="GodotSharpEditor" />
-    <PackageReference Remove="GodotSharp" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="GodotSharp" />
-    <PackageReference Remove="GodotSharpEditor" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="GodotSharp" />
-    <PackageReference Remove="GodotSharpEditor" />
-    <PackageReference Remove="Godot.SourceGenerators" />
-    <PackageReference Remove="GodotSharp" />
+    <PackageReference Include="FFmpeg.AutoGen" Version="8.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="SDL3-CS" Version="3.3.2.1" />
+    <PackageReference Include="SDL3-CS.Native" Version="3.3.2" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="src\Learning\Links.txt" />

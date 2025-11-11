@@ -137,8 +137,6 @@ public partial class AudioInspector : Control
         _routingAccordian.Visible = false;
         _routingContainer.Visible = false;
         _waveformAccordian.Visible = false;
-
-
         
         _routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
         _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);

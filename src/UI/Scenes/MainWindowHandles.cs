@@ -50,8 +50,19 @@ public partial class MainWindowHandles: Control
 		// Set window size constraints
 		var window = GetWindow();
 		window.MinSize = _minWindowSize;
-		var displaySize = DisplayServer.ScreenGetSize(0); // Primary display
-		window.MaxSize = displaySize;
+		// Calculate total screenspace across all displays
+		var screenCount = DisplayServer.GetScreenCount();
+		Vector2I minPos = new Vector2I(int.MaxValue, int.MaxValue);
+		Vector2I maxPos = new Vector2I(int.MinValue, int.MinValue);
+		for (int i = 0; i < screenCount; i++)
+		{
+			Vector2I pos = DisplayServer.ScreenGetPosition(i);
+			Vector2I size = DisplayServer.ScreenGetSize(i);
+			minPos = new Vector2I(Mathf.Min(minPos.X, pos.X), Mathf.Min(minPos.Y, pos.Y));
+			maxPos = new Vector2I(Mathf.Max(maxPos.X, pos.X + size.X), Mathf.Max(maxPos.Y, pos.Y + size.Y));
+		}
+		Vector2I totalSize = maxPos - minPos;
+		window.MaxSize = totalSize;
 
 		_globalSignals.LogAlert += _alertReceived;
 		
@@ -60,7 +71,7 @@ public partial class MainWindowHandles: Control
 		_boarderStylebox = border.GetThemeStylebox("panel") as StyleBoxFlat;
 		if (_boarderStylebox == null) return;
 		_originalBorderColor = _boarderStylebox.BorderColor;
-		_highlightColor = new Color(1,0,0,1);//GlobalStyles.Danger;
+		_highlightColor = GlobalStyles.Danger; //new Color(1,0,0,1);//GlobalStyles.Danger;
 		
 		_headerHandle = GetNode<Control>("%HeaderHandle");
 		_rightHandle = GetNode<Control>("%RightHandle");
