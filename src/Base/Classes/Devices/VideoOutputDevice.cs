@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot.Collections;
 
@@ -54,6 +55,7 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     private TestPattern _testPattern;
     private Dictionary<int, TestPattern> _layerTestPatterns = new();
+    private PackedScene _videoLayerPackedSene = SceneLoader.LoadPackedScene("uid://bnijb6qe1sop3", out _);
 
     /// <summary>
     /// Cached last clipped rectangle to avoid unnecessary updates.
@@ -71,6 +73,11 @@ public partial class VideoOutputDevice : Window, IDisposable
         AddChild(_outputRect);
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
+
+        var videoLayer = _videoLayerPackedSene.Instantiate<Control>();
+        AddChild(videoLayer);
+        videoLayer.Size = new Vector2(500, 500);
+        videoLayer.Position = new Vector2(400, 0);
         GD.Print($"VideoOutputDevice:Constructor - Initialized output device '{OutputName}' with ID {OutputId}.");
     }
     

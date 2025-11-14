@@ -1,20 +1,12 @@
-<Project Sdk="Godot.NET.Sdk/4.5.1">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="FFmpeg.AutoGen" Version="8.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="SDL3-CS" Version="3.3.2.1" />
-    <PackageReference Include="SDL3-CS.Native" Version="3.3.2" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="src\Learning\Links.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="src\Base\Classes\PlaybackPRE_TEXTRECT_CHANGE.cs" />
-    <Compile Remove="src\Dumper.cs" />
-  </ItemGroup>
-</Project>
+<Project Sdk="Godot.NET.Sdk/4.5.1">  
+<PropertyGroup>  
+<TargetFramework>net8.0</TargetFramework>  
+<EnableDynamicLoading>true</EnableDynamicLoading>  
+<AllowUnsafeBlocks>true</AllowUnsafeBlocks>  
+</PropertyGroup>  
+<ItemGroup>  
+<PackageReference Include="FFmpeg.AutoGen" Version="8.0.0" />  
+<PackageReference Include="SDL3-CS" Version="3.3.2.1" />  
+<PackageReference Include="SDL3-CS.Native" Version="3.3.2" />  
+</ItemGroup>  
+</Project> 

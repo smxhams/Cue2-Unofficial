@@ -24,7 +24,7 @@ public partial class MediaEngine : Node
         try
         {
             GD.Print("MediaEngine:_Ready - Loading FFmpeg libs.");
-            LoadFFmpegLibraries(); // From integration guide
+            LinkFFmpegLibraries();
             GD.Print($"MediaEngine:_Ready - FFmpeg version: {ffmpeg.av_version_info()}");
         }
         catch (Exception ex)
@@ -37,10 +37,10 @@ public partial class MediaEngine : Node
     }
     
     /// <summary>
-    /// Loads FFmpeg native libraries manually for cross-platform compatibility in Godot Mono.
+    /// Dynamically links FFmpeg native libraries manually for cross-platform compatibility in Godot Mono.
     /// Ensures core DLLs (avcodec, avformat, etc.) are resolved before any FFmpeg calls.
     /// </summary>
-    private void LoadFFmpegLibraries() 
+    private void LinkFFmpegLibraries() 
     {
         try 
         {
@@ -81,14 +81,14 @@ public partial class MediaEngine : Node
             ffmpeg.RootPath = libPath; 
 
             // Base library names without prefix/extension (major versions from FFmpeg 8.0)
-            string[] baseLibs = { "avutil.60", "avcodec.62", "avformat.62", "swresample.6", "swscale.9" }; //!!!
+            string[] baseLibs = { "avutil.60", "avcodec.62", "avformat.62", "swresample.6", "swscale.9" };
 
             foreach (string baseLib in baseLibs) 
             { 
                 // Platform-specific naming 
                 string libName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                    ? baseLib.Replace(".", "-")  // Windows: avutil-59 (replace . with -) //!!!
-                    : $"lib{baseLib}";           // macOS/Linux: libavutil.59 (major symlink) //!!!
+                    ? baseLib.Replace(".", "-")  // Windows: avutil-59 (replace . with -)
+                    : $"lib{baseLib}";           // macOS/Linux: libavutil.59 (major symlink)
 
                 string ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".dll" : 
                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? ".dylib" : ".so"; 
@@ -537,6 +537,68 @@ public partial class MediaEngine : Node
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// Checks for available hardware acceleration devices and returns the best supported type.
+    /// Prioritizes CUDA (NVDEC) for NVIDIA GPUs, then VAAPI for Linux, VideoToolbox for macOS.
+    /// Returns AVHWDeviceType.None if no hardware acceleration is available.
+    /// </summary>
+    /// <returns>The best available hardware device type for video decoding.</returns>
+    public static unsafe AVHWDeviceType GetBestHardwareDeviceType()
+    {
+        // List of preferred hardware types in order
+        AVHWDeviceType[] preferredTypes = {
+            AVHWDeviceType.AV_HWDEVICE_TYPE_CUDA,    // NVIDIA NVDEC
+            AVHWDeviceType.AV_HWDEVICE_TYPE_VAAPI,   // Intel/AMD on Linux
+            AVHWDeviceType.AV_HWDEVICE_TYPE_VIDEOTOOLBOX, // Apple on macOS
+            AVHWDeviceType.AV_HWDEVICE_TYPE_DXVA2,   // Windows DirectX
+            AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA  // Windows D3D11
+        };
+
+        foreach (var type in preferredTypes)
+        {
+            if (ffmpeg.av_hwdevice_get_type_name(type) != null)
+            {
+                // Check if we can create a device context (basic availability test)
+                AVBufferRef* hwDeviceCtx = null;
+                int ret = ffmpeg.av_hwdevice_ctx_create(&hwDeviceCtx, type, null, null, 0);
+                if (ret >= 0)
+                {
+                    ffmpeg.av_buffer_unref(&hwDeviceCtx);
+                    GD.Print($"MediaEngine:GetBestHardwareDeviceType - Hardware acceleration available: {ffmpeg.av_hwdevice_get_type_name(type)}");
+                    return type;
+                }
+            }
+        }
+
+        GD.Print("MediaEngine:GetBestHardwareDeviceType - No hardware acceleration available, falling back to software decoding.");
+        return AVHWDeviceType.AV_HWDEVICE_TYPE_NONE;
+    }
+
+    /// <summary>
+    /// Creates a hardware device context for the specified device type.
+    /// Returns null if creation fails or type is NONE.
+    /// </summary>
+    /// <param name="deviceType">The hardware device type to create.</param>
+    /// <returns>Pointer to the hardware device context buffer, or null on failure.</returns>
+    public static unsafe AVBufferRef* CreateHardwareDeviceContext(AVHWDeviceType deviceType)
+    {
+        if (deviceType == AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+        {
+            return null;
+        }
+
+        AVBufferRef* hwDeviceCtx = null;
+        int ret = ffmpeg.av_hwdevice_ctx_create(&hwDeviceCtx, deviceType, null, null, 0);
+        if (ret < 0)
+        {
+            GD.PrintErr($"MediaEngine:CreateHardwareDeviceContext - Failed to create hardware device context for {ffmpeg.av_hwdevice_get_type_name(deviceType)}: {GetFFmpegError(ret)}");
+            return null;
+        }
+
+        GD.Print($"MediaEngine:CreateHardwareDeviceContext - Created hardware device context for {ffmpeg.av_hwdevice_get_type_name(deviceType)}");
+        return hwDeviceCtx;
     }
 
     /// <summary>

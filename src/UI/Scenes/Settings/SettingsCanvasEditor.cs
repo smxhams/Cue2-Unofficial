@@ -159,8 +159,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
         _subViewportContainer.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
         _viewport.Size = new Vector2I(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
 
-        // Set initial zoom
-        CallDeferred(nameof(UpdateZoom));
+        
 
         // Load current canvas size into line edits
         _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
@@ -182,6 +181,9 @@ public partial class SettingsCanvasEditor : ScrollContainer
         PopulateOutputDevices();
         PopulateTargetLayers();
         UpdateCanvasOutlines();
+        
+        // Set initial zoom
+        CallDeferred(nameof(UpdateZoom));
 
         GD.Print($"SettingsCanvasEditor:_ready - Initialised");
     }
@@ -268,7 +270,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
                 }
             }
 
-            UpdateCanvasOutlines();
+            CallDeferred(nameof(UpdateCanvasOutlines));
         }
         catch (Exception ex)
         {

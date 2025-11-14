@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "gUXdeAL6s8I=",
+  "dgSpecHash": "QcuRZoOpBIc=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
@@ -8,7 +8,6 @@
     "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.5.1\\godot.sourcegenerators.4.5.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.5.1\\godotsharp.4.5.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.5.1\\godotsharpeditor.4.5.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\newtonsoft.json\\13.0.4\\newtonsoft.json.13.0.4.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs\\3.3.2.1\\sdl3-cs.3.3.2.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs.native\\3.3.2\\sdl3-cs.native.3.3.2.nupkg.sha512"
   ],

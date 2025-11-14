@@ -12,7 +12,6 @@
           "Godot.SourceGenerators": "4.5.1",
           "GodotSharp": "4.5.1",
           "GodotSharpEditor": "4.5.1",
-          "Newtonsoft.Json": "13.0.4",
           "SDL3-CS": "3.3.2.1",
           "SDL3-CS.Native": "3.3.2"
         },
@@ -45,14 +44,6 @@
           "lib/net8.0/GodotSharpEditor.dll": {
             "assemblyVersion": "4.5.1.0",
             "fileVersion": "4.5.1.0"
-          }
-        }
-      },
-      "Newtonsoft.Json/13.0.4": {
-        "runtime": {
-          "lib/net6.0/Newtonsoft.Json.dll": {
-            "assemblyVersion": "13.0.0.0",
-            "fileVersion": "13.0.4.30916"
           }
         }
       },
@@ -139,13 +130,6 @@
       "sha512": "sha512-8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
       "path": "godotsharpeditor/4.5.1",
       "hashPath": "godotsharpeditor.4.5.1.nupkg.sha512"
-    },
-    "Newtonsoft.Json/13.0.4": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A==",
-      "path": "newtonsoft.json/13.0.4",
-      "hashPath": "newtonsoft.json.13.0.4.nupkg.sha512"
     },
     "SDL3-CS/3.3.2.1": {
       "type": "package",

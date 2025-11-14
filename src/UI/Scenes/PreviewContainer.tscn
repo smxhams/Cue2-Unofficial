@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dt5dcwbwscssc" path="res://src/Base/Preview.cs" id="1_c65rc"]
 [ext_resource type="Material" uid="uid://c33ls3l1g8yrd" path="res://src/Base/VideoTextureRectMaterial.tres" id="2_avyjy"]
-[ext_resource type="Script" uid="uid://decsdgg8vwdwn" path="res://src/Base/VideoToTextureRect.cs" id="3_dmlci"]
+[ext_resource type="Script" uid="uid://dq8ujntqkri4y" path="res://src/TestFFmpeg.cs" id="3_fnh2m"]
 
 [sub_resource type="Gradient" id="Gradient_brprv"]
 
@@ -10,34 +10,18 @@
 gradient = SubResource("Gradient_brprv")
 
 [node name="PreviewContainer" type="PanelContainer"]
-visible = false
 clip_contents = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 size_flags_horizontal = 3
 script = ExtResource("1_c65rc")
 
 [node name="VBoxContainer2" type="VBoxContainer" parent="."]
 clip_contents = true
 layout_mode = 2
-
-[node name="HBoxContainer2" type="HBoxContainer" parent="VBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer2/HBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Preview"
-clip_text = true
-
-[node name="GoLive" type="Button" parent="VBoxContainer2/HBoxContainer2"]
-clip_contents = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-focus_mode = 0
-text = "Go Live ->"
-clip_text = true
 
 [node name="TextureRect" type="TextureRect" parent="VBoxContainer2"]
 material = ExtResource("2_avyjy")
@@ -46,4 +30,27 @@ size_flags_vertical = 3
 texture = SubResource("GradientTexture2D_paorf")
 expand_mode = 1
 stretch_mode = 4
-script = ExtResource("3_dmlci")
+script = ExtResource("3_fnh2m")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer2"]
+layout_mode = 2
+
+[node name="PlayPauseButton" type="Button" parent="VBoxContainer2/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_constants/icon_max_width = 14
+
+[node name="SeekProgressBar" type="ProgressBar" parent="VBoxContainer2/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 25)
+layout_mode = 2
+size_flags_horizontal = 3
+show_percentage = false
+
+[node name="CurrentTimeLabel" type="Label" parent="VBoxContainer2/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2

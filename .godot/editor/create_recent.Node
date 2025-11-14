@@ -1,11 +1,11 @@
-VBoxContainer
 Control
+Button
+Label
 HBoxContainer
+VBoxContainer
 OptionButton
 LineEdit
-Label
 CheckButton
-Button
 ScrollContainer
 CheckBox
 Panel

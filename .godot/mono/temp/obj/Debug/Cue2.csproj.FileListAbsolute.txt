@@ -1,4 +1,3 @@
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL3.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/refint/Cue2.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.pdb
@@ -9,11 +8,7 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharp.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Newtonsoft.Json.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.Native.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-arm64/native/SDL3.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL3.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.AssemblyReference.cache
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.GeneratedMSBuildEditorConfig.editorconfig
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfoInputs.cache
@@ -23,10 +18,6 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-x64/native/SDL
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.Up2Date
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/Cue2.genruntimeconfig.cache
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/Debug/ref/Cue2.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.AssemblyReference.cache
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.GeneratedMSBuildEditorConfig.editorconfig
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.AssemblyInfoInputs.cache
@@ -40,29 +31,13 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/Cue2.pdb
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/GodotSharp.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/Newtonsoft.Json.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.dll
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.Native.dll
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-arm64/native/libSDL3.so
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/linux-x64/native/libSDL3.so
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-arm64/native/libSDL3.dylib
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/osx-x64/native/libSDL3.dylib
-C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/runtimes/win-arm64/native/SDL3.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.csproj.Up2Date
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/refint/Cue2.dll
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.pdb
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/Cue2.genruntimeconfig.cache
 C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/obj/Debug/ref/Cue2.dll
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.AssemblyReference.cache
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.GeneratedMSBuildEditorConfig.editorconfig
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.AssemblyInfoInputs.cache
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.AssemblyInfo.cs
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.CoreCompileInputs.cache
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.sourcelink.json
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.dll
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\refint\Cue2.dll
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.pdb
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Cue2.deps.json
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Cue2.runtimeconfig.json
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Cue2.dll
@@ -70,8 +45,19 @@ C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Cue2.pdb
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\FFmpeg.AutoGen.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\GodotSharp.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\GodotSharpEditor.dll
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Newtonsoft.Json.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\SDL3-CS.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.AssemblyReference.cache
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.GeneratedMSBuildEditorConfig.editorconfig
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.AssemblyInfoInputs.cache
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.AssemblyInfo.cs
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.CoreCompileInputs.cache
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.sourcelink.json
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.Up2Date
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\refint\Cue2.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.pdb
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.genruntimeconfig.cache
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\ref\Cue2.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\SDL3-CS.Native.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\linux-arm64\native\libSDL3.so
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\linux-x64\native\libSDL3.so
@@ -79,6 +65,3 @@ C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\osx-arm64\native\l
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\osx-x64\native\libSDL3.dylib
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win-arm64\native\SDL3.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\runtimes\win-x64\native\SDL3.dll
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.csproj.Up2Date
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.genruntimeconfig.cache
-C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\ref\Cue2.dll

@@ -28,6 +28,7 @@ public partial class DisplaysManager : Node
 
     private GlobalSignals _globalSignals;
     private Canvas Canvas => GetNode<GlobalData>("/root/GlobalData").VideoCanvas;
+    private PackedScene _videoLayer;
 
     /// <summary>
     /// List of active video output devices.
@@ -45,6 +46,8 @@ public partial class DisplaysManager : Node
 
         // Add default layer
         AddLayer("Default", 0);
+
+        _videoLayer = SceneLoader.LoadPackedScene("uid://bnijb6qe1sop3", out _);
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
     }

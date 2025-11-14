@@ -83,6 +83,66 @@ public partial class VideoInspector : Control
 
 		_globalSignals.ShellFocused += ShellSelected;
 
+		AssignUiNodeParameters();
+
+		// Waveform UI setup
+		_waveformPanel = GetNode<PanelContainer>("%WaveformPanel");
+		_waveformLineLeftGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
+		_waveformLineMiddle = new Line2D { DefaultColor = GlobalStyles.HighColor1, Width = 1.0f };
+		_waveformLineRightGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
+		_waveformPanel.AddChild(_waveformLineLeftGrey);
+		_waveformPanel.AddChild(_waveformLineMiddle);
+		_waveformPanel.AddChild(_waveformLineRightGrey);
+
+		// Draggable handles (assume as children of a Control under %WaveformPanel
+		_startDragHandle = GetNode<Button>("%StartDragHandle");
+		_endDragHandle = GetNode<Button>("%EndDragHandle");
+		_startDragHandle.GuiInput += OnStartHandleInput;
+		_endDragHandle.GuiInput += OnEndHandleInput;
+		
+
+		_startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
+		_endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
+		_loopInput.Toggled += state => { _focusedVideoComponent.Loop = state; SyncDuration(); };
+		_playCountInput.TextSubmitted += OnPlayCountSubmitted;
+		_scaleWidthLineEdit.TextSubmitted += newText => OnScaleWidthSubmitted(newText);
+		_scaleHeightLineEdit.TextSubmitted += newText => OnScaleHeightSubmitted(newText);
+		_offsetXLineEdit.TextSubmitted += newText => OnOffsetXSubmitted(newText);
+		_offsetYLineEdit.TextSubmitted += newText => OnOffsetYSubmitted(newText);
+		_useAudioCheckButton.Toggled += OnUseAudioToggled;
+		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
+		_outputOptionButton.ItemSelected += OutputOptionSelected;
+		_targetLayerOptionButton.ItemSelected += TargetLayerSelected;
+		
+		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
+        
+		GetNode<Label>("%InfoLabel").AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
+        
+		// Ensure content is hidden at start up
+		_inspectorContent.Visible = false;
+		_selectFileContainer.Visible = false;
+		_previewContainer.Visible = false;
+		_audioAccordian.Visible = false;
+		_routingAccordian.Visible = false;
+		_waveformAccordian.Visible = false;
+		
+		_previewCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_audioCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		_waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+		
+		// Connect Ui input methods.
+		_selectFileButton.Pressed += OpenFileDialog;
+
+		// Accordion connections
+		_previewCollapseButton.Pressed += () => ToggleAccordian(_previewContainer, _previewCollapseButton);
+		_audioCollapseButton.Pressed += () => ToggleAccordian(_audioAccordian, _audioCollapseButton);
+		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
+		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
+	}
+
+	private void AssignUiNodeParameters()
+	{
 		// Ui Node setup
 		_infoLabel = GetNode<Label>("%InfoLabel");
 		_selectFileContainer = GetNode<HBoxContainer>("%SelectFileContainer");
@@ -120,61 +180,9 @@ public partial class VideoInspector : Control
 		_waveformCollapseButton  = GetNode<Button>("%WaveformCollapseButton");
 		_waveformAccordian =   GetNode<VBoxContainer>("%WaveformAccordian");
 		_volumeInput = GetNode<LineEdit>("%VolumeInput");
-
-		// Waveform UI setup
-		_waveformPanel = GetNode<PanelContainer>("%WaveformPanel");
-		_waveformLineLeftGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
-		_waveformLineMiddle = new Line2D { DefaultColor = GlobalStyles.HighColor1, Width = 1.0f };
-		_waveformLineRightGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
-		_waveformPanel.AddChild(_waveformLineLeftGrey);
-		_waveformPanel.AddChild(_waveformLineMiddle);
-		_waveformPanel.AddChild(_waveformLineRightGrey);
-
-		// Draggable handles (assume as children of a Control under %WaveformPanel
-		_startDragHandle = GetNode<Button>("%StartDragHandle");
-		_endDragHandle = GetNode<Button>("%EndDragHandle");
-		_startDragHandle.GuiInput += OnStartHandleInput;
-		_endDragHandle.GuiInput += OnEndHandleInput;
-		
-
-		_startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
-		_endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
-		_loopInput.Toggled += state => { _focusedVideoComponent.Loop = state; SyncDuration(); };
-		_playCountInput.TextSubmitted += OnPlayCountSubmitted;
-		_scaleWidthLineEdit.TextSubmitted += newText => OnScaleWidthSubmitted(newText);
-		_scaleHeightLineEdit.TextSubmitted += newText => OnScaleHeightSubmitted(newText);
-		_offsetXLineEdit.TextSubmitted += newText => OnOffsetXSubmitted(newText);
-		_offsetYLineEdit.TextSubmitted += newText => OnOffsetYSubmitted(newText);
-		_useAudioCheckButton.Toggled += OnUseAudioToggled;
-		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
-		_outputOptionButton.ItemSelected += OutputOptionSelected;
-		
-		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
-        
-		GetNode<Label>("%InfoLabel").AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
-        
-		// Ensure content is hidden at start up
-		_inspectorContent.Visible = false;
-		_selectFileContainer.Visible = false;
-		_previewContainer.Visible = false;
-		_audioAccordian.Visible = false;
-		_routingAccordian.Visible = false;
-		_waveformAccordian.Visible = false;
-		
-		_previewCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-		_audioCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-		_routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-		_waveformCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-		
-		// Connect Ui input methods.
-		_selectFileButton.Pressed += OpenFileDialog;
-
-		// Accordion connections
-		_previewCollapseButton.Pressed += () => ToggleAccordian(_previewContainer, _previewCollapseButton);
-		_audioCollapseButton.Pressed += () => ToggleAccordian(_audioAccordian, _audioCollapseButton);
-		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
-		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
 	}
+	
+	
 
 	/// <summary>
 	/// Called when a cue shell is selected. Updates UI based on presence of AudioComponent.
@@ -229,30 +237,40 @@ public partial class VideoInspector : Control
 
 		// Populate metadata label
 		var meta = _focusedVideoComponent.Metadata;
-		string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)}. " +
-		                      $"Resolution: {meta.Width}x{meta.Height}. " +
-		                      $"Frame Rate: {meta.FrameRate:F1} fps. " +
-		                      $"Codec: {meta.Codec}. " +
+		string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
+		                      $"Resolution: {meta.Width}x{meta.Height} \n" +
+		                      $"Frame Rate: {meta.FrameRate:F1} fps \n" +
+		                      $"Codec: {meta.Codec} \n" +
 		                      $"Format: {meta.Format}";
 		if (meta.AudioChannels > 0)
 		{
-			metadataText += $"\nAudio Channels: {meta.AudioChannels}. " +
-			                $"Audio Sample Rate: {meta.AudioSampleRate} Hz. " +
-			                $"Audio Bit Depth: {meta.AudioBitDepth}. " +
+			metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +
+			                $"Audio Sample Rate: {meta.AudioSampleRate} Hz \n" +
+			                $"Audio Bit Depth: {meta.AudioBitDepth} \n" +
 			                $"Audio Codec: {meta.AudioCodec}";
 		}
 		else
 		{
 			metadataText += "\nNo Audio";
 		}
-		_fileMetadataLabel.Text = metadataText;
+		_fileUrl.TooltipText = metadataText;
 
 		// Populate target layer options
 		_targetLayerOptionButton.Clear();
-		foreach (var layer in DisplaysManager.Layers)
+		for (int i = 0; i < DisplaysManager.Layers.Count; i++)
 		{
+			var layer = DisplaysManager.Layers[i];
 			_targetLayerOptionButton.AddItem(layer.LayerName, layer.LayerId);
 		}
+		// Select the current target layer
+		for (int i = 0; i < _targetLayerOptionButton.ItemCount; i++)
+		{
+			if (_targetLayerOptionButton.GetItemId(i) == _focusedVideoComponent.TargetLayerId)
+			{
+				_targetLayerOptionButton.Select(i);
+				break;
+			}
+		} 
 
 		// Set scale and offset values
 		_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString();
@@ -594,6 +612,17 @@ public partial class VideoInspector : Control
 			_focusedVideoComponent.PatchId = -1;
 			_routingContainer.Visible = false;
 		}
+	}
+
+	/// <summary>
+	/// Handles target layer selection.
+	/// </summary>
+	/// <param name="index">The selected index.</param>
+	private void TargetLayerSelected(long index)
+	{
+		int layerId = _targetLayerOptionButton.GetItemId((int)index);
+		_focusedVideoComponent.TargetLayerId = layerId;
+		GD.Print($"VideoInspector:TargetLayerSelected - Target layer set to ID {layerId}");
 	}
 
 	/// <summary>

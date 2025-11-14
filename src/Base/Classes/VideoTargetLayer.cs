@@ -112,6 +112,7 @@ public partial class VideoTargetLayer : CanvasLayer
     public void LoadFromData(Godot.Collections.Dictionary data)
     {
         LayerId = (int)data["LayerId"];
+        if (LayerId >= _nextLayerId) _nextLayerId = LayerId++;
         LayerName = (string)data["LayerName"];
         ZIndex = (int)data["ZIndex"];
         

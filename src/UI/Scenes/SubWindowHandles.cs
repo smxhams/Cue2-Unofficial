@@ -59,9 +59,25 @@ public partial class SubWindowHandles : Control
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)
 	{
-		if (@event is InputEventMouseButton { Pressed: true })
+		if (@event is InputEventMouseButton mouseEvent)
 		{
-			DisplayServer.WindowStartDrag(_windowId);
+			if (mouseEvent.DoubleClick && mouseEvent.ButtonIndex == MouseButton.Left)
+			{
+				// Toggle maximize on double click
+				var window = GetWindow();
+				if (window.Mode == Window.ModeEnum.Maximized)
+				{
+					window.Mode = Window.ModeEnum.Windowed;
+				}
+				else
+				{
+					window.Mode = Window.ModeEnum.Maximized;
+				}
+			}
+			else if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
+			{
+				DisplayServer.WindowStartDrag(_windowId);
+			}
 		}
 	}
 

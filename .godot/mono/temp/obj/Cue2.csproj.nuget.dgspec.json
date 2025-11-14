@@ -62,10 +62,6 @@
               "version": "[4.5.1, )",
               "autoReferenced": true
             },
-            "Newtonsoft.Json": {
-              "target": "Package",
-              "version": "[13.0.4, )"
-            },
             "SDL3-CS": {
               "target": "Package",
               "version": "[3.3.2.1, )"
