@@ -17,7 +17,7 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveVideoPlayback : Node
 {
-    public FFmpegVideoDecoderOld Decoder { get; private set; }
+    public FFmpegVideoDecoder Decoder { get; private set; }
     public AudioOutputPatch Patch;
     public CuePatch CuePatch { get; set; }
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
@@ -70,7 +70,7 @@ public partial class ActiveVideoPlayback : Node
     {
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
-        Decoder = new FFmpegVideoDecoderOld(videoComponent, this);
+        Decoder = new FFmpegVideoDecoder(videoComponent.VideoFile);
 
         // Find target layer
         _targetLayer = DisplaysManager.Layers.Find(l => l.LayerId == _videoComponent.TargetLayerId);

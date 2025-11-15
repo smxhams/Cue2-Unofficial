@@ -2,11 +2,12 @@ using Godot;
 using FFmpeg.AutoGen;
 using System;
 using System.Collections.Concurrent;
-using System.Collections;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+
 
 namespace Cue2.Shared;
 
@@ -16,22 +17,58 @@ namespace Cue2.Shared;
 /// </summary>
 public class FFmpegVideoDecoder : IDisposable
 {
-    // FFmpeg fields
-    private unsafe AVFormatContext* _formatCtx;
-    private unsafe AVCodecContext* _codecCtx;
-    private unsafe SwsContext* _swsCtx;
-    private int _videoStreamIndex = -1;
-    private int _width, _height;
-    private double _timeBase;
-    private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);
-    private CancellationTokenSource _cts;
-    private Task _decodeTask;
-    private BlockingCollection<(byte[], double)> _frameQueue;
-    private object _ffmpegLock = new object();
-    private long _currentBufferSize = 0;
-    private double _currentBufferedTime = 0;
-    private double _lastPlayedTime = 0;
-    private bool _playbackReady = false;
+    // FFmpeg scaling algorithm constant for bilinear interpolation
+    private const int SWS_BILINEAR = 2;
+    // Number of channels in RGBA format (Red, Green, Blue, Alpha)
+    private const int RGBA_CHANNELS = 4;
+    // Minimum timestamp for seeking (start of file)
+    private const long SEEK_MIN_TS = 0;
+    // Maximum timestamp for seeking (end of file)
+    private const long SEEK_MAX_TS = long.MaxValue;
+    // Timeout in milliseconds for stopping decoding gracefully
+    private const int STOP_TIMEOUT_MS = 5000;
+    // Fallback frames per second if not detectable from video
+    private const double FALLBACK_FPS = 30.0;
+    // Size of the frame buffer queue for recycling byte arrays
+    private const int FRAME_QUEUE_SIZE = 5;
+
+    /// <summary>
+    /// Initializes a new instance of the SimpleVideoDecoder class.
+    /// </summary>
+    /// <param name="godotNode">A Godot Node reference for thread-safe event invocation.</param>
+    public FFmpegVideoDecoder(Node godotNode)
+    {
+        _godotNode = godotNode ?? throw new ArgumentNullException(nameof(godotNode));
+    }
+
+    // FFmpeg-related pointers and contexts (managed via Dispose)
+    private unsafe AVFormatContext* _formatCtx; // Container format context
+    private unsafe AVCodecContext* _codecCtx;   // Codec context for decoding
+    private unsafe SwsContext* _swsCtx;         // Software scaling context for RGBA conversion
+    private unsafe AVCodec* _codec;             // Video codec
+    private unsafe AVStream* _stream;           // Video stream
+    private int _videoStreamIndex = -1;         // Index of the video stream in the container
+    private int _width, _height;                // Video dimensions
+    private double _timeBase;                   // Time base for timestamp calculations
+    // Threading and synchronization primitives
+    private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true); // Controls pause/resume
+    private ManualResetEventSlim _disposeEvent = new ManualResetEventSlim(false); // Signals disposal completion
+    private CancellationTokenSource _cts; // For cancelling decoding operations
+    private volatile bool _forceStop = false; // Force stop flag for immediate termination
+    private int _frameDurationMs; // Duration of each frame in milliseconds
+    private Stopwatch _stopwatch = new Stopwatch(); // For precise timing
+    private Node _godotNode; // Godot node for thread-safe event invocation
+    private long _nextFrameTime = 0; // Timestamp for next frame emission
+    private ConcurrentQueue<byte[]> _frameQueue = new ConcurrentQueue<byte[]>(); // Queue for recycling frame buffers
+    private long _pauseStartTime = 0; // Timestamp when pause started
+    private ReaderWriterLockSlim _lock = new ReaderWriterLockSlim(); // Protects FFmpeg contexts during seek/dispose
+    private bool _isDisposed = false; // Tracks disposal state
+
+    // Frame buffers for RGBA conversion
+    private unsafe AVFrame* _rgbFrame; // RGBA frame structure
+    private unsafe byte* _rgbBuffer;   // Raw RGBA pixel data buffer
+    private int _rgbBufferSize;        // Size of the RGBA buffer in bytes
+    private unsafe AVFrame* _frame;    // Decoded frame from FFmpeg
 
     /// <summary>
     /// Event raised when a new frame is decoded and ready.
@@ -47,11 +84,6 @@ public class FFmpegVideoDecoder : IDisposable
     /// Event raised when the end of the video is reached.
     /// </summary>
     public event Action EndReached;
-
-    /// <summary>
-    /// Event raised when the initial buffer is ready for playback.
-    /// </summary>
-    public event Action PlaybackReady;
 
     /// <summary>
     /// Gets the video width.
@@ -79,58 +111,117 @@ public class FFmpegVideoDecoder : IDisposable
     public Task DecodingTask { get; private set; }
 
     /// <summary>
-    /// Maximum buffer time in seconds.
-    /// </summary>
-    public double MaxBufferTime { get; set; } = 5.0;
-
-    /// <summary>
-    /// Maximum buffer size in bytes.
-    /// </summary>
-    public long MaxBufferSize { get; set; } = 500 * 1024 * 1024; // 500MB
-
-    /// <summary>
-    /// Gets the current buffered time in seconds.
-    /// </summary>
-    public double BufferedTime { get; private set; }
-
-    /// <summary>
-    /// Gets the current buffer size in bytes.
-    /// </summary>
-    public long BufferedSize { get; private set; }
-
-    /// <summary>
-    /// Gets whether the decoder is currently buffering.
-    /// </summary>
-    public bool IsBuffering { get; private set; }
-
-    /// <summary>
     /// Starts decoding the specified video file asynchronously.
     /// </summary>
     /// <param name="filePath">Path to the video file.</param>
     /// <returns>A task representing the decoding operation.</returns>
     public async Task StartDecodingAsync(string filePath)
     {
+        if (_isDisposed) throw new ObjectDisposedException(nameof(FFmpegVideoDecoder));
+
         if (DecodingTask != null && !DecodingTask.IsCompleted)
         {
-            GD.PrintErr("SimpleVideoDecoder: Decoding already in progress");
+            GD.PrintErr("SimpleVideoDecoder:StartDecodingAsync - Decoding already in progress");
             return;
         }
 
-        DecodingTask = Task.Run(() => InitDecoder(filePath));
-        await DecodingTask;
+        if (string.IsNullOrEmpty(filePath))
+            throw new ArgumentException("File path cannot be null or empty", nameof(filePath));
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"Video file not found: {filePath}");
+
+        try
+        {
+            InitDecoder(filePath);
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"SimpleVideoDecoder:StartDecodingAsync - InitDecoder failed: {ex.Message}");
+            // Cleanup partial initialization
+            unsafe
+            {
+                if (_swsCtx != null)
+                {
+                    ffmpeg.sws_freeContext(_swsCtx);
+                    _swsCtx = null;
+                }
+                if (_codecCtx != null)
+                {
+                    fixed (AVCodecContext** ppCodec = &_codecCtx)
+                    {
+                        ffmpeg.avcodec_free_context(ppCodec);
+                    }
+                    _codecCtx = null;
+                }
+                if (_formatCtx != null)
+                {
+                    fixed (AVFormatContext** ppFormat = &_formatCtx)
+                    {
+                        ffmpeg.avformat_close_input(ppFormat);
+                    }
+                    _formatCtx = null;
+                }
+            }
+            throw;
+        }
+        _cts = new CancellationTokenSource();
+        _nextFrameTime = 0;
+        _stopwatch.Restart();
+        // Start decoding in background thread
+        DecodingTask = Task.Run(() =>
+        {
+            try
+            {
+                DecodeLoop(_cts.Token);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"SimpleVideoDecoder:DecodeLoop - Exception: {ex.Message}");
+            }
+        }, _cts.Token).ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                GD.PrintErr($"SimpleVideoDecoder:DecodingTask - Faulted: {t.Exception?.InnerException?.Message}");
+            }
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
     /// <summary>
-    /// Stops the decoding process asynchronously.
+    /// Stops the decoding process asynchronously by cancelling the token and awaiting completion.
     /// </summary>
-    /// <returns>A task that completes when decoding has stopped.</returns>
+    /// <returns>A <see cref="Task"/> representing the asynchronous stop operation.</returns>
     public async Task StopDecodingAsync()
     {
         if (DecodingTask == null || DecodingTask.IsCompleted)
             return;
 
         _cts?.Cancel();
-        await DecodingTask;
+        try
+        {
+            // Await with timeout to prevent indefinite hang
+            var timeoutTask = Task.Delay(STOP_TIMEOUT_MS, _cts.Token);
+            var completedTask = await Task.WhenAny(DecodingTask, timeoutTask);
+            if (completedTask == timeoutTask)
+            {
+                // Force stop if timeout
+                _forceStop = true;
+                GD.Print("SimpleVideoDecoder:StopDecodingAsync - Forced stop after timeout");
+            }
+            else
+            {
+                await DecodingTask; // Ensure it's fully awaited if it completed first
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            GD.Print("SimpleVideoDecoder:StopDecodingAsync - Await cancelled");
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr("SimpleVideoDecoder:StopDecodingAsync - Error during await: " + ex.Message);
+        }
     }
 
     /// <summary>
@@ -138,7 +229,10 @@ public class FFmpegVideoDecoder : IDisposable
     /// </summary>
     public void Pause()
     {
+        if (_isDisposed) throw new ObjectDisposedException(nameof(FFmpegVideoDecoder));
+
         _pauseEvent.Reset();
+        _pauseStartTime = _stopwatch.ElapsedMilliseconds;
         IsPaused = true;
     }
 
@@ -147,6 +241,10 @@ public class FFmpegVideoDecoder : IDisposable
     /// </summary>
     public void Resume()
     {
+        if (_isDisposed) throw new ObjectDisposedException(nameof(FFmpegVideoDecoder));
+
+        long pausedDuration = _stopwatch.ElapsedMilliseconds - _pauseStartTime;
+        _nextFrameTime += pausedDuration;
         _pauseEvent.Set();
         IsPaused = false;
     }
@@ -157,324 +255,443 @@ public class FFmpegVideoDecoder : IDisposable
     /// <param name="time">The time to seek to.</param>
     public unsafe void Seek(double time)
     {
-        if (_formatCtx == null || _codecCtx == null) return;
+        if (_isDisposed) throw new ObjectDisposedException(nameof(FFmpegVideoDecoder));
 
-        lock (this)
+        _lock.EnterWriteLock();
+        try
         {
-            // Clear buffer
-            while (_frameQueue.TryTake(out _)) { }
-            _currentBufferSize = 0;
-            _currentBufferedTime = 0;
-            BufferedSize = 0;
-            BufferedTime = 0;
-            _lastPlayedTime = time;
-            _playbackReady = true; // Resume playing as soon as ready after seek
-            Monitor.PulseAll(this);
+            if (_formatCtx == null || _codecCtx == null) return;
+
+            if (_timeBase <= 0 || double.IsNaN(_timeBase) || double.IsInfinity(_timeBase))
+            {
+                GD.PrintErr("SimpleVideoDecoder:Seek - Invalid time base");
+                return;
+            }
+            time = Math.Max(0, time); // Clamp to valid range
+            if (Duration > 0) time = Math.Min(time, Duration);
+            long timestamp = (long)(time / _timeBase); // Convert seconds to stream timebase units
+            long min_ts = SEEK_MIN_TS;
+            long max_ts = SEEK_MAX_TS;
+            int ret = ffmpeg.avformat_seek_file(_formatCtx, _videoStreamIndex, min_ts, timestamp, max_ts, ffmpeg.AVSEEK_FLAG_BACKWARD); // Seek to nearest keyframe before timestamp on video stream
+            if (ret < 0)
+            {
+                throw new InvalidOperationException($"SimpleVideoDecoder:Seek - Seek failed: {GetFFmpegError(ret)}");
+            }
+            ffmpeg.avcodec_flush_buffers(_codecCtx);
+            if (_frame != null) ffmpeg.av_frame_unref(_frame); // Reset frame state after flush
+            GD.Print($"SimpleVideoDecoder:Seek - Seeked to {time}s");
         }
-
-        lock (_ffmpegLock)
+        finally
         {
-            long timestamp = (long)(time / _timeBase); // Convert to stream time_base units
-            int ret = ffmpeg.av_seek_frame(_formatCtx, _videoStreamIndex, timestamp, 1); // AVSEEK_FLAG_BACKWARD
-            if (ret >= 0)
-            {
-                ffmpeg.avformat_flush(_formatCtx);
-                ffmpeg.avcodec_flush_buffers(_codecCtx);
-                GD.Print($"Seeked to {time}s");
-            }
-            else
-            {
-                GD.PrintErr($"Seek failed: {GetFFmpegError(ret)}");
-            }
+            _lock.ExitWriteLock();
         }
     }
 
+    /// <summary>
+    /// Initializes the FFmpeg decoder with the specified video file.
+    /// Sets up format context, finds video stream, initializes codec, and prepares scaler.
+    /// </summary>
+    /// <param name="filePath">Path to the video file to decode.</param>
     private unsafe void InitDecoder(string filePath)
     {
-        try
+        InitializeFormatContext(filePath);
+        FindVideoStream();
+        InitializeCodec();
+        SetupScaler();
+    }
+
+    /// <summary>
+    /// Initializes the FFmpeg format context and opens the input file.
+    /// </summary>
+    /// <param name="filePath">Path to the video file.</param>
+    private unsafe void InitializeFormatContext(string filePath)
+    {
+        int ret;
+        AVDictionary* options = null;
+        ffmpeg.av_dict_set(&options, "fflags", "+genpts", 0); // Generate timestamps if missing
+        fixed (AVFormatContext** pCtx = &_formatCtx)
         {
-            int ret;
-            fixed (AVFormatContext** pCtx = &_formatCtx)
-            {
-                ret = ffmpeg.avformat_open_input(pCtx, filePath, null, null);
-                if (ret < 0) throw new Exception($"Open failed: {GetFFmpegError(ret)}");
-            }
-
-            ret = ffmpeg.avformat_find_stream_info(_formatCtx, null);
-            if (ret < 0) throw new Exception($"Stream info failed: {GetFFmpegError(ret)}");
-
-            Duration = _formatCtx->duration != ffmpeg.AV_NOPTS_VALUE ? _formatCtx->duration / (double)ffmpeg.AV_TIME_BASE : 0;
-
-            for (uint i = 0; i < _formatCtx->nb_streams; i++)
-            {
-                if (_formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO)
-                {
-                    _videoStreamIndex = (int)i;
-                    break;
-                }
-            }
-            if (_videoStreamIndex == -1) throw new Exception("No video stream.");
-
-            AVStream* stream = _formatCtx->streams[(uint)_videoStreamIndex];
-            _timeBase = stream->time_base.num / (double)stream->time_base.den;
-            AVCodec* codec = ffmpeg.avcodec_find_decoder(stream->codecpar->codec_id);
-            if (codec == null) throw new Exception("Unsupported codec.");
-
-            fixed (AVCodecContext** pCodecCtx = &_codecCtx)
-            {
-                _codecCtx = ffmpeg.avcodec_alloc_context3(codec);
-                ret = ffmpeg.avcodec_parameters_to_context(_codecCtx, stream->codecpar);
-                if (ret < 0) throw new Exception($"Params to context failed: {GetFFmpegError(ret)}");
-
-                ret = ffmpeg.avcodec_open2(_codecCtx, codec, null);
-                if (ret < 0) throw new Exception($"Open codec failed: {GetFFmpegError(ret)}");
-            }
-
-            _width = _codecCtx->width;
-            _height = _codecCtx->height;
-
-            // Setup scaler to RGB24
-            _swsCtx = ffmpeg.sws_getContext(
-                _width, _height, _codecCtx->pix_fmt,
-                _width, _height, AVPixelFormat.AV_PIX_FMT_RGB24,
-                2, null, null, null);
-            if (_swsCtx == null) throw new Exception("Sws context failed");
-
-            GD.Print($"SimpleVideoDecoder initialized: {_width}x{_height}");
-
-            // Start decoding tasks
-            _cts = new CancellationTokenSource();
-            _frameQueue = new BlockingCollection<(byte[], double)>(1000); // Bounded queue
-            var producerTask = Task.Run(() => ProducerLoop(_cts.Token));
-            var consumerTask = Task.Run(() => ConsumerLoopAsync(_cts.Token));
-            _decodeTask = Task.WhenAll(producerTask, consumerTask);
+            ret = ffmpeg.avformat_open_input(pCtx, filePath, null, &options);
+            if (ret < 0) throw new Exception($"Open failed: {GetFFmpegError(ret)}");
         }
-        catch (Exception ex)
+        ffmpeg.av_dict_free(&options);
+
+        ret = ffmpeg.avformat_find_stream_info(_formatCtx, null);
+        if (ret < 0) throw new Exception($"Stream info failed: {GetFFmpegError(ret)}");
+    }
+
+    /// <summary>
+    /// Finds the video stream in the format context and sets up timing parameters.
+    /// </summary>
+    private unsafe void FindVideoStream()
+    {
+        for (uint i = 0; i < _formatCtx->nb_streams; i++)
         {
-            GD.PrintErr($"SimpleVideoDecoder InitDecoder error: {ex.Message}");
+            if (_formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_VIDEO)
+            {
+                _videoStreamIndex = (int)i;
+                break;
+            }
+        }
+        if (_videoStreamIndex == -1) throw new Exception("No video stream.");
+
+        _stream = _formatCtx->streams[(uint)_videoStreamIndex];
+        _timeBase = _stream->time_base.num / (double)_stream->time_base.den;
+        if (double.IsNaN(_timeBase) || double.IsInfinity(_timeBase) || _timeBase <= 0)
+        {
+            _timeBase = 1.0 / FALLBACK_FPS;
+        }
+        double fps = ffmpeg.av_q2d(_stream->r_frame_rate);
+        if (fps == 0) fps = ffmpeg.av_q2d(_stream->avg_frame_rate);
+        if (fps == 0) fps = 30;
+        _frameDurationMs = (int)(1000.0 / fps);
+        Duration = _formatCtx->duration != ffmpeg.AV_NOPTS_VALUE ? (double)_formatCtx->duration / ffmpeg.AV_TIME_BASE : 0;
+        // Fallback to stream if container invalid, but scale properly
+        if (Duration == 0 && _stream->duration != ffmpeg.AV_NOPTS_VALUE)
+        {
+            Duration = (double)_stream->duration * _timeBase;
         }
     }
 
-    private unsafe void ProducerLoop(CancellationToken token)
+    /// <summary>
+    /// Initializes the FFmpeg codec context for decoding.
+    /// </summary>
+    private unsafe void InitializeCodec()
+    {
+        _codec = ffmpeg.avcodec_find_decoder(_stream->codecpar->codec_id);
+        if (_codec == null) throw new Exception("Unsupported codec.");
+
+        fixed (AVCodecContext** pCodecCtx = &_codecCtx)
+        {
+            _codecCtx = ffmpeg.avcodec_alloc_context3(_codec);
+            _codecCtx->thread_count = System.Environment.ProcessorCount;
+            int ret = ffmpeg.avcodec_parameters_to_context(_codecCtx, _stream->codecpar);
+            if (ret < 0) throw new Exception($"Params to context failed: {GetFFmpegError(ret)}");
+
+            ret = ffmpeg.avcodec_open2(_codecCtx, _codec, null);
+            if (ret < 0) throw new Exception($"Open codec failed: {GetFFmpegError(ret)}");
+        }
+
+        _width = _codecCtx->width;
+        _height = _codecCtx->height;
+
+        if (_width <= 0 || _height <= 0) throw new InvalidOperationException("Invalid video dimensions");
+    }
+
+    /// <summary>
+    /// Sets up the FFmpeg scaler for converting frames to RGBA format.
+    /// </summary>
+    private unsafe void SetupScaler()
+    {
+        // Setup scaler to RGBA
+        _swsCtx = ffmpeg.sws_getContext(
+            _width, _height, _codecCtx->pix_fmt,
+            _width, _height, AVPixelFormat.AV_PIX_FMT_RGBA,
+            SWS_BILINEAR, null, null, null);
+        if (_swsCtx == null) throw new Exception("Sws context failed");
+
+        _rgbBufferSize = _width * _height * RGBA_CHANNELS;
+        _rgbBuffer = (byte*)ffmpeg.av_malloc((ulong)_rgbBufferSize);
+        _rgbFrame = ffmpeg.av_frame_alloc();
+        _rgbFrame->data[0] = _rgbBuffer;
+        _rgbFrame->linesize[0] = _width * RGBA_CHANNELS;
+        _rgbFrame->format = (int)AVPixelFormat.AV_PIX_FMT_RGBA;
+        _rgbFrame->width = _width;
+        _rgbFrame->height = _height;
+        for (uint i = 1; i < RGBA_CHANNELS; i++)
+        {
+            _rgbFrame->data[i] = null;
+            _rgbFrame->linesize[i] = 0;
+        }
+
+        _frame = ffmpeg.av_frame_alloc();
+        for (int i = 0; i < FRAME_QUEUE_SIZE; i++) _frameQueue.Enqueue(new byte[_rgbBufferSize]);
+
+        GD.Print($"SimpleVideoDecoder:InitDecoder - initialized: {_width}x{_height}");
+    }
+
+    /// <summary>
+    /// Main decoding loop that reads packets, decodes frames, and emits them at correct timing.
+    /// Runs in a background thread and handles pause/resume and cancellation.
+    /// </summary>
+    /// <param name="token">Cancellation token to stop decoding.</param>
+    private unsafe void DecodeLoop(CancellationToken token)
     {
         AVPacket* packet = ffmpeg.av_packet_alloc();
-        AVFrame* frame = ffmpeg.av_frame_alloc();
-        AVFrame* rgbFrame = ffmpeg.av_frame_alloc();
 
         try
         {
-            // Allocate RGB buffer
-            int rgbBufferSize = _width * _height * 3;
-            byte* rgbBuffer = (byte*)ffmpeg.av_malloc((ulong)rgbBufferSize);
-            rgbFrame->data[0] = rgbBuffer;
-            rgbFrame->linesize[0] = _width * 3;
-
-            int ret;
-            while (!token.IsCancellationRequested)
+            while (!token.IsCancellationRequested && !_forceStop)
             {
-                // Check buffer limits
-                lock (this)
+                token.ThrowIfCancellationRequested();
+                try
                 {
-                    while (BufferedTime >= MaxBufferTime || _currentBufferSize >= MaxBufferSize)
-                    {
-                        IsBuffering = true;
-                        Monitor.Wait(this, 100); // Wait until space available
-                        if (token.IsCancellationRequested) break;
-                    }
-                    IsBuffering = false;
+                    _pauseEvent.Wait(token); // Wait if paused, or proceed
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when cancellation is requested during pause
                 }
 
-                lock (_ffmpegLock)
+                _lock.EnterReadLock();
+                try
                 {
-                    ret = ffmpeg.av_read_frame(_formatCtx, packet);
-                    if (ret < 0)
+                    if (_formatCtx == null) break; // Safety check in case disposed
+                    bool success = ReadPacket(packet, out bool isEof);
+                    if (!success)
                     {
+                        if (isEof)
+                        {
+                            _godotNode.CallDeferred("InvokeEndReached"); // Notify end of video
+                        }
                         break;
                     }
 
                     if (packet->stream_index != _videoStreamIndex)
                     {
-                        ffmpeg.av_packet_unref(packet);
+                        ffmpeg.av_packet_unref(packet); // Skip non-video packets
                         continue;
                     }
 
-                    ret = ffmpeg.avcodec_send_packet(_codecCtx, packet);
-                    ffmpeg.av_packet_unref(packet);
-                    if (ret < 0) continue;
-
-                    while ((ret = ffmpeg.avcodec_receive_frame(_codecCtx, frame)) >= 0)
-                    {
-                    // Scale to RGB
-                    byte*[] srcSlice = { frame->data[0], frame->data[1], frame->data[2], frame->data[3] };
-                    int[] srcStride = { frame->linesize[0], frame->linesize[1], frame->linesize[2], frame->linesize[3] };
-                    byte*[] dstSlice = { rgbFrame->data[0], rgbFrame->data[1], rgbFrame->data[2], rgbFrame->data[3] };
-                    int[] dstStride = { rgbFrame->linesize[0], rgbFrame->linesize[1], rgbFrame->linesize[2], rgbFrame->linesize[3] };
-                    ffmpeg.sws_scale(_swsCtx, srcSlice, srcStride, 0, _height, dstSlice, dstStride);
-
-                    // Copy RGB to byte[]
-                    byte[] rgbData = new byte[rgbBufferSize];
-                    Marshal.Copy((IntPtr)rgbFrame->data[0], rgbData, 0, rgbBufferSize);
-
-                    // Convert to RGBA8
-                    byte[] rgbaData = ConvertRgb24ToRgba8(rgbData);
-
-                    // Calculate time
-                    double currentTime = frame->pts != ffmpeg.AV_NOPTS_VALUE ? frame->pts * _timeBase : 0;
-
-                    // Add to queue
-                    _frameQueue.Add((rgbaData, currentTime), token);
-
-                    lock (this)
-                    {
-                        _currentBufferSize += rgbaData.Length;
-                        _currentBufferedTime = Math.Max(_currentBufferedTime, currentTime);
-                        BufferedSize = _currentBufferSize;
-                        BufferedTime = _currentBufferedTime - _lastPlayedTime;
-                        Monitor.Pulse(this); // Notify producer wait
-                    }
-
-                        ffmpeg.av_frame_unref(frame);
-                    }
+                    DecodeFrame(packet, token); // Decode and emit the frame
+                }
+                finally
+                {
+                    _lock.ExitReadLock();
                 }
             }
+            _disposeEvent.Set(); // Signal that decoding has stopped
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder ProducerLoop error: {ex.Message}");
+            GD.PrintErr($"SimpleVideoDecoder:DecodeLoop - Error: {ex.Message}");
         }
         finally
         {
-            try
-            {
-                ffmpeg.av_packet_free(&packet);
-                ffmpeg.av_frame_free(&frame);
-                ffmpeg.av_frame_free(&rgbFrame);
-            }
-            catch (Exception ex)
-            {
-                GD.PrintErr($"Error freeing FFmpeg resources: {ex.Message}");
-            }
+            _disposeEvent.Set(); // Ensure signal is set even on error
+            ffmpeg.av_packet_free(&packet); // Clean up packet resources
         }
     }
 
-    private async Task ConsumerLoopAsync(CancellationToken token)
+    /// <summary>
+    /// Reads the next packet from the FFmpeg format context.
+    /// </summary>
+    /// <param name="packet">Pointer to the packet structure to fill.</param>
+    /// <param name="isEof">Set to true if end of file is reached.</param>
+    /// <returns>True if a packet was successfully read, false otherwise.</returns>
+    private unsafe bool ReadPacket(AVPacket* packet, out bool isEof)
+    {
+        int ret = ffmpeg.av_read_frame(_formatCtx, packet);
+        if (ret < 0)
+        {
+            if (ret == ffmpeg.AVERROR_EOF)
+            {
+                isEof = true;
+                return false; // End of file reached
+            }
+            else
+            {
+                GD.PrintErr($"SimpleVideoDecoder:ReadPacket - Read frame error: {GetFFmpegError(ret)}");
+                isEof = false;
+                return false; // Error reading packet
+            }
+        }
+        isEof = false;
+        return true; // Packet read successfully
+    }
+
+    /// <summary>
+    /// Sends a packet to the decoder and receives decoded frames, emitting them via events.
+    /// Handles the FFmpeg send/receive pattern for decoding.
+    /// </summary>
+    /// <param name="packet">The packet to decode.</param>
+    /// <param name="token">Cancellation token for stopping.</param>
+    private unsafe void DecodeFrame(AVPacket* packet, CancellationToken token)
     {
         try
         {
-            double lastTime = 0;
-            foreach (var (frameData, time) in _frameQueue.GetConsumingEnumerable(token))
+            int ret = ffmpeg.avcodec_send_packet(_codecCtx, packet);
+            if (ret < 0)
             {
-                // Pre-load check
-                if (!_playbackReady)
-                {
-                    if (BufferedTime >= 1.0) // Pre-load 1 second
-                    {
-                        _playbackReady = true;
-                        PlaybackReady?.Invoke();
-                    }
-                    else
-                    {
-                        continue; // Skip until ready
-                    }
-                }
+                GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Send packet error: {GetFFmpegError(ret)}");
+                return;
+            }
+            // Packet data is now owned by the decoder; unref after receive
 
-                // Wait if paused
-                _pauseEvent.Wait(token);
-
-                // Raise events
-                FrameReady?.Invoke(frameData);
-                TimeUpdated?.Invoke(time);
-                _lastPlayedTime = time;
-
-                // Calculate delay
-                double delayMs = (time - lastTime) * 1000;
-                if (delayMs > 0 && delayMs < 1000) // Reasonable delay
-                {
-                    await Task.Delay((int)delayMs, token);
-                }
-                lastTime = time;
-
-                // Update buffer
-                lock (this)
-                {
-                    _currentBufferSize -= frameData.Length;
-                    BufferedSize = _currentBufferSize;
-                    BufferedTime = _currentBufferedTime - _lastPlayedTime;
-                    Monitor.Pulse(this); // Notify producer
-                }
+            while ((ret = ffmpeg.avcodec_receive_frame(_codecCtx, _frame)) >= 0)
+            {
+                EmitFrame(_frame, token); // Process and emit the decoded frame
+                ffmpeg.av_frame_unref(_frame); // Release frame buffers
+            }
+            if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
+                return; // Expected: need more data or end of stream
+            else if (ret < 0)
+            {
+                GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Receive frame error: {GetFFmpegError(ret)}");
             }
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder ConsumerLoopAsync error: {ex.Message}");
+            GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Exception: {ex.Message}");
         }
         finally
         {
-            if (!token.IsCancellationRequested)
+            ffmpeg.av_packet_unref(packet); // Always unref the packet
+        }
+    }
+
+    /// <summary>
+    /// Scales the decoded frame to RGBA, copies it to a buffer, emits it via events, and handles timing for frame rate.
+    /// </summary>
+    /// <param name="frame">The decoded frame from FFmpeg.</param>
+    /// <param name="token">Cancellation token.</param>
+    private unsafe void EmitFrame(AVFrame* frame, CancellationToken token)
+    {
+        try
+        {
+            token.ThrowIfCancellationRequested();
+
+            // Scale the frame from its native pixel format to RGBA using the software scaler
+            byte*[] srcSlice = { frame->data[0], frame->data[1], frame->data[2], frame->data[3] }; // Source plane pointers
+            int[] srcStride = { frame->linesize[0], frame->linesize[1], frame->linesize[2], frame->linesize[3] }; // Source strides
+            byte*[] dstSlice = { _rgbFrame->data[0], _rgbFrame->data[1], _rgbFrame->data[2], _rgbFrame->data[3] }; // Destination plane pointers
+            int[] dstStride = { _rgbFrame->linesize[0], _rgbFrame->linesize[1], _rgbFrame->linesize[2], _rgbFrame->linesize[3] }; // Destination strides
+            ffmpeg.sws_scale(_swsCtx, srcSlice, srcStride, 0, _height, dstSlice, dstStride);
+
+            // Recycle frame buffers from the queue to avoid allocations
+            if (_frameQueue.TryDequeue(out byte[] frameBuffer))
             {
-                EndReached?.Invoke();
+                Marshal.Copy((IntPtr)_rgbFrame->data[0], frameBuffer, 0, _rgbBufferSize); // Copy RGBA data to managed array
+                _godotNode.CallDeferred("InvokeFrameReady", frameBuffer); // Emit frame on main thread
+                _frameQueue.Enqueue(frameBuffer); // Return buffer to queue
+            }
+
+            // Calculate current playback time from frame timestamps or fallback to stopwatch
+            double currentTime = frame->pts != ffmpeg.AV_NOPTS_VALUE ? frame->pts * _timeBase :
+                                 (frame->pkt_dts != ffmpeg.AV_NOPTS_VALUE ? frame->pkt_dts * _timeBase :
+                                  _stopwatch.Elapsed.TotalSeconds);
+            _godotNode.CallDeferred("InvokeTimeUpdated", currentTime);
+
+            // Handle variable frame rate (VFR): adjust duration based on repeat_pict for repeated fields
+            double durationMs = _frameDurationMs;
+            if (frame->repeat_pict > 0) durationMs *= (frame->repeat_pict + 1);
+            _nextFrameTime += (long)durationMs;
+
+            // Sleep to maintain frame timing, ensuring smooth playback
+            long targetTime = _nextFrameTime;
+            long currentTimeMs = _stopwatch.ElapsedMilliseconds;
+            if (currentTimeMs < targetTime && !token.IsCancellationRequested)
+            {
+                int sleepMs = (int)(targetTime - currentTimeMs);
+                if (sleepMs > 0) Thread.Sleep(sleepMs);
             }
         }
-    }
-
-    private byte[] ConvertRgb24ToRgba8(byte[] rgbData)
-    {
-        byte[] rgbaData = new byte[_width * _height * 4];
-        for (int i = 0, j = 0; i < rgbData.Length; i += 3, j += 4)
+        catch (Exception ex)
         {
-            rgbaData[j] = rgbData[i];     // R
-            rgbaData[j + 1] = rgbData[i + 1]; // G
-            rgbaData[j + 2] = rgbData[i + 2]; // B
-            rgbaData[j + 3] = 255;        // A
+            GD.PrintErr($"SimpleVideoDecoder:EmitFrame - Exception: {ex.Message}");
         }
-        return rgbaData;
     }
 
+    /// <summary>
+    /// Converts an FFmpeg error code to a human-readable string.
+    /// </summary>
+    /// <param name="error">The FFmpeg error code.</param>
+    /// <returns>A string describing the error.</returns>
     private unsafe string GetFFmpegError(int error)
     {
         const int bufferSize = 1024;
         byte[] buffer = new byte[bufferSize];
         fixed (byte* pBuffer = buffer)
         {
-            ffmpeg.av_strerror(error, pBuffer, (ulong)bufferSize);
+            ffmpeg.av_strerror(error, pBuffer, (ulong)bufferSize); // Fill buffer with error string
         }
-        int nullIndex = Array.IndexOf(buffer, (byte)0);
+        int nullIndex = Array.IndexOf(buffer, (byte)0); // Find null terminator
         return nullIndex >= 0 ? System.Text.Encoding.ASCII.GetString(buffer, 0, nullIndex) : System.Text.Encoding.ASCII.GetString(buffer);
     }
 
+    /// <summary>
+    /// Disposes FFmpeg resources, cancels ongoing tasks, and cleans up events.
+    /// Ensures graceful shutdown without leaks.
+    /// </summary>
     public void Dispose()
     {
-        _pauseEvent.Set(); // Ensure not paused to allow exit
-        StopDecodingAsync().Wait();
-        _frameQueue?.Dispose();
-        unsafe
+        if (_isDisposed) return;
+        _lock.EnterWriteLock();
+        try
         {
-            if (_swsCtx != null)
-            {
-                ffmpeg.sws_freeContext(_swsCtx);
-                _swsCtx = null;
-            }
-
-            if (_codecCtx != null)
-            {
-                fixed (AVCodecContext** ppCodec = &_codecCtx)
-                {
-                    ffmpeg.avcodec_free_context(ppCodec);
-                }
-                _codecCtx = null;
-            }
-
-            if (_formatCtx != null)
-            {
-                fixed (AVFormatContext** ppFormat = &_formatCtx)
-                {
-                    ffmpeg.avformat_close_input(ppFormat);
-                }
-                _formatCtx = null;
-            }
+            _pauseEvent.Set(); // Ensure not paused to allow exit
+            _cts?.Cancel();
         }
-        _cts?.Dispose();
-        _pauseEvent?.Dispose();
-        GD.Print("SimpleVideoDecoder disposed");
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+        if (!_disposeEvent.Wait(5000))
+        {
+            GD.PrintErr("SimpleVideoDecoder:Dispose - Dispose event timeout");
+        }
+        _lock.EnterWriteLock();
+        try
+        {
+            unsafe
+            {
+                if (_swsCtx != null)
+                {
+                    ffmpeg.sws_freeContext(_swsCtx);
+                    _swsCtx = null;
+                }
+
+                if (_codecCtx != null)
+                {
+                    fixed (AVCodecContext** ppCodec = &_codecCtx)
+                    {
+                        ffmpeg.avcodec_free_context(ppCodec);
+                    }
+                    _codecCtx = null;
+                }
+
+                if (_formatCtx != null)
+                {
+                    fixed (AVFormatContext** ppFormat = &_formatCtx)
+                    {
+                        ffmpeg.avformat_close_input(ppFormat);
+                    }
+                    _formatCtx = null;
+                }
+
+                if (_rgbFrame != null)
+                {
+                    fixed (AVFrame** ppRgbFrame = &_rgbFrame)
+                    {
+                        ffmpeg.av_frame_free(ppRgbFrame);
+                    }
+                    _rgbFrame = null;
+                }
+
+                if (_rgbBuffer != null)
+                {
+                    ffmpeg.av_free(_rgbBuffer);
+                    _rgbBuffer = null;
+                }
+
+                if (_frame != null)
+                {
+                    fixed (AVFrame** ppFrame = &_frame)
+                    {
+                        ffmpeg.av_frame_free(ppFrame);
+                    }
+                    _frame = null;
+                }
+            }
+            _cts?.Dispose();
+            _pauseEvent?.Dispose();
+            _disposeEvent?.Dispose();
+            _isDisposed = true;
+            GD.Print("SimpleVideoDecoder:Dispose - disposed");
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 }

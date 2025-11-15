@@ -2,6 +2,7 @@ using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot;
 using System;
+using System.Runtime.InteropServices;
 
 namespace Cue2;
 
@@ -16,7 +17,7 @@ public partial class TestFFmpeg : TextureRect
 
     private string file = "C:\\MyFiles\\Cue2_Home\\TestCues\\sample_1280x720_surfing_with_audio.mp4";
 
-    private SimpleVideoDecoder _decoder;
+    private FFmpegVideoDecoder _decoder;
     private bool _isExiting = false;
     private bool _updatingFromDecoder = false;
 
@@ -43,7 +44,7 @@ public partial class TestFFmpeg : TextureRect
         GD.Print($"TestFFmpeg initialised: {file}");
 
         // Create decoder and subscribe to events
-        _decoder = new SimpleVideoDecoder();
+        _decoder = new FFmpegVideoDecoder(this);
         _decoder.FrameReady += OnFrameReady;
         _decoder.TimeUpdated += OnTimeUpdated;
         _decoder.EndReached += OnEndReached;
@@ -58,10 +59,10 @@ public partial class TestFFmpeg : TextureRect
         _ = _decoder.StartDecodingAsync(file);
     }
 
-    private void OnFrameReady(byte[] rgbaData)
+    private void OnFrameReady(byte[] data)
     {
         // Update texture on main thread
-        CallDeferred(nameof(UpdateTexture), rgbaData);
+        CallDeferred(nameof(UpdateTexture), data);
     }
 
     private void OnTimeUpdated(double time)
@@ -165,6 +166,21 @@ public partial class TestFFmpeg : TextureRect
             _decoder = null;
             GD.Print("TestFFmpeg: Cleanup complete.");
         }
+    }
+
+    public void InvokeFrameReady(byte[] data)
+    {
+        OnFrameReady(data);
+    }
+
+    public void InvokeTimeUpdated(double time)
+    {
+        OnTimeUpdated(time);
+    }
+
+    public void InvokeEndReached()
+    {
+        OnEndReached();
     }
 
     public override void _ExitTree()
