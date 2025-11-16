@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1763171102
+::res://::1763238622
 export_presets.cfg::TextFile/TextFile::-1::1733095694::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D/CompressedTexture2D::8597863507468381028::1762140938::1747122912::1::::<><><>0<>0<>2121b297116ecef117fc369b9feee572<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 README.md::TextFile/TextFile::-1::1762140938::0::1::::<><><>0<>0<><>::
@@ -94,10 +94,10 @@ PlayerMac.run.xml::TextFile/TextFile::-1::1762317489::0::1::::<><><>0<>0<><>::
 ::res://Files/::1762140938
 Challenger (Loop).wav::AudioStreamWAV/AudioStreamWAV::8889465709718550112::1762140938::1741989025::1::::<><><>0<>0<>3b6f6947fe28da16f09780b247d25e3f<>res://.godot/imported/Challenger (Loop).wav-3cec7401635d6954cab5d88e8b9a6705.sample::
 Searching (Loop).wav::AudioStreamWAV/AudioStreamWAV::928424272324044172::1762140938::1741989025::1::::<><><>0<>0<>b93b951987460724a528dbd474654c14<>res://.godot/imported/Searching (Loop).wav-cc88f5ac7eba7187d293ced7b0a653a7.sample::
-::res://src/::1763107622
-AGENTS.md::TextFile::-1::1762927935::0::1::::<><><>0<>0<><>::
-SimpleVideoDecoderReview.md::TextFile::-1::1763108514::0::1::::<><><>0<>0<><>::
-TestFFmpeg.cs::CSharpScript::8351639140068111610::1763105927::0::1::::<>TextureRect<><>0<>0<><>::
+::res://src/::1763195306
+AGENTS.md::TextFile::-1::1763178458::0::1::::<><><>0<>0<><>::
+SimpleVideoDecoderReview.md::TextFile::-1::1763182963::0::1::::<><><>0<>0<><>::
+TestFFmpeg.cs::CSharpScript::8351639140068111610::1763195306::0::1::::<>TextureRect<><>0<>0<><>::
 ::res://src/Base/::1763068390
 ActiveCueBar.tscn::PackedScene/PackedScene::8559962263874904924::1762140938::0::1::::<><><>0<>0<><>::uid://cb7g4xgryo2dg::::res://src/UI/Scenes/ComponentProgressBar.tscn
 Cue2Base.cs::CSharpScript::3855806022055526979::1762143832::0::1::::<>Control<><>0<>0<><>::
@@ -118,10 +118,10 @@ VideoPlayback.gdshader::Shader::9163745258136980093::1763066005::0::1::::<><><>0
 VideoTextureRectMaterial.tres::ShaderMaterial::6796633086412818829::1763068390::0::1::::<><><>0<>0<><>::uid://d3s8ssw0tvkc0::::res://src/Base/VideoPlayback.gdshader
 VideoToTextureRect.cs::CSharpScript::7445244770328291621::1762143772::0::1::::<>TextureRect<><>0<>0<><>::
 video_output.tscn::PackedScene/PackedScene::7321502229609095143::1762140938::0::1::::<><><>0<>0<><>::uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs<>uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres
-::res://src/Base/Classes/::1763105771
+::res://src/Base/Classes/::1763196966
 ActiveAudioPlayback.cs::CSharpScript::1865291930392215703::1762140938::0::1::::<>GodotObject<><>0<>0<><>::
 ActiveCue.cs::CSharpScript::5737088265893442501::1762927320::0::1::::<>GodotObject<><>0<>0<><>::
-ActiveVideoPlayback.cs::CSharpScript::45345226016531640::1763085325::0::1::::<>Node<><>0<>0<><>::
+ActiveVideoPlayback.cs::CSharpScript::45345226016531640::1763196966::0::1::::<>Node<><>0<>0<><>::
 AudioFileMetadata.cs::CSharpScript/CSharpScript::8559262123915468989::1762140938::0::1::::<><><>0<>0<><>::
 AudioOutputPatch.cs::CSharpScript::8759237685733553493::1762140938::0::1::::<>GodotObject<><>0<>0<><>::
 Canvas.cs::CSharpScript::2062328623190078110::1762140938::0::1::::<>SubViewport<><>0<>0<><>::
@@ -172,14 +172,13 @@ SettingsGeneral.cs::CSharpScript::3038811565116862052::1762140938::0::1::::<>Scr
 launcher.tscn::PackedScene/PackedScene::4200433581996456708::1762140938::0::1::::<><><>0<>0<><>::uid://bmbs6kyrh6uq7::::res://src/launcher/LaunchManager.cs<>uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs
 LauncherHandles.cs::CSharpScript::3194261988031518947::1762889450::0::1::::<>Control<><>0<>0<><>::
 LaunchManager.cs::CSharpScript::3231900013676203672::1762140938::0::1::::<>Control<><>0<>0<><>::
-::res://src/Shared/::1763108241
+::res://src/Shared/::1763196973
 AudioDevices.cs::CSharpScript::3123637818016137637::1762919512::0::1::::<>Node<><>0<>0<><>::
 CueLightManager.cs::CSharpScript::9051166078888758983::1762140938::0::1::::<>Node<><>0<>0<><>::
 DisplaysManager.cs::CSharpScript::7330541336050863412::1763105771::0::1::::<>Node<><>0<>0<><>::
 EventLogger.cs::CSharpScript::1029115469543193390::1762140938::0::1::::<>Node<><>0<>0<><>::
 FFmpegAudioDecoder.cs::CSharpScript/CSharpScript::5809092426450096512::1762140938::0::1::::<><><>0<>0<><>::
-FFmpegVideoDecoder.cs::CSharpScript::2877055216710050276::1763105753::0::1::::<><><>0<>0<><>::
-FFmpegVideoDecoderOld.cs::CSharpScript::538264997357525149::1763085325::0::1::::<><><>0<>0<><>::
+FFmpegVideoDecoder.cs::CSharpScript::2877055216710050276::1763195172::0::1::::<><><>0<>0<><>::
 GlobalData.cs::CSharpScript::4503515704991174087::1762583183::0::1::::<>Node<><>0<>0<><>::
 GlobalSignals.cs::CSharpScript::5558519815270985299::1762140938::0::1::::<>Node<><>0<>0<><>::
 GlobalStyles.cs::CSharpScript::2132265063379963223::1762140938::0::1::::<>Node<><>0<>0<><>::
@@ -188,7 +187,6 @@ LogType.cs::CSharpScript/CSharpScript::-1::1762140938::0::1::::<><><>0<>0<><>::
 MediaEngine.cs::CSharpScript::6010125824212505973::1762914441::0::1::::<>Node<><>0<>0<><>::
 SaveManager.cs::CSharpScript::6032995468372215493::1762140938::0::1::::<>Node<><>0<>0<><>::
 SceneLoader.cs::CSharpScript/CSharpScript::3619610303397267705::1762140938::0::1::::<><><>0<>0<><>::
-SimpleVideoDecoder.cs::CSharpScript::5102362641163083451::1763108241::0::1::::<><><>0<>0<><>::
 WorkspaceStates.cs::CSharpScript/CSharpScript::5194139032810158273::1762140938::0::1::::<><><>0<>0<><>::
 ::res://src/UI/::1762140938
 ::res://src/UI/Assets/::1763065588

@@ -481,7 +481,8 @@ public partial class DisplaysManager : Node
 
         foreach (var layer in Layers)
         {
-            layer.Dispose();
+            Canvas.RemoveChild(layer);
+            layer.QueueFree();
         }
         Layers.Clear();
         
@@ -501,6 +502,13 @@ public partial class DisplaysManager : Node
             AddLayer("Default", 0);
         }
 
+        foreach (var output in Outputs)
+        {
+            RemoveChild(output);
+            output.QueueFree();
+        }
+        Outputs.Clear();
+
         if (data.ContainsKey("Outputs"))
         {
             var outputsData = (Godot.Collections.Array) data["Outputs"];
@@ -517,5 +525,16 @@ public partial class DisplaysManager : Node
         }
 
         UpdateAllLayerTestPatterns();
+    }
+
+    public override void _ExitTree()
+    {
+        // Layers are children of Canvas, which is freed by GlobalData, so no need to clean them here
+        foreach (var output in Outputs)
+        {
+            RemoveChild(output);
+            output.QueueFree();
+        }
+        Outputs.Clear();
     }
 }

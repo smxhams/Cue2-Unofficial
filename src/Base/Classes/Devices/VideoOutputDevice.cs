@@ -74,10 +74,10 @@ public partial class VideoOutputDevice : Window, IDisposable
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
 
-        var videoLayer = _videoLayerPackedSene.Instantiate<Control>();
+        /*var videoLayer = _videoLayerPackedSene.Instantiate<Control>();
         AddChild(videoLayer);
         videoLayer.Size = new Vector2(500, 500);
-        videoLayer.Position = new Vector2(400, 0);
+        videoLayer.Position = new Vector2(400, 0);*/
         GD.Print($"VideoOutputDevice:Constructor - Initialized output device '{OutputName}' with ID {OutputId}.");
     }
     

@@ -70,7 +70,11 @@ public partial class ActiveVideoPlayback : Node
     {
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
-        Decoder = new FFmpegVideoDecoder(videoComponent.VideoFile);
+        Decoder = new FFmpegVideoDecoder(this);
+        
+        //Decoder.FrameReady += OnFrameReady;
+        //Decoder.TimeUpdated += OnTimeUpdated;
+        //Decoder.EndReached += OnEndReached;
 
         // Find target layer
         _targetLayer = DisplaysManager.Layers.Find(l => l.LayerId == _videoComponent.TargetLayerId);
@@ -141,7 +145,7 @@ public partial class ActiveVideoPlayback : Node
     public async Task InitAsync()
     {
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing...");
-        await Decoder.InitAsync();
+        await Decoder.StartDecodingAsync(_videoComponent.VideoFile);
 
         // Init embedded audio if present
         if (_embeddedAudioPlayback != null)
@@ -224,7 +228,7 @@ public partial class ActiveVideoPlayback : Node
         }
         else
         {
-            Decoder.PlayAsync();
+            //Decoder.PlayAsync();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Play();
             _playTimer.Start();
             GD.Print($"ActiveVideoPlayback:Play - Playback started without fade-in");
@@ -237,9 +241,9 @@ public partial class ActiveVideoPlayback : Node
         {
             Decoder.Pause();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Pause();
-            _pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
+            //_pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
             IsPaused = true;
-            Decoder.ClearQueues(); // Clear frame queue to avoid stale data on resume
+            //Decoder.ClearQueues(); // Clear frame queue to avoid stale data on resume
             _playTimer.Stop();
             GD.Print($"ActiveVideoPlayback:Pause - Playback paused at estimated {_pausedAtUs / 1000} ms");
         }
@@ -283,7 +287,7 @@ public partial class ActiveVideoPlayback : Node
         if (wasFadingOut)
         {
             // If already fading out, immediately stop and clean
-            Decoder.Stop();
+            //Decoder.Stop();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
             Clean();
             return;
@@ -294,7 +298,7 @@ public partial class ActiveVideoPlayback : Node
             await FadeOutAsync(fadeDuration);
             return;
         }
-        Decoder.Stop();
+        //Decoder.Stop();
         if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
         Clean();
     }
@@ -314,7 +318,7 @@ public partial class ActiveVideoPlayback : Node
 
         try
         {
-            Decoder.PlayAsync(); // Start playback
+            //Decoder.PlayAsync(); // Start playback
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Play();
             _playTimer.Start();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
@@ -373,7 +377,7 @@ public partial class ActiveVideoPlayback : Node
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(0f);
-                Decoder.Stop();
+                //Decoder.Stop();
                 if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
                 Clean();
                 GD.Print($"ActiveVideoPlayback:FadeOutAsync - Fade-out completed over {duration} seconds");
@@ -424,14 +428,16 @@ public partial class ActiveVideoPlayback : Node
     public long GetPlaybackTimeMs()
     {
         if (Decoder == null) return 0;
-        long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate; // Approximate
-        return (Decoder.CurrentTime - queuedUs) / 1000;
+        //long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate; // Approximate
+        //return (Decoder.CurrentTime - queuedUs) / 1000;
+        return 0;
     }
 
     private long GetQueuedUs()
     {
-        long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate;
-        return queuedUs;
+        //long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate;
+        //return queuedUs;
+        return 0;
     }
 
     /// <summary>
@@ -443,13 +449,13 @@ public partial class ActiveVideoPlayback : Node
     {
         try
         {
-            bool wasPlaying = Decoder.IsPlaying && !Decoder.IsPaused; // (preserve state)
+            //bool wasPlaying = Decoder.IsPlaying && !Decoder.IsPaused; // (preserve state)
             Pause(); // (pause to safely seek)
-            Decoder.ClearQueues(); // (clear frame queue)
+            //Decoder.ClearQueues(); // (clear frame queue)
             Decoder.Seek(timestampUs);
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Seek(timestampUs);
             _pausedAtUs = timestampUs; // Set paused position to the seek target
-            if (wasPlaying) Resume(); // (resume if was playing)
+            //if (wasPlaying) Resume(); // (resume if was playing)
             GD.Print($"ActiveVideoPlayback:Seek - Sought to {timestampUs} us");
         }
         catch (Exception ex)
@@ -477,7 +483,7 @@ public partial class ActiveVideoPlayback : Node
             {
                 try
                 {
-                    Decoder.Stop();
+                    //Decoder.Stop();
                     GD.Print($"ActiveVideoPlayback:Clean - Decoder stopped");
                 }
                 catch (Exception ex)

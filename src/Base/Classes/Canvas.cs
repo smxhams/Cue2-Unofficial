@@ -102,5 +102,14 @@ public partial class Canvas : SubViewport
         SetCanvasSize(size);
     }
 
+    public override void _ExitTree()
+    {
+        // Clean up SDL if initialized
+        if (SDL.WasInit(SDL.InitFlags.Video) != 0)
+        {
+            SDL.Quit();
+        }
+    }
+
     // TODO: Extension points for 3D (e.g., switch to Viewport with 3D scene)
 }

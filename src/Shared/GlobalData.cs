@@ -122,9 +122,17 @@ public partial class GlobalData : Node
 				
 			}
 		}
-		
+
 	}
-	
+
+	public override void _ExitTree()
+	{
+		if (VideoCanvas != null)
+		{
+			VideoCanvas.QueueFree();
+		}
+	}
+
 	public static string ParseHotkey(string action)
 	// Parse Hotkey will retyurn simple text representation of an input action.
 	// Currently used to display hotkeys in UI
