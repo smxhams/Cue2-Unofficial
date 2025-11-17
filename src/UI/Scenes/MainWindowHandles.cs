@@ -1,7 +1,7 @@
 using Cue2.Shared;
 using Godot;
 
-namespace Cue2.launcher;
+namespace Cue2.UI.Scenes;
 public partial class MainWindowHandles: Control
 {
 	private GlobalData _globalData;

@@ -63,6 +63,7 @@ public class FFmpegVideoDecoder : IDisposable
     private long _pauseStartTime = 0; // Timestamp when pause started
     private ReaderWriterLockSlim _lock = new ReaderWriterLockSlim(); // Protects FFmpeg contexts during seek/dispose
     private bool _isDisposed = false; // Tracks disposal state
+    private volatile bool _pausedAtEnd = false; // Paused at end of file
 
     // Frame buffers for RGBA conversion
     private unsafe AVFrame* _rgbFrame; // RGBA frame structure
@@ -186,6 +187,9 @@ public class FFmpegVideoDecoder : IDisposable
                 GD.PrintErr($"SimpleVideoDecoder:DecodingTask - Faulted: {t.Exception?.InnerException?.Message}");
             }
         }, TaskContinuationOptions.OnlyOnFaulted);
+
+        // Pause by default
+        Pause();
     }
 
     /// <summary>
@@ -279,6 +283,7 @@ public class FFmpegVideoDecoder : IDisposable
             }
             ffmpeg.avcodec_flush_buffers(_codecCtx);
             if (_frame != null) ffmpeg.av_frame_unref(_frame); // Reset frame state after flush
+            if (_pausedAtEnd) { _pausedAtEnd = false; _nextFrameTime = 0; _stopwatch.Restart(); }
             GD.Print($"SimpleVideoDecoder:Seek - Seeked to {time}s");
         }
         finally
@@ -433,6 +438,12 @@ public class FFmpegVideoDecoder : IDisposable
                     // Expected when cancellation is requested during pause
                 }
 
+                if (_pausedAtEnd)
+                {
+                    Thread.Sleep(100); // Wait when paused at end
+                    continue;
+                }
+
                 _lock.EnterReadLock();
                 try
                 {
@@ -443,8 +454,12 @@ public class FFmpegVideoDecoder : IDisposable
                         if (isEof)
                         {
                             _godotNode.CallDeferred("InvokeEndReached"); // Notify end of video
+                            _pausedAtEnd = true;
                         }
-                        break;
+                        else
+                        {
+                            break; // Error, stop
+                        }
                     }
 
                     if (packet->stream_index != _videoStreamIndex)

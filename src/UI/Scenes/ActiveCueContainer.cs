@@ -1,10 +1,9 @@
-using Godot;
-using System;
 using System.Collections.Generic;
 using Cue2.Base.Classes;
 using Cue2.Shared;
+using Godot;
 
-namespace Cue2.Base;
+namespace Cue2.UI.Scenes;
 
 public partial class ActiveCueContainer : PanelContainer
 {

@@ -115,6 +115,16 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Gets a video target layer by ID.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <returns>The VideoTargetLayer or null.</returns>
+    public static VideoTargetLayer GetLayerById(int layerId)
+    {
+        return Layers.Find(l => l.LayerId == layerId);
+    }
+
+    /// <summary>
     /// Updates all output regions (called when canvas changes).
     /// </summary>
     public void UpdateAllOutputs()

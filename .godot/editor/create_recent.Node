@@ -1,4 +1,8 @@
 Control
+VSeparator
+Line2D
+Panel
+TextureRect
 Button
 Label
 HBoxContainer
@@ -8,7 +12,3 @@ LineEdit
 CheckButton
 ScrollContainer
 CheckBox
-Panel
-SubViewportContainer
-OmniLight3D
-MeshInstance3D

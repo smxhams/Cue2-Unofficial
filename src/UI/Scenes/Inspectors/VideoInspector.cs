@@ -1,14 +1,15 @@
-using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
+using Godot;
+
+namespace Cue2.UI.Scenes.Inspectors;
 
 public partial class VideoInspector : Control
 	
@@ -42,8 +43,10 @@ public partial class VideoInspector : Control
 	private LineEdit _offsetXLineEdit;
 	private LineEdit _offsetYLineEdit;
 
+	// Video Preview
 	private Button _previewCollapseButton;
 	private HBoxContainer _previewContainer;
+	private VideoPreviewer _videoPreviewer;
     
 	// Audio
 	private Button _audioCollapseButton;
@@ -139,6 +142,7 @@ public partial class VideoInspector : Control
 		_audioCollapseButton.Pressed += () => ToggleAccordian(_audioAccordian, _audioCollapseButton);
 		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
 		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
+		_previewCollapseButton.Pressed += PreviewToggled;
 	}
 
 	private void AssignUiNodeParameters()
@@ -164,8 +168,11 @@ public partial class VideoInspector : Control
 		_offsetXLineEdit  = GetNode<LineEdit>("%OffsetXLineEdit");
 		_offsetYLineEdit  = GetNode<LineEdit>("%OffsetYLineEdit");
 
+		
+		// Video Previewer
 		_previewCollapseButton = GetNode<Button>("%PreviewCollapseButton");
 		_previewContainer = GetNode<HBoxContainer>("%PreviewContainer");
+		_videoPreviewer = GetNode<VideoPreviewer>("%VideoPreviewer");
 	    
 		// Audio
 		_audioCollapseButton  = GetNode<Button>("%AudioCollapseButton");
@@ -277,6 +284,12 @@ public partial class VideoInspector : Control
 		_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString();
 		_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString();
 		_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString();
+		
+		
+		// Initalize preview
+		_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+		_videoPreviewer.LoadDecoder(file);
+		
 
 		var volumeDb = UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume);
 		_volumeInput.Text = $"{volumeDb}dB";
@@ -625,6 +638,7 @@ public partial class VideoInspector : Control
 		GD.Print($"VideoInspector:TargetLayerSelected - Target layer set to ID {layerId}");
 	}
 
+	
 	/// <summary>
 	/// Populates the output option button with available audio outputs.
 	/// </summary>
@@ -743,10 +757,10 @@ public partial class VideoInspector : Control
 		// Validate routing (CuePatch) matches what is expected
 		var routing = _focusedVideoComponent.Routing;
 		bool needsUpdate = routing == null ||
-							routing.OutputChannels != outputChannels ||
-							!routing.OutputLabels.SequenceEqual(outputLabels) ||
-							routing.InputChannels != inputChannels ||
-							!routing.InputLabels.SequenceEqual(inputLabels);
+		                   routing.OutputChannels != outputChannels ||
+		                   !routing.OutputLabels.SequenceEqual(outputLabels) ||
+		                   routing.InputChannels != inputChannels ||
+		                   !routing.InputLabels.SequenceEqual(inputLabels);
 
 		if (needsUpdate)
 		{
@@ -1042,6 +1056,12 @@ public partial class VideoInspector : Control
 			await DrawWaveform();
 		}
 	}
+	
+	private void PreviewToggled()
+	{
+		_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+	}
+
 
 	/// <summary>
 	/// Clears the file dialog instance.

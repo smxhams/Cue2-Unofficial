@@ -1,7 +1,7 @@
 using Cue2.Shared;
 using Godot;
 
-namespace Cue2.UI;
+namespace Cue2.UI.Scenes;
 
 public partial class ButtonStyles : Button
 {
