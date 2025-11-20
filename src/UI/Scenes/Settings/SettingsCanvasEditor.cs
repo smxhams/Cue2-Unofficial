@@ -86,7 +86,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-        _canvas = _globalData.VideoCanvas;
+        _canvas = DisplaysManager.Canvas;
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 
         _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), Callable.From(OnDisplaysChanged));

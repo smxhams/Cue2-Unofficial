@@ -3,7 +3,7 @@ using System;
 
 namespace Cue2.Base.Classes;
 
-public partial class VideoTargetLayer : CanvasLayer
+public class VideoTargetLayer
 {
     private static int _nextLayerId = 0;
 
@@ -53,38 +53,7 @@ public partial class VideoTargetLayer : CanvasLayer
         LayerName = name;
         ZIndex = zIndex;
     }
-
-    /// <summary>
-    /// Adds a child node to this layer (e.g., a TextureRect for video).
-    /// </summary>
-    /// <param name="child">The node to add (e.g., TextureRect).</param>
-    public void AddContent(Node child)
-    {
-        if (child == null)
-        {
-            GD.PrintErr("VideoTargetLayer:AddContent - Cannot add null child.");
-            return;
-        }
-
-        AddChild(child);
-        GD.Print($"Added content to layer '{LayerName}'.");
-    }
-
-    /// <summary>
-    /// Removes a child node from this layer.
-    /// </summary>
-    /// <param name="child">The node to remove.</param>
-    public void RemoveContent(Node child)
-    {
-        if (child == null || !IsAncestorOf(child))
-        {
-            GD.PrintErr("VideoTargetLayer:RemoveContent - Child not found in layer.");
-            return;
-        }
-
-        RemoveChild(child);
-        GD.Print($"Removed content from layer '{LayerName}'.");
-    }
+    
 
     /// <summary>
     /// Serializes the layer data.

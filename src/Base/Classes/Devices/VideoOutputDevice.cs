@@ -40,12 +40,7 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// Whether the output window is transparent.
     /// </summary>
     public bool OutputTransparent { get; set; } = false;
-
-    /// <summary>
-    /// Reference to the parent canvas.
-    /// </summary>
-    private Canvas _canvas;
-
+    
     /// <summary>
     /// TextureRect to display the cropped canvas region.
     /// </summary>
@@ -53,9 +48,14 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     private static int _nextOutputId = 0;
 
+    private Control _sceneRoot;
+
     private TestPattern _testPattern;
     private Dictionary<int, TestPattern> _layerTestPatterns = new();
-    private PackedScene _videoLayerPackedSene = SceneLoader.LoadPackedScene("uid://bnijb6qe1sop3", out _);
+    
+    private PackedScene _displayLayerPackedScene = SceneLoader.LoadPackedScene("uid://dwnssjgckgb8p", out _);
+    private Dictionary<Control, int> _activeLayers = new();
+    
 
     /// <summary>
     /// Cached last clipped rectangle to avoid unnecessary updates.
@@ -74,13 +74,19 @@ public partial class VideoOutputDevice : Window, IDisposable
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
 
-        /*var videoLayer = _videoLayerPackedSene.Instantiate<Control>();
-        AddChild(videoLayer);
-        videoLayer.Size = new Vector2(500, 500);
-        videoLayer.Position = new Vector2(400, 0);*/
+        InitSceneRoot();
+
         GD.Print($"VideoOutputDevice:Constructor - Initialized output device '{OutputName}' with ID {OutputId}.");
     }
-    
+
+    private void InitSceneRoot()
+    {
+        _sceneRoot = new Control();
+        AddChild(_sceneRoot);
+        _sceneRoot.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _sceneRoot.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+    }
+
 
     /// <summary>
     /// Sets the reference to the parent canvas.
@@ -88,8 +94,20 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// <param name="canvas">The canvas this output belongs to.</param>
     public void SetCanvasReference(Canvas canvas)
     {
-        _canvas = canvas;
         UpdateOutputRegion();
+    }
+
+
+    public Control AddLayer(int LayerId)
+    {
+        var layer = DisplaysManager.GetLayerById(LayerId);
+        var displayLayer = _displayLayerPackedScene.Instantiate<Control>();
+        _sceneRoot.AddChild(displayLayer);
+        var outputLayer = displayLayer.GetNode<TextureRect>("%LayerOutput");
+        outputLayer.Size = layer.Size;
+        
+        
+        return displayLayer;
     }
 
     
@@ -100,11 +118,6 @@ public partial class VideoOutputDevice : Window, IDisposable
     public void UpdateOutputRegion()
     {
         GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updating output region '{OutputName}'.");
-        if (_canvas == null)
-        {
-            GD.Print("VideoOutputDevice:UpdateOutputRegion - No canvas reference set.");
-            return;
-        }
 
         // Validation
         if (OutputSize.X <= 0 || OutputSize.Y <= 0)
@@ -115,15 +128,10 @@ public partial class VideoOutputDevice : Window, IDisposable
 
         try
         {
-            var canvasTexture = _canvas.GetCanvasTexture();
-            if (canvasTexture == null)
-            {
-                GD.Print("VideoOutputDevice:UpdateOutputRegion - Canvas texture not available.");
-                return;
-            }
+            var canvas = DisplaysManager.Canvas;
 
             // Calculate clipped region within canvas bounds
-            Rect2 canvasRect = new Rect2(0, 0, _canvas.CanvasSize.X, _canvas.CanvasSize.Y);
+            Rect2 canvasRect = new Rect2(0, 0, canvas.CanvasSize.X, canvas.CanvasSize.Y);
             Rect2 outputRect = new Rect2(CanvasPosition, OutputSize);
             Rect2 clippedRect = canvasRect.Intersection(outputRect);
 
@@ -142,16 +150,6 @@ public partial class VideoOutputDevice : Window, IDisposable
                 GD.Print($"VideoOutputDevice:UpdateOutputRegion - No valid region for output '{OutputName}' within canvas bounds.");
                 return;
             }
-
-            // Create an Image from the canvas texture
-            var image = canvasTexture.GetImage();
-
-            // Crop the clipped region
-            var croppedImage = new Image();
-            croppedImage = image.GetRegion(new Rect2I((Vector2I)clippedRect.Position, (Vector2I)clippedRect.Size));
-
-            // Set to TextureRect
-            _outputRect.Texture = ImageTexture.CreateFromImage(croppedImage);
             
             // Position and size window based on clipped region
             if (Mode == ModeEnum.ExclusiveFullscreen)
@@ -342,9 +340,6 @@ public partial class VideoOutputDevice : Window, IDisposable
             kvp.Value.QueueFree();
         }
         _layerTestPatterns.Clear();
-
-        // Clear canvas reference
-        _canvas = null;
         
         QueueFree();
 

@@ -286,7 +286,6 @@ public partial class ActiveCue : GodotObject
             var playback = _activeVideoComponents[panel];
 
             // TODO: Handle embedded audio
-            playback.Play();
         }
         catch (Exception ex)
         {
@@ -370,14 +369,7 @@ public partial class ActiveCue : GodotObject
                 UpdateComponentUiState(panel, audioComponent);
             }
         }
-        foreach (var panel in _activeVideoComponents.Keys)
-        {
-            if (IsInstanceValid(panel))
-            {
-                var videoComponent = _componentToVideo[panel];
-                UpdateVideoComponentUiState(panel, videoComponent);
-            }
-        }
+        // Video components are updated via TimeUpdated event for real-time updates
     }
     
     private async Task SetupComponents()
@@ -427,7 +419,7 @@ public partial class ActiveCue : GodotObject
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
             timeLabel.Text = UiUtilities.FormatTime(audioComponent.TotalDuration);
             
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio", "AtlasIcons");
+            typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio2", "AtlasIcons");
             pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
             
@@ -510,10 +502,14 @@ public partial class ActiveCue : GodotObject
             GD.Print($"ActiveCue:SetupAudioComponent - Exception: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
-            //StopAll(); //Can't remember why this failing will call a stopall
+            //StopAll(); //Can't remember why this will call a stopall in catch
         }
     }
 
+    /// <summary>
+    /// Creates Ui for VideoComponent and handles input.
+    /// </summary>
+    /// <param name="videoComponent"></param>
     private async Task SetupVideoComponent(VideoComponent videoComponent)
     {
         try
@@ -523,13 +519,10 @@ public partial class ActiveCue : GodotObject
             {
                 videoComponent.Metadata = await _mediaEngine.GetVideoFileMetadataAsync(videoComponent.VideoFile);
             }
-
-            GD.Print($"ActiveCue:SetupVideoComponent - Making video playback");
+            
             var playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
-            GD.Print($"ActiveCue:SetupVideoComponent - Init video playback");
             await playback.InitAsync();
-            GD.Print($"ActiveCue:SetupVideoComponent - Video Playback made");
-
+            
             // UI
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
@@ -544,14 +537,11 @@ public partial class ActiveCue : GodotObject
             pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
-
             // Component Logic
             _activeVideoComponents.Add(componentPanel, playback);
             _componentToVideo.Add(componentPanel, videoComponent);
             
             pauseButton.Pressed += () => {
-
-                var playback = _activeVideoComponents[componentPanel];
                 bool componentPaused = playback.IsPaused;
                 if (!componentPaused)
                 {
@@ -568,8 +558,7 @@ public partial class ActiveCue : GodotObject
 
             // Stop
             stopButton.Pressed += async () => await StopVideoComponent(componentPanel);
-
-
+            
             // Progress bar seeking
             var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
             double pendingSeekTimeSec = 0;
@@ -583,7 +572,7 @@ public partial class ActiveCue : GodotObject
                         // Calculate initial seek time
                         var localPos = progressBar.GetLocalMousePosition();
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                        pendingSeekTimeSec = videoComponent.StartTime + percent * videoComponent.Duration;
+                        pendingSeekTimeSec = videoComponent.StartTime + percent * playback.GetDuration();
                         progressBar.Value = percent * 100; // Preview
                         timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
                     }
@@ -592,8 +581,8 @@ public partial class ActiveCue : GodotObject
                         // Release: perform the seek
                         if (playback.IsSeeking)
                         {
-                            long timestampUs = (long)(pendingSeekTimeSec * 1_000_000);
-                            playback.Seek(timestampUs);
+                            double time = pendingSeekTimeSec;
+                            playback.Seek(time);
                             GD.Print($"ActiveCue:ProgressBar - Sought to {pendingSeekTimeSec} sec on release");
                         }
                         playback.IsSeeking = false;
@@ -604,11 +593,12 @@ public partial class ActiveCue : GodotObject
                     // Update preview during drag
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                    pendingSeekTimeSec = videoComponent.StartTime + percent * videoComponent.Duration;
+                    pendingSeekTimeSec = videoComponent.StartTime + percent * playback.GetDuration();
                     progressBar.Value = percent * 100; // Update preview
                     timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
                 }
             };
+            playback.TimeUpdated += (time) => CallDeferred(nameof(UpdateVideoUi), time, componentPanel); // Defer to main thread
             
             _activeComponentCount++;
 
@@ -620,33 +610,9 @@ public partial class ActiveCue : GodotObject
             GD.Print($"ActiveCue:SetupVideoComponent - Exception: {ex.Message}, Stack: {ex.StackTrace}, Target: {ex.TargetSite}, {ex.InnerException}, {ex.Source}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating video component for cue {_cue.Name}: {ex.Message}", 2);
-            //StopAll(); //Can't remember why this failing will call a stopall
         }
     }
 
-    /// <summary>
-    /// Handles seek calculation and execution from UI input.
-    /// </summary>
-    /// <param name="progressBar">The progress bar being interacted with.</param>
-    /// <param name="playback">The associated playback instance.</param>
-    /// <param name="audioComponent">The audio component for duration/start.</param>
-    private void UpdateSeek(ProgressBar progressBar, ActiveAudioPlayback playback, AudioComponent audioComponent)
-    {
-        try
-        {
-            var localPos = progressBar.GetLocalMousePosition();
-            float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-            double seekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration; // (seconds)
-            long timestampUs = (long)(seekTimeSec * 1_000_000); // (to us for Decoder.Seek)
-            playback.Seek(timestampUs); // (call new Seek method)
-            GD.Print($"ActiveCue:UpdateSeek - Sought to {seekTimeSec} sec ({timestampUs} us)");
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"ActiveCue:UpdateSeek - Seek error: {ex.Message}");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"UI seek failed in {_cue.Name}: {ex.Message}", 2);
-        }
-    }
 
     private async Task SetupCueLightComponent(CueLightComponent cueLightComponent)
     {
@@ -725,21 +691,24 @@ public partial class ActiveCue : GodotObject
 
     }
 
-    private void UpdateVideoComponentUiState(PanelContainer componentPanel, VideoComponent videoComponent)
-    {
 
+
+    private void UpdateVideoUi(double time, PanelContainer componentPanel)
+    {
+        if (!IsInstanceValid(componentPanel) || !_activeVideoComponents.ContainsKey(componentPanel) || !_componentToVideo.ContainsKey(componentPanel)) return;
+
+        var videoComponent = _componentToVideo[componentPanel];
         var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
         var videoPlayback = _activeVideoComponents[componentPanel];
         if (videoPlayback.IsStopped || videoPlayback.IsPaused) return;
-        float trackTime = videoPlayback.GetPlaybackTimeMs() / 1000f; // ms to seconds
-        float progressPercentage = ((trackTime - (float)videoComponent.StartTime) / (float)videoComponent.Duration) * 100f;
+        float trackTime = (float)time;
+        float progressPercentage = ((trackTime - (float)videoComponent.StartTime) / (float)videoPlayback.GetDuration() * 100f);
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
         if (!videoPlayback.IsSeeking)
         {
             timeLabel.Text = UiUtilities.FormatTime(trackTime);
             progressBar.Value = progressPercentage;
         }
-
 
         // Update fade-out progress
         var fadeProgress = componentPanel.GetNode<ProgressBar>("%ComponentFadeProgress");
@@ -752,7 +721,6 @@ public partial class ActiveCue : GodotObject
         {
             fadeProgress.Visible = false;
         }
-
     }
     
     

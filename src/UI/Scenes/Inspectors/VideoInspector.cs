@@ -287,8 +287,16 @@ public partial class VideoInspector : Control
 		
 		
 		// Initalize preview
-		_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
-		_videoPreviewer.LoadDecoder(file);
+		if (_previewContainer.Visible)
+		{
+			_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+			_videoPreviewer.LoadDecoder(file);
+		}
+		else
+		{
+			// Fluch video decoder if residual from previous shell selected remains
+			_videoPreviewer.ClearDecoder();
+		}
 		
 
 		var volumeDb = UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume);
@@ -635,6 +643,7 @@ public partial class VideoInspector : Control
 	{
 		int layerId = _targetLayerOptionButton.GetItemId((int)index);
 		_focusedVideoComponent.TargetLayerId = layerId;
+		_videoPreviewer.SetAreasDeferred(layerId);
 		GD.Print($"VideoInspector:TargetLayerSelected - Target layer set to ID {layerId}");
 	}
 
@@ -1059,7 +1068,16 @@ public partial class VideoInspector : Control
 	
 	private void PreviewToggled()
 	{
-		_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+		if (_previewContainer.Visible)
+		{
+			_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+			_videoPreviewer.LoadDecoder(_focusedVideoComponent.VideoFile);
+		}
+		else
+		{
+			// Fluch video decoder if preview not opened
+			_videoPreviewer.ClearDecoder();
+		}
 	}
 
 

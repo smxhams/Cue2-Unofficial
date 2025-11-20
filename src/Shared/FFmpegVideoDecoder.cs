@@ -51,19 +51,19 @@ public class FFmpegVideoDecoder : IDisposable
     private int _width, _height;                // Video dimensions
     private double _timeBase;                   // Time base for timestamp calculations
     // Threading and synchronization primitives
-    private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true); // Controls pause/resume
-    private ManualResetEventSlim _disposeEvent = new ManualResetEventSlim(false); // Signals disposal completion
-    private CancellationTokenSource _cts; // For cancelling decoding operations
-    private volatile bool _forceStop = false; // Force stop flag for immediate termination
-    private int _frameDurationMs; // Duration of each frame in milliseconds
+    private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);      // Controls pause/resume
+    private ManualResetEventSlim _disposeEvent = new ManualResetEventSlim(false);   // Signals disposal completion
+    private CancellationTokenSource _cts;           // For cancelling decoding operations
+    private volatile bool _forceStop = false;       // Force stop flag for immediate termination
+    private int _frameDurationMs;                   // Duration of each frame in milliseconds
     private Stopwatch _stopwatch = new Stopwatch(); // For precise timing
-    private Node _godotNode; // Godot node for thread-safe event invocation
-    private long _nextFrameTime = 0; // Timestamp for next frame emission
-    private ConcurrentQueue<byte[]> _frameQueue = new ConcurrentQueue<byte[]>(); // Queue for recycling frame buffers
-    private long _pauseStartTime = 0; // Timestamp when pause started
-    private ReaderWriterLockSlim _lock = new ReaderWriterLockSlim(); // Protects FFmpeg contexts during seek/dispose
-    private bool _isDisposed = false; // Tracks disposal state
-    private volatile bool _pausedAtEnd = false; // Paused at end of file
+    private Node _godotNode;                        // Godot node for thread-safe event invocation
+    private long _nextFrameTime = 0;                // Timestamp for next frame emission
+    private ConcurrentQueue<byte[]> _frameQueue = new ConcurrentQueue<byte[]>();            // Queue for recycling frame buffers
+    private long _pauseStartTime = 0;               // Timestamp when pause started
+    private ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();                        // Protects FFmpeg contexts during seek/dispose
+    private bool _isDisposed = false;               // Tracks disposal state
+    private volatile bool _pausedAtEnd = false;     // Paused at end of file
 
     // Frame buffers for RGBA conversion
     private unsafe AVFrame* _rgbFrame; // RGBA frame structure
@@ -251,6 +251,12 @@ public class FFmpegVideoDecoder : IDisposable
         _nextFrameTime += pausedDuration;
         _pauseEvent.Set();
         IsPaused = false;
+    }
+
+    public void Stop()
+    {
+        if (_isDisposed) throw new ObjectDisposedException(nameof(FFmpegVideoDecoder));
+        StopDecodingAsync().Wait();
     }
 
     /// <summary>

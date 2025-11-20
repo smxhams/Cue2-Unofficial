@@ -12,7 +12,8 @@ public partial class Footer : Control
     
     private List<string> _last5Logs = new List<string>();
     private Node _logWindow;
-    
+
+    private Label _processTimeLabel;
     
     public override void _Ready()
     {
@@ -22,7 +23,20 @@ public partial class Footer : Control
         
         GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
         GetNode<Button>("%LogCount").Toggled += _onLogCountToggled;
-    } 
+        
+        _processTimeLabel = GetNode<Label>("%ProcessTimeLabel");
+    }
+
+
+    public override void _Process(double delta)
+    {
+        int ms = (int)(delta * 1000);
+        _processTimeLabel.Text = $"{ms:0000}ms";
+
+        double fps = 1.0 / delta;
+        int microseconds = (int)(delta * 1000000);
+        _processTimeLabel.TooltipText = $"{ms}ms\nFPS: {fps:F2}\nPrecise: {microseconds}μs";
+    }
 
     private void _updateLog(String @printout, int @type)
     {

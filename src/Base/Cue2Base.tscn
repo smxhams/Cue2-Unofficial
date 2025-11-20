@@ -1,4 +1,4 @@
-[gd_scene load_steps=32 format=4 uid="uid://begopskfmco7t"]
+[gd_scene load_steps=33 format=4 uid="uid://begopskfmco7t"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://bya2tf86xcdn6" path="res://src/UI/Scenes/CueListUI.tscn" id="4_7gle1"]
 [ext_resource type="PackedScene" uid="uid://c7uaftlqmt1qj" path="res://src/UI/Scenes/ActiveCueContainer.tscn" id="6_jn5cm"]
 [ext_resource type="PackedScene" uid="uid://cm5s0bi03612d" path="res://src/UI/Scenes/Inspectors/ShellInspector.tscn" id="7_7gle1"]
+[ext_resource type="PackedScene" uid="uid://dge4tv6ikfteh" path="res://src/UI/Scenes/Inspectors/LibraryInspector.tscn" id="7_ht2vi"]
 [ext_resource type="PackedScene" uid="uid://c2oerlmq8wmp7" path="res://src/UI/Scenes/Inspectors/AudioInspector.tscn" id="8_7gle1"]
 [ext_resource type="PackedScene" uid="uid://b6v72f8k5o0oy" path="res://src/UI/Scenes/Footer.tscn" id="8_jn5cm"]
 [ext_resource type="PackedScene" uid="uid://ghgo66ss8d58" path="res://src/UI/Scenes/Inspectors/ConnectionInspector.tscn" id="9_7xm62"]
@@ -2463,10 +2464,9 @@ current_tab = 2
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
 
-[node name="Library" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
+[node name="Library" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("7_ht2vi")]
 visible = false
 layout_mode = 2
-metadata/_tab_index = 0
 
 [node name="Audio" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("8_7gle1")]
 visible = false

@@ -75,6 +75,15 @@ alignment = 2
 [node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
 layout_mode = 2
 
+[node name="ProcessTimeLabel" type="Label" parent="HBoxContainer/BottomRightContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Process tick latency"
+mouse_filter = 1
+
+[node name="VSeparator4" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
+layout_mode = 2
+
 [node name="CurrentTime" type="Label" parent="HBoxContainer/BottomRightContainer"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2

@@ -26,8 +26,9 @@ public partial class DisplaysManager : Node
         public float RefreshRate;
     }
 
+    public static Canvas Canvas;
+    
     private GlobalSignals _globalSignals;
-    private Canvas Canvas => GetNode<GlobalData>("/root/GlobalData").VideoCanvas;
     private PackedScene _videoLayer;
 
     /// <summary>
@@ -43,11 +44,10 @@ public partial class DisplaysManager : Node
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        Canvas = new Canvas();
 
         // Add default layer
         AddLayer("Default", 0);
-
-        _videoLayer = SceneLoader.LoadPackedScene("uid://bnijb6qe1sop3", out _);
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
     }
@@ -71,7 +71,6 @@ public partial class DisplaysManager : Node
         
         Outputs.Add(output);
         output.Show();
-        output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
         
 
@@ -135,6 +134,14 @@ public partial class DisplaysManager : Node
         }
     }
 
+    public void UpdateAllLayers()
+    {
+        foreach (var output in Outputs)
+        {
+            //output.UpdateLayers();
+        }
+    }
+
     /// <summary>
     /// Updates the canvas position of a video output device.
     /// </summary>
@@ -181,7 +188,6 @@ public partial class DisplaysManager : Node
         layer.Size = Canvas.CanvasSize;
         layer.CanvasPosition = Vector2I.Zero;
         Layers.Add(layer);
-        Canvas.AddChild(layer);
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added layer '{name}' to canvas.", 0);
         return layer;
     }
@@ -201,8 +207,6 @@ public partial class DisplaysManager : Node
                 output.RemoveLayerTestPattern(layer.LayerId);
             }
             Layers.Remove(layer);
-            Canvas.RemoveChild(layer);
-            layer.QueueFree();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed layer '{layer.LayerName}'.", 0);
         }
     }
@@ -488,12 +492,7 @@ public partial class DisplaysManager : Node
             var canvasData = (Godot.Collections.Dictionary) data["Canvas"];
             Canvas.LoadFromData(canvasData);
         }
-
-        foreach (var layer in Layers)
-        {
-            Canvas.RemoveChild(layer);
-            layer.QueueFree();
-        }
+        
         Layers.Clear();
         
         if (data.ContainsKey("Layers"))

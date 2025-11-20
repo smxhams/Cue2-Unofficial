@@ -2,12 +2,14 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Godot;
 using SDL3;
+using Image = Godot.Image;
 
 namespace Cue2.Base.Classes;
 
@@ -17,7 +19,10 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveVideoPlayback : Node
 {
-    public FFmpegVideoDecoder Decoder { get; private set; }
+    private FFmpegVideoDecoder _decoder;
+    private ImageTexture _godotTexture;
+    private Image _godotImage;
+    
     public AudioOutputPatch Patch;
     public CuePatch CuePatch { get; set; }
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
@@ -30,12 +35,14 @@ public partial class ActiveVideoPlayback : Node
     private AudioDevices _audioDevices;
     private VideoTargetLayer _targetLayer;
     private TextureRect _videoRect;
-    private Godot.Image _videoImage;
+    private Image _videoImage;
     private ImageTexture _videoTexture;
 
     // Embedded audio handling
     private ActiveAudioPlayback _embeddedAudioPlayback;
     private AudioComponent _embeddedAudioComponent;
+
+    private Dictionary<Control, TextureRect> _targetLayers = new();
 
     
     private readonly object _lock = new object(); // For thread safety
@@ -46,6 +53,9 @@ public partial class ActiveVideoPlayback : Node
     public bool IsStopped = false;
     public bool IsPaused = false;
     public bool IsSeeking = false;
+    public bool IsExiting = false;
+    private float _startAlpha = 1.0f;
+    private float _fadeAlpha = 1.0f;
     private CancellationTokenSource _fadeCts;
     
     private long _startTimeMs = 0;
@@ -55,12 +65,13 @@ public partial class ActiveVideoPlayback : Node
     public int EffectivePlayCount;
     private bool _hasStarted = false;
     private bool _reachedEnd = false;
-
-    private readonly Stopwatch _playTimer = new Stopwatch();
-    private long _pausedAtUs = 0; // Stored pause position in us for resume seek
-
-    [Signal] public delegate void CompletedEventHandler();
     
+    private long _pausedAtUs = 0; // Stored pause position in us for resume seek
+    private bool _isExiting = false;
+    
+    [Signal] public delegate void CompletedEventHandler();
+    [Signal] public delegate void TimeUpdatedEventHandler(double time);
+
     public ActiveVideoPlayback()
     {
         // Blank constructor for Godot
@@ -70,11 +81,8 @@ public partial class ActiveVideoPlayback : Node
     {
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
-        Decoder = new FFmpegVideoDecoder(this);
-        
-        //Decoder.FrameReady += OnFrameReady;
-        //Decoder.TimeUpdated += OnTimeUpdated;
-        //Decoder.EndReached += OnEndReached;
+
+        LoadDecoder();
 
         // Find target layer
         _targetLayer = DisplaysManager.Layers.Find(l => l.LayerId == _videoComponent.TargetLayerId);
@@ -83,39 +91,9 @@ public partial class ActiveVideoPlayback : Node
             GD.PrintErr($"ActiveVideoPlayback:Constructor - Target layer {_videoComponent.TargetLayerId} not found.");
             return;
         }
-
-        /*
-        if (_videoComponent.UseAudio)
-        {
-            Patch = _videoComponent.Patch;
-            CuePatch = _videoComponent.Routing;
-
-            // Setup embedded audio if video has audio
-            if (_videoComponent.Metadata.AudioChannels > 0)
-            {
-                _embeddedAudioComponent = new AudioComponent
-                {
-                    AudioFile = _videoComponent.VideoFile,
-                    StartTime = _videoComponent.StartTime,
-                    EndTime = _videoComponent.EndTime,
-                    Volume = _videoComponent.Volume,
-                    Loop = _videoComponent.Loop,
-                    PlayCount = _videoComponent.PlayCount,
-                    Metadata = new AudioFileMetadata
-                    {
-                        Duration = _videoComponent.Metadata.Duration,
-                        Channels = _videoComponent.Metadata.AudioChannels,
-                        SampleRate = _videoComponent.Metadata.AudioSampleRate,
-                        BitDepth = _videoComponent.Metadata.AudioBitDepth,
-                        Codec = _videoComponent.Metadata.AudioCodec,
-                        Format = _videoComponent.Metadata.Format
-                    }
-                };
-                _embeddedAudioPlayback = new ActiveAudioPlayback(_embeddedAudioComponent, _audioDevices);
-                _embeddedAudioPlayback.Patch = Patch;
-                _embeddedAudioPlayback.CuePatch = CuePatch;
-            }
-        }*/
+        
+        _godotImage = Image.CreateEmpty(1, 1, false, Image.Format.Rgba8);
+        _godotTexture = ImageTexture.CreateFromImage(_godotImage);
 
         // Validate and set start time
         if (_videoComponent.StartTime < 0)
@@ -136,102 +114,146 @@ public partial class ActiveVideoPlayback : Node
         {
             _startTimeMs = 0;
         }
-        
-        //Decoder.EndReached += OnEndReached;
-        //Decoder.LengthChanged += OnLengthChanged;
-        
+    }
+
+    private void LoadDecoder()
+    {
+        if (_decoder != null)
+        {
+            ClearDecoder();
+        }
+
+        _decoder = new FFmpegVideoDecoder(this);
+        _decoder.FrameReady += OnFrameReady;
+        _decoder.TimeUpdated += OnTimeUpdated;
+        _decoder.EndReached += OnEndReached;
     }
 
     public async Task InitAsync()
     {
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing...");
-        await Decoder.StartDecodingAsync(_videoComponent.VideoFile);
+        if (_decoder == null)
+        {
+            LoadDecoder();
+        }
 
+        await _decoder.StartDecodingAsync(_videoComponent.VideoFile);
+
+        _godotImage = Image.CreateEmpty(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8);
+        _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+        
+        foreach (var display in DisplaysManager.Outputs)
+        {
+            var layerControl = display.AddLayer(_videoComponent.TargetLayerId);
+            var layerTextRect = layerControl.GetNode<TextureRect>("%LayerOutput");
+            layerTextRect.Texture = _godotTexture;
+            _targetLayers.Add(layerControl, layerTextRect);
+            // Connect to TreeExited to remove reference when layer is destroyed
+            layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
+        }
+        
+        
         // Init embedded audio if present
         if (_embeddedAudioPlayback != null)
         {
             await _embeddedAudioPlayback.InitAsync();
         }
-
-        // Setup video TextureRect on the target layer
-        if (_targetLayer != null)
-        {
-            _videoRect = new TextureRect();
-            _videoRect.Position = new Vector2(_videoComponent.OffsetX, _videoComponent.OffsetY);
-            _videoRect.Size = new Vector2(_videoComponent.ScaledWidth, _videoComponent.ScaledHeight);
-            _videoRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-            _videoRect.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-
-            _videoImage = Godot.Image.CreateEmpty(_videoComponent.ScaledWidth, _videoComponent.ScaledHeight, false, Godot.Image.Format.Rgba8);
-            _videoTexture = ImageTexture.CreateFromImage(_videoImage);
-            _videoRect.Texture = _videoTexture;
-
-            _targetLayer.AddContent(_videoRect);
-            GD.Print($"ActiveVideoPlayback:InitAsync - Added video rect to layer '{_targetLayer.LayerName}' at ({_videoComponent.OffsetX}, {_videoComponent.OffsetY}) size {_videoComponent.ScaledWidth}x{_videoComponent.ScaledHeight}");
-        }
+        
+        _decoder.Resume();
 
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing complete");
     }
 
     /// <summary>
+    /// InvokeFrameReady is called by the decoder on the main thread. 
+    /// </summary>
+    /// <param name="data"></param>
+    public void InvokeFrameReady(byte[] data)
+    {
+        OnFrameReady(data);
+    }
+
+    public void InvokeTimeUpdated(double time)
+    {
+        OnTimeUpdated(time);
+    }
+
+    public void InvokeEndReached()
+    {
+        OnEndReached();
+    }
+
+    private void OnLayerExited(TextureRect layer)
+    {
+        // Remove the layer from _targetLayers to prevent invalid references
+        foreach (var kv in _targetLayers)
+        {
+            if (kv.Value == layer)
+            {
+                _targetLayers.Remove(kv.Key);
+                GD.Print($"ActiveVideoPlayback:OnLayerExited - Removed reference to destroyed layer");
+                break;
+            }
+        }
+    }
+
+    private void OnFrameReady(byte[] data)
+    {
+        // Pushs data back onto the main thread in Godot sync
+        CallDeferred(nameof(PushFrame), data);
+    }
+
+    private void OnTimeUpdated(double time)
+    {
+        EmitSignal(SignalName.TimeUpdated, time);
+    }
+
+    private void OnEndReached()
+    {
+        GD.Print($"ActiveVideoPlayback:OnEndReached");
+        EmitSignalCompleted();
+    }
+    
+    /// <summary>
     /// Pushes a decoded RGB frame to the video output.
     /// </summary>
-    /// <param name="rgbData">The RGB24 frame data.</param>
-    /// <param name="width">Frame width.</param>
-    /// <param name="height">Frame height.</param>
-    public void PushFrame(byte[] rgbData, int width, int height)
+    /// <param name="rgbaData">The frame data.</param>
+    public void PushFrame(byte[] rgbaData)
     {
-        if (_videoRect == null || _videoImage == null || _videoTexture == null) return;
-
-        // Create temporary image from RGB data
-        Godot.Image tempImage = Godot.Image.CreateFromData(width, height, false, Godot.Image.Format.Rgb8, rgbData);
-        try
+        if (_isExiting || !IsInstanceValid(_godotImage) || !IsInstanceValid(_godotTexture)) return;
+        
+        // Resize image if dimensions changed
+        if (_godotImage.GetWidth() != _decoder?.Width || _godotImage.GetHeight() != _decoder?.Height)
         {
-            // Resize to scaled dimensions if necessary
-            if (tempImage.GetWidth() != _videoComponent.ScaledWidth || tempImage.GetHeight() != _videoComponent.ScaledHeight)
+            _godotImage = Image.CreateEmpty(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8);
+            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+        }
+        
+        // This is where video modifications / filters can take place.
+        if (_fadeAlpha < 1.0f)
+        {
+            // Apply fade by modifying alpha channel
+            for (int i = 3; i < rgbaData.Length; i += 4)
             {
-                tempImage.Resize(_videoComponent.ScaledWidth, _videoComponent.ScaledHeight, Godot.Image.Interpolation.Bilinear);
+                rgbaData[i] = (byte)(rgbaData[i] * _fadeAlpha);
             }
-
-            // Convert to RGBA8
-            tempImage.Convert(Godot.Image.Format.Rgba8);
-
-            // Update the video image and texture
-            _videoImage.SetData(_videoComponent.ScaledWidth, _videoComponent.ScaledHeight, false, Godot.Image.Format.Rgba8, tempImage.GetData());
-            _videoTexture.Update(_videoImage);
-
-            // Update texture on main thread if needed
-            this.CallDeferred(nameof(UpdateTexture));
-        }
-        finally
-        {
-            tempImage.Dispose();
-        }
-    }
-
-    private void UpdateTexture()
-    {
-        // Texture is already updated, but if needed for deferred
-    }
-
-    public async void Play()
-    {
-        lock (_lock)
-        {
-            if (_hasStarted) return;
-            _hasStarted = true;
         }
 
-        if (_videoComponent.FadeInDuration > 0) // start with fade-in if specified
+        _godotImage.SetData(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8, rgbaData);
+        _godotTexture.Update(_godotImage);
+        
+        
+        if (_targetLayers.Count == 0)
         {
-            await FadeInAsync(_videoComponent.FadeInDuration);
+            GD.Print($"ActiveVideoPlayback:OnLayerExited - No target layers present, calling completed");
+            EmitSignalCompleted();
+            Clean();
         }
-        else
+        
+        //Push to all layers on various outputs
+        foreach (var layer in _targetLayers)
         {
-            //Decoder.PlayAsync();
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Play();
-            _playTimer.Start();
-            GD.Print($"ActiveVideoPlayback:Play - Playback started without fade-in");
+            layer.Value.Texture = _godotTexture;
         }
     }
 
@@ -239,12 +261,11 @@ public partial class ActiveVideoPlayback : Node
     {
         lock (_lock)
         {
-            Decoder.Pause();
+            _decoder.Pause();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Pause();
             //_pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
             IsPaused = true;
             //Decoder.ClearQueues(); // Clear frame queue to avoid stale data on resume
-            _playTimer.Stop();
             GD.Print($"ActiveVideoPlayback:Pause - Playback paused at estimated {_pausedAtUs / 1000} ms");
         }
     }
@@ -255,14 +276,13 @@ public partial class ActiveVideoPlayback : Node
         {
             if (_pausedAtUs > 0)
             {
-                Decoder.Seek(_pausedAtUs); // Seek back to paused position
+                _decoder.Seek(_pausedAtUs); // Seek back to paused position
                 if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Seek(_pausedAtUs);
                 _pausedAtUs = 0;
             }
-            Decoder.Resume();
+            _decoder.Resume();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Resume();
             IsPaused = false;
-            _playTimer.Start();
             GD.Print($"ActiveVideoPlayback:Resume - Playback resumed");
         }
     }
@@ -298,7 +318,7 @@ public partial class ActiveVideoPlayback : Node
             await FadeOutAsync(fadeDuration);
             return;
         }
-        //Decoder.Stop();
+        _decoder.Stop();
         if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
         Clean();
     }
@@ -314,23 +334,26 @@ public partial class ActiveVideoPlayback : Node
 
         float startVol = 0f;
         float endVol = 1.0f;
+        float startAlpha = _fadeAlpha;
+        float endAlpha = 1.0f;
         Stopwatch timer = Stopwatch.StartNew();
 
         try
         {
             //Decoder.PlayAsync(); // Start playback
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Play();
-            _playTimer.Start();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, endVol, t));
+                _fadeAlpha = Mathf.Lerp(startAlpha, endAlpha, t);
                 await Task.Delay(16, _fadeCts.Token); // ~60fps
             }
 
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(endVol);
+                _fadeAlpha = endAlpha;
                 GD.Print($"ActiveVideoPlayback:FadeInAsync - Fade-in completed to {endVol} over {duration} seconds");
             }
         }
@@ -363,6 +386,8 @@ public partial class ActiveVideoPlayback : Node
         }
 
         float startVol = _volume;
+        float startAlpha = _fadeAlpha;
+        float endAlpha = 0.0f;
         Stopwatch timer = Stopwatch.StartNew();
 
         try
@@ -371,12 +396,14 @@ public partial class ActiveVideoPlayback : Node
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, 0f, t));
+                _fadeAlpha = Mathf.Lerp(startAlpha, endAlpha, t);
                 await Task.Delay(16, _fadeCts.Token); // ~60fps
             }
 
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(0f);
+                _fadeAlpha = endAlpha;
                 //Decoder.Stop();
                 if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
                 Clean();
@@ -410,128 +437,19 @@ public partial class ActiveVideoPlayback : Node
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.SetVolume(volume);
         }
     }
-
-    public double GetRemainingTime()
-    {
-        lock (_lock)
-        {
-            if (_videoComponent.Loop) return -1.0;
-
-            double segmentDuration = _useCustomEnd ? (_endTimeMs - _startTimeMs) / 1000.0 : _videoComponent.Metadata.Duration - _videoComponent.StartTime;
-            double remainingInSegment = segmentDuration - (GetPlaybackTimeMs() / 1000.0);
-            int remainingCounts = EffectivePlayCount - _currentPlayCount;
-
-            return remainingInSegment + remainingCounts * segmentDuration;
-        }
-    }
-
-    public long GetPlaybackTimeMs()
-    {
-        if (Decoder == null) return 0;
-        //long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate; // Approximate
-        //return (Decoder.CurrentTime - queuedUs) / 1000;
-        return 0;
-    }
-
-    private long GetQueuedUs()
-    {
-        //long queuedUs = Decoder.QueuedFrames * 1_000_000L / (long)_videoComponent.Metadata.FrameRate;
-        //return queuedUs;
-        return 0;
-    }
+    
 
     /// <summary>
-    /// Seeks to the specified timestamp in microseconds, clearing queues to avoid stale data.
+    /// Seeks to the specified timestamp in seconds, clearing queues to avoid stale data.
     /// Works while playing or paused; playback state is preserved.
     /// </summary>
-    /// <param name="timestampUs">Target timestamp in us.</param>
-    public void Seek(long timestampUs)
+    /// <param name="time">Target timestamp in seconds.</param>
+    public void Seek(double time)
     {
-        try
-        {
-            //bool wasPlaying = Decoder.IsPlaying && !Decoder.IsPaused; // (preserve state)
-            Pause(); // (pause to safely seek)
-            //Decoder.ClearQueues(); // (clear frame queue)
-            Decoder.Seek(timestampUs);
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Seek(timestampUs);
-            _pausedAtUs = timestampUs; // Set paused position to the seek target
-            //if (wasPlaying) Resume(); // (resume if was playing)
-            GD.Print($"ActiveVideoPlayback:Seek - Sought to {timestampUs} us");
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"ActiveVideoPlayback:Seek - Seek error: {ex.Message}");
-        }
+        _decoder.Seek(time);
     }
 
-    public void Clean()
-    {
-        lock (_lock)
-        {
-            GD.Print($"ActiveVideoPlayback:Clean - Clean Start");
-            if (IsStopped)
-            {
-                GD.Print("ActiveVideoPlayback:Clean - Already cleaned");
-                return;
-            }
-
-            IsStopped = true;
-            _playTimer.Stop(); // Stop timer first
-
-            // Stop and dispose decoder
-            if (Decoder != null)
-            {
-                try
-                {
-                    //Decoder.Stop();
-                    GD.Print($"ActiveVideoPlayback:Clean - Decoder stopped");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveVideoPlayback:Clean - Exception stopping Decoder: {ex.Message}");
-                    GD.PrintErr($"ActiveVideoPlayback:Clean - Decoder stop failed: {ex.Message}");
-                }
-
-                try
-                {
-                    Decoder.Dispose();
-                    GD.Print($"ActiveVideoPlayback:Clean - Decoder disposed");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveVideoPlayback:Clean - Exception disposing Decoder: {ex.Message}");
-                    GD.PrintErr($"ActiveVideoPlayback:Clean - Decoder dispose failed: {ex.Message}");
-                }
-                Decoder = null; // Prevent accidental reuse
-            }
-
-            // Stop and dispose embedded audio
-            if (_embeddedAudioPlayback != null)
-            {
-                try
-                {
-                    _embeddedAudioPlayback.Stop();
-                    GD.Print($"ActiveVideoPlayback:Clean - Embedded audio stopped");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveVideoPlayback:Clean - Exception stopping embedded audio: {ex.Message}");
-                }
-                _embeddedAudioPlayback = null;
-            }
-
-            // Remove video rect from layer
-            if (_videoRect != null && _targetLayer != null)
-            {
-                _targetLayer.RemoveContent(_videoRect);
-                _videoRect.QueueFree();
-                _videoRect = null;
-            }
-        }
-
-        EmitSignal(SignalName.Completed); // Emit signal immediately before freeing
-        CallDeferred("free");
-    }
+    
 
     /// <summary>
     /// Thread safe get of current fade out to stop state
@@ -594,6 +512,49 @@ public partial class ActiveVideoPlayback : Node
                 _currentPlayCount = value;
             }
         }
+    }
+
+    public double GetDuration()
+    {
+        return _decoder.Duration;
+    }
+    
+    private void ClearDecoder()
+    {
+        if (_decoder != null)
+        {
+            _decoder.FrameReady -= OnFrameReady;
+            _decoder.TimeUpdated -= OnTimeUpdated;
+            _decoder.EndReached -= OnEndReached;
+            _decoder.StopDecodingAsync().Wait();
+            _decoder.Dispose();
+            _decoder = null;
+        }
+    }
+
+    private void ClearTargetLayers()
+    {
+        // Clear all generated target layers
+        foreach (var layerControl in _targetLayers.Keys)
+        {
+            layerControl.QueueFree();
+        }
+        _targetLayers.Clear();
+    }
+    
+    public void Clean()
+    {
+        ClearDecoder();
+        ClearTargetLayers();
+        EmitSignal(SignalName.Completed); // Emit signal immediately before freeing
+        CallDeferred("free");
+    }
+
+    public override void _ExitTree()
+    {
+        _isExiting = true;
+        ClearDecoder();
+        ClearTargetLayers();
     }
 
 }

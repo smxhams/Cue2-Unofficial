@@ -92,9 +92,6 @@ public partial class GlobalData : Node
 		CueLightManager = new CueLightManager();
 		AddChild(CueLightManager);
 
-		VideoCanvas = new Canvas();
-		AddChild(VideoCanvas);
-
 		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 		
 		int currentScreen = DisplayServer.WindowGetCurrentScreen(GetWindow().GetWindowId());
@@ -125,16 +122,8 @@ public partial class GlobalData : Node
 
 	}
 
-	public override void _ExitTree()
-	{
-		if (VideoCanvas != null)
-		{
-			VideoCanvas.QueueFree();
-		}
-	}
-
 	public static string ParseHotkey(string action)
-	// Parse Hotkey will retyurn simple text representation of an input action.
+	// Parse Hotkey will return simple text representation of an input action.
 	// Currently used to display hotkeys in UI
 	{
 		// Check if the action exists in the Input Map
@@ -181,11 +170,5 @@ public partial class GlobalData : Node
 		
 		return dict;
 	}
-
-	/*public string Version()
-	{
-		return Version();
-	}*/
-
 
 }

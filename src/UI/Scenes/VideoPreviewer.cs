@@ -65,6 +65,8 @@ public partial class VideoPreviewer : Control
         _decoder.TimeUpdated += OnTimeUpdated;
         _decoder.EndReached += OnEndReached;
         
+        _playPauseButton.Icon = GetThemeIcon("Play", "AtlasIcons");
+        
         // Start decoding asynchronously
         _ = _decoder.StartDecodingAsync(file);
     }
@@ -76,7 +78,7 @@ public partial class VideoPreviewer : Control
 
     private void SetAreas(int layerId)
     {
-        var canvas = _globalData.VideoCanvas;
+        var canvas = DisplaysManager.Canvas;
         var layer = DisplaysManager.GetLayerById(layerId);
         
         var viewArea = _viewArea.Size;//GetParent<VBoxContainer>().Size;
@@ -84,8 +86,6 @@ public partial class VideoPreviewer : Control
         var scale = Mathf.Min(viewArea.X / canvasSize.X, viewArea.Y / canvasSize.Y);
         var scaledSize = canvasSize * scale;
         
-        // Scale is coming up 0, checkl sizes are being gotten correct. 
-
         _canvasArea.Size = scaledSize;
 
         var scaledLayerPos = new Vector2(layer.CanvasPosition.X * scale, layer.CanvasPosition.Y * scale);
@@ -94,7 +94,7 @@ public partial class VideoPreviewer : Control
         _previewTextRect.Position = scaledLayerPos;
         _previewTextRect.Size = scaledLayerSize;
 
-        _seekProgressBar.CustomMinimumSize = new Vector2(scaledSize.X - 116, _seekProgressBar.CustomMinimumSize.Y);
+        _seekProgressBar.CustomMinimumSize = new Vector2(scaledSize.X - 93, _seekProgressBar.CustomMinimumSize.Y);
     }
 
     private void OnFrameReady(byte[] data)
@@ -220,6 +220,11 @@ public partial class VideoPreviewer : Control
             _decoder.StopDecodingAsync().Wait();
             _decoder.Dispose();
             _decoder = null;
+            
+            _seekProgressBar.Value = 0;
+            _godotImage = Image.CreateEmpty(1, 1, false, Image.Format.Rgba8);
+            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+            _previewTextRect.Texture = _godotTexture;
         }
     }
 
