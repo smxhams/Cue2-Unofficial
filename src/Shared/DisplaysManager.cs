@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using System.Collections.Generic;
+using System.Linq;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using SDL3;
@@ -71,10 +72,11 @@ public partial class DisplaysManager : Node
         
         Outputs.Add(output);
         output.Show();
+        output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
         
 
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added video output '{output.OutputName}' for monitor {monitorIndex}.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"DisplaysManager: Added video output '{output.OutputName}' for monitor {monitorIndex}.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         return output;
     }
@@ -360,6 +362,7 @@ public partial class DisplaysManager : Node
             var gPrimI = DisplayServer.GetPrimaryScreen();
             var gPrimPos = DisplayServer.ScreenGetPosition(gPrimI);
             var sPrimI = SDL.GetPrimaryDisplay();
+            GD.Print($"DisplaysManager:GetAvailableDisplays - Primary display: {sPrimI}");
             SDL.GetDisplayBounds(sPrimI, out SDL.Rect sPrimRect);
 
             var offsetX = gPrimPos.X - sPrimRect.X;
@@ -372,6 +375,7 @@ public partial class DisplaysManager : Node
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"Mismatch in display counts: Godot {screenCount}, SDL {sdlCount}. Using Godot count.", 1);
+                GD.Print($"{SDL.GetError()}");
             }
 
             // Get SDL display data
@@ -458,7 +462,6 @@ public partial class DisplaysManager : Node
     public Godot.Collections.Dictionary GetData()
     {
         var data = new Godot.Collections.Dictionary();
-        GD.Print($"SAVING CANVAS");
         var canvasData = Canvas.GetData();
         data.Add("Canvas", canvasData);
         
@@ -488,7 +491,6 @@ public partial class DisplaysManager : Node
     {
         if (data.ContainsKey("Canvas"))
         {
-            GD.Print($"LOADING CANVAS");
             var canvasData = (Godot.Collections.Dictionary) data["Canvas"];
             Canvas.LoadFromData(canvasData);
         }
@@ -530,6 +532,12 @@ public partial class DisplaysManager : Node
                 output.SetCanvasReference(Canvas);
                 output.Show();
                 DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
+            }
+            // Update _nextOutputId to avoid ID conflicts
+            if (Outputs.Count > 0)
+            {
+                int maxId = Outputs.Max(o => o.OutputId);
+                VideoOutputDevice.SetNextOutputId(maxId + 1);
             }
         }
 

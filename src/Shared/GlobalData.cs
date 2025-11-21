@@ -6,6 +6,7 @@ using Cue2.Base.Classes;
 using Cue2.Base.CommandInterpreter;
 using Godot;
 using Godot.Collections;
+using SDL3;
 
 namespace Cue2.Shared;
 // This script manages global data it contains:
@@ -74,6 +75,17 @@ public partial class GlobalData : Node
 	{
 		// Init MediaManager class so can be referenced everywhere
 		//if (autoloadOnStartup == true){loadShow("Last");}
+
+		// Initialize SDL with audio, events, and video
+		if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events | SDL.InitFlags.Video) == false)
+		{
+			var errorMsg = $"SDL Init failed: {SDL.GetError()}";
+			GD.Print("GlobalData:_Ready - " + errorMsg);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), errorMsg, 3);
+			return;
+		}
+		GD.Print("GlobalData:_Ready - SDL initialized successfully.");
+
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 		
@@ -120,6 +132,12 @@ public partial class GlobalData : Node
 			}
 		}
 
+	}
+
+	public override void _ExitTree()
+	{
+		if (SDL.WasInit(SDL.InitFlags.Audio) != 0) SDL.Quit();
+		GD.Print("GlobalData:_ExitTree - Cleaned up SDL.");
 	}
 
 	public static string ParseHotkey(string action)

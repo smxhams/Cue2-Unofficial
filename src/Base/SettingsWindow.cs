@@ -122,14 +122,6 @@ public partial class SettingsWindow : Window
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
 		tiVideoDevice.SetText(0, "Canvas Editor");
 		
-		// Routing
-		TreeItem tiRoutes = _setTree.CreateItem(root);
-		tiRoutes.SetText(0, "Routes");
-		TreeItem tiAudioRoutes = _setTree.CreateItem(tiRoutes);
-		tiAudioRoutes.SetText(0, "Audio Routes");
-		TreeItem tiVideoRoutes = _setTree.CreateItem(tiRoutes);
-		tiVideoRoutes.SetText(0, "Video Routes");
-		
 		// Connections
 		TreeItem tiConnections = _setTree.CreateItem(root);
 		tiConnections.SetText(0, "Connections");
@@ -145,13 +137,13 @@ public partial class SettingsWindow : Window
 		// Cue defaults
 		TreeItem tiDefaults = _setTree.CreateItem(root);
 		tiDefaults.SetText(0, "Defaults");
-		tiDefaults.SetTooltipText(0, "Set default behaviors and paramters acroll shells and cues universaly.");
+		tiDefaults.SetTooltipText(0, "Set default behaviors and paramaters across shells and cues universaly.");
 		TreeItem tiAudioCueDafaults = _setTree.CreateItem(tiDefaults);
 		tiAudioCueDafaults.SetText(0, "Audio Cues");
 		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for audio cues.");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiAudioCueDafaults.SetText(0, "Defaults");
-		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for video cues.");
+		tiVideoCueDefaults.SetText(0, "Video Defaults");
+		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues.");
 	}
 
 	public override void _ExitTree()

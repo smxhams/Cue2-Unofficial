@@ -70,7 +70,7 @@ public class VideoTargetLayer
         data.Add("SizeX", Size.X);
         data.Add("SizeY", Size.Y);
         data.Add("Transparent", Transparent);
-        GD.Print($"SAVING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
+        //GD.Print($"VideoTargetLayer:GetData - SAVING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
         return data;
     }
 
@@ -94,7 +94,7 @@ public class VideoTargetLayer
         CanvasPosition = new Vector2I(canvPosX, canvPosY);
 
         Transparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
-        GD.Print($"LOADING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
+        //GD.Print($"VideoTargetLayer:LoadFromData - LOADING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
 
     }
     

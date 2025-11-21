@@ -328,7 +328,10 @@ public partial class SettingsCanvasEditor : ScrollContainer
             posYLineEdit.Text = output.CanvasPosition.Y.ToString();
             sizeXLineEdit.Text = output.OutputSize.X.ToString();
             sizeYLineEdit.Text = output.OutputSize.Y.ToString();
-            _activeOutputs[monitorIndex] = output;
+            if (isCurrent)
+            {
+                _activeOutputs[monitorIndex] = output;
+            }
         }
         else
         {
@@ -347,7 +350,7 @@ public partial class SettingsCanvasEditor : ScrollContainer
 
         // UseOutputCheckButton
         var useOutputCheckButton = instance.GetNode<CheckButton>("%UseOutputCheckButton");
-        useOutputCheckButton.ButtonPressed = output != null;
+        useOutputCheckButton.ButtonPressed = output != null && isCurrent;
         useOutputCheckButton.Toggled += (bool toggled) => {
             UpdateUIForUseOutput(instance, toggled);
             // Update border color

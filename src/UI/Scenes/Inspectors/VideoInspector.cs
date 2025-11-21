@@ -277,6 +277,12 @@ public partial class VideoInspector : Control
 				_targetLayerOptionButton.Select(i);
 				break;
 			}
+		}
+		// Handle missing layer
+		if (_targetLayerOptionButton.Selected == -1)
+		{
+			_targetLayerOptionButton.AddItem($"!!! Missing layer: {_focusedVideoComponent.TargetLayerId}");
+			_targetLayerOptionButton.Select(_targetLayerOptionButton.ItemCount - 1);
 		} 
 
 		// Set scale and offset values
@@ -685,9 +691,9 @@ public partial class VideoInspector : Control
 			_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
 			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
 		}
-		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.Patch != null)
+		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.PatchId != -1)
 		{
-			_outputOptionButton.AddItem($"!!! Missing patch: {_focusedVideoComponent.Patch.Name}");
+			_outputOptionButton.AddItem($"!!! Missing patch: ID {_focusedVideoComponent.PatchId}");
 			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
 		}
 	}

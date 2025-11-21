@@ -151,14 +151,21 @@ public partial class ActiveVideoPlayback : Node
             // Connect to TreeExited to remove reference when layer is destroyed
             layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
         }
-        
-        
+
+        if (_targetLayers.Count == 0)
+        {
+            _isExiting = true;
+            EmitSignalCompleted();
+            Clean();
+            return;
+        }
+
         // Init embedded audio if present
         if (_embeddedAudioPlayback != null)
         {
             await _embeddedAudioPlayback.InitAsync();
         }
-        
+
         _decoder.Resume();
 
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing complete");
@@ -194,6 +201,11 @@ public partial class ActiveVideoPlayback : Node
                 GD.Print($"ActiveVideoPlayback:OnLayerExited - Removed reference to destroyed layer");
                 break;
             }
+        }
+        if (_targetLayers.Count == 0 && !_isExiting)
+        {
+            EmitSignalCompleted();
+            Clean();
         }
     }
 
@@ -243,9 +255,9 @@ public partial class ActiveVideoPlayback : Node
         _godotTexture.Update(_godotImage);
         
         
-        if (_targetLayers.Count == 0)
+        if (_targetLayers.Count == 0 && !_isExiting)
         {
-            GD.Print($"ActiveVideoPlayback:OnLayerExited - No target layers present, calling completed");
+            GD.Print($"ActiveVideoPlayback:PushFrame - No target layers present, calling completed");
             EmitSignalCompleted();
             Clean();
         }
@@ -544,6 +556,7 @@ public partial class ActiveVideoPlayback : Node
     
     public void Clean()
     {
+        _isExiting = true; // Prevent further operations
         ClearDecoder();
         ClearTargetLayers();
         EmitSignal(SignalName.Completed); // Emit signal immediately before freeing

@@ -33,15 +33,6 @@ public partial class AudioDevices : Node
 	    _globalData = GetNode<GlobalData>("/root/GlobalData");
 	    _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	    _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
-	    
-	    if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events) == false)
-	    {
-		    var errorMsg = $"SDL Init failed: {SDL.GetError}";
-		    GD.Print("AudioDevices:_Ready - " + errorMsg);
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), errorMsg, 3);
-		    return;
-	    }
-	    GD.Print("AudioDevices:_Ready - SDL initialized successfully.");
 
 	    _pollTimer = new Timer();
 	    _pollTimer.WaitTime = 0.5;
@@ -505,8 +496,7 @@ public partial class AudioDevices : Node
 		{
 			CloseAudioDevice(device.DeviceId);
 		}
-		if (SDL.WasInit(SDL.InitFlags.Audio) != 0) SDL.Quit();
-		GD.Print("AudioDevices:_ExitTree - Cleaned up SDL and devices.");
+		GD.Print("AudioDevices:_ExitTree - Cleaned up devices.");
 	}
 	
 	

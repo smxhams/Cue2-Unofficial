@@ -41,12 +41,12 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// </summary>
     public bool OutputTransparent { get; set; } = false;
     
-    /// <summary>
-    /// TextureRect to display the cropped canvas region.
-    /// </summary>
-    private TextureRect _outputRect;
-
     private static int _nextOutputId = 0;
+
+    public static void SetNextOutputId(int id)
+    {
+        _nextOutputId = id;
+    }
 
     private Control _sceneRoot;
 
@@ -66,17 +66,10 @@ public partial class VideoOutputDevice : Window, IDisposable
     {
         OutputId = _nextOutputId++;
         Mode = ModeEnum.Windowed; // Windowed for proper sizing and positioning
-        _outputRect = new TextureRect();
-        _outputRect.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
-        _outputRect.StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
-        //AlwaysOnTop = true;
-        AddChild(_outputRect);
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
 
         InitSceneRoot();
-
-        GD.Print($"VideoOutputDevice:Constructor - Initialized output device '{OutputName}' with ID {OutputId}.");
     }
 
     private void InitSceneRoot()
@@ -86,7 +79,6 @@ public partial class VideoOutputDevice : Window, IDisposable
         _sceneRoot.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _sceneRoot.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
     }
-
 
     /// <summary>
     /// Sets the reference to the parent canvas.
@@ -145,7 +137,6 @@ public partial class VideoOutputDevice : Window, IDisposable
             if (clippedRect.Size.X <= 0 || clippedRect.Size.Y <= 0)
             {
                 // No valid region to display
-                _outputRect.Texture = null;
                 DisplayServer.WindowSetSize(new Vector2I(0, 0), GetWindowId());
                 GD.Print($"VideoOutputDevice:UpdateOutputRegion - No valid region for output '{OutputName}' within canvas bounds.");
                 return;
@@ -318,14 +309,6 @@ public partial class VideoOutputDevice : Window, IDisposable
     {
         // Hide the window
         Hide();
-
-        // Remove child TextureRect
-        if (_outputRect != null)
-        {
-            RemoveChild(_outputRect);
-            _outputRect.QueueFree();
-            _outputRect = null;
-        }
 
         // Remove test patterns
         if (_testPattern != null)
