@@ -285,7 +285,8 @@ public partial class ActiveCue : GodotObject
             }
             var playback = _activeVideoComponents[panel];
 
-            // TODO: Handle embedded audio
+            await playback.InitAsync();
+            await playback.PlayAsync();
         }
         catch (Exception ex)
         {

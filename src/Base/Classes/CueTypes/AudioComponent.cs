@@ -124,7 +124,6 @@ public class AudioComponent : ICueComponent
             Metadata.Codec = metaDict.ContainsKey("Codec") ? (string)metaDict["Codec"] : "unknown"; 
             Metadata.Format = metaDict.ContainsKey("Format") ? (string)metaDict["Format"] : "unknown"; 
             // Sync legacy fields from metadata (for backward compat) 
-            GD.Print("AudioComponent:LoadFromData - Metadata loaded from save data.");
         } 
         else 
         { 

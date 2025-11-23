@@ -88,9 +88,10 @@ public partial class SettingsWindow : Window
 	private string GetSelectedMenu(string action) =>
 		action switch // Name corresponded to node name in UI.
 		{
+			"General" => "SettingsGeneral",
+			"Audio" => "SettingsAudio",
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Canvas Editor" => "CanvasEditor",
-			"General" => "SettingsGeneral",
 			"Cue Lights" => "CueLights",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};

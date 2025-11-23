@@ -39,14 +39,26 @@ public class VideoComponent : ICueComponent
     /// <summary>Whether to use audio if available</summary>
     public bool UseAudio { get; set; } = true;
 
+    /// <summary>Enable embedded audio playback synced to video.</summary>
+    public bool UseEmbeddedAudio { get; set; } = false;
+
     /// <summary>Audio output patch</summary>
     public AudioOutputPatch Patch { get; set; } = null;
+
+    /// <summary>Patch for embedded audio output routing.</summary>
+    public AudioOutputPatch? AudioPatch { get; set; }
     /// <summary>Audio output patch ID</summary>
     public int PatchId { get; set; } = -1;
     /// <summary>Direct audio output device name</summary>
     public string DirectOutput { get; set; } = null;
     /// <summary>Audio routing matrix with volumes</summary>
     public CuePatch Routing { get; set; } = null;
+
+    /// <summary>Cue patch matrix for embedded audio channels.</summary>
+    public CuePatch? AudioRouting { get; set; }
+
+    /// <summary>Volume multiplier for embedded audio (0-1).</summary>
+    public float AudioVolume { get; set; } = 1f;
     /// <summary>Serialised waveform data for display</summary>
     public byte[] WaveformData { get; set; } = null;
 
@@ -79,9 +91,14 @@ public class VideoComponent : ICueComponent
         data.Add("OffsetY", OffsetY);
         data.Add("HasAudio", HasAudio);
         data.Add("UseAudio", UseAudio);
+        data.Add("UseEmbeddedAudio", UseEmbeddedAudio);
         if (Patch != null)
         {
             data.Add("PatchId", PatchId);
+        }
+        if (AudioPatch != null)
+        {
+            data.Add("AudioPatchId", AudioPatch.Id); // Assuming AudioPatch has Id
         }
         if (DirectOutput != null)
         {
@@ -91,6 +108,11 @@ public class VideoComponent : ICueComponent
         {
             data.Add("Routing", Routing.GetData());
         }
+        if (AudioRouting != null)
+        {
+            data.Add("AudioRouting", AudioRouting.GetData());
+        }
+        data.Add("AudioVolume", AudioVolume);
         data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
         if (HasAudio && EmbeddedAudio != null)
         {
@@ -139,6 +161,9 @@ public class VideoComponent : ICueComponent
         OffsetY = data.ContainsKey("OffsetY") ? (int)data["OffsetY"] : 0;
         HasAudio = data.ContainsKey("HasAudio") ? (bool)data["HasAudio"] : false;
         UseAudio = data.ContainsKey("UseAudio") ? (bool)data["UseAudio"] : true;
+        UseEmbeddedAudio = data.ContainsKey("UseEmbeddedAudio") ? (bool)data["UseEmbeddedAudio"] : false;
+        PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
+        var audioPatchId = data.ContainsKey("AudioPatchId") ? (int)data["AudioPatchId"] : -1;
         if (HasAudio && data.ContainsKey("EmbeddedAudio"))
         {
             EmbeddedAudio = new AudioComponent();
@@ -150,6 +175,12 @@ public class VideoComponent : ICueComponent
             Routing = new CuePatch();
             Routing.LoadFromData((Dictionary)data["Routing"]);
         }
+        if (data.ContainsKey("AudioRouting"))
+        {
+            AudioRouting = new CuePatch();
+            AudioRouting.LoadFromData((Dictionary)data["AudioRouting"]);
+        }
+        AudioVolume = data.ContainsKey("AudioVolume") ? (float)(double)data["AudioVolume"] : 1f;
 
         if (data.ContainsKey("Metadata"))
         {
@@ -165,7 +196,6 @@ public class VideoComponent : ICueComponent
             Metadata.AudioSampleRate = metaDict.ContainsKey("AudioSampleRate") ? (int)metaDict["AudioSampleRate"] : 0;
             Metadata.AudioBitDepth = metaDict.ContainsKey("AudioBitDepth") ? (int)metaDict["AudioBitDepth"] : 0;
             Metadata.AudioCodec = metaDict.ContainsKey("AudioCodec") ? (string)metaDict["AudioCodec"] : string.Empty;
-            GD.Print("VideoComponent:LoadFromData - Metadata loaded from save data.");
         }
         else
         {

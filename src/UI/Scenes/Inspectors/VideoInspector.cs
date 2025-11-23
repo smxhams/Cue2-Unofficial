@@ -219,7 +219,7 @@ public partial class VideoInspector : Control
 		// Video Component Found
 		_focusedVideoComponent = _focusedCue.Components.OfType<VideoComponent>().First();
 		var file = _focusedVideoComponent.VideoFile;
-
+		
 		if (_focusedVideoComponent.Metadata == null)
 		{
 			var refreshedMeta = await _mediaEngine.GetVideoFileMetadataAsync(file);
@@ -305,7 +305,8 @@ public partial class VideoInspector : Control
 		}
 		
 
-		var volumeDb = UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume);
+		var volume = _focusedVideoComponent.UseEmbeddedAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
+		var volumeDb = UiUtilities.LinearToDb((float)volume);
 		_volumeInput.Text = $"{volumeDb}dB";
 
 		// Generate waveform data if not cached
@@ -329,15 +330,17 @@ public partial class VideoInspector : Control
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Using cached waveform for {_focusedVideoComponent.VideoFile}", 0);
 		}
-		await DrawWaveform();
 
 		// Handle audio UI based on presence of audio in video file
 		if (_focusedVideoComponent.HasAudio)
 		{
+			GD.Print($"VideoInspector:ShellSelected - Patch: {_focusedVideoComponent.PatchId}");
 			_useAudioCheckButton.Visible = true;
-			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
-			_useAudioLabel.Text = "Use Audio";
+			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseEmbeddedAudio;
+			_useAudioLabel.Text = "Use Embedded Audio";
 			PopulateOutputOptions();
+			await DrawWaveform(); // This can move to if useaudio selected.
+			if (_focusedVideoComponent.UseEmbeddedAudio) ToggleAccordian(_audioAccordian, _audioCollapseButton);
 		}
 		else
 		{
@@ -554,11 +557,7 @@ public partial class VideoInspector : Control
 	/// <param name="state">The toggle state.</param>
 	private void OnUseAudioToggled(bool state)
 	{
-		_focusedVideoComponent.UseAudio = state;
-		if (state)
-		{
-			ToggleAccordian(_audioAccordian, _audioCollapseButton);
-		}
+		_focusedVideoComponent.UseEmbeddedAudio = state;
 	}
 
 	/// <summary>
@@ -584,7 +583,14 @@ public partial class VideoInspector : Control
 			var volume = UiUtilities.DbToLinear(dbValue.ToString());
 			var dbReturn = UiUtilities.LinearToDb(volume);
 			textField.Text = $"{dbReturn}dB";
-			_focusedVideoComponent.Volume = volume;
+			if (_focusedVideoComponent.UseEmbeddedAudio)
+			{
+				_focusedVideoComponent.AudioVolume = volume;
+			}
+			else
+			{
+				_focusedVideoComponent.Volume = volume;
+			}
 			textField.ReleaseFocus();
 		}
 		catch (Exception ex)
@@ -607,8 +613,15 @@ public partial class VideoInspector : Control
 			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {patchId}");
 			if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
 			{
-				_focusedVideoComponent.Patch = patch;
-				_focusedVideoComponent.PatchId = patchId;
+				if (_focusedVideoComponent.UseEmbeddedAudio)
+				{
+					_focusedVideoComponent.AudioPatch = patch;
+				}
+				else
+				{
+					_focusedVideoComponent.Patch = patch;
+					_focusedVideoComponent.PatchId = patchId;
+				}
 				_focusedVideoComponent.DirectOutput = null;
 				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {patch.Name}");
 			}
@@ -708,7 +721,7 @@ public partial class VideoInspector : Control
 			child.QueueFree();
 		}
 
-		if (_focusedVideoComponent == null || !_focusedVideoComponent.HasAudio || !_focusedVideoComponent.UseAudio)
+		if (_focusedVideoComponent == null || !_focusedVideoComponent.HasAudio || !_focusedVideoComponent.UseEmbeddedAudio)
 		{
 			GD.Print($"VideoInspector:BuildRoutingMatrix - No focused video component, no audio, or audio not enabled");
 			_routingContainer.Visible = false;
@@ -725,10 +738,20 @@ public partial class VideoInspector : Control
 		List<string> outputLabels = new List<string>();
 
 		// Audio Output Patch
-		if (_focusedVideoComponent.PatchId != -1)
+		AudioOutputPatch patch = null;
+		if (_focusedVideoComponent.UseEmbeddedAudio)
+		{
+			patch = _focusedVideoComponent.AudioPatch;
+			if (patch == null)
+			{
+				_routingContainer.Visible = false;
+				return;
+			}
+		}
+		else if (_focusedVideoComponent.PatchId != -1)
 		{
 			// Check if selected patch exists, if not clean the video component of it.
-			if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out var patch))
+			if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out patch))
 			{
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
 				_focusedVideoComponent.Patch = null;
@@ -738,6 +761,10 @@ public partial class VideoInspector : Control
 				_routingContainer.Visible = false;
 				return;
 			}
+		}
+
+		if (patch != null)
+		{
 			outputChannels = patch.Channels.Count;
 			outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
 		}
@@ -770,7 +797,7 @@ public partial class VideoInspector : Control
 		_routingContainer.Visible = true;
 
 		// Validate routing (CuePatch) matches what is expected
-		var routing = _focusedVideoComponent.Routing;
+		var routing = _focusedVideoComponent.UseEmbeddedAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
 		bool needsUpdate = routing == null ||
 		                   routing.OutputChannels != outputChannels ||
 		                   !routing.OutputLabels.SequenceEqual(outputLabels) ||
@@ -784,7 +811,14 @@ public partial class VideoInspector : Control
 
 			// Create new CuePatch with current dimensions
 			routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
-			_focusedVideoComponent.Routing = routing;
+			if (_focusedVideoComponent.UseEmbeddedAudio)
+			{
+				_focusedVideoComponent.AudioRouting = routing;
+			}
+			else
+			{
+				_focusedVideoComponent.Routing = routing;
+			}
 
 			if (oldRouting != null)
 			{
@@ -823,7 +857,8 @@ public partial class VideoInspector : Control
 			for (int col = 0; col < outputChannels; col++)
 			{
 				var volumeEdit = new LineEdit();
-				var linearVol = _focusedVideoComponent.Routing.GetVolume(row, col);
+				var routingForGet = _focusedVideoComponent.UseEmbeddedAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
+				var linearVol = routingForGet.GetVolume(row, col);
 				if (linearVol > 0.0f)
 				{
 					var dbVol = UiUtilities.LinearToDb(linearVol);
@@ -863,7 +898,8 @@ public partial class VideoInspector : Control
 			}
 
 			var linear = UiUtilities.DbToLinear(dbValue.ToString());
-			_focusedVideoComponent.Routing.SetVolume(inputCh, outputCh, linear);
+			var routingForSet = _focusedVideoComponent.UseEmbeddedAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
+			routingForSet.SetVolume(inputCh, outputCh, linear);
 			if (linear > 0.0f)
 			{
 				var dbReturn = UiUtilities.LinearToDb(linear);

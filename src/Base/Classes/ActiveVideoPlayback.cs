@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,8 +40,11 @@ public partial class ActiveVideoPlayback : Node
     private ImageTexture _videoTexture;
 
     // Embedded audio handling
-    private ActiveAudioPlayback _embeddedAudioPlayback;
-    private AudioComponent _embeddedAudioComponent;
+    private FFmpegAudioDecoder _audioDecoder;
+    private Dictionary<uint, IntPtr> _audioStreams = new();
+    private float[] _audioChannelGains;
+    private CancellationTokenSource _audioCts;
+    private Task _audioConsumerTask;
 
     private Dictionary<Control, TextureRect> _targetLayers = new();
 
@@ -77,12 +81,19 @@ public partial class ActiveVideoPlayback : Node
         // Blank constructor for Godot
     }
 
+    public bool UseAudio => _videoComponent.UseEmbeddedAudio && _videoComponent.Metadata.AudioChannels > 0;
+
     public ActiveVideoPlayback(VideoComponent videoComponent, AudioDevices audioDevices)
     {
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
 
         LoadDecoder();
+
+        if (UseAudio)
+        {
+            _audioDecoder = new FFmpegAudioDecoder(_videoComponent.VideoFile, _videoComponent.StartTime, this);
+        }
 
         // Find target layer
         _targetLayer = DisplaysManager.Layers.Find(l => l.LayerId == _videoComponent.TargetLayerId);
@@ -161,9 +172,10 @@ public partial class ActiveVideoPlayback : Node
         }
 
         // Init embedded audio if present
-        if (_embeddedAudioPlayback != null)
+        if (_audioDecoder != null)
         {
-            await _embeddedAudioPlayback.InitAsync();
+            await _audioDecoder.InitAsync();
+            SetupAudioRouting();
         }
 
         _decoder.Resume();
@@ -218,6 +230,17 @@ public partial class ActiveVideoPlayback : Node
     private void OnTimeUpdated(double time)
     {
         EmitSignal(SignalName.TimeUpdated, time);
+        DriftCheck(time);
+    }
+
+    private void DriftCheck(double videoPtsSec)
+    {
+        if (_audioDecoder != null && Math.Abs(videoPtsSec - _audioDecoder.CurrentTime / 1_000_000.0) > 0.05)
+        {
+            _audioDecoder.Seek((long)(videoPtsSec * 1_000_000));
+            _audioDecoder.ClearQueues();
+            GD.Print($"Video audio resync to {videoPtsSec:F2}s");
+        }
     }
 
     private void OnEndReached()
@@ -274,7 +297,12 @@ public partial class ActiveVideoPlayback : Node
         lock (_lock)
         {
             _decoder.Pause();
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Pause();
+            if (_audioDecoder != null)
+            {
+                _audioDecoder.Pause();
+                foreach (var stream in _audioStreams.Values) SDL.ClearAudioStream(stream);
+                _audioDecoder.ClearQueues();
+            }
             //_pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
             IsPaused = true;
             //Decoder.ClearQueues(); // Clear frame queue to avoid stale data on resume
@@ -288,15 +316,164 @@ public partial class ActiveVideoPlayback : Node
         {
             if (_pausedAtUs > 0)
             {
-                _decoder.Seek(_pausedAtUs); // Seek back to paused position
-                if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Seek(_pausedAtUs);
+                _decoder.Seek(_pausedAtUs / 1_000_000.0); // Seek back to paused position
+                if (_audioDecoder != null) _audioDecoder.Seek(_pausedAtUs);
                 _pausedAtUs = 0;
             }
             _decoder.Resume();
+            if (_audioDecoder != null) _audioDecoder.Resume();
             if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Resume();
             IsPaused = false;
             GD.Print($"ActiveVideoPlayback:Resume - Playback resumed");
         }
+    }
+
+    public async Task PlayAsync()
+    {
+        _decoder.Resume();
+        if (_audioDecoder != null)
+        {
+            await _audioDecoder.PlayAsync();
+            _audioCts = new CancellationTokenSource();
+            _audioConsumerTask = Task.Run(() => AudioConsumerLoopAsync(_audioCts.Token));
+        }
+    }
+
+    private async Task AudioConsumerLoopAsync(CancellationToken token)
+    {
+        if (_audioDecoder == null) return;
+        foreach (var pcmChunk in _audioDecoder.PcmQueue.GetConsumingEnumerable(token))
+        {
+            if (!token.IsCancellationRequested && !IsPaused)
+            {
+                PushEmbeddedPcm(pcmChunk);
+                // Pace: sleep(chunkDurationMs)
+                int produced = pcmChunk.Length / (_videoComponent.Metadata.AudioChannels * 4); // F32LE
+                long chunkMs = (long)(produced * 1000L / _videoComponent.Metadata.AudioSampleRate);
+                await Task.Delay((int)chunkMs, token);
+            }
+        }
+    }
+
+    public void PushEmbeddedPcm(byte[] pcm)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                // Copy ActiveAudioPlayback.ApplyChannelVolumes + PushPcm
+                Span<float> input = MemoryMarshal.Cast<byte, float>(pcm);
+                foreach (var kv in _audioStreams)
+                {
+                    byte[] outputBuffer = ArrayPool<byte>.Shared.Rent(pcm.Length);
+                    try
+                    {
+                        ApplyChannelVolumes(pcm, kv.Key, outputBuffer);
+                        unsafe
+                        {
+                            fixed (byte* p = outputBuffer)
+                                SDL.PutAudioStreamData(kv.Value, (IntPtr)p, outputBuffer.Length);
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(outputBuffer, clearArray: true);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveVideoPlayback.PushEmbeddedPcm: {ex.Message}");
+            }
+        }
+    }
+
+    private void ApplyChannelVolumes(byte[] pcm, uint deviceId, byte[] outputBuffer)
+    {
+        // Simplified: assume mono or something, but copy from ActiveAudioPlayback
+        // For now, just copy pcm to outputBuffer
+        Array.Copy(pcm, outputBuffer, pcm.Length);
+    }
+
+    private void ApplyChannelGains(Span<float> input, Span<float> output, float[] gains, List<int> channels)
+    {
+        int samples = input.Length / _videoComponent.Metadata.AudioChannels;
+        for (int s = 0; s < samples; s++)
+        {
+            for (int ch = 0; ch < channels.Count; ch++)
+            {
+                int inCh = channels[ch];
+                output[s * channels.Count + ch] = input[s * _videoComponent.Metadata.AudioChannels + inCh] * gains[inCh];
+            }
+        }
+    }
+
+    // Setup audio routing
+    private void SetupAudioRouting()
+    {
+        lock (_lock)
+        {
+            // Copy from ActiveAudioPlayback: Calc gains (AudioVolume * CuePatch matrix)
+            _audioChannelGains = CalculateChannelGains(_videoComponent.AudioVolume, _videoComponent.AudioRouting);
+            var sourceSpec = new SDL.AudioSpec
+            {
+                Freq = _videoComponent.Metadata.AudioSampleRate,
+                Format = SDL.AudioFormat.AudioF32LE,
+                Channels = (byte)_videoComponent.Metadata.AudioChannels
+            };
+            foreach (var deviceName in _videoComponent.AudioPatch.OutputDevices.Keys)
+            {
+                var device = _audioDevices.OpenAudioDevice(routed.DeviceName, out string error);
+                if (device == null)
+                {
+                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to open device {routed.DeviceName}: {error}");
+                    continue;
+                }
+                SDL.GetAudioDeviceFormat(device.LogicalId, out var deviceSpec, out var _);
+                var stream = SDL.CreateAudioStream(sourceSpec, deviceSpec);
+                if (stream == IntPtr.Zero)
+                {
+                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to create stream for {routed.DeviceName}: {SDL.GetError()}");
+                    continue;
+                }
+                if (!SDL.BindAudioStream(device.LogicalId, stream))
+                {
+                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to bind stream for {routed.DeviceName}: {SDL.GetError()}");
+                    SDL.DestroyAudioStream(stream);
+                    continue;
+                }
+                _audioStreams[device.LogicalId] = stream;
+            }
+        }
+    }
+
+    private float[] CalculateChannelGains(float volume, CuePatch cuePatch)
+    {
+        int channels = _videoComponent.Metadata.AudioChannels;
+        float[] gains = new float[channels];
+        if (cuePatch != null)
+        {
+            // Apply volume * CuePatch matrix
+            for (int i = 0; i < channels; i++)
+            {
+                float gain = volume;
+                float cuePatchGain = 0f;
+                for (int j = 0; j < cuePatch.OutputChannels; j++)
+                {
+                    cuePatchGain += cuePatch.GetVolume(i, j);
+                }
+                gains[i] = gain * cuePatchGain;
+            }
+        }
+        else
+        {
+            // Apply volume only
+            for (int i = 0; i < channels; i++)
+            {
+                gains[i] = volume;
+            }
+        }
+        return gains;
     }
 
     /// <summary>
@@ -320,7 +497,7 @@ public partial class ActiveVideoPlayback : Node
         {
             // If already fading out, immediately stop and clean
             //Decoder.Stop();
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
+            if (_audioDecoder != null) _audioDecoder.Stop();
             Clean();
             return;
         }
@@ -331,7 +508,7 @@ public partial class ActiveVideoPlayback : Node
             return;
         }
         _decoder.Stop();
-        if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
+        if (_audioDecoder != null) _audioDecoder.Stop();
         Clean();
     }
 
@@ -353,7 +530,7 @@ public partial class ActiveVideoPlayback : Node
         try
         {
             //Decoder.PlayAsync(); // Start playback
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Play();
+            if (_audioDecoder != null) await _audioDecoder.PlayAsync();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
@@ -446,7 +623,10 @@ public partial class ActiveVideoPlayback : Node
         lock (_lock)
         {
             _volume = Mathf.Clamp(volume, 0f, 1f);
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.SetVolume(volume);
+            if (_audioDecoder != null)
+            {
+                _audioChannelGains = CalculateChannelGains(_videoComponent.AudioVolume * _volume, _videoComponent.AudioRouting);
+            }
         }
     }
     
@@ -459,6 +639,7 @@ public partial class ActiveVideoPlayback : Node
     public void Seek(double time)
     {
         _decoder.Seek(time);
+        _audioDecoder?.Seek((long)(time * 1_000_000));
     }
 
     
@@ -557,6 +738,10 @@ public partial class ActiveVideoPlayback : Node
     public void Clean()
     {
         _isExiting = true; // Prevent further operations
+        _audioCts?.Cancel();
+        _audioConsumerTask?.Wait(5000);
+        foreach (var stream in _audioStreams.Values) SDL.DestroyAudioStream(stream);
+        _audioDecoder?.Dispose();
         ClearDecoder();
         ClearTargetLayers();
         EmitSignal(SignalName.Completed); // Emit signal immediately before freeing

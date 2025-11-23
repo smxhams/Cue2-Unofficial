@@ -472,6 +472,17 @@ public partial class CueList : ScrollContainer
 						newCueAudioComponent.Patch = patch;
 					}
 				}
+				
+				var newCueVideoComponent = newCue.GetVideoComponent();
+				if (newCueVideoComponent != null)
+				{
+					var patches = _globalData.Settings.GetAudioOutputPatches();
+					patches.TryGetValue(newCueVideoComponent.PatchId, out var patch);
+					if (patch != null)
+					{
+						newCueVideoComponent.Patch = patch;
+					}
+				}
 
 				var cueLightComps = newCue.GetCueLightComponents();
 				if (cueLightComps != null)
