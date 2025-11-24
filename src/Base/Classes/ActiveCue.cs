@@ -285,8 +285,13 @@ public partial class ActiveCue : GodotObject
             }
             var playback = _activeVideoComponents[panel];
 
-            await playback.InitAsync();
-            await playback.PlayAsync();
+            if (videoComp.UseAudio)
+            {
+                await _audioDevices.StartAudioPlayback(playback, videoComp);
+            }
+
+            playback.Play();
+
         }
         catch (Exception ex)
         {

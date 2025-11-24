@@ -33,7 +33,7 @@ public class FFmpegVideoDecoder : IDisposable
     private const int FRAME_QUEUE_SIZE = 5;
 
     /// <summary>
-    /// Initializes a new instance of the SimpleVideoDecoder class.
+    /// Initializes a new instance of the FFmpegVideoDecoder class.
     /// </summary>
     /// <param name="godotNode">A Godot Node reference for thread-safe event invocation.</param>
     public FFmpegVideoDecoder(Node godotNode)
@@ -122,7 +122,7 @@ public class FFmpegVideoDecoder : IDisposable
 
         if (DecodingTask != null && !DecodingTask.IsCompleted)
         {
-            GD.PrintErr("SimpleVideoDecoder:StartDecodingAsync - Decoding already in progress");
+            GD.PrintErr("FFmpegVideoDecoder:StartDecodingAsync - Decoding already in progress");
             return;
         }
 
@@ -138,7 +138,7 @@ public class FFmpegVideoDecoder : IDisposable
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder:StartDecodingAsync - InitDecoder failed: {ex.Message}");
+            GD.PrintErr($"FFmpegVideoDecoder:StartDecodingAsync - InitDecoder failed: {ex.Message}");
             // Cleanup partial initialization
             unsafe
             {
@@ -178,13 +178,13 @@ public class FFmpegVideoDecoder : IDisposable
             }
             catch (Exception ex)
             {
-                GD.PrintErr($"SimpleVideoDecoder:DecodeLoop - Exception: {ex.Message}");
+                GD.PrintErr($"FFmpegVideoDecoder:DecodeLoop - Exception: {ex.Message}");
             }
         }, _cts.Token).ContinueWith(t =>
         {
             if (t.IsFaulted)
             {
-                GD.PrintErr($"SimpleVideoDecoder:DecodingTask - Faulted: {t.Exception?.InnerException?.Message}");
+                GD.PrintErr($"FFmpegVideoDecoder:DecodingTask - Faulted: {t.Exception?.InnerException?.Message}");
             }
         }, TaskContinuationOptions.OnlyOnFaulted);
 
@@ -211,7 +211,7 @@ public class FFmpegVideoDecoder : IDisposable
             {
                 // Force stop if timeout
                 _forceStop = true;
-                GD.Print("SimpleVideoDecoder:StopDecodingAsync - Forced stop after timeout");
+                GD.Print("FFmpegVideoDecoder:StopDecodingAsync - Forced stop after timeout");
             }
             else
             {
@@ -220,11 +220,11 @@ public class FFmpegVideoDecoder : IDisposable
         }
         catch (OperationCanceledException)
         {
-            GD.Print("SimpleVideoDecoder:StopDecodingAsync - Await cancelled");
+            GD.Print("FFmpegVideoDecoder:StopDecodingAsync - Await cancelled");
         }
         catch (Exception ex)
         {
-            GD.PrintErr("SimpleVideoDecoder:StopDecodingAsync - Error during await: " + ex.Message);
+            GD.PrintErr("FFmpegVideoDecoder:StopDecodingAsync - Error during await: " + ex.Message);
         }
     }
 
@@ -274,7 +274,7 @@ public class FFmpegVideoDecoder : IDisposable
 
             if (_timeBase <= 0 || double.IsNaN(_timeBase) || double.IsInfinity(_timeBase))
             {
-                GD.PrintErr("SimpleVideoDecoder:Seek - Invalid time base");
+                GD.PrintErr("FFmpegVideoDecoder:Seek - Invalid time base");
                 return;
             }
             time = Math.Max(0, time); // Clamp to valid range
@@ -285,12 +285,12 @@ public class FFmpegVideoDecoder : IDisposable
             int ret = ffmpeg.avformat_seek_file(_formatCtx, _videoStreamIndex, min_ts, timestamp, max_ts, ffmpeg.AVSEEK_FLAG_BACKWARD); // Seek to nearest keyframe before timestamp on video stream
             if (ret < 0)
             {
-                throw new InvalidOperationException($"SimpleVideoDecoder:Seek - Seek failed: {GetFFmpegError(ret)}");
+                throw new InvalidOperationException($"FFmpegVideoDecoder:Seek - Seek failed: {GetFFmpegError(ret)}");
             }
             ffmpeg.avcodec_flush_buffers(_codecCtx);
             if (_frame != null) ffmpeg.av_frame_unref(_frame); // Reset frame state after flush
             if (_pausedAtEnd) { _pausedAtEnd = false; _nextFrameTime = 0; _stopwatch.Restart(); }
-            GD.Print($"SimpleVideoDecoder:Seek - Seeked to {time}s");
+            GD.Print($"FFmpegVideoDecoder:Seek - Seeked to {time}s");
         }
         finally
         {
@@ -418,7 +418,7 @@ public class FFmpegVideoDecoder : IDisposable
         _frame = ffmpeg.av_frame_alloc();
         for (int i = 0; i < FRAME_QUEUE_SIZE; i++) _frameQueue.Enqueue(new byte[_rgbBufferSize]);
 
-        GD.Print($"SimpleVideoDecoder:InitDecoder - initialized: {_width}x{_height}");
+        GD.Print($"FFmpegVideoDecoder:InitDecoder - initialized: {_width}x{_height}");
     }
 
     /// <summary>
@@ -485,7 +485,7 @@ public class FFmpegVideoDecoder : IDisposable
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder:DecodeLoop - Error: {ex.Message}");
+            GD.PrintErr($"FFmpegVideoDecoder:DecodeLoop - Error: {ex.Message}");
         }
         finally
         {
@@ -512,7 +512,7 @@ public class FFmpegVideoDecoder : IDisposable
             }
             else
             {
-                GD.PrintErr($"SimpleVideoDecoder:ReadPacket - Read frame error: {GetFFmpegError(ret)}");
+                GD.PrintErr($"FFmpegVideoDecoder:ReadPacket - Read frame error: {GetFFmpegError(ret)}");
                 isEof = false;
                 return false; // Error reading packet
             }
@@ -534,7 +534,7 @@ public class FFmpegVideoDecoder : IDisposable
             int ret = ffmpeg.avcodec_send_packet(_codecCtx, packet);
             if (ret < 0)
             {
-                GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Send packet error: {GetFFmpegError(ret)}");
+                GD.PrintErr($"FFmpegVideoDecoder:DecodeFrame - Send packet error: {GetFFmpegError(ret)}");
                 return;
             }
             // Packet data is now owned by the decoder; unref after receive
@@ -548,12 +548,12 @@ public class FFmpegVideoDecoder : IDisposable
                 return; // Expected: need more data or end of stream
             else if (ret < 0)
             {
-                GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Receive frame error: {GetFFmpegError(ret)}");
+                GD.PrintErr($"FFmpegVideoDecoder:DecodeFrame - Receive frame error: {GetFFmpegError(ret)}");
             }
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder:DecodeFrame - Exception: {ex.Message}");
+            GD.PrintErr($"FFmpegVideoDecoder:DecodeFrame - Exception: {ex.Message}");
         }
         finally
         {
@@ -609,7 +609,7 @@ public class FFmpegVideoDecoder : IDisposable
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SimpleVideoDecoder:EmitFrame - Exception: {ex.Message}");
+            GD.PrintErr($"FFmpegVideoDecoder:EmitFrame - Exception: {ex.Message}");
         }
     }
 
@@ -649,7 +649,7 @@ public class FFmpegVideoDecoder : IDisposable
         }
         if (!_disposeEvent.Wait(5000))
         {
-            GD.PrintErr("SimpleVideoDecoder:Dispose - Dispose event timeout");
+            GD.PrintErr("FFmpegVideoDecoder:Dispose - Dispose event timeout");
         }
         _lock.EnterWriteLock();
         try
@@ -708,7 +708,7 @@ public class FFmpegVideoDecoder : IDisposable
             _pauseEvent?.Dispose();
             _disposeEvent?.Dispose();
             _isDisposed = true;
-            GD.Print("SimpleVideoDecoder:Dispose - disposed");
+            GD.Print("FFmpegVideoDecoder:Dispose - disposed");
         }
         finally
         {

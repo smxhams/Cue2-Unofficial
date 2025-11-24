@@ -12,7 +12,6 @@ public class VideoComponent : ICueComponent
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
     public int TargetLayerId { get; set; } = 0; // ID of the target layer to render on
     public bool HasAudio { get; set; }
-    public AudioComponent EmbeddedAudio { get; set; }
 
     /// <summary>
     /// Duration is length of video between start and endtime
@@ -38,9 +37,6 @@ public class VideoComponent : ICueComponent
     public int OffsetY { get; set; } = 0;
     /// <summary>Whether to use audio if available</summary>
     public bool UseAudio { get; set; } = true;
-
-    /// <summary>Enable embedded audio playback synced to video.</summary>
-    public bool UseEmbeddedAudio { get; set; } = false;
 
     /// <summary>Audio output patch</summary>
     public AudioOutputPatch Patch { get; set; } = null;
@@ -91,7 +87,6 @@ public class VideoComponent : ICueComponent
         data.Add("OffsetY", OffsetY);
         data.Add("HasAudio", HasAudio);
         data.Add("UseAudio", UseAudio);
-        data.Add("UseEmbeddedAudio", UseEmbeddedAudio);
         if (Patch != null)
         {
             data.Add("PatchId", PatchId);
@@ -114,10 +109,6 @@ public class VideoComponent : ICueComponent
         }
         data.Add("AudioVolume", AudioVolume);
         data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
-        if (HasAudio && EmbeddedAudio != null)
-        {
-            data.Add("EmbeddedAudio", EmbeddedAudio.GetData());
-        }
 
         if (Metadata != null)
         {
@@ -161,14 +152,8 @@ public class VideoComponent : ICueComponent
         OffsetY = data.ContainsKey("OffsetY") ? (int)data["OffsetY"] : 0;
         HasAudio = data.ContainsKey("HasAudio") ? (bool)data["HasAudio"] : false;
         UseAudio = data.ContainsKey("UseAudio") ? (bool)data["UseAudio"] : true;
-        UseEmbeddedAudio = data.ContainsKey("UseEmbeddedAudio") ? (bool)data["UseEmbeddedAudio"] : false;
         PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
-        var audioPatchId = data.ContainsKey("AudioPatchId") ? (int)data["AudioPatchId"] : -1;
-        if (HasAudio && data.ContainsKey("EmbeddedAudio"))
-        {
-            EmbeddedAudio = new AudioComponent();
-            EmbeddedAudio.LoadFromData((Dictionary)data["EmbeddedAudio"]);
-        }
+
         WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
         if (data.ContainsKey("Routing"))
         {

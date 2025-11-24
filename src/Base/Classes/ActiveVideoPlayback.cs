@@ -20,7 +20,7 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveVideoPlayback : Node
 {
-    private FFmpegVideoDecoder _decoder;
+    private FFmpegVideoDecoder _videoDecoder;
     private ImageTexture _godotTexture;
     private Image _godotImage;
     
@@ -81,18 +81,17 @@ public partial class ActiveVideoPlayback : Node
         // Blank constructor for Godot
     }
 
-    public bool UseAudio => _videoComponent.UseEmbeddedAudio && _videoComponent.Metadata.AudioChannels > 0;
+    public bool UseAudio => _videoComponent.UseAudio && _videoComponent.Metadata.AudioChannels > 0;
 
     public ActiveVideoPlayback(VideoComponent videoComponent, AudioDevices audioDevices)
     {
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
 
-        LoadDecoder();
-
+        LoadVideoDecoder();
         if (UseAudio)
         {
-            _audioDecoder = new FFmpegAudioDecoder(_videoComponent.VideoFile, _videoComponent.StartTime, this);
+            LoadAudioDecoder();
         }
 
         // Find target layer
@@ -127,30 +126,41 @@ public partial class ActiveVideoPlayback : Node
         }
     }
 
-    private void LoadDecoder()
+    private void LoadVideoDecoder()
     {
-        if (_decoder != null)
+        if (_videoDecoder != null)
         {
-            ClearDecoder();
+            ClearVideoDecoder();
         }
 
-        _decoder = new FFmpegVideoDecoder(this);
-        _decoder.FrameReady += OnFrameReady;
-        _decoder.TimeUpdated += OnTimeUpdated;
-        _decoder.EndReached += OnEndReached;
+        _videoDecoder = new FFmpegVideoDecoder(this);
+        _videoDecoder.FrameReady += OnFrameReady;
+        _videoDecoder.TimeUpdated += OnTimeUpdated;
+        _videoDecoder.EndReached += OnEndReached;
+    }
+
+    private void LoadAudioDecoder()
+    {
+        if (_audioDecoder != null)
+        {
+            ClearAudioDecoder();
+        }
+        
+        _audioDecoder = new FFmpegAudioDecoder(_videoComponent, this);
+
     }
 
     public async Task InitAsync()
     {
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing...");
-        if (_decoder == null)
+        if (_videoDecoder == null)
         {
-            LoadDecoder();
+            LoadVideoDecoder();
         }
 
-        await _decoder.StartDecodingAsync(_videoComponent.VideoFile);
+        await _videoDecoder.StartDecodingAsync(_videoComponent.VideoFile);
 
-        _godotImage = Image.CreateEmpty(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8);
+        _godotImage = Image.CreateEmpty(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8);
         _godotTexture = ImageTexture.CreateFromImage(_godotImage);
         
         foreach (var display in DisplaysManager.Outputs)
@@ -175,10 +185,9 @@ public partial class ActiveVideoPlayback : Node
         if (_audioDecoder != null)
         {
             await _audioDecoder.InitAsync();
-            SetupAudioRouting();
         }
 
-        _decoder.Resume();
+        await PlayAsync();
 
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing complete");
     }
@@ -235,11 +244,11 @@ public partial class ActiveVideoPlayback : Node
 
     private void DriftCheck(double videoPtsSec)
     {
-        if (_audioDecoder != null && Math.Abs(videoPtsSec - _audioDecoder.CurrentTime / 1_000_000.0) > 0.05)
+        if (_audioDecoder != null && Math.Abs(videoPtsSec - _audioDecoder.CurrentTime / 1_000_000.0) > 0.1)
         {
             _audioDecoder.Seek((long)(videoPtsSec * 1_000_000));
             _audioDecoder.ClearQueues();
-            GD.Print($"Video audio resync to {videoPtsSec:F2}s");
+            GD.Print($"ActiveVideoPlayback:DriftCheck - Video audio resync to {videoPtsSec:F2}s");
         }
     }
 
@@ -258,9 +267,9 @@ public partial class ActiveVideoPlayback : Node
         if (_isExiting || !IsInstanceValid(_godotImage) || !IsInstanceValid(_godotTexture)) return;
         
         // Resize image if dimensions changed
-        if (_godotImage.GetWidth() != _decoder?.Width || _godotImage.GetHeight() != _decoder?.Height)
+        if (_godotImage.GetWidth() != _videoDecoder?.Width || _godotImage.GetHeight() != _videoDecoder?.Height)
         {
-            _godotImage = Image.CreateEmpty(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8);
+            _godotImage = Image.CreateEmpty(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8);
             _godotTexture = ImageTexture.CreateFromImage(_godotImage);
         }
         
@@ -274,7 +283,7 @@ public partial class ActiveVideoPlayback : Node
             }
         }
 
-        _godotImage.SetData(_decoder.Width, _decoder.Height, false, Image.Format.Rgba8, rgbaData);
+        _godotImage.SetData(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8, rgbaData);
         _godotTexture.Update(_godotImage);
         
         
@@ -296,7 +305,7 @@ public partial class ActiveVideoPlayback : Node
     {
         lock (_lock)
         {
-            _decoder.Pause();
+            _videoDecoder.Pause();
             if (_audioDecoder != null)
             {
                 _audioDecoder.Pause();
@@ -316,13 +325,12 @@ public partial class ActiveVideoPlayback : Node
         {
             if (_pausedAtUs > 0)
             {
-                _decoder.Seek(_pausedAtUs / 1_000_000.0); // Seek back to paused position
+                _videoDecoder.Seek(_pausedAtUs / 1_000_000.0); // Seek back to paused position
                 if (_audioDecoder != null) _audioDecoder.Seek(_pausedAtUs);
                 _pausedAtUs = 0;
             }
-            _decoder.Resume();
+            _videoDecoder.Resume();
             if (_audioDecoder != null) _audioDecoder.Resume();
-            if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Resume();
             IsPaused = false;
             GD.Print($"ActiveVideoPlayback:Resume - Playback resumed");
         }
@@ -330,7 +338,7 @@ public partial class ActiveVideoPlayback : Node
 
     public async Task PlayAsync()
     {
-        _decoder.Resume();
+        _videoDecoder.Resume();
         if (_audioDecoder != null)
         {
             await _audioDecoder.PlayAsync();
@@ -346,7 +354,7 @@ public partial class ActiveVideoPlayback : Node
         {
             if (!token.IsCancellationRequested && !IsPaused)
             {
-                PushEmbeddedPcm(pcmChunk);
+                PushPcm(pcmChunk);
                 // Pace: sleep(chunkDurationMs)
                 int produced = pcmChunk.Length / (_videoComponent.Metadata.AudioChannels * 4); // F32LE
                 long chunkMs = (long)(produced * 1000L / _videoComponent.Metadata.AudioSampleRate);
@@ -355,7 +363,7 @@ public partial class ActiveVideoPlayback : Node
         }
     }
 
-    public void PushEmbeddedPcm(byte[] pcm)
+    public void PushPcm(byte[] pcm)
     {
         lock (_lock)
         {
@@ -404,45 +412,6 @@ public partial class ActiveVideoPlayback : Node
             {
                 int inCh = channels[ch];
                 output[s * channels.Count + ch] = input[s * _videoComponent.Metadata.AudioChannels + inCh] * gains[inCh];
-            }
-        }
-    }
-
-    // Setup audio routing
-    private void SetupAudioRouting()
-    {
-        lock (_lock)
-        {
-            // Copy from ActiveAudioPlayback: Calc gains (AudioVolume * CuePatch matrix)
-            _audioChannelGains = CalculateChannelGains(_videoComponent.AudioVolume, _videoComponent.AudioRouting);
-            var sourceSpec = new SDL.AudioSpec
-            {
-                Freq = _videoComponent.Metadata.AudioSampleRate,
-                Format = SDL.AudioFormat.AudioF32LE,
-                Channels = (byte)_videoComponent.Metadata.AudioChannels
-            };
-            foreach (var deviceName in _videoComponent.AudioPatch.OutputDevices.Keys)
-            {
-                var device = _audioDevices.OpenAudioDevice(routed.DeviceName, out string error);
-                if (device == null)
-                {
-                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to open device {routed.DeviceName}: {error}");
-                    continue;
-                }
-                SDL.GetAudioDeviceFormat(device.LogicalId, out var deviceSpec, out var _);
-                var stream = SDL.CreateAudioStream(sourceSpec, deviceSpec);
-                if (stream == IntPtr.Zero)
-                {
-                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to create stream for {routed.DeviceName}: {SDL.GetError()}");
-                    continue;
-                }
-                if (!SDL.BindAudioStream(device.LogicalId, stream))
-                {
-                    GD.PrintErr($"ActiveVideoPlayback:SetupAudioRouting - Failed to bind stream for {routed.DeviceName}: {SDL.GetError()}");
-                    SDL.DestroyAudioStream(stream);
-                    continue;
-                }
-                _audioStreams[device.LogicalId] = stream;
             }
         }
     }
@@ -507,7 +476,7 @@ public partial class ActiveVideoPlayback : Node
             await FadeOutAsync(fadeDuration);
             return;
         }
-        _decoder.Stop();
+        _videoDecoder.Stop();
         if (_audioDecoder != null) _audioDecoder.Stop();
         Clean();
     }
@@ -594,7 +563,6 @@ public partial class ActiveVideoPlayback : Node
                 SetVolume(0f);
                 _fadeAlpha = endAlpha;
                 //Decoder.Stop();
-                if (_embeddedAudioPlayback != null) _embeddedAudioPlayback.Stop();
                 Clean();
                 GD.Print($"ActiveVideoPlayback:FadeOutAsync - Fade-out completed over {duration} seconds");
             }
@@ -638,7 +606,7 @@ public partial class ActiveVideoPlayback : Node
     /// <param name="time">Target timestamp in seconds.</param>
     public void Seek(double time)
     {
-        _decoder.Seek(time);
+        _videoDecoder.Seek(time);
         _audioDecoder?.Seek((long)(time * 1_000_000));
     }
 
@@ -709,20 +677,31 @@ public partial class ActiveVideoPlayback : Node
 
     public double GetDuration()
     {
-        return _decoder.Duration;
+        return _videoDecoder.Duration;
     }
     
-    private void ClearDecoder()
+    private void ClearVideoDecoder()
     {
-        if (_decoder != null)
+        if (_videoDecoder != null)
         {
-            _decoder.FrameReady -= OnFrameReady;
-            _decoder.TimeUpdated -= OnTimeUpdated;
-            _decoder.EndReached -= OnEndReached;
-            _decoder.StopDecodingAsync().Wait();
-            _decoder.Dispose();
-            _decoder = null;
+            _videoDecoder.FrameReady -= OnFrameReady;
+            _videoDecoder.TimeUpdated -= OnTimeUpdated;
+            _videoDecoder.EndReached -= OnEndReached;
+            _videoDecoder.StopDecodingAsync().Wait();
+            _videoDecoder.Dispose();
+            _videoDecoder = null;
         }
+    }
+
+    private void ClearAudioDecoder()
+    {
+        if (_audioDecoder != null)
+        {
+            _audioDecoder.Stop();
+            _audioDecoder.Dispose();
+            _audioDecoder = null;
+        }
+        
     }
 
     private void ClearTargetLayers()
@@ -742,7 +721,7 @@ public partial class ActiveVideoPlayback : Node
         _audioConsumerTask?.Wait(5000);
         foreach (var stream in _audioStreams.Values) SDL.DestroyAudioStream(stream);
         _audioDecoder?.Dispose();
-        ClearDecoder();
+        ClearVideoDecoder();
         ClearTargetLayers();
         EmitSignal(SignalName.Completed); // Emit signal immediately before freeing
         CallDeferred("free");
@@ -751,7 +730,7 @@ public partial class ActiveVideoPlayback : Node
     public override void _ExitTree()
     {
         _isExiting = true;
-        ClearDecoder();
+        ClearVideoDecoder();
         ClearTargetLayers();
     }
 
