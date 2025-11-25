@@ -261,7 +261,7 @@ public partial class ActiveCue : GodotObject
             }
             var playback = _activeAudioComponents[panel];
 
-            await _audioDevices.StartAudioPlayback(playback, audioComp);
+            await _audioDevices.StartAudioPlayback(playback);
             playback.Play();
         }
         catch (Exception ex)
@@ -287,10 +287,10 @@ public partial class ActiveCue : GodotObject
 
             if (videoComp.UseAudio)
             {
-                await _audioDevices.StartAudioPlayback(playback, videoComp);
+                await _audioDevices.StartAudioPlayback(playback);
             }
 
-            playback.Play();
+            playback.PlayAsync();
 
         }
         catch (Exception ex)

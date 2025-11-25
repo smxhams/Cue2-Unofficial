@@ -24,7 +24,7 @@ public partial class AudioDevices : Node
 	private readonly Dictionary<int, AudioDevice> _openDevices = new Dictionary<int, AudioDevice>();
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
-	private readonly Dictionary<uint, List<ActiveAudioPlayback>> _activePlaybacks = new Dictionary<uint, List<ActiveAudioPlayback>>();
+	private readonly Dictionary<uint, List<IAudioPlayback>> _activeAudioPlaybacks = new Dictionary<uint, List<IAudioPlayback>>();
 	
 	private Timer _pollTimer;
 	
@@ -300,8 +300,7 @@ public partial class AudioDevices : Node
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
     
-    
-    public async Task StartAudioPlayback(ActiveAudioPlayback playback, AudioComponent audioComponent)
+    public async Task StartAudioPlayback(IAudioPlayback playback)
     {
 	    if (playback == null) 
 	    {
@@ -329,24 +328,24 @@ public partial class AudioDevices : Node
 	    //var devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
 	    List<AudioDevice> devicesToOpen;
 	    
-	    if (!string.IsNullOrEmpty(audioComponent.DirectOutput)) // Handle direct output
+	    if (!string.IsNullOrEmpty(playback.DirectOutput)) // Handle direct output
 	    {
-		    var device = OpenAudioDevice(audioComponent.DirectOutput, out string error);
+		    var device = OpenAudioDevice(playback.DirectOutput, out string error);
 		    if (device == null)
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to open direct output device {audioComponent.DirectOutput}: {error}", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to open direct output device {playback.DirectOutput}: {error}", 2);
 			    return;
 		    }
 		    devicesToOpen = new List<AudioDevice> { device }; // Single device for direct output
 		    if (device.Channels != playback.SourceChannels) // Validate channel count
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {audioComponent.DirectOutput} has {device.Channels} channels, audio has {playback.SourceChannels}", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {playback.DirectOutput} has {device.Channels} channels, audio has {playback.SourceChannels}", 2);
 			    return;
 		    }
 	    }
 	    else if (playback.Patch != null) // Fallback to patch routing
 	    {
-		    devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
+		    devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDeviceAudio(d, playback)).ToList();
 		    if (devicesToOpen.Count == 0)
 		    {
 			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No valid devices found for patch.", 2);
@@ -392,11 +391,11 @@ public partial class AudioDevices : Node
 
 		    playback.DeviceStreams[device.LogicalId] = stream;
 
-		    lock (_activePlaybacks)
+		    lock (_activeAudioPlaybacks)
 		    {
-			    if (!_activePlaybacks.ContainsKey(device.LogicalId))
-				    _activePlaybacks[device.LogicalId] = new List<ActiveAudioPlayback>();
-			    _activePlaybacks[device.LogicalId].Add(playback);
+			    if (!_activeAudioPlaybacks.ContainsKey(device.LogicalId))
+				    _activeAudioPlaybacks[device.LogicalId] = new List<IAudioPlayback>();
+			    _activeAudioPlaybacks[device.LogicalId].Add(playback);
 		    }
 
 		    if (SDL.AudioDevicePaused(device.LogicalId) == true)
@@ -411,11 +410,10 @@ public partial class AudioDevices : Node
     
     
     
-    private bool ShouldRouteToDevice(AudioDevice device, ActiveAudioPlayback playback)
+    private bool ShouldRouteToDeviceAudio(AudioDevice device, IAudioPlayback playback)
     {
 	    return playback.Patch.OutputDevices.ContainsKey(device.Name); // Simplified; expand if needed for channel routing
     }
-    
     
     /// <summary>
     /// Handles cleanup when an audio playback completes, pausing devices with no active playbacks.
@@ -429,11 +427,11 @@ public partial class AudioDevices : Node
     /// Ensures resources are freed and devices are paused to save CPU when idle.
     /// Logs cleanup actions via GD.Print for debugging.
     /// </remarks>
-    private void OnPlaybackCompleted(ActiveAudioPlayback playback) 
+    private void OnPlaybackCompleted(IAudioPlayback playback) 
     {
 	    foreach (var physicalId in playback.DeviceStreams.Keys.ToList())
 	    {
-		    if (_activePlaybacks.TryGetValue(physicalId, out var list))
+		    if (_activeAudioPlaybacks.TryGetValue(physicalId, out var list))
 		    {
 			    GD.Print($"AudioDevices:OnPlaybackCompleted - Cleaning up for device {physicalId}");
 			    list.Remove(playback);
@@ -459,7 +457,7 @@ public partial class AudioDevices : Node
     /// <remarks>
     /// Logs a warning for unknown formats. Consider throwing an exception in strict modes.
     /// </remarks>
-	private static int GetBitDepth(SDL.AudioFormat format)
+	public static int GetBitDepth(SDL.AudioFormat format)
 	{
 		switch (format)
 		{
@@ -483,14 +481,7 @@ public partial class AudioDevices : Node
 
 	public override void _ExitTree()
 	{
-		foreach (var playbacks in _activePlaybacks.Values)
-		{
-			foreach (var playback in playbacks.ToList())
-			{
-				playback.Stop(0).Wait();
-			}
-		}
-		_activePlaybacks.Clear();
+		_activeAudioPlaybacks.Clear();
 		
 		foreach (var device in _openDevices.Values.ToList())
 		{
@@ -498,7 +489,4 @@ public partial class AudioDevices : Node
 		}
 		GD.Print("AudioDevices:_ExitTree - Cleaned up devices.");
 	}
-	
-	
-    
 }

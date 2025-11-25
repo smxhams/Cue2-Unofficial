@@ -615,7 +615,7 @@ public partial class VideoInspector : Control
 			{
 				if (_focusedVideoComponent.UseAudio)
 				{
-					_focusedVideoComponent.AudioPatch = patch;
+					_focusedVideoComponent.Patch = patch;
 				}
 				else
 				{
@@ -741,7 +741,7 @@ public partial class VideoInspector : Control
 		AudioOutputPatch patch = null;
 		if (_focusedVideoComponent.UseAudio)
 		{
-			patch = _focusedVideoComponent.AudioPatch;
+			patch = _focusedVideoComponent.Patch;
 			if (patch == null)
 			{
 				_routingContainer.Visible = false;
@@ -797,7 +797,7 @@ public partial class VideoInspector : Control
 		_routingContainer.Visible = true;
 
 		// Validate routing (CuePatch) matches what is expected
-		var routing = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
+		var routing = _focusedVideoComponent.Routing;
 		bool needsUpdate = routing == null ||
 		                   routing.OutputChannels != outputChannels ||
 		                   !routing.OutputLabels.SequenceEqual(outputLabels) ||
@@ -813,7 +813,7 @@ public partial class VideoInspector : Control
 			routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
 			if (_focusedVideoComponent.UseAudio)
 			{
-				_focusedVideoComponent.AudioRouting = routing;
+				_focusedVideoComponent.Routing = routing;
 			}
 			else
 			{
@@ -857,7 +857,7 @@ public partial class VideoInspector : Control
 			for (int col = 0; col < outputChannels; col++)
 			{
 				var volumeEdit = new LineEdit();
-				var routingForGet = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
+				var routingForGet = _focusedVideoComponent.Routing;
 				var linearVol = routingForGet.GetVolume(row, col);
 				if (linearVol > 0.0f)
 				{
@@ -898,7 +898,7 @@ public partial class VideoInspector : Control
 			}
 
 			var linear = UiUtilities.DbToLinear(dbValue.ToString());
-			var routingForSet = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioRouting : _focusedVideoComponent.Routing;
+			var routingForSet = _focusedVideoComponent.Routing;
 			routingForSet.SetVolume(inputCh, outputCh, linear);
 			if (linear > 0.0f)
 			{

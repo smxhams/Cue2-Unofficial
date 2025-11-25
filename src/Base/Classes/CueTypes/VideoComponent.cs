@@ -40,19 +40,12 @@ public class VideoComponent : ICueComponent
 
     /// <summary>Audio output patch</summary>
     public AudioOutputPatch Patch { get; set; } = null;
-
-    /// <summary>Patch for embedded audio output routing.</summary>
-    public AudioOutputPatch? AudioPatch { get; set; }
     /// <summary>Audio output patch ID</summary>
     public int PatchId { get; set; } = -1;
     /// <summary>Direct audio output device name</summary>
     public string DirectOutput { get; set; } = null;
     /// <summary>Audio routing matrix with volumes</summary>
     public CuePatch Routing { get; set; } = null;
-
-    /// <summary>Cue patch matrix for embedded audio channels.</summary>
-    public CuePatch? AudioRouting { get; set; }
-
     /// <summary>Volume multiplier for embedded audio (0-1).</summary>
     public float AudioVolume { get; set; } = 1f;
     /// <summary>Serialised waveform data for display</summary>
@@ -91,10 +84,6 @@ public class VideoComponent : ICueComponent
         {
             data.Add("PatchId", PatchId);
         }
-        if (AudioPatch != null)
-        {
-            data.Add("AudioPatchId", AudioPatch.Id); // Assuming AudioPatch has Id
-        }
         if (DirectOutput != null)
         {
             data.Add("DirectOutput", DirectOutput);
@@ -102,10 +91,6 @@ public class VideoComponent : ICueComponent
         if (Routing != null)
         {
             data.Add("Routing", Routing.GetData());
-        }
-        if (AudioRouting != null)
-        {
-            data.Add("AudioRouting", AudioRouting.GetData());
         }
         data.Add("AudioVolume", AudioVolume);
         data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
@@ -159,11 +144,6 @@ public class VideoComponent : ICueComponent
         {
             Routing = new CuePatch();
             Routing.LoadFromData((Dictionary)data["Routing"]);
-        }
-        if (data.ContainsKey("AudioRouting"))
-        {
-            AudioRouting = new CuePatch();
-            AudioRouting.LoadFromData((Dictionary)data["AudioRouting"]);
         }
         AudioVolume = data.ContainsKey("AudioVolume") ? (float)(double)data["AudioVolume"] : 1f;
 

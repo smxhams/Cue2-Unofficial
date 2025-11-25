@@ -18,14 +18,17 @@ namespace Cue2.Base.Classes;
 /// Encapsulates an active video playback session for control (volume, pause, stop, fade).
 /// Thread-safe for multi-threaded access (e.g., UI updates).
 /// </summary>
-public partial class ActiveVideoPlayback : Node
+public partial class ActiveVideoPlayback : Node, IAudioPlayback
 {
     private FFmpegVideoDecoder _videoDecoder;
     private ImageTexture _godotTexture;
     private Image _godotImage;
     
-    public AudioOutputPatch Patch;
-    public CuePatch CuePatch { get; set; }
+    
+    // For embedded audio playback
+    public AudioOutputPatch Patch { get; set; }
+    public CuePatch Routing { get; set; }
+    public string DirectOutput { get; set; }
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
     public int SourceChannels { get; set; }
     public int SourceSampleRate { get; set; }
@@ -92,6 +95,14 @@ public partial class ActiveVideoPlayback : Node
         if (UseAudio)
         {
             LoadAudioDecoder();
+        }
+        
+        // Load needed parameters from component
+        if (UseAudio)
+        {
+            Patch = videoComponent.Patch;
+            Routing = videoComponent.Routing;
+            DirectOutput = videoComponent.DirectOutput;
         }
 
         // Find target layer
@@ -185,9 +196,15 @@ public partial class ActiveVideoPlayback : Node
         if (_audioDecoder != null)
         {
             await _audioDecoder.InitAsync();
+            SourceChannels = _videoComponent.Metadata.AudioChannels;
+            SourceSampleRate = _audioDecoder.OutputSampleRate;
+            SourceFormat = _audioDecoder.TargetFormat;
+            SourceBytesPerFrame = SourceChannels * (AudioDevices.GetBitDepth(SourceFormat) / 8);
+            _channelGains = new float[SourceChannels];
+            UpdateChannelGains();
         }
 
-        await PlayAsync();
+        //await PlayAsync();
 
         GD.Print($"ActiveVideoPlayback:InitAsync - Initializing complete");
     }
@@ -239,7 +256,7 @@ public partial class ActiveVideoPlayback : Node
     private void OnTimeUpdated(double time)
     {
         EmitSignal(SignalName.TimeUpdated, time);
-        DriftCheck(time);
+        //DriftCheck(time);
     }
 
     private void DriftCheck(double videoPtsSec)
@@ -363,35 +380,22 @@ public partial class ActiveVideoPlayback : Node
         }
     }
 
-    public void PushPcm(byte[] pcm)
+    public unsafe void PushPcm(byte[] pcm)
     {
-        lock (_lock)
+        foreach (var kv in DeviceStreams)
         {
+            byte[] outputBuffer = ArrayPool<byte>.Shared.Rent(pcm.Length); // Rent buffer for output
             try
             {
-                // Copy ActiveAudioPlayback.ApplyChannelVolumes + PushPcm
-                Span<float> input = MemoryMarshal.Cast<byte, float>(pcm);
-                foreach (var kv in _audioStreams)
+                ApplyChannelVolumes(pcm, kv.Key, outputBuffer); // Apply volumes and routing
+                fixed (byte* p = outputBuffer)
                 {
-                    byte[] outputBuffer = ArrayPool<byte>.Shared.Rent(pcm.Length);
-                    try
-                    {
-                        ApplyChannelVolumes(pcm, kv.Key, outputBuffer);
-                        unsafe
-                        {
-                            fixed (byte* p = outputBuffer)
-                                SDL.PutAudioStreamData(kv.Value, (IntPtr)p, outputBuffer.Length);
-                        }
-                    }
-                    finally
-                    {
-                        ArrayPool<byte>.Shared.Return(outputBuffer, clearArray: true);
-                    }
+                    SDL.PutAudioStreamData(kv.Value, (IntPtr)p, outputBuffer.Length);
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                GD.PrintErr($"ActiveVideoPlayback.PushEmbeddedPcm: {ex.Message}");
+                ArrayPool<byte>.Shared.Return(outputBuffer, clearArray: true); // Return to pool
             }
         }
     }
@@ -403,46 +407,33 @@ public partial class ActiveVideoPlayback : Node
         Array.Copy(pcm, outputBuffer, pcm.Length);
     }
 
-    private void ApplyChannelGains(Span<float> input, Span<float> output, float[] gains, List<int> channels)
+    private void UpdateChannelGains()
     {
-        int samples = input.Length / _videoComponent.Metadata.AudioChannels;
-        for (int s = 0; s < samples; s++)
+        lock (_lock)
         {
-            for (int ch = 0; ch < channels.Count; ch++)
+            if (Routing != null) // (apply CuePatch for both direct and patched output)
             {
-                int inCh = channels[ch];
-                output[s * channels.Count + ch] = input[s * _videoComponent.Metadata.AudioChannels + inCh] * gains[inCh];
-            }
-        }
-    }
-
-    private float[] CalculateChannelGains(float volume, CuePatch cuePatch)
-    {
-        int channels = _videoComponent.Metadata.AudioChannels;
-        float[] gains = new float[channels];
-        if (cuePatch != null)
-        {
-            // Apply volume * CuePatch matrix
-            for (int i = 0; i < channels; i++)
-            {
-                float gain = volume;
-                float cuePatchGain = 0f;
-                for (int j = 0; j < cuePatch.OutputChannels; j++)
+                // Apply AudioComponent.Volume * _volume * CuePatch matrix
+                for (int i = 0; i < SourceChannels; i++)
                 {
-                    cuePatchGain += cuePatch.GetVolume(i, j);
+                    float gain = (float)_videoComponent.Volume * _volume;
+                    float cuePatchGain = 0f;
+                    for (int j = 0; j < Routing.OutputChannels; j++)
+                    {
+                        cuePatchGain += Routing.GetVolume(i, j); // Sum contributions to patch channels
+                    }
+                    _channelGains[i] = gain * cuePatchGain;
                 }
-                gains[i] = gain * cuePatchGain;
             }
-        }
-        else
-        {
-            // Apply volume only
-            for (int i = 0; i < channels; i++)
+            else // (fallback if no CuePatch)
             {
-                gains[i] = volume;
+                // Apply AudioComponent.Volume * _volume only
+                for (int i = 0; i < SourceChannels; i++)
+                {
+                    _channelGains[i] = (float)_videoComponent.Volume * _volume;
+                }
             }
         }
-        return gains;
     }
 
     /// <summary>
@@ -591,10 +582,7 @@ public partial class ActiveVideoPlayback : Node
         lock (_lock)
         {
             _volume = Mathf.Clamp(volume, 0f, 1f);
-            if (_audioDecoder != null)
-            {
-                _audioChannelGains = CalculateChannelGains(_videoComponent.AudioVolume * _volume, _videoComponent.AudioRouting);
-            }
+            UpdateChannelGains(); // Recompute volume with new levels
         }
     }
     
@@ -733,5 +721,6 @@ public partial class ActiveVideoPlayback : Node
         ClearVideoDecoder();
         ClearTargetLayers();
     }
+
 
 }

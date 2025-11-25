@@ -16,11 +16,12 @@ namespace Cue2.Base.Classes;
 /// Encapsulates an active audio playback session for control (volume, pause, stop, fade).
 /// Thread-safe for multi-threaded access (e.g., UI updates).
 /// </summary>
-public partial class ActiveAudioPlayback : GodotObject
+public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 {
     public FFmpegAudioDecoder Decoder { get; private set; }
-    public AudioOutputPatch Patch;
-    public CuePatch CuePatch { get; set; }
+    public AudioOutputPatch Patch { get; set; }
+    public CuePatch Routing { get; set; }
+    public string DirectOutput { get; set; }
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
     public int SourceChannels { get; set; }
     public int SourceSampleRate { get; set; }
@@ -64,7 +65,7 @@ public partial class ActiveAudioPlayback : GodotObject
         _audioComponent = audioComponent ?? throw new ArgumentNullException(nameof(audioComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
         Patch = _audioComponent.Patch;
-        CuePatch = _audioComponent.Routing;
+        Routing = _audioComponent.Routing;
         Decoder = new FFmpegAudioDecoder(audioComponent, this);
 
         // Validate and set start time
@@ -96,34 +97,34 @@ public partial class ActiveAudioPlayback : GodotObject
         SourceChannels = _audioComponent.Metadata.Channels;
         SourceSampleRate = Decoder.OutputSampleRate;
         SourceFormat = Decoder.TargetFormat;
-        SourceBytesPerFrame = SourceChannels * (GetBitDepth(SourceFormat) / 8);
+        SourceBytesPerFrame = SourceChannels * (AudioDevices.GetBitDepth(SourceFormat) / 8);
         _channelGains = new float[SourceChannels]; // Initialize channel gains
         UpdateChannelGains(); // Set initial volumes
         GD.Print("ActiveAudioPlayback:InitAsync - Initialized FFmpeg decoder with sample rate " + SourceSampleRate);
     }
     
     /// <summary>
-    /// Updates channel gains based on AudioComponent and CuePatch (if present).
+    /// Updates channel gains based on AudioComponent and Routing (if present).
     /// </summary>
     private void UpdateChannelGains()
     {
         lock (_lock)
         {
-            if (CuePatch != null) // (apply CuePatch for both direct and patched output)
+            if (Routing != null) // (apply Routing for both direct and patched output)
             {
-                // Apply AudioComponent.Volume * _volume * CuePatch matrix
+                // Apply AudioComponent.Volume * _volume * Routing matrix
                 for (int i = 0; i < SourceChannels; i++)
                 {
                     float gain = (float)_audioComponent.Volume * _volume;
                     float cuePatchGain = 0f;
-                    for (int j = 0; j < CuePatch.OutputChannels; j++)
+                    for (int j = 0; j < Routing.OutputChannels; j++)
                     {
-                        cuePatchGain += CuePatch.GetVolume(i, j); // Sum contributions to patch channels
+                        cuePatchGain += Routing.GetVolume(i, j); // Sum contributions to patch channels
                     }
                     _channelGains[i] = gain * cuePatchGain;
                 }
             }
-            else // (fallback if no CuePatch)
+            else // (fallback if no Routing)
             {
                 // Apply AudioComponent.Volume * _volume only
                 for (int i = 0; i < SourceChannels; i++)
@@ -545,7 +546,7 @@ public partial class ActiveAudioPlayback : GodotObject
         string deviceName = GetDeviceName(deviceId);
         if (!string.IsNullOrEmpty(_audioComponent.DirectOutput))
         {
-            // Direct output: Apply channel gains (including CuePatch if present)
+            // Direct output: Apply channel gains (including Routing if present)
             var device = _audioDevices.GetAudioDevice((int)deviceId);
             if (device == null)
             {
@@ -553,7 +554,7 @@ public partial class ActiveAudioPlayback : GodotObject
                 return;
             }
             int deviceChannels = device.Channels;
-            int outputChannels = CuePatch != null ? CuePatch.OutputChannels : SourceChannels;
+            int outputChannels = Routing != null ? Routing.OutputChannels : SourceChannels;
             if (outputChannels != deviceChannels) // (validate channel count)
             {
                 GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Channel mismatch for direct output: {outputChannels} vs {deviceChannels}");
@@ -567,9 +568,9 @@ public partial class ActiveAudioPlayback : GodotObject
                 }
             }
         }
-        else if (deviceName != null && Patch != null && Patch.OutputDevices.TryGetValue(deviceName, out var outputChannels)) // (patched output, no CuePatch check here)
+        else if (deviceName != null && Patch != null && Patch.OutputDevices.TryGetValue(deviceName, out var outputChannels)) // (patched output, no Routing check here)
         {
-            // Patched output: Route via AudioOutputPatch, using _channelGains (includes CuePatch if present)
+            // Patched output: Route via AudioOutputPatch, using _channelGains (includes Routing if present)
             for (int s = 0; s < samples; s++)
             {
                 for (int outCh = 0; outCh < outputChannels.Count; outCh++)
@@ -579,10 +580,10 @@ public partial class ActiveAudioPlayback : GodotObject
                     {
                         for (int inCh = 0; inCh < SourceChannels; inCh++)
                         {
-                            float gain = _channelGains[inCh]; // (_channelGains includes CuePatch)
-                            if (CuePatch != null) // (apply CuePatch matrix if present)
+                            float gain = _channelGains[inCh]; // (_channelGains includes Routing)
+                            if (Routing != null) // (apply Routing matrix if present)
                             {
-                                gain *= CuePatch.GetVolume(inCh, patchCh);
+                                gain *= Routing.GetVolume(inCh, patchCh);
                             }
                             sample += pcmSpan[s * SourceChannels + inCh] * gain;
                         }
@@ -638,27 +639,6 @@ public partial class ActiveAudioPlayback : GodotObject
             }
         }
     }
-
-    private static int GetBitDepth(SDL.AudioFormat format) // Moved from AudioDevices for reuse
-    {
-        switch (format)
-        {
-            case SDL.AudioFormat.AudioU8:
-            case SDL.AudioFormat.AudioS8:
-                return 8;
-            case SDL.AudioFormat.AudioS16BE:
-            case SDL.AudioFormat.AudioS16LE:
-                return 16;
-            case SDL.AudioFormat.AudioF32BE:
-            case SDL.AudioFormat.AudioF32LE:
-            case SDL.AudioFormat.AudioS32BE:
-            case SDL.AudioFormat.AudioS32LE:
-                return 32;
-            default:
-                return 0; // Unknown or unsupported format
-        }
-    }
-    
     
     
     public void Clean()
