@@ -31,6 +31,8 @@ InputActionsListener="*res://src/Shared/InputActionsListener.cs"
 UiUtilities="*res://src/UI/Utilities/UiUtilities.cs"
 MediaEngine="*res://src/Shared/MediaEngine.cs"
 AudioDevices="*res://src/Shared/AudioDevices.cs"
+OscListener="*res://src/Base/Classes/Connections/OscListener.cs"
+OscConnections="*res://src/Base/Classes/Connections/OscConnections.cs"
 
 [display]
 

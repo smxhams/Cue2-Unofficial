@@ -93,6 +93,8 @@ public partial class SettingsWindow : Window
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Canvas Editor" => "CanvasEditor",
 			"Cue Lights" => "CueLights",
+			"OSC Connections" => "SettingsOscConnections",
+			"OSC Listener" => "SettingsOscListen",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};
 	
@@ -128,8 +130,11 @@ public partial class SettingsWindow : Window
 		tiConnections.SetText(0, "Connections");
 		TreeItem tiCueLights = _setTree.CreateItem(tiConnections);
 		tiCueLights.SetText(0, "Cue Lights");
-		TreeItem tiOSCConnection = _setTree.CreateItem(tiConnections);
-		tiOSCConnection.SetText(0, "OSC Connection");
+		TreeItem tiOscConnections = _setTree.CreateItem(tiConnections);
+		tiOscConnections.SetText(0, "OSC Connections");
+		TreeItem tiOscListener = _setTree.CreateItem(tiConnections);
+		tiOscListener.SetText(0, "OSC Listener");
+		tiOscListener.SetTooltipText(0, "Settings for received OSC messages");
 		TreeItem tiNetworkConnection = _setTree.CreateItem(tiConnections);
 		tiNetworkConnection.SetText(0, "Network Connection");
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);

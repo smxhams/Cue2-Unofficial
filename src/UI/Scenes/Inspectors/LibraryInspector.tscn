@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://dge4tv6ikfteh"]
+
+[node name="Library" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+metadata/_tab_index = 0
+
+[node name="SplitContainer" type="HSplitContainer" parent="."]
+layout_mode = 0
+offset_right = 1148.0
+offset_bottom = 237.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="SplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="SplitContainer/VBoxContainer"]
+layout_mode = 2
+text = "Favorites"
+
+[node name="HSplitContainer" type="HSplitContainer" parent="SplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScrollContainer2" type="ScrollContainer" parent="SplitContainer/HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="SplitContainer/HSplitContainer/ScrollContainer2"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="SplitContainer/HSplitContainer/ScrollContainer2/VBoxContainer2"]
+layout_mode = 2
+text = "Filters"
+
+[node name="ScrollContainer3" type="ScrollContainer" parent="SplitContainer/HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VBoxContainer3" type="VBoxContainer" parent="SplitContainer/HSplitContainer/ScrollContainer3"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="SplitContainer/HSplitContainer/ScrollContainer3/VBoxContainer3"]
+layout_mode = 2
+text = "File Explorer"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="."]
+layout_mode = 0
+offset_right = 1148.0
+offset_bottom = 237.0

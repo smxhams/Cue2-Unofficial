@@ -1,0 +1,166 @@
+[gd_scene load_steps=4 format=3 uid="uid://cm5s0bi03612d"]
+
+[ext_resource type="Script" uid="uid://bv2kx3l0vphuf" path="res://src/UI/Scenes/Inspectors/ShellInspector.cs" id="1_frsqn"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_frsqn"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tpxeo"]
+
+[node name="ShellInspector" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_frsqn")
+metadata/_tab_index = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer"]
+layout_mode = 2
+
+[node name="GridContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 2
+size_flags_vertical = 3
+
+[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer/GridContainer"]
+layout_mode = 2
+columns = 2
+
+[node name="CueId" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ParentCueLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CueNumLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Number:"
+
+[node name="CueNum" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Cue numbers, shorthand identifier. Does not need to be unique. Max length of 5 characters."
+placeholder_text = "No Selection"
+max_length = 5
+
+[node name="CueNameLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Name:"
+
+[node name="ShellName" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+placeholder_text = "No Selection"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+theme_override_styles/separator = SubResource("StyleBoxEmpty_frsqn")
+
+[node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+
+[node name="ColourLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+text = "Colour:"
+
+[node name="ColourPickerButton" type="ColorPickerButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.38058, 0.38058, 0.38058, 1)
+text = "Shell Colour"
+color = Color(1, 1, 1, 1)
+edit_alpha = false
+
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+theme_override_styles/separator = SubResource("StyleBoxEmpty_tpxeo")
+
+[node name="Control" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+
+[node name="PreWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+text = "Pre-wait:"
+
+[node name="PreWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "How long to wait between this cue being triggered and activating the cue's components. "
+
+[node name="DurationLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+text = "Duration:"
+
+[node name="DurationValue" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait."
+editable = false
+
+[node name="PostWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+text = "Post-wait:"
+
+[node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "How long to wait after all the cue's components are completed to continue the next cue (if 'continue' selected.)"
+
+[node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+text = "Next cue:"
+
+[node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Follow determines behavior of the next cue in the cuelist.
+Continue: Next cue will trigger after this cue is complete (Including post-wait)
+Follow: Next cue will be triggered when this cue is triggered"
+focus_mode = 0
+
+[node name="Triggers" type="VBoxContainer" parent="."]
+clip_contents = true
+layout_mode = 0
+offset_left = 400.0
+offset_top = 4.0
+offset_right = 700.0
+offset_bottom = 304.0
+
+[node name="Label" type="Label" parent="Triggers"]
+layout_mode = 2
+text = "A cheeky trigger section"
+
+[node name="Label2" type="Label" parent="Triggers"]
+layout_mode = 2
+text = "
+Anyone wanna hotkey?
+Or maybe some time code"

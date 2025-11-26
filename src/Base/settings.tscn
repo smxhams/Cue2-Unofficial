@@ -1,11 +1,13 @@
-[gd_scene load_steps=12 format=3 uid="uid://cfw3syjm11bd6"]
+[gd_scene load_steps=14 format=3 uid="uid://cfw3syjm11bd6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_5fbwj"]
 [ext_resource type="Script" uid="uid://bhwlk65qyenwy" path="res://src/Base/SettingsWindow.cs" id="2_xuilu"]
 [ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/Base/Settings/SettingsGeneral.cs" id="3_jdmuw"]
 [ext_resource type="Script" uid="uid://cu1ujebi3h7vu" path="res://src/Base/Settings/SettingsAudioOutputPatch.cs" id="3_pnmd8"]
 [ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindowHandles.tscn" id="4_r2cu3"]
+[ext_resource type="PackedScene" uid="uid://b0p7y7dg15efm" path="res://src/UI/Scenes/Settings/SettingsOscConnections.tscn" id="4_vhgyk"]
 [ext_resource type="PackedScene" uid="uid://b6sx83qucwbua" path="res://src/Base/Settings/SettingsAudio.tscn" id="4_wntir"]
+[ext_resource type="PackedScene" uid="uid://ci4ndmhqsbvlh" path="res://src/UI/Scenes/Settings/SettingsOscListen.tscn" id="5_bjvi6"]
 [ext_resource type="PackedScene" uid="uid://msbmpql2gk17" path="res://src/UI/Scenes/Settings/SettingsCueLights.tscn" id="5_uxven"]
 [ext_resource type="PackedScene" uid="uid://ceydom3514ip" path="res://src/UI/Scenes/Settings/SettingsCanvasEditor.tscn" id="6_uxven"]
 
@@ -284,8 +286,19 @@ popup/item_1/id = 1
 popup/item_2/text = "Large"
 popup/item_2/id = 2
 
+[node name="SettingsOscConnections" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("4_vhgyk")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsOscListen" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("5_bjvi6")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
 [node name="SettingsAudio" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("4_wntir")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 
 [node name="AudioOutputPatch" type="ScrollContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide"]
