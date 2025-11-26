@@ -110,7 +110,7 @@ public partial class TimelineInspector : Control
         }
 
         if (Mathf.Abs(currentScale - _prevScale) > 0.001f) {
-            _ruler.Scale = currentScale;
+            _ruler.ZoomScale = currentScale;
             _prevScale = currentScale;
             needsRedraw = true;
         }
@@ -581,27 +581,26 @@ public partial class TimelineInspector : Control
     /// </summary>
     private partial class Ruler : Control
     {
-        public float Scale { get; set; }
+        public float ZoomScale { get; set; }
         public float Offset { get; set; }
 
         public override void _Draw()
         {
             // Determine tick interval based on scale for readability
             float targetPixelSpacing = 100.0f; // Desired space between ticks in pixels
-            float interval = (float)Mathf.Pow(10, Mathf.Round(Math.Log10(targetPixelSpacing / Scale)));
-            if (interval * Scale < 50) interval *= 2;
-            else if (interval * Scale > 200) interval /= 2;
+            float interval = (float)Mathf.Pow(10, Mathf.Round(Math.Log10(targetPixelSpacing / ZoomScale)));
+            if (interval * ZoomScale < 50) interval *= 2;
+            else if (interval * ZoomScale > 200) interval /= 2;
 
-            // Calculate start and end time in view
-            float tStart = Offset / Scale;
-            float tEnd = (Offset + Size.X) / Scale;
+            float tStart = Offset / ZoomScale;
+            float tEnd = (Offset + Size.X) / ZoomScale;
 
             // Find first tick
             float firstTick = Mathf.Ceil(tStart / interval) * interval;
 
             for (float t = firstTick; t <= tEnd; t += interval)
             {
-                float x = t * Scale - Offset;
+                float x = t * ZoomScale - Offset;
                 DrawLine(new Vector2(x, 0), new Vector2(x, Size.Y), Colors.White, 1.0f);
 
                 string labelText = string.Create(10, t, (span, value) => {  // Allocates only the final string

@@ -273,7 +273,7 @@ public partial class SaveManager : Node
 			}
 			catch (Exception ex)
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory existing: {folderPath}", 0);
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory existing: {folderPath}, error: {ex.Message}", 0);
 				return false;
 			}
 		}

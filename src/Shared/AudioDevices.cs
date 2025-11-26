@@ -299,6 +299,11 @@ public partial class AudioDevices : Node
     {
 	    return _openDevices.GetValueOrDefault(deviceId);
     }
+
+    public AudioDevice GetAudioDeviceByLogicalId(uint logicalId)
+    {
+	    return _openDevices.Values.FirstOrDefault(d => d.LogicalId == logicalId);
+    }
     
     public async Task StartAudioPlayback(IAudioPlayback playback)
     {
@@ -337,9 +342,10 @@ public partial class AudioDevices : Node
 			    return;
 		    }
 		    devicesToOpen = new List<AudioDevice> { device }; // Single device for direct output
-		    if (device.Channels != playback.SourceChannels) // Validate channel count
+		    int expectedChannels = playback.Routing != null ? playback.Routing.OutputChannels : playback.SourceChannels;
+		    if (device.Channels != expectedChannels) // Validate channel count
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {playback.DirectOutput} has {device.Channels} channels, audio has {playback.SourceChannels}", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {playback.DirectOutput} has {device.Channels} channels, expected {expectedChannels}", 2);
 			    return;
 		    }
 	    }

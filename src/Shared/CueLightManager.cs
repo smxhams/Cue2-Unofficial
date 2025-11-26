@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Cue2.Base.Classes.Connections;
 using Godot.Collections;
 
+#nullable enable
+
 namespace Cue2.Shared;
 
 /// <summary>
@@ -17,8 +19,10 @@ namespace Cue2.Shared;
 /// </summary>
 public partial class CueLightManager : Node
 {
+    #pragma warning disable CS8618 // Fields are initialized in _Ready
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
+    #pragma warning restore CS8618
     private System.Collections.Generic.Dictionary<int, CueLight> _cueLights = new();
     private int _nextId = 0;
 
@@ -38,7 +42,7 @@ public partial class CueLightManager : Node
     {
         var cueLight = new CueLight(_nextId++);
         _cueLights[cueLight.Id] = cueLight;
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"CueLightManager:CreateCueLight - Created {_nextId - 1}: {cueLight.Name}", 0);
         return cueLight;
     }
@@ -52,7 +56,7 @@ public partial class CueLightManager : Node
         cueLight.Name = $"CueLight_{ipAddress.Split('.')[3]}";
         cueLight.SetIpAddressAsync(ipAddress);
         _cueLights[cueLight.Id] = cueLight;
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"CueLightManager:CreateCueLight - Created {_nextId - 1}: {cueLight.Name}", 0);
         return cueLight;
     }
@@ -164,7 +168,7 @@ public partial class CueLightManager : Node
 
             // Send "PING" to broadcast address on port 80
             byte[] sendBytes = Encoding.UTF8.GetBytes("PING");
-            await udpClient.SendAsync(sendBytes, sendBytes.Length, new IPEndPoint(IPAddress.Broadcast, 80));
+            await udpClient!.SendAsync(sendBytes, sendBytes.Length, new IPEndPoint(IPAddress.Broadcast, 80));
             GD.Print($"CueLightManager:DiscoverCueLightsAsync - Sent broadcast PING"); 
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Sent UDP broadcast for cue light discovery", 0);
 

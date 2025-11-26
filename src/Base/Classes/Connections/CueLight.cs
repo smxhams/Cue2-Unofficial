@@ -222,7 +222,7 @@ public partial class CueLight : GodotObject, IDisposable
         }
     }
 
-    public void Dispose()
+    public new void Dispose()
     {
         DisposeAsync().GetAwaiter().GetResult();
     }

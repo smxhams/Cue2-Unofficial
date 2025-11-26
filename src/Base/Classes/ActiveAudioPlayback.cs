@@ -66,6 +66,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
         Patch = _audioComponent.Patch;
         Routing = _audioComponent.Routing;
+        DirectOutput = _audioComponent.DirectOutput;
         Decoder = new FFmpegAudioDecoder(audioComponent, this);
 
         // Validate and set start time
@@ -547,7 +548,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         if (!string.IsNullOrEmpty(_audioComponent.DirectOutput))
         {
             // Direct output: Apply channel gains (including Routing if present)
-            var device = _audioDevices.GetAudioDevice((int)deviceId);
+            var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
             if (device == null)
             {
                 GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Device {deviceId} not found for direct output");
@@ -555,16 +556,32 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             }
             int deviceChannels = device.Channels;
             int outputChannels = Routing != null ? Routing.OutputChannels : SourceChannels;
-            if (outputChannels != deviceChannels) // (validate channel count)
+
+            if (Routing != null)
             {
-                GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Channel mismatch for direct output: {outputChannels} vs {deviceChannels}");
-                return;
-            }
-            for (int s = 0; s < samples; s++)
-            {
-                for (int ch = 0; ch < SourceChannels; ch++)
+                // Route using CuePatch : Note, loops through devices channels and disregards extra outputs in Routing if there's a hotswap from Patch -> direct output
+                for (int s = 0; s < samples; s++)
                 {
-                    outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
+                    for (int outCh = 0; outCh < deviceChannels; outCh++)
+                    {
+                        float sample = 0f;
+                        for (int inCh = 0; inCh < SourceChannels; inCh++)
+                        {
+                            sample += pcmSpan[s * SourceChannels + inCh] * _channelGains[inCh] * Routing.GetVolume(inCh, outCh);
+                        }
+                        outputSpan[s * deviceChannels + outCh] = sample;
+                    }
+                }
+            }
+            else
+            {
+                // No routing, direct
+                for (int s = 0; s < samples; s++)
+                {
+                    for (int ch = 0; ch < SourceChannels; ch++)
+                    {
+                        outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
+                    }
                 }
             }
         }
@@ -608,14 +625,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     
     private string GetDeviceName(uint deviceId)
     {
-        foreach (var device in _audioDevices.GetOpenAudioDevicesNames())
-        {
-            if (_audioDevices.GetAudioDeviceIdFromName(device) == (int)deviceId)
-            {
-                return device;
-            }
-        }
-        return null;
+        var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
+        return device?.Name;
     }
 
 

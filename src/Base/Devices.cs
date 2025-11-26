@@ -4,12 +4,16 @@ using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
 using Godot;
 
+#nullable enable
+
 namespace Cue2.Base;
 
 public partial class Devices : Node
 {
+    #pragma warning disable CS8618 // Fields are initialized in _Ready
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
+    #pragma warning restore CS8618
 
     private int Index = 0;
     
@@ -20,11 +24,11 @@ public partial class Devices : Node
         _globalData = GetNode<GlobalData>("/root/GlobalData");
     }
 
-    private AudioDevice CreateAudioDevice(string deviceName, int deviceId = -1)
+    private AudioDevice? CreateAudioDevice(string deviceName, int deviceId = -1)
     {
         string? device = null;
 
-        var vlcDevices = _audioDevices.GetAvailableAudioDeviceNames(); // Get devices availible to VLC
+        var vlcDevices = _audioDevices!.GetAvailableAudioDeviceNames(); // Get devices availible to VLC
         
         // Match vlc device to name
         foreach (var i in vlcDevices)
@@ -61,12 +65,12 @@ public partial class Devices : Node
         return deviceList;
     }
 
-    public AudioDevice GetAudioDeviceFromId(int deviceId)
+    public AudioDevice? GetAudioDeviceFromId(int deviceId)
     {
-        return AudioDevices[deviceId];
+        return AudioDevices.TryGetValue(deviceId, out var device) ? device : null;
     }
 
-    public AudioDevice EnableAudioDevice(string deviceName)
+    public AudioDevice? EnableAudioDevice(string deviceName)
     {
         GD.Print(AudioDevices.Count);
         // Returns audio device, first if it already exists, if not it'll create one and return that.

@@ -74,17 +74,23 @@ public class FFmpegVideoDecoder : IDisposable
     /// <summary>
     /// Event raised when a new frame is decoded and ready.
     /// </summary>
+    #pragma warning disable CS0067 // Events are invoked via CallDeferred to InvokeXxx methods for thread safety
     public event Action<byte[]> FrameReady;
+    #pragma warning restore CS0067
 
     /// <summary>
     /// Event raised when the current playback time is updated.
     /// </summary>
+    #pragma warning disable CS0067 // Events are invoked via CallDeferred to InvokeXxx methods for thread safety
     public event Action<double> TimeUpdated;
+    #pragma warning restore CS0067
 
     /// <summary>
     /// Event raised when the end of the video is reached.
     /// </summary>
+    #pragma warning disable CS0067 // Events are invoked via CallDeferred to InvokeXxx methods for thread safety
     public event Action EndReached;
+    #pragma warning restore CS0067
 
     /// <summary>
     /// Gets the video width.

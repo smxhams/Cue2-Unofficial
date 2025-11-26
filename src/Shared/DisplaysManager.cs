@@ -527,6 +527,11 @@ public partial class DisplaysManager : Node
             {
                 var output = new VideoOutputDevice();
                 output.LoadFromData(outputData);
+                if (output.TargetMonitor >= DisplayServer.GetScreenCount())
+                {
+                    GD.Print($"DisplaysManager:LoadFromData - Skipping output '{output.OutputName}' because target monitor {output.TargetMonitor} is not available (screen_count = {DisplayServer.GetScreenCount()})");
+                    continue;
+                }
                 AddChild(output);
                 Outputs.Add(output);
                 output.SetCanvasReference(Canvas);

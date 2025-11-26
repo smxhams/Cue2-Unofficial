@@ -96,9 +96,10 @@ public partial class VideoOutputDevice : Window, IDisposable
         var displayLayer = _displayLayerPackedScene.Instantiate<Control>();
         _sceneRoot.AddChild(displayLayer);
         var outputLayer = displayLayer.GetNode<TextureRect>("%LayerOutput");
-        outputLayer.Size = layer.Size;
-        
-        
+        outputLayer.Position = (Vector2)(layer.CanvasPosition - CanvasPosition);
+        outputLayer.Size = (Vector2)layer.Size;
+
+
         return displayLayer;
     }
 
@@ -115,6 +116,12 @@ public partial class VideoOutputDevice : Window, IDisposable
         if (OutputSize.X <= 0 || OutputSize.Y <= 0)
         {
             GD.Print("VideoOutputDevice:UpdateOutputRegion - Invalid output size, must be positive.");
+            return;
+        }
+
+        if (TargetMonitor >= DisplayServer.GetScreenCount())
+        {
+            GD.PrintErr($"VideoOutputDevice:UpdateOutputRegion - Target monitor {TargetMonitor} is out of bounds (screen_count = {DisplayServer.GetScreenCount()})");
             return;
         }
 
@@ -305,7 +312,7 @@ public partial class VideoOutputDevice : Window, IDisposable
         base._ExitTree();
     }
 
-    public void Dispose()
+    public new void Dispose()
     {
         // Hide the window
         Hide();

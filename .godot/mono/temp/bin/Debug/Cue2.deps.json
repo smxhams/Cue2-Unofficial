@@ -12,6 +12,7 @@
           "Godot.SourceGenerators": "4.5.1",
           "GodotSharp": "4.5.1",
           "GodotSharpEditor": "4.5.1",
+          "Rug.Osc": "1.2.5",
           "SDL3-CS": "3.3.2.1",
           "SDL3-CS.Native": "3.3.2"
         },
@@ -44,6 +45,14 @@
           "lib/net8.0/GodotSharpEditor.dll": {
             "assemblyVersion": "4.5.1.0",
             "fileVersion": "4.5.1.0"
+          }
+        }
+      },
+      "Rug.Osc/1.2.5": {
+        "runtime": {
+          "lib/Rug.Osc.dll": {
+            "assemblyVersion": "1.2.5.17694",
+            "fileVersion": "1.2.5.0"
           }
         }
       },
@@ -130,6 +139,13 @@
       "sha512": "sha512-8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
       "path": "godotsharpeditor/4.5.1",
       "hashPath": "godotsharpeditor.4.5.1.nupkg.sha512"
+    },
+    "Rug.Osc/1.2.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-nbujIPTk+QO90qv+U9E5reGFEBDpu8c4I65dkVxR4/xBL+WXUzUjvfBm5mEmtRRqFeoqfK7VLje+FEdz/FmoTg==",
+      "path": "rug.osc/1.2.5",
+      "hashPath": "rug.osc.1.2.5.nupkg.sha512"
     },
     "SDL3-CS/3.3.2.1": {
       "type": "package",

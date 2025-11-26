@@ -50,6 +50,15 @@
           }
         }
       },
+      "Rug.Osc/1.2.5": {
+        "type": "package",
+        "compile": {
+          "lib/Rug.Osc.dll": {}
+        },
+        "runtime": {
+          "lib/Rug.Osc.dll": {}
+        }
+      },
       "SDL3-CS/3.3.2.1": {
         "type": "package",
         "compile": {
@@ -161,6 +170,19 @@
         "lib/net8.0/GodotSharpEditor.xml"
       ]
     },
+    "Rug.Osc/1.2.5": {
+      "sha512": "nbujIPTk+QO90qv+U9E5reGFEBDpu8c4I65dkVxR4/xBL+WXUzUjvfBm5mEmtRRqFeoqfK7VLje+FEdz/FmoTg==",
+      "type": "package",
+      "path": "rug.osc/1.2.5",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/Rug.Osc.XML",
+        "lib/Rug.Osc.dll",
+        "rug.osc.1.2.5.nupkg.sha512",
+        "rug.osc.nuspec"
+      ]
+    },
     "SDL3-CS/3.3.2.1": {
       "sha512": "Ux0C+5TrCoXbgY+tng6xcNDlRY19at08USzfvO+xdXQJKWvFfWK9cwhkHXYlJANLhz5IALWZkuiahQwwe8VS0Q==",
       "type": "package",
@@ -217,24 +239,25 @@
       "Godot.SourceGenerators >= 4.5.1",
       "GodotSharp >= 4.5.1",
       "GodotSharpEditor >= 4.5.1",
+      "Rug.Osc >= 1.2.5",
       "SDL3-CS >= 3.3.2.1",
       "SDL3-CS.Native >= 3.3.2"
     ]
   },
   "packageFolders": {
-    "/Users/smxham/.nuget/packages/": {}
+    "C:\\Users\\smxham\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
+      "projectUniqueName": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
       "projectName": "Cue2",
-      "projectPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
-      "packagesPath": "/Users/smxham/.nuget/packages/",
-      "outputPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/",
+      "projectPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
+      "packagesPath": "C:\\Users\\smxham\\.nuget\\packages\\",
+      "outputPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\.godot\\mono\\temp\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/Users/smxham/.nuget/NuGet/NuGet.Config"
+        "C:\\Users\\smxham\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -257,8 +280,7 @@
         "enableAudit": "true",
         "auditLevel": "low",
         "auditMode": "direct"
-      },
-      "SdkAnalysisLevel": "9.0.300"
+      }
     },
     "frameworks": {
       "net8.0": {
@@ -283,6 +305,10 @@
             "version": "[4.5.1, )",
             "autoReferenced": true
           },
+          "Rug.Osc": {
+            "target": "Package",
+            "version": "[1.2.5, )"
+          },
           "SDL3-CS": {
             "target": "Package",
             "version": "[3.3.2.1, )"
@@ -303,23 +329,25 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.20, 8.0.20]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.20, 8.0.20]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.305/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.303/PortableRuntimeIdentifierGraph.json"
       }
     }
-  }
+  },
+  "logs": [
+    {
+      "code": "NU1701",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "Package 'Rug.Osc 1.2.5' was restored using '.NETFramework,Version=v4.6.1, .NETFramework,Version=v4.6.2, .NETFramework,Version=v4.7, .NETFramework,Version=v4.7.1, .NETFramework,Version=v4.7.2, .NETFramework,Version=v4.8, .NETFramework,Version=v4.8.1' instead of the project target framework 'net8.0'. This package may not be fully compatible with your project.",
+      "libraryId": "Rug.Osc",
+      "targetGraphs": [
+        "net8.0"
+      ]
+    }
+  ]
 }

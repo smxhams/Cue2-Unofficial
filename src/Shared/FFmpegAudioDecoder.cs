@@ -27,7 +27,6 @@ public class FFmpegAudioDecoder : IDisposable
     private readonly double _endTimeSec = -1;
     private readonly bool _componentLoop;
     private readonly int _componentPlaycount;
-    private AudioFileMetadata _metadata; // Metadata for video audio
     private unsafe AVFormatContext* _formatCtx;
     private unsafe AVCodecContext* _codecCtx;
     private unsafe SwrContext* _swrCtx;

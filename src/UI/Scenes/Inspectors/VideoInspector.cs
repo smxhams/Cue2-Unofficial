@@ -340,6 +340,7 @@ public partial class VideoInspector : Control
 			_useAudioLabel.Text = "Use Embedded Audio";
 			if (_focusedVideoComponent.UseAudio) ToggleAccordian(_audioAccordian, _audioCollapseButton);
 			PopulateOutputOptions();
+			BuildRoutingMatrix();
 			await DrawWaveform(); // This can move to if useaudio selected.
 		}
 		else
@@ -613,15 +614,9 @@ public partial class VideoInspector : Control
 			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {patchId}");
 			if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
 			{
-				if (_focusedVideoComponent.UseAudio)
-				{
-					_focusedVideoComponent.Patch = patch;
-				}
-				else
-				{
-					_focusedVideoComponent.Patch = patch;
-					_focusedVideoComponent.PatchId = patchId;
-				}
+				_focusedVideoComponent.Patch = patch;
+				_focusedVideoComponent.PatchId = patchId;
+				
 				_focusedVideoComponent.DirectOutput = null;
 				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {patch.Name}");
 			}
@@ -730,6 +725,8 @@ public partial class VideoInspector : Control
 
 		await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
 
+		GD.Print($"BUILDING ROUTING MATRIX");
+		
 		// Get ins and outs data
 		var inputChannels = _focusedVideoComponent.Metadata.AudioChannels;
 		var inputLabels = GetChannelLabels(inputChannels, isInput: true);
@@ -737,37 +734,23 @@ public partial class VideoInspector : Control
 		int outputChannels;
 		List<string> outputLabels = new List<string>();
 
-		// Audio Output Patch
-		AudioOutputPatch patch = null;
-		if (_focusedVideoComponent.UseAudio)
-		{
-			patch = _focusedVideoComponent.Patch;
-			if (patch == null)
-			{
-				_routingContainer.Visible = false;
-				return;
-			}
-		}
-		else if (_focusedVideoComponent.PatchId != -1)
-		{
-			// Check if selected patch exists, if not clean the video component of it.
-			if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out patch))
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
-				_focusedVideoComponent.Patch = null;
-				_focusedVideoComponent.PatchId = -1;
-				_focusedVideoComponent.Routing = null;
-				PopulateOutputOptions(); // Refresh UI to reflect missing patch
-				_routingContainer.Visible = false;
-				return;
-			}
-		}
-
-		if (patch != null)
-		{
-			outputChannels = patch.Channels.Count;
-			outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
-		}
+        // Audio Output Patch
+        if (_focusedVideoComponent.PatchId != -1)
+        {
+            // Check if selected patch exists, if not clean the video component of it.
+            if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out var patch))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
+                _focusedVideoComponent.Patch = null;
+                _focusedVideoComponent.PatchId = -1;
+                _focusedVideoComponent.Routing = null;
+                PopulateOutputOptions(); // Refresh UI to reflect missing patch
+                _routingContainer.Visible = false;
+                return;
+            }
+            outputChannels = patch.Channels.Count;
+            outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+        }
 
 		// Direct output
 		else if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
@@ -809,16 +792,9 @@ public partial class VideoInspector : Control
 			// Preserve old volumes if possible
 			var oldRouting = routing;
 
-			// Create new CuePatch with current dimensions
-			routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
-			if (_focusedVideoComponent.UseAudio)
-			{
-				_focusedVideoComponent.Routing = routing;
-			}
-			else
-			{
-				_focusedVideoComponent.Routing = routing;
-			}
+            // Create new CuePatch with current dimensions
+            routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+            _focusedVideoComponent.Routing = routing;
 
 			if (oldRouting != null)
 			{

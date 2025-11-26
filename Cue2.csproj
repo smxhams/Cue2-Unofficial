@@ -6,6 +6,7 @@
 </PropertyGroup>  
 <ItemGroup>  
 <PackageReference Include="FFmpeg.AutoGen" Version="8.0.0" />  
+ <PackageReference Include="Rug.Osc" Version="1.2.5" />
 <PackageReference Include="SDL3-CS" Version="3.3.2.1" />  
 <PackageReference Include="SDL3-CS.Native" Version="3.3.2" />  
 </ItemGroup>  
