@@ -16,13 +16,20 @@ public partial class OscConnections : Node
     {
         _address = IPAddress.Loopback;
         _sender = new OscSender(_address, 8000);
+        _sender.Connect();
+        GD.Print("OscConnections: Sender initialized and connected to 127.0.0.1:8000");
     }
 
     public static void SendTestMessage()
     {
+        if (_sender == null)
+        {
+            GD.Print("OscConnections: Sender is null, cannot send");
+            return;
+        }
         var message = new OscMessage("/cue/play", 1);
         _sender.Send(message);
-        GD.Print("TestOscSender: Sent /cue/play 1");
+        GD.Print("OscConnections:SendTestMessage - Sent /cue/play 1");
     }
 
     public override void _ExitTree()

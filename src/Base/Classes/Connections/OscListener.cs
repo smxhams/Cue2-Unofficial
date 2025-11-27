@@ -1,5 +1,6 @@
 using Godot;
 using Rug.Osc;
+using System;
 using System.Threading;
 
 namespace Cue2.Base.Classes.Connections;
@@ -15,25 +16,35 @@ public partial class OscListener : Node
 
     public override void _Ready()
     {
+        GD.Print($"OscListener:_Ready - Initializing OscReceiver");
         _receiver = new OscReceiver(8000);
         _receiver.Connect();
         _thread = new Thread(() =>
         {
+            GD.Print("OscListener: Thread started, waiting for messages");
             while (_running)
             {
                 try
                 {
                     OscPacket packet = _receiver.Receive();
+                    GD.Print("OscListener: Received a packet");
                     if (packet is OscMessage oscMessage)
                     {
+                        GD.Print("OscListener: Packet is OscMessage, deferring");
                         CallDeferred("OnMessageReceived", oscMessage.ToString());
                     }
+                    else
+                    {
+                        GD.Print("OscListener: Packet is not OscMessage");
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    GD.Print($"OscListener: Exception in receive: {ex.Message}");
                     break;
                 }
             }
+            GD.Print("OscListener: Thread exiting");
         });
         _thread.Start();
     }
