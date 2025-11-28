@@ -1,9 +1,14 @@
+using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
 using Godot;
 using Godot.Collections;
 
 namespace Cue2.Base.Classes;
 
+/// <summary>
+/// Manages storing of settings data
+/// Child of GlobalData
+/// </summary>
 public partial class Settings : Node
 {
     private GlobalSignals _globalSignals;
@@ -24,7 +29,6 @@ public partial class Settings : Node
     public Color CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
     public Color CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
     public byte CueLightBrightness = 50;
-    
     
     
     public override void _Ready()
@@ -138,6 +142,12 @@ public partial class Settings : Node
         saveTable.Add("CueLightStandbyColour", CueLightStandbyColour.ToHtml());
         saveTable.Add("CueLightCountInColour", CueLightCountInColour.ToHtml());
         saveTable.Add("CueLightBrightness", CueLightBrightness);
+        
+        // Osc Listen
+        saveTable.Add("OscListen", GetNode<OscListen>("/root/OscListen").GetData());
+        
+        // Osc Connections
+        
         return saveTable;
     }
 
@@ -192,6 +202,16 @@ public partial class Settings : Node
         CueLightStandbyColour = settingsData.TryGetValue("CueLightStandbyColour", out value) ? Color.FromString(value.AsString(), CueLightStandbyColour) : CueLightStandbyColour;
         CueLightCountInColour = settingsData.TryGetValue("CueLightCountInColour", out value) ? Color.FromString(value.AsString(), CueLightCountInColour) : CueLightCountInColour;
         CueLightBrightness = settingsData.TryGetValue("CueLightBrightness", out value) ? (byte)value : CueLightBrightness;
+        
+        // Osc Listen
+        if (settingsData.TryGetValue("OscListen", out var oscListen))
+        {
+            GD.Print($"Settings:LoadSettings - Loading OscListen");
+            var OscListenAsDict = oscListen.AsGodotDictionary();
+            GetNode<OscListen>("/root/OscListen").LoadFromData(OscListenAsDict);
+        }
+        
+        // Osc Connections
     }
     
 }

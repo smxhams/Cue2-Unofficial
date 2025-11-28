@@ -30,25 +30,102 @@ layout_mode = 2
 [node name="Row1" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="VBoxContainer/Row1"]
+[node name="EnableLabel" type="Label" parent="VBoxContainer/Row1"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "Interface"
+text = "Enable OSC Listener "
+
+[node name="EnabledCheckButton" type="CheckButton" parent="VBoxContainer/Row1"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+
+[node name="Control" type="Control" parent="VBoxContainer/Row1"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="IpAddressLabel" type="Label" parent="VBoxContainer/Row1"]
+unique_name_in_owner = true
+layout_mode = 2
 
 [node name="Row2" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="UiScaling" type="Label" parent="VBoxContainer/Row2"]
+[node name="SessionNameLabel" type="Label" parent="VBoxContainer/Row2"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "UI Scaling"
+theme_override_font_sizes/font_size = 12
+text = "Session Name"
 vertical_alignment = 1
 
-[node name="Button" type="Button" parent="VBoxContainer/Row2"]
+[node name="SessionNameLineEdit" type="LineEdit" parent="VBoxContainer/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+alignment = 1
+max_length = 20
+
+[node name="Control" type="Control" parent="VBoxContainer/Row2"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PortLabel" type="Label" parent="VBoxContainer/Row2"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Port:"
+
+[node name="PortLineEdit" type="LineEdit" parent="VBoxContainer/Row2"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Row3" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="Row4" type="HBoxContainer" parent="VBoxContainer"]
+[node name="ExampleOscMessageLabel" type="Label" parent="VBoxContainer/Row3"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "/SessionName/Play/1"
+
+[node name="Control" type="Control" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OscCommandsLabel" type="Label" parent="VBoxContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Osc Commands"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Row5" type="HBoxContainer" parent="VBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GoStandbyLabel" type="Label" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row5"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Go cues in Standby:"
+
+[node name="GoStandbyLineEdit" type="LineEdit" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row5"]
+layout_mode = 2
+text = "/Go"
+editable = false
+
+[node name="Row4" type="HBoxContainer" parent="VBoxContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GoCueIdLabel" type="Label" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row4"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Go cue by ID"
+
+[node name="GoCueIdLineEdit" type="LineEdit" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row4"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+text = "/Go/Id/###"
+editable = false

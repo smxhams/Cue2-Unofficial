@@ -72,7 +72,11 @@ clip_text = true
 layout_mode = 2
 alignment = 2
 
-[node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
+[node name="BkgProcessStatusBar" type="ProgressBar" parent="HBoxContainer/BottomRightContainer"]
+layout_mode = 2
+show_percentage = false
+
+[node name="VSeparator5" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
 layout_mode = 2
 
 [node name="ProcessTimeLabel" type="Label" parent="HBoxContainer/BottomRightContainer"]

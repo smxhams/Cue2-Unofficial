@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1764192461
+::res://::1764304659
 export_presets.cfg::TextFile/TextFile::-1::1733095694::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D/CompressedTexture2D::8597863507468381028::1762140938::1747122912::1::::<><><>0<>0<>2121b297116ecef117fc369b9feee572<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 README.md::TextFile/TextFile::-1::1762140938::0::1::::<><><>0<>0<><>::
@@ -10,7 +10,7 @@ collapsible_container_inspector_plugin.gd::GDScript/GDScript::859344914588241370
 collapsible_container_plugin_loader.gd::GDScript/GDScript::8699811508691133935::1762140938::0::1::::<>EditorPlugin<><>0<>1<><>::
 plugin.cfg::TextFile/TextFile::-1::1762140938::0::1::::<><><>0<>0<><>::
 ::res://addons/collapsible_container/collapsible_elements/::1762143854
-collapsible_container.gd::GDScript/GDScript::3743194857847071228::1762140938::0::1::::CollapsibleContainer<>Control<><>0<>1<><>::
+collapsible_container.gd::GDScript/GDScript::3743194857847071228::1762140938::0::1::::CollapsibleContainer<>Control<>res://addons/collapsible_container/collapsible_elements/collapsible_container.svg<>0<>1<><>::
 collapsible_container.svg::CompressedTexture2D/CompressedTexture2D::7091256535802334435::1762140938::1762143854::1::::<><><>0<>0<>21e351b80b856e0e791ffb082d9d5dbb<>res://.godot/imported/collapsible_container.svg-6bdfacf076bb04b60e67829b6de29657.ctex::
 collapsible_inspector_buttons.gd::GDScript/GDScript::4087264941882946472::1762140938::0::1::::<>EditorProperty<><>0<>0<><>::
 ::res://addons/collapsible_container/collapsible_elements/FoldingPresets/::1762140938
@@ -56,7 +56,7 @@ ControlAlignVCenterWide.svg::CompressedTexture2D/CompressedTexture2D::1610590933
 accordion_menu.tscn::PackedScene/PackedScene::5718306870135069498::1762140938::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/collapsible_elements/collapsible_container.gd<>res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/horizontal_menu.gd<>uid://dqm8hk0rif0jg::::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_button.tscn
 horizontal_menu.gd::GDScript/GDScript::2180653109461689928::1762140938::0::1::::<>Control<><>0<>0<><>::
 ::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/::1762143854
-collapsible_button.gd::GDScript/GDScript::6205898055688929455::1762140938::0::1::::<>Button<><>0<>1<><>::
+collapsible_button.gd::GDScript/GDScript::6205898055688929455::1762140938::0::1::::<>Button<>res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_container_button.svg<>0<>1<><>::
 collapsible_button.tscn::PackedScene/PackedScene::8309072808292096676::1762140938::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_button.gd
 collapsible_container_button.svg::CompressedTexture2D/CompressedTexture2D::3159317658515649253::1762140938::1762143854::1::::<><><>0<>0<>8440399925e4ec6cf8ffece88fcc8485<>res://.godot/imported/collapsible_container_button.svg-6fc636468a98337e8075fd3ee3a6d6cf.ctex::
 ::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/::1762140938
@@ -88,8 +88,8 @@ signal_example_script.gd::GDScript/GDScript::7572096448436812187::1762140938::0:
 ::res://bin/macos/::1762843335
 ::res://bin/win64/::1762817428
 ::res://bin/winarm64/::1762817515
-::res://Cue2.run/::1762308802
-Player.run.xml::TextFile::-1::1762890547::0::1::::<><><>0<>0<><>::
+::res://Cue2.run/::1764210442
+Player.run.xml::TextFile::-1::1764210394::0::1::::<><><>0<>0<><>::
 ::res://Cue2Mac.run/::1762317508
 PlayerMac.run.xml::TextFile/TextFile::-1::1762317489::0::1::::<><><>0<>0<><>::
 ::res://Files/::1762140938
@@ -103,7 +103,7 @@ package-lock.json::JSON::-1::1763933545::0::1::::<><><>0<>0<><>::
 proposed_README.md::TextFile::-1::1763587910::0::1::::<><><>0<>0<><>::
 README.md::TextFile::-1::1762140938::0::1::::<><><>0<>0<><>::
 TestFFmpeg.cs::CSharpScript::8351639140068111610::1763195306::0::1::::<>TextureRect<><>0<>0<><>::
-::res://src/Base/::1764192461
+::res://src/Base/::1764192851
 ActiveCueBar.tscn::PackedScene/PackedScene::8559962263874904924::1762140938::0::1::::<><><>0<>0<><>::uid://cb7g4xgryo2dg::::res://src/UI/Scenes/ComponentProgressBar.tscn
 Cue2Base.cs::CSharpScript::3855806022055526979::1762143832::0::1::::<>Control<><>0<>0<><>::
 Cue2Base.tscn::PackedScene::2680440110688548987::1763517554::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://bu61tdqw7n060::::res://src/Base/Cue2Base.cs<>uid://cd4xfma7ijlpi::::res://src/UI/Scenes/Header.tscn<>uid://db8fxhod3yfo6::::res://src/UI/Scenes/MainTitleBar.tscn<>uid://bya2tf86xcdn6::::res://src/UI/Scenes/CueListUI.tscn<>uid://c7uaftlqmt1qj::::res://src/UI/Scenes/ActiveCueContainer.tscn<>uid://cm5s0bi03612d::::res://src/UI/Scenes/Inspectors/ShellInspector.tscn<>uid://dge4tv6ikfteh::::res://src/UI/Scenes/Inspectors/LibraryInspector.tscn<>uid://c2oerlmq8wmp7::::res://src/UI/Scenes/Inspectors/AudioInspector.tscn<>uid://b6v72f8k5o0oy::::res://src/UI/Scenes/Footer.tscn<>uid://ghgo66ss8d58::::res://src/UI/Scenes/Inspectors/ConnectionInspector.tscn<>uid://d6ybxbmxkpib::::res://src/UI/Scenes/Inspectors/VideoInspector.tscn<>uid://cn3w3e20ljw3m::::res://src/UI/Scenes/Inspectors/TimelineInspector.tscn<>uid://b54ov4k1klk3j::::res://src/UI/Scenes/Inspectors/VideoInspector.cs<>uid://vrjj42fn2k2a::::res://src/Base/FileDialogue.cs<>uid://bpxw1fu0sgxtl::::res://src/UI/Scenes/MainWindowHandles.cs<>uid://b6p30ddy04yla::::res://src/Base/OpenDialog.cs
@@ -111,8 +111,8 @@ Devices.cs::CSharpScript::4640135516718921988::1764109781::0::1::::<>Node<><>0<>
 FileDialogue.cs::CSharpScript::1509624228430235078::1762140938::0::1::::<>FileDialog<><>0<>0<><>::
 OpenDialog.cs::CSharpScript::4594985386757575182::1762140938::0::1::::<>FileDialog<><>0<>0<><>::
 SaveDialog.cs::CSharpScript::5972160456151017888::1762140938::0::1::::<>FileDialog<><>0<>0<><>::
-settings.tscn::PackedScene::5170935391298064441::1764192472::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://bhwlk65qyenwy::::res://src/Base/SettingsWindow.cs<>uid://bjka1uto8v7i3::::res://src/Base/Settings/SettingsGeneral.cs<>uid://cu1ujebi3h7vu::::res://src/Base/Settings/SettingsAudioOutputPatch.cs<>uid://dpemt56x826sd::::res://src/UI/Scenes/SubWindowHandles.tscn<>uid://b0p7y7dg15efm::::res://src/UI/Scenes/Settings/SettingsOscSend.tscn<>uid://b6sx83qucwbua::::res://src/Base/Settings/SettingsAudio.tscn<>uid://ci4ndmhqsbvlh::::res://src/UI/Scenes/Settings/SettingsOscListen.tscn<>uid://msbmpql2gk17::::res://src/UI/Scenes/Settings/SettingsCueLights.tscn<>uid://ceydom3514ip::::res://src/UI/Scenes/Settings/SettingsCanvasEditor.tscn
-SettingsWindow.cs::CSharpScript::2923846319935321688::1764192302::0::1::::<>Window<><>0<>0<><>::
+settings.tscn::PackedScene::5170935391298064441::1764192680::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://bhwlk65qyenwy::::res://src/Base/SettingsWindow.cs<>uid://bjka1uto8v7i3::::res://src/Base/Settings/SettingsGeneral.cs<>uid://cu1ujebi3h7vu::::res://src/Base/Settings/SettingsAudioOutputPatch.cs<>uid://dpemt56x826sd::::res://src/UI/Scenes/SubWindowHandles.tscn<>uid://b0p7y7dg15efm::::res://src/UI/Scenes/Settings/SettingsOscConnections.tscn<>uid://b6sx83qucwbua::::res://src/Base/Settings/SettingsAudio.tscn<>uid://ci4ndmhqsbvlh::::res://src/UI/Scenes/Settings/SettingsOscListen.tscn<>uid://msbmpql2gk17::::res://src/UI/Scenes/Settings/SettingsCueLights.tscn<>uid://ceydom3514ip::::res://src/UI/Scenes/Settings/SettingsCanvasEditor.tscn
+SettingsWindow.cs::CSharpScript::2923846319935321688::1764192851::0::1::::<>Window<><>0<>0<><>::
 ShellBar.cs::CSharpScript::6895522173830298125::1762140938::0::1::::<>Control<><>0<>0<><>::
 shell_bar.tscn::PackedScene/PackedScene::9107914894803112806::1762140938::0::1::::<><><>0<>0<><>::uid://c5iiiivhxukfl::::res://src/Base/ShellBar.cs<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
 shell_bar_group.tscn::PackedScene/PackedScene::7894244447310820930::1762140938::0::1::::<><><>0<>0<><>::uid://c5iiiivhxukfl::::res://src/Base/ShellBar.cs<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
@@ -121,7 +121,7 @@ VideoCanvas.tscn::PackedScene/PackedScene::3836405259099407617::1762140938::0::1
 VideoPlayback.gdshader::Shader::9163745258136980093::1764188366::0::1::::<><><>0<>0<><>::
 VideoTextureRectMaterial.tres::ShaderMaterial::6796633086412818829::1763068390::0::1::::<><><>0<>0<><>::uid://d3s8ssw0tvkc0::::res://src/Base/VideoPlayback.gdshader
 video_output.tscn::PackedScene/PackedScene::7321502229609095143::1762140938::0::1::::<><><>0<>0<><>::uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs<>uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres
-::res://src/Base/Classes/::1764190553
+::res://src/Base/Classes/::1764279779
 ActiveAudioPlayback.cs::CSharpScript::1865291930392215703::1764186862::0::1::::<>GodotObject<><>0<>0<><>::
 ActiveCue.cs::CSharpScript::5737088265893442501::1764019265::0::1::::<>GodotObject<><>0<>0<><>::
 ActiveVideoPlayback.cs::CSharpScript::45345226016531640::1764186758::0::1::::<>Node<><>0<>0<><>::
@@ -133,16 +133,16 @@ CueListState.cs::CSharpScript/CSharpScript::5670477637566534882::1762140938::0::
 CuePatch.cs::CSharpScript/CSharpScript::4637230464141836879::1762140938::0::1::::<><><>0<>0<><>::
 GroupCue.cs::CSharpScript/CSharpScript::5279904311828544537::1762140938::0::1::::<><><>0<>0<><>::
 IAudioPlayback.cs::CSharpScript::1699728015628010498::1764019265::0::1::::<><><>0<>0<><>::
-Settings.cs::CSharpScript::394974176764252106::1762140938::0::1::::<>Node<><>0<>0<><>::
+Settings.cs::CSharpScript::394974176764252106::1764279779::0::1::::<>Node<><>0<>0<><>::
 ShellSelection.cs::CSharpScript::5331747436567085945::1762140938::0::1::::<>Node<><>0<>0<><>::
 VideoFileMetadata.cs::CSharpScript::295705225554600001::1762571516::0::1::::<><><>0<>0<><>::
 VideoTargetLayer.cs::CSharpScript::8020275012442606114::1763688283::0::1::::<><><>0<>0<><>::
-::res://src/Base/Classes/Connections/::1764192302
+::res://src/Base/Classes/Connections/::1764303483
 CueLight.cs::CSharpScript::834444826445800433::1764109108::0::1::::<>GodotObject<><>0<>0<><>::
 IConnection.cs::CSharpScript/CSharpScript::7530413401892383701::1762140938::0::1::::<><><>0<>0<><>::
 NetworkConnection.cs::CSharpScript/CSharpScript::3082627154984857173::1762140938::0::1::::<><><>0<>0<><>::
-OscConnections.cs::CSharpScript::2170561468456572646::1764192259::0::1::::<><><>0<>0<><>::
-OscListener.cs::CSharpScript::312870688752589552::1764192255::0::1::::<><><>0<>0<><>::
+OscConnections.cs::CSharpScript::2170561468456572646::1764303483::0::1::::<>Node<><>0<>0<><>::
+OscListen.cs::CSharpScript::414331499218454256::1764297016::0::1::::<>Node<><>0<>0<><>::
 ::res://src/Base/Classes/CueTypes/::1764017267
 AudioComponent.cs::CSharpScript::1412146281864083926::1763864927::0::1::::<><><>0<>0<><>::
 Cue.cs::CSharpScript::3639028604513860391::1763874003::0::1::::<><><>0<>0<><>::
@@ -206,7 +206,7 @@ icon32.png::CompressedTexture2D/CompressedTexture2D::8610604953915555270::176214
 icons.png::CompressedTexture2D/CompressedTexture2D::7037938117856060676::1763605251::1763605279::1::::<><><>0<>0<>98814f8ed59d5397908b35b5c44c7054<>res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex::
 icon_atlas_texture.tres::AtlasTexture/AtlasTexture::2448630440108534118::1762143871::0::1::::<><><>0<>0<><>::uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
 ShellPanelStyleBox.tres::StyleBoxFlat/StyleBoxFlat::8915072120006833744::1762143871::0::1::::<><><>0<>0<><>::
-::res://src/UI/Scenes/::1764190714
+::res://src/UI/Scenes/::1764275662
 ActiveCueContainer.cs::CSharpScript::2345135716127170500::1763356641::0::1::::<>PanelContainer<><>0<>0<><>::
 ActiveCueContainer.tscn::PackedScene/PackedScene::7060181863534239913::1762140938::0::1::::<><><>0<>0<><>::uid://8oabpi8j7qka::::res://src/UI/Scenes/ActiveCueContainer.cs<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png<>uid://dt7rlfag7yr2c::::res://src/Base/ActiveCueBar.tscn
 ButtonStyles.cs::CSharpScript::3842833391458543593::1763356641::0::1::::<>Button<><>0<>0<><>::
@@ -214,7 +214,7 @@ ComponentProgressBar.tscn::PackedScene::4909507607244923752::1763624217::0::1:::
 CueListUI.tscn::PackedScene/PackedScene::4072626534929378693::1762140938::0::1::::<><><>0<>0<><>::uid://bvggf4vdf2pc0::::res://src/Base/Classes/CueList.cs
 DisplayLayer.tscn::PackedScene::8731379054162327301::1764190714::0::1::::<><><>0<>0<><>::
 Footer.cs::CSharpScript::2162986026356572401::1763582740::0::1::::<>Control<><>0<>0<><>::
-Footer.tscn::PackedScene::4607618243601639720::1763582173::0::1::::<><><>0<>0<><>::uid://521cf2c4d6w8::::res://src/UI/Scenes/Footer.cs<>uid://d20wrpbn8dhip::::res://src/Base/Minor/CurrentTime.cs
+Footer.tscn::PackedScene::4607618243601639720::1764275662::0::1::::<><><>0<>0<><>::uid://521cf2c4d6w8::::res://src/UI/Scenes/Footer.cs<>uid://d20wrpbn8dhip::::res://src/Base/Minor/CurrentTime.cs
 Header.tscn::PackedScene/PackedScene::5044680904716378874::1762140938::0::1::::<><><>0<>0<><>::uid://bm26sjwgtda8d::::res://src/UI/Scenes/HeaderUI.cs<>uid://7h1277c0156g::::res://src/UI/Assets/GO_theme.tres
 HeaderUI.cs::CSharpScript::3286339884769122541::1763356641::0::1::::<>Control<><>0<>0<><>::
 LogWindow.cs::CSharpScript::5025226084286812668::1762140938::0::1::::<>Window<><>0<>0<><>::
@@ -240,14 +240,18 @@ TimelineInspector.cs::CSharpScript::2139558655374914194::1764109195::0::1::::<>C
 TimelineInspector.tscn::PackedScene/PackedScene::5744484940818581364::1762140938::0::1::::<><><>0<>0<><>::uid://5qohosm0xcfy::::res://src/UI/Scenes/Inspectors/TimelineInspector.cs
 VideoInspector.cs::CSharpScript::4552842027092866977::1764110696::0::1::::<>Control<><>0<>0<><>::
 VideoInspector.tscn::PackedScene::276022445068479437::1763783128::0::1::::<><><>0<>0<><>::uid://b1hhiqmg2m3c::::res://src/UI/Scenes/VideoPreviewer.tscn
-::res://src/UI/Scenes/Settings/::1764192461
+::res://src/UI/Scenes/Settings/::1764304622
 CueLightInstance.tscn::PackedScene/PackedScene::2220093523924611118::1762140938::0::1::::<><><>0<>0<><>::
 SettingsCanvasEditor.cs::CSharpScript::7129527206806397971::1763688162::0::1::::<>ScrollContainer<><>0<>0<><>::
 SettingsCanvasEditor.tscn::PackedScene/PackedScene::150098518678306371::1762245375::0::1::::<><><>0<>0<><>::uid://c8tujh2ove2m6::::res://src/UI/Scenes/Settings/SettingsCanvasEditor.cs<>uid://cafctoouo75sh::::res://src/UI/Scenes/Settings/VideoOutputDevicesCard.tscn
 SettingsCueLights.cs::CSharpScript::3866270580814670503::1762140938::0::1::::<>ScrollContainer<><>0<>0<><>::
 SettingsCueLights.tscn::PackedScene::879507882852331644::1762143871::0::1::::<><><>0<>0<><>::uid://bvc3582nv4vjj::::res://src/UI/Scenes/Settings/SettingsCueLights.cs
-SettingsOscListen.tscn::PackedScene::5395014391490790841::1764190900::0::1::::<><><>0<>0<><>::
-SettingsOscSend.tscn::PackedScene::4174094929467210710::1764190910::0::1::::<><><>0<>0<><>::
+SettingsOscConnectionCard.cs::CSharpScript::5851482297531907379::1764304008::0::1::::<>HBoxContainer<><>0<>0<><>::
+SettingsOscConnectionCard.tscn::PackedScene::5803881396894309733::1764304622::0::1::::<><><>0<>0<><>::uid://cpmrb8wngqhax::::res://src/UI/Scenes/Settings/SettingsOscConnectionCard.cs
+SettingsOscConnections.cs::CSharpScript::150314173180130501::1764304561::0::1::::<>ScrollContainer<><>0<>0<><>::
+SettingsOscConnections.tscn::PackedScene::4174094929467210710::1764303410::0::1::::<><><>0<>0<><>::uid://ce2wgiyvepmb::::res://src/UI/Scenes/Settings/SettingsOscConnections.cs
+SettingsOscListen.cs::CSharpScript::931381048079798790::1764297163::0::1::::<>ScrollContainer<><>0<>0<><>::
+SettingsOscListen.tscn::PackedScene::5395014391490790841::1764297017::0::1::::<><><>0<>0<><>::uid://njfyern1ut55::::res://src/UI/Scenes/Settings/SettingsOscListen.cs
 VideoOutputDevicesCard.tscn::PackedScene::4783319378109100995::1763517614::0::1::::<><><>0<>0<><>::
 VideoTargetLayerCard.tscn::PackedScene/PackedScene::8585249090551736662::1762220842::0::1::::<><><>0<>0<><>::
 ::res://src/UI/Utilities/::1762315546
