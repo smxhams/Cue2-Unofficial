@@ -103,6 +103,7 @@ public class Cue : ICue
                     "Video" => new VideoComponent(),
                     "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
+                    "OscComponent" => new OscComponent(),
                     _ => null
                 };
                 if (comp != null)
@@ -174,14 +175,22 @@ public class Cue : ICue
     public void AddICueComponent(ICueComponent component)
     {
         Components.Add(component);
-        GD.Print($"Cue:AddCueLightComponent - Added to Cue {Id}");
+    }
+
+    public void RemoveICueComponent(ICueComponent component)
+    {
+        Components.Remove(component);
     }
     
     public CueLightComponent[] GetCueLightComponents()
     {
         return Components.OfType<CueLightComponent>().ToArray();
     }
-    
+
+    public OscComponent[] GetOscComponents()
+    {
+        return Components.OfType<OscComponent>().ToArray();
+    }
 
     public double CalculateTotalDuration()
     {

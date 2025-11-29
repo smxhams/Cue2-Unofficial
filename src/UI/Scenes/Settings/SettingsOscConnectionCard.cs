@@ -56,7 +56,6 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         _rearrangeButton.Icon = GetThemeIcon("Rearrange", "AtlasIcons");
         _deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
 
-        
     }
 
     public void SetCueOscConnection(CueOscConnection connection)
@@ -65,6 +64,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         _nameLineEdit.Text = connection.Name;
         _destinationLineEdit.Text = connection.Address.ToString();
         _portLineEdit.Text = connection.Port.ToString();
+        LoadInterfaceOptions();
 
     }
 

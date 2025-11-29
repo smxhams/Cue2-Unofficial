@@ -40,7 +40,8 @@ public partial class ActiveCue : GodotObject
     private Dictionary<PanelContainer, ActiveVideoPlayback> _activeVideoComponents = new Dictionary<PanelContainer, ActiveVideoPlayback>();
     private Dictionary<PanelContainer, VideoComponent> _componentToVideo = new Dictionary<PanelContainer, VideoComponent>();
     private Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new Dictionary<PanelContainer, CueLightComponent>();
-
+    private Dictionary<PanelContainer, OscComponent> _activeOscComponents = new Dictionary<PanelContainer, OscComponent>();
+    
     private int _activeComponentCount = 0;
     
     /// <summary>
@@ -241,6 +242,14 @@ public partial class ActiveCue : GodotObject
             {
                 tasks.Add(TriggerVideoComponent(videoComp));
             }
+            else if (comp is CueLightComponent cueLightComp)
+            {
+                tasks.Add(TriggerCueLightComponent(cueLightComp));
+            }
+            else if (comp is OscComponent oscComp)
+            {
+                tasks.Add(TriggerOscComponent(oscComp));
+            }
             // Add other component types (e.g., OSC) as implemented
         }
 
@@ -290,13 +299,28 @@ public partial class ActiveCue : GodotObject
                 await _audioDevices.StartAudioPlayback(playback);
             }
 
-            playback.PlayAsync();
+            await playback.PlayAsync();
 
         }
         catch (Exception ex)
         {
             GD.PrintErr($"ActiveCue:TriggerVideoComponent - Error triggering {videoComp.VideoFile}: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Trigger failed for video in {_cue.Name}: {ex.Message}", 2);
+        }
+    }
+
+    private async Task TriggerCueLightComponent(CueLightComponent comp)
+    {
+        await comp.ExecuteAsync();
+    }
+
+    private async Task TriggerOscComponent(OscComponent comp)
+    {
+        await comp.Execute();
+        var panel = _activeOscComponents.FirstOrDefault(kv => kv.Value == comp).Key;
+        if (panel != null)
+        {
+            HandleOscComponentCompleted(panel);
         }
     }
 
@@ -397,11 +421,16 @@ public partial class ActiveCue : GodotObject
                 //var cueLightComp = component as CueLightComponent;
                 //tasks.Add(cueLightComp.ExecuteAsync(_cue.CueNum));
             }
+            else if (component is OscComponent oscComponent)
+            {
+                tasks.Add(SetupOscComponent(oscComponent));
+            }
         }
         await Task.WhenAll(tasks);
     }
-    
-    
+
+
+
     private async Task SetupAudioComponent(AudioComponent audioComponent)
     {
         try
@@ -474,6 +503,7 @@ public partial class ActiveCue : GodotObject
                         pendingSeekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration;
                         progressBar.Value = percent * 100; // Preview
                         timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
+    
                     }
                     else
                     {
@@ -640,13 +670,47 @@ public partial class ActiveCue : GodotObject
             _activeCueLightComponents.Add(componentPanel, cueLightComponent);
             
             _activeComponentCount++;
+
+            stopButton.Pressed += () =>
+            {
+                _activeCueLightComponents.Remove(componentPanel);
+                _activeComponentCount--;
+                componentPanel.QueueFree();
+            };
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"ActiveCue:SetupCueLightComponent - Exception: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error setting up cuelight component for cue {_cue.Name}: {ex.Message}", 2);
+        }
+    }
+    
+    private async Task SetupOscComponent(OscComponent oscComponent)
+    {
+        try
+        {
+            PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+            _componentContainer.AddChild(componentPanel);
+            var labelText = $"{oscComponent.OscConnection.Name} : {oscComponent.OscMessage}";
+            componentPanel.GetNode<Label>("%ComponentLabel").Text = labelText;
+            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            componentPanel.GetNode<Button>("%ComponentPause").QueueFree(); // No pause implemented
+            var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
+            typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+            
+            _activeOscComponents.Add(componentPanel, oscComponent);
+            
+            _activeComponentCount++;
             
         }
         catch (Exception ex)
         {
-            GD.Print($"ActiveCue:StartAsync - Exception: {ex.Message}");
+            GD.Print($"ActiveCue:SetupOscComponent - Exception: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
+                $"Error setting up osc component for cue {_cue.Name}: {ex.Message}", 2);
         }
     }
 
@@ -871,14 +935,7 @@ public partial class ActiveCue : GodotObject
         _activeAudioComponents.Remove(componentPanel);
         _componentToAudio.Remove(componentPanel);
         componentPanel.QueueFree();
-        if (_activeAudioComponents.Count == 0 && _activeVideoComponents.Count == 0)
-        {
-            _isFinished = true;
-            if (_childActiveCues.Count == 0)
-            {
-                Cleanup();
-            }
-        }
+        CheckForCueCompletion();
     }
 
     private void HandleVideoComponentCompleted(PanelContainer componentPanel)
@@ -892,7 +949,28 @@ public partial class ActiveCue : GodotObject
         _activeVideoComponents.Remove(componentPanel);
         _componentToVideo.Remove(componentPanel);
         componentPanel.QueueFree();
-        if (_activeAudioComponents.Count == 0 && _activeVideoComponents.Count == 0)
+        CheckForCueCompletion();
+    }
+
+    private void HandleOscComponentCompleted(PanelContainer componentPanel)
+    {
+        if (!IsInstanceValid(this) || !_activeOscComponents.ContainsKey(componentPanel))
+        {
+            GD.Print("ActiveCue:HandleOscComponentCompleted - Component already cleaned or invalid");
+            return;
+        }
+
+        _activeOscComponents.Remove(componentPanel);
+        componentPanel.QueueFree();
+        _activeComponentCount--;
+        CheckForCueCompletion();
+    }
+
+    private void CheckForCueCompletion()
+    {
+        if (_activeAudioComponents.Count == 0 
+            && _activeVideoComponents.Count == 0 
+            && _activeOscComponents.Count == 0)
         {
             _isFinished = true;
             if (_childActiveCues.Count == 0)

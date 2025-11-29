@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://ghgo66ss8d58"]
+[gd_scene load_steps=4 format=3 uid="uid://ghgo66ss8d58"]
 
 [ext_resource type="Script" uid="uid://bgk8ddxgx7asj" path="res://src/UI/Scenes/Inspectors/ConnectionInspector.cs" id="1_v7y2v"]
 [ext_resource type="PackedScene" uid="uid://cfl3cwoqby4lo" path="res://src/UI/Scenes/Inspectors/CueLightConnectionCard.tscn" id="2_m8fye"]
+[ext_resource type="PackedScene" uid="uid://cst0ttvboq673" path="res://src/UI/Scenes/Inspectors/InspectorOscConnectionCard.tscn" id="3_c0ptv"]
 
 [node name="Connection" type="Control"]
 layout_mode = 3
@@ -85,30 +86,6 @@ size_flags_horizontal = 0
 size_flags_vertical = 0
 focus_mode = 0
 
-[node name="InspectorOscConnectionCard" type="PanelContainer" parent="MarginContainer/ScrollContainer/ConnectionCardContainer"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 0)
-layout_mode = 2
-size_flags_horizontal = 0
-size_flags_vertical = 0
-
-[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/ScrollContainer/ConnectionCardContainer/InspectorOscConnectionCard"]
-layout_mode = 2
-theme_override_constants/margin_left = 4
-theme_override_constants/margin_top = 4
-theme_override_constants/margin_right = 4
-theme_override_constants/margin_bottom = 4
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer/ConnectionCardContainer/InspectorOscConnectionCard/MarginContainer"]
-layout_mode = 2
-
-[node name="NameLabel" type="Label" parent="MarginContainer/ScrollContainer/ConnectionCardContainer/InspectorOscConnectionCard/MarginContainer/VBoxContainer"]
+[node name="InspectorOscConnectionCard" parent="MarginContainer/ScrollContainer/ConnectionCardContainer" instance=ExtResource("3_c0ptv")]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Empty Component"
-
-[node name="TextEdit" type="TextEdit" parent="MarginContainer/ScrollContainer/ConnectionCardContainer/InspectorOscConnectionCard/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 60)
-layout_mode = 2
-size_flags_vertical = 3
-placeholder_text = "/command/here"

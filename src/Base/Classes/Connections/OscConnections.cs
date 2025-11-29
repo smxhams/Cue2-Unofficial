@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using Godot;
 using Godot.Collections;
@@ -11,49 +12,23 @@ namespace Cue2.Base.Classes.Connections;
 /// OscConnections manages Osc clients and the transmission of OSC messages.
 /// </summary>
 public partial class OscConnections : Node
-{
-    private static OscSender _sender;
-    private IPAddress _address;
-    
+{ 
     public static List<CueOscConnection> Connections { get; set; } = new List<CueOscConnection>();
     
     public override void _Ready()
     {
-        _address = IPAddress.Loopback;
-        _sender = new OscSender(_address, 7001);
-        _sender.Connect();
         GD.Print("OscConnections: Sender initialized and connected to 127.0.0.1:8000");
     }
 
-    private static void SendMessage(OscMessage message)
-    {
-        if (_sender == null)
-        {
-            GD.Print("OscConnections: Sender is null, cannot send");
-            return;
-        }
-        try
-        {
-            _sender.Close();
-            _sender.Connect();
-            _sender.Send(message);
-            GD.Print($"OscConnections: Sent {message}");
-        }
-        catch (Exception ex)
-        {
-            GD.Print($"OscConnections: Failed to send message: {ex.Message}");
-        }
-    }
-
-    public static void SendTestMessage()
-    {
-        var message = new OscMessage("/cue/play", 1);
-        SendMessage(message);
-    }
+    public static CueOscConnection GetCueOscConnection(int id) => Connections.Find(c => c.Id == id);
+    
 
     public override void _ExitTree()
     {
-        _sender?.Close();
+        foreach (var connection in Connections)
+        {
+            connection.CloseConnection();
+        }
     }
 
     public static CueOscConnection CreateConnection(string name = "Osc", IPAddress address = null, int port = 7002, string networkInterface = "")
@@ -77,6 +52,7 @@ public partial class OscConnections : Node
         if (connection != null)
         {
             Connections.Remove(connection);
+            connection.CloseConnection();
             GD.Print($"OscConnections: Deleted connection '{connection.Name}' (ID: {id})");
             return true;
         }
@@ -108,6 +84,7 @@ public partial class OscConnections : Node
                 {
                     var connection = new CueOscConnection();
                     connection.LoadFromData(dict);
+                    connection.InitializeSender();
                     Connections.Add(connection);
                 }
             }
@@ -126,6 +103,70 @@ public partial class CueOscConnection : GodotObject
     public string NetworkInterface { get; set; }
     public IPAddress Address { get; set; }
     public int Port { get; set; }
+    
+    private OscSender _sender;
+
+    public void InitializeSender()
+    {
+        try
+        {
+            IPAddress localAddress = IPAddress.Any;
+            if (!string.IsNullOrEmpty(NetworkInterface))
+            {
+                var interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+                var ni = interfaces.FirstOrDefault(i => i.Name == NetworkInterface);
+                if (ni != null)
+                {
+                    var ipProps = ni.GetIPProperties();
+                    var ipv4 = ipProps.UnicastAddresses.FirstOrDefault(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                    if (ipv4 != null)
+                    {
+                        localAddress = ipv4.Address;
+                    }
+                    else
+                    {
+                        GD.Print($"CueOscConnection: No IPv4 address found for interface '{NetworkInterface}'");
+                    }
+                }
+                else
+                {
+                    GD.PrintErr($"CueOscConnection: Network interface '{NetworkInterface}' not found");
+                }
+            }
+            _sender = new OscSender(Address, Port); // local port 0 for auto
+            _sender.Connect();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"CueOscConnection: Failed to initialize sender for connection '{Name}': {ex.Message}");
+            _sender = null;
+        }
+    }
+
+    public void SendMessage(OscMessage message)
+    {
+        if (_sender != null)
+        {
+            try
+            {
+                _sender.Send(message);
+                GD.Print($"CueOscConnection: Sent {message} from {NetworkInterface}");
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"CueOscConnection: Failed to send {message}: {ex.Message}");
+            }
+        }
+        else
+        {
+            GD.PrintErr("CueOscConnection: Sender not initialized");
+        }
+    }
+
+    public void CloseConnection()
+    {
+        _sender?.Close();
+    }
 
     public Dictionary GetData()
     {
@@ -146,6 +187,7 @@ public partial class CueOscConnection : GodotObject
         NetworkInterface = data.TryGetValue("NetworkInterface", out value) ? (string)value : NetworkInterface;
         Address = data.TryGetValue("Address", out value) && !string.IsNullOrEmpty((string)value) ? IPAddress.Parse((string)value) : IPAddress.Loopback;
         Port = data.TryGetValue("Port", out value) ? (int)value : Port;
+        GD.Print($"CueOscConnection: Loaded {Id} connection: Name: {Name}, NetworkInterface: {NetworkInterface},  Address: {Address}, Port: {Port}");
     }
     
 }

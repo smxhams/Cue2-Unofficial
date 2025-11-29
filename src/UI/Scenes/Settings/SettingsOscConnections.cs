@@ -19,7 +19,7 @@ public partial class SettingsOscConnections : ScrollContainer
     private Label _destinationLabel;
     private Label _portLabel;
     
-    private PackedScene _oscConnectionCardScene = SceneLoader.LoadPackedScene("uid://coxpcw6hyfn4p", out _);
+    private PackedScene _oscConnectionCardScene = SceneLoader.LoadPackedScene("uid://b53mk1xolhtmv", out _);
     
     public override void _Ready()
     {

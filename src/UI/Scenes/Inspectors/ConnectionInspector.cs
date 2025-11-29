@@ -106,7 +106,7 @@ public partial class ConnectionInspector : Control
         
         
         
-        // Load Cueliught connection cards
+        // Load Cuelight connection cards
         if (_focusedCue == null) return;
         foreach (var component in _focusedCue.Components)
         {
@@ -114,7 +114,24 @@ public partial class ConnectionInspector : Control
             {
                 LoadCueLightComponentCard(component as CueLightComponent);
             }
+            else if (component is OscComponent)
+            {
+                LoadOscComponentCard(component as OscComponent);
+            }
         }
+    }
+
+    private void LoadOscComponentCard(OscComponent component)
+    {
+        var oscCard = _oscComponentCardScene.Instantiate<InspectorOscConnectionCard>();
+        _connectionCardContainer.AddChild(oscCard);
+        oscCard.SetComponent(component, this);
+            
+    }
+
+    public void RemoveComponent(ICueComponent component)
+    {
+        _focusedCue.RemoveICueComponent(component);
     }
 
     private void LoadCueLightComponentCard(CueLightComponent cueLightComp)

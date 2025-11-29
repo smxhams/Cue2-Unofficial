@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Cue2.Base.Classes.Connections;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Godot;
@@ -491,6 +492,16 @@ public partial class CueList : ScrollContainer
 					{
 						var cuelight = _globalData.CueLightManager.GetCueLight(cueLightComp.CueLightId);
 						cueLightComp.CueLight = cuelight;
+					}
+				}
+				
+				var oscComponents = newCue.GetOscComponents();
+				if (oscComponents != null)
+				{
+					foreach (var oscComp in oscComponents)
+					{
+						var oscConnection = OscConnections.GetCueOscConnection(oscComp.OscConnectionId);
+						oscComp.OscConnection = oscConnection;
 					}
 				}
 
