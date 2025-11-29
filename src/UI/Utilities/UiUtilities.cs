@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
@@ -333,6 +334,32 @@ public partial class UiUtilities : Node
             return null;
         }
     }
+
+    public static IPAddress ValidateIpAddress(string input)
+    {
+        return IPAddress.None;
+    }
+
+    public static int ValidatePort(string input)
+    {
+        if (int.TryParse(input, out int port))
+        {
+            if (port >= 1 && port <= 65535)
+            {
+                return port;
+            }
+            else
+            {
+                GD.Print($"SettingsOscListen: Invalid port number. Must be between 1 and 65535.");
+                return -1;
+            }
+        }
+        else
+        {
+            GD.Print($"SettingsOscListen: Invalid port number. Please enter a valid integer.");
+            return -1;
+        }
+    }
     
     
     /// <summary>
@@ -350,6 +377,9 @@ public partial class UiUtilities : Node
             GD.PrintErr(message);
         }
     }
+    
+    
+    
 
 
     public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)

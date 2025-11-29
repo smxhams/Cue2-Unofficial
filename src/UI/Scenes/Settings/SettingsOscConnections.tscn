@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://b0p7y7dg15efm"]
+[gd_scene load_steps=2 format=3 uid="uid://c1b0pu4blunqr"]
 
 [ext_resource type="Script" uid="uid://ce2wgiyvepmb" path="res://src/UI/Scenes/Settings/SettingsOscConnections.cs" id="1_7heie"]
 
@@ -99,11 +99,3 @@ layout_mode = 2
 [node name="ConnectionsContainer" type="VBoxContainer" parent="VBoxContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-
-[node name="Row3" type="HBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="TestButton" type="Button" parent="VBoxContainer/Row3"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "Send Test to Self"

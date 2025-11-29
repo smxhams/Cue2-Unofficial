@@ -168,10 +168,10 @@ public class Cue : ICue
     }
 
     /// <summary>
-    /// Adds a cue light component to this cue
+    /// Adds a ICueComponent to this cue
     /// </summary>
     /// <param name="component"></param>
-    public void AddCueLightComponent(CueLightComponent component)
+    public void AddICueComponent(ICueComponent component)
     {
         Components.Add(component);
         GD.Print($"Cue:AddCueLightComponent - Added to Cue {Id}");

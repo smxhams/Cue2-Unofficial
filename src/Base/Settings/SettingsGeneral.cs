@@ -10,7 +10,7 @@ public partial class SettingsGeneral : ScrollContainer
     private GlobalData _globalData;
     public override void _Ready()
     {
-        GD.Print("Settingsd General Init");
+        GD.Print("SettingsGeneral:_Ready - Settings General Init");
         
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
@@ -22,10 +22,10 @@ public partial class SettingsGeneral : ScrollContainer
         GetNode<OptionButton>("%GoScaleOptionButton").ItemSelected += _scaleGoButton;
         
         //GetNode<OptionButton>("%SaveFilterOptionButton").selec
-        _syncSettings();
+        SyncSettings();
     }
     
-    private void _syncSettings()
+    private void SyncSettings()
     {
         GetNode<LineEdit>("%UiScaleNum").Text = _globalData.Settings.UiScale*100 + "%";
         GetNode<HSlider>("%UiScaleSlider").Value = _globalData.Settings.UiScale * 100f;

@@ -1,14 +1,14 @@
+Button
+TextEdit
 VBoxContainer
 Control
 Label
 HSplitContainer
 BoxContainer
 Container
-Button
 LineEdit
 OptionButton
 HBoxContainer
 CheckButton
 ProgressBar
 TextureRect
-SplitContainer

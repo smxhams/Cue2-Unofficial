@@ -56,7 +56,7 @@ public partial class OscConnections : Node
         _sender?.Close();
     }
 
-    public static CueOscConnection CreateConnection(string name = "Osc", IPAddress address = null, int port = 7002, int networkInterface = 0)
+    public static CueOscConnection CreateConnection(string name = "Osc", IPAddress address = null, int port = 7002, string networkInterface = "")
     {
         var connection = new CueOscConnection
         {
@@ -83,14 +83,47 @@ public partial class OscConnections : Node
         GD.Print($"OscConnections: Connection with ID {id} not found");
         return false;
     }
+
+    public Dictionary GetData()
+    {
+        var dict = new Dictionary();
+        var connectionsArray = new Godot.Collections.Array();
+        foreach (var connection in Connections)
+        {
+            connectionsArray.Add(connection.GetData());
+        }
+        dict["OscConnections"] = connectionsArray;
+        return dict;
+    }
+
+    public void LoadFromData(Dictionary data)
+    {
+        if (data.TryGetValue("OscConnections", out var value) && value.As<Godot.Collections.Array>() is Godot.Collections.Array connectionsArray)
+        {
+            Connections.Clear();
+            CueOscConnection._nextId = 0; // Reset ID counter
+            foreach (var item in connectionsArray)
+            {
+                if (item.As<Dictionary>() is Dictionary dict)
+                {
+                    var connection = new CueOscConnection();
+                    connection.LoadFromData(dict);
+                    Connections.Add(connection);
+                }
+            }
+            GD.Print($"OscConnections: Loaded {Connections.Count} connections");
+        }
+    }
+    
+    
 }
 
-public class CueOscConnection
+public partial class CueOscConnection : GodotObject
 {
     public static int _nextId = 0;
     public int Id { get; set; }
     public string Name = $"Osc";
-    public int NetworkInterface { get; set; }
+    public string NetworkInterface { get; set; }
     public IPAddress Address { get; set; }
     public int Port { get; set; }
 
@@ -110,7 +143,7 @@ public class CueOscConnection
         Id = data.TryGetValue("Id", out var value) ? (int)value : _nextId++;
         if (Id >= _nextId) _nextId = Id + 1;
         Name = data.TryGetValue("Name", out value) ? (string)value : Name;
-        NetworkInterface = data.TryGetValue("NetworkInterface", out value) ? (int)value : NetworkInterface;
+        NetworkInterface = data.TryGetValue("NetworkInterface", out value) ? (string)value : NetworkInterface;
         Address = data.TryGetValue("Address", out value) && !string.IsNullOrEmpty((string)value) ? IPAddress.Parse((string)value) : IPAddress.Loopback;
         Port = data.TryGetValue("Port", out value) ? (int)value : Port;
     }

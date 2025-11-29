@@ -147,6 +147,7 @@ public partial class Settings : Node
         saveTable.Add("OscListen", GetNode<OscListen>("/root/OscListen").GetData());
         
         // Osc Connections
+        saveTable.Add("OscConnections", GetNode<OscConnections>("/root/OscConnections").GetData());
         
         return saveTable;
     }
@@ -207,11 +208,17 @@ public partial class Settings : Node
         if (settingsData.TryGetValue("OscListen", out var oscListen))
         {
             GD.Print($"Settings:LoadSettings - Loading OscListen");
-            var OscListenAsDict = oscListen.AsGodotDictionary();
-            GetNode<OscListen>("/root/OscListen").LoadFromData(OscListenAsDict);
+            var oscListenAsDict = oscListen.AsGodotDictionary();
+            GetNode<OscListen>("/root/OscListen").LoadFromData(oscListenAsDict);
         }
         
         // Osc Connections
+        if (settingsData.TryGetValue("OscConnections", out var oscConnections))
+        {
+            GD.Print($"Settings:LoadSettings - Loading OscConnections");
+            var oscConnectionsAsDict = oscConnections.AsGodotDictionary();
+            GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
+        }
     }
     
 }

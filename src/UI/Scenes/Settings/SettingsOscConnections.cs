@@ -11,7 +11,6 @@ public partial class SettingsOscConnections : ScrollContainer
 {
 
     // Ui Properties
-    private Button _testButton;
     private Button _newOscButton;
     private VBoxContainer _connectionsContainer;
 
@@ -26,7 +25,6 @@ public partial class SettingsOscConnections : ScrollContainer
     {
         
         // Assign Ui properties
-        _testButton = GetNode<Button>("%TestButton");
         _newOscButton = GetNode<Button>("%NewOscButton");
         _connectionsContainer = GetNode<VBoxContainer>("%ConnectionsContainer");
         
@@ -35,12 +33,38 @@ public partial class SettingsOscConnections : ScrollContainer
         _destinationLabel = GetNode<Label>("%DestinationLabel");
         _portLabel = GetNode<Label>("%PortLabel");
         
-        _testButton.Pressed += OscConnections.SendTestMessage;
         _newOscButton.Pressed += NewConnection;
         _nameLabel.Resized += UpdateUiColumns;
         _interfaceLabel.Resized += UpdateUiColumns;
         _destinationLabel.Resized += UpdateUiColumns;
         _portLabel.Resized += UpdateUiColumns;
+
+        VisibilityChanged += SyncConnections;
+    }
+
+
+    public void SyncConnections()
+    {
+        GD.Print($"SettingsOscConnections:SyncConnections - Syncing {OscConnections.Connections.Count} OSC connections");
+        if (Visible)
+        {
+            // Clear existing cards
+            foreach (var child in _connectionsContainer.GetChildren())
+            {
+                _connectionsContainer.RemoveChild(child);
+                child.QueueFree();
+            }
+
+            // Add cards for each connection
+            var ratios = GetColumnRatios();
+            foreach (var connection in OscConnections.Connections)
+            {
+                var connectionCard = _oscConnectionCardScene.Instantiate<SettingsOscConnectionCard>();
+                _connectionsContainer.AddChild(connectionCard);
+                connectionCard.SetCueOscConnection(connection);
+                connectionCard.UpdateRatios(ratios);
+            }
+        }
     }
 
     private void NewConnection()
@@ -54,11 +78,11 @@ public partial class SettingsOscConnections : ScrollContainer
         connectionCard.UpdateRatios(ratios);
     }
 
-    private Dictionary<string, float> GetColumnRatios()
+    private Godot.Collections.Dictionary GetColumnRatios()
     {
         float totalWidth = _nameLabel.Size.X + _interfaceLabel.Size.X + _destinationLabel.Size.X + _portLabel.Size.X;
-        if (totalWidth == 0) return new Dictionary<string, float>();
-        var ratios = new Dictionary<string, float>();
+        if (totalWidth == 0) return new Godot.Collections.Dictionary();
+        var ratios = new Godot.Collections.Dictionary();
         ratios["Name"] = _nameLabel.Size.X / totalWidth;
         ratios["Interface"] = _interfaceLabel.Size.X / totalWidth;
         ratios["Destination"] = _destinationLabel.Size.X / totalWidth;
@@ -72,7 +96,7 @@ public partial class SettingsOscConnections : ScrollContainer
         UpdateAllCardRatios(ratios);
     }
 
-    private void UpdateAllCardRatios(Dictionary<string, float> ratios)
+    private void UpdateAllCardRatios(Godot.Collections.Dictionary ratios)
     {
         foreach (var child in _connectionsContainer.GetChildren())
         {

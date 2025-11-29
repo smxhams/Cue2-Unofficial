@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Cue2.Base;
 using Cue2.Base.Classes;
+using Cue2.Base.Classes.Connections;
 using Cue2.Base.CommandInterpreter;
 using Godot;
 using Godot.Collections;
@@ -183,9 +184,14 @@ public partial class GlobalData : Node
 		var cueLights = CueLightManager.GetCueLights();
 		foreach (var cueLight in cueLights)
 		{
-			dict.Add("Cue Light", cueLight);
+			dict.Add(cueLight,"Cue Light");
 		}
-		
+
+		var oscConnections = OscConnections.Connections;
+		foreach (var oscCon in oscConnections)
+		{
+			dict.Add(oscCon,"Osc Connection");
+		}
 		return dict;
 	}
 

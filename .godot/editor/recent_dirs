@@ -1,7 +1,5 @@
-res://src/UI/Scenes/Settings
-res://src/Base/Classes/Connections
-res://src/Base/Settings
 res://src/UI/Scenes/Inspectors
+res://src/Base/Settings
 res://src
 /Users/smxham/Documents/MyFiles/Cue2_Home/Ext/godot-minimal-theme-main/godot-minimal-theme-main
 res://src/UI/Scenes
@@ -9,6 +7,7 @@ res://src/Shared
 res://src/launcher
 res://src/UI/Utilities
 /Users/smxham/Documents/MyFiles/Cue2_Home/Ext
+res://src/UI/Scenes/Settings
 res://src/UI/Assets
 res://src/ui/Scenes
 res://src/ui

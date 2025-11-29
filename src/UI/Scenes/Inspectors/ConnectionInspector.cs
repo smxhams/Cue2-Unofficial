@@ -13,7 +13,8 @@ public partial class ConnectionInspector : Control
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
 
-    private PackedScene _cueLightComponentCardScene;
+    private PackedScene _cueLightComponentCardScene = SceneLoader.LoadPackedScene("uid://cfl3cwoqby4lo", out string _);
+    private PackedScene _oscComponentCardScene = SceneLoader.LoadPackedScene("uid://cst0ttvboq673", out string _);
     
     private Cue _focusedCue;
 
@@ -30,8 +31,6 @@ public partial class ConnectionInspector : Control
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 
         _globalSignals.ShellFocused += ShellSelected;
-        
-        _cueLightComponentCardScene = SceneLoader.LoadPackedScene("uid://cfl3cwoqby4lo", out string _);
         
         
         _infoLabel = GetNode<Label>("InfoLabel");
@@ -81,14 +80,21 @@ public partial class ConnectionInspector : Control
         int index = 1;
         foreach (var kvp in availableConnections)
         {
-            var connectionType = (string)kvp.Key;
-            var connectionObj = kvp.Value;
+            var connectionType = (string)kvp.Value;
+            var connectionObj = kvp.Key;
 
             if (connectionObj.Obj is CueLight cueLight)
             {
                 string displayText = $"{connectionType} - {cueLight.Name}";
                 _availableConnectionsButton.AddItem(displayText, index);
                 _availableConnectionsButton.SetItemMetadata(index, cueLight); // Associate the object with the item for later retrieval
+                index++;
+            }
+            else if (connectionObj.Obj is CueOscConnection cueOscConnection)
+            {
+                string displayText = $"{connectionType} - {cueOscConnection.Name}";
+                _availableConnectionsButton.AddItem(displayText, index);
+                _availableConnectionsButton.SetItemMetadata(index, cueOscConnection);
                 index++;
             }
             else
@@ -193,7 +199,14 @@ public partial class ConnectionInspector : Control
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: Cue Light - {selectedCueLight.Name}", 0);
             var cueLightComponent = new CueLightComponent { CueLight = selectedCueLight, CueLightId = selectedCueLight.Id };
-            _focusedCue.AddCueLightComponent(cueLightComponent);
+            _focusedCue.AddICueComponent(cueLightComponent);
+            LoadConnections();
+        }
+        else if (selectedObj is CueOscConnection selectedOscConnection)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: OSC Connection - {selectedOscConnection.Name}", 0);
+            var oscComponent = new OscComponent { OscConnection = selectedOscConnection, OscConnectionId = selectedOscConnection.Id };
+            _focusedCue.AddICueComponent(oscComponent);
             LoadConnections();
         }
         else

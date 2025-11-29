@@ -132,9 +132,6 @@ public partial class OscListen : Node
         SetEnabled(OscListenEnabled);
         Port = OscListenData.TryGetValue("Port", out value) ? (int)value : Port;
         SessionName = OscListenData.TryGetValue("SessionName", out value) ? (string)value : SessionName;
-        
-
-
     }
     
     public override void _ExitTree()

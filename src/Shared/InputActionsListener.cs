@@ -85,13 +85,11 @@ public partial class InputActionsListener : Node
     
     private void SetListeningTrue()
     {
-        GD.Print("Listening True");
         SetListening(true);
     }
 
     private void SetListeningFalse()
     {
-        GD.Print("Listening False");
         SetListening(false);
     }
 }
