@@ -42,6 +42,7 @@ public partial class OscConnections : Node
             NetworkInterface = networkInterface
         };
         Connections.Add(connection);
+        connection.InitialiseSender();
         GD.Print($"OscConnections: Created connection '{connection.Name}' to {connection.Address}:{connection.Port}");
         return connection;
     }
@@ -84,7 +85,7 @@ public partial class OscConnections : Node
                 {
                     var connection = new CueOscConnection();
                     connection.LoadFromData(dict);
-                    connection.InitializeSender();
+                    connection.InitialiseSender();
                     Connections.Add(connection);
                 }
             }
@@ -106,10 +107,18 @@ public partial class CueOscConnection : GodotObject
     
     private OscSender _sender;
 
-    public void InitializeSender()
+    public void InitialiseSender()
     {
         try
         {
+            // Close existing sender if already connected
+            if (_sender != null)
+            {
+                _sender.Close();
+                _sender.Dispose();
+                _sender = null;
+            }
+
             IPAddress localAddress = IPAddress.Any;
             if (!string.IsNullOrEmpty(NetworkInterface))
             {
@@ -133,7 +142,16 @@ public partial class CueOscConnection : GodotObject
                     GD.PrintErr($"CueOscConnection: Network interface '{NetworkInterface}' not found");
                 }
             }
-            _sender = new OscSender(Address, Port); // local port 0 for auto
+            if (!string.IsNullOrEmpty(NetworkInterface))
+            {
+                _sender = new OscSender(localAddress, Address, Port);
+                GD.Print($"CueOscConnection:InitialiseSender - Connected via interface {NetworkInterface} to {Name}@{Address}:{Port} from {localAddress}");
+            }
+            else
+            {
+                _sender = new OscSender(Address, Port);
+                GD.Print($"CueOscConnection:InitialiseSender - Connected via automatic to {Name}@{Address}:{Port}");
+            }
             _sender.Connect();
         }
         catch (Exception ex)
@@ -141,6 +159,15 @@ public partial class CueOscConnection : GodotObject
             GD.PrintErr($"CueOscConnection: Failed to initialize sender for connection '{Name}': {ex.Message}");
             _sender = null;
         }
+    }
+
+    /// <summary>
+    /// Reconnects the OSC sender with the current properties.
+    /// </summary>
+    public void Reconnect()
+    {
+        CloseConnection();
+        InitialiseSender();
     }
 
     public void SendMessage(OscMessage message)
@@ -166,6 +193,8 @@ public partial class CueOscConnection : GodotObject
     public void CloseConnection()
     {
         _sender?.Close();
+        _sender?.Dispose();
+        _sender = null;
     }
 
     public Dictionary GetData()

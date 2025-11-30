@@ -103,7 +103,17 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             }
             else
             {
-                var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+                var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(ni => (ni.OperationalStatus == OperationalStatus.Up ||
+                                  ni.OperationalStatus == OperationalStatus.Down ||
+                                  ni.OperationalStatus == OperationalStatus.NotPresent) &&
+                                 (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                                  ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                                  ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
+                                  ni.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet))
+                    .OrderBy(ni => ni.OperationalStatus == OperationalStatus.Up ? 0 :
+                                   ni.OperationalStatus == OperationalStatus.Down ? 1 : 2)
+                    .ToList();
                 var interfaceNames = new List<string>();
                 foreach (var ni in interfaces)
                 {
@@ -119,6 +129,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
                     CueOscConnection.NetworkInterface = interfaceNames[(int)index - 1];
                 }
             }
+            CueOscConnection.Reconnect();
         }
     }
 
@@ -141,6 +152,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             if (IPAddress.TryParse(newText, out var ip))
             {
                 CueOscConnection.Address = ip;
+                CueOscConnection.Reconnect();
             }
             else
             {
@@ -168,6 +180,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             if (port != -1)
             {
                 CueOscConnection.Port = port;
+                CueOscConnection.Reconnect();
             }
             else _portLineEdit.Text = CueOscConnection.Port.ToString();
         }

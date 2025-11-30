@@ -21,9 +21,11 @@ size_flags_horizontal = 3
 
 [node name="InterfaceOptionButton" type="OptionButton" parent="."]
 unique_name_in_owner = true
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
+fit_to_longest_item = false
 
 [node name="DestinationLineEdit" type="LineEdit" parent="."]
 unique_name_in_owner = true

@@ -36,7 +36,7 @@ public class OscComponent : ICueComponent
         {
             GD.Print($"OscComponent: Failed to execute OSC component: {ex.Message}");
         }
-        await Task.Delay(1000); // Show UI for 1 second
+        await Task.Delay(1); // Show UI for 1 second
     }
     
     public Dictionary GetData()
