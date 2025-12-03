@@ -234,7 +234,7 @@ public partial class VideoInspector : Control
 		// Insert values from data
 		_fileUrl.Text = file;
 		_startTimeInput.Text =
-			UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out var startTip);
+			UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
 		_startTimeInput.TooltipText = startTip;
 		_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
 		_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
@@ -417,7 +417,7 @@ public partial class VideoInspector : Control
 	{
 		try
 		{
-			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out var labeledTime);
+			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime);
             
 			if (time == "")
 			{
@@ -456,7 +456,7 @@ public partial class VideoInspector : Control
 		_focusedCue.CalculateTotalDuration();
 		var durationSecs = _focusedVideoComponent.Duration;
 		_durationValue.Text =
-			UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+			UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out string durLabeledTime);
 		_durationValue.TooltipText = durLabeledTime;
 		_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 	}

@@ -47,15 +47,25 @@ public partial class UiUtilities : Node
     /// </summary>
     /// <param name="input">The raw string from the LineEdit.</param>
     /// <param name="seconds">Out: The parsed time in seconds (double).</param>
+    /// <param name="isValid">Out: True if the input was successfully parsed, false otherwise.</param>
     /// <returns>The formatted string (e.g., "01:02:03.000") or "00:00:00.000" on parse failure.</returns>
     /// <remarks>
     /// Supports flexible formats: colon-separated (h:m:s.ms), plain seconds (e.g., "3723" -> "01:02:03.000"), or partial (e.g., "1:2:3" -> "01:02:03.000").
     /// Plain numbers are treated as total seconds. Logs warnings on invalid input. Use in UI for time fields like cue start/end times.
     /// </remarks>
+    public static string ParseAndFormatTime(string input, out double seconds, out bool isValid)
+    {
+        return ParseAndFormatTime(input, out seconds, out _, out isValid); // Overload to default without labeledFormat
+    }
+    
     public static string ParseAndFormatTime(string input, out double seconds)
     {
-        string _; // Dummy for labeledFormat //!!!
-        return ParseAndFormatTime(input, out seconds, out _); // Overload to default without labeledFormat
+        return ParseAndFormatTime(input, out seconds, out _, out _); // Overload to default without labeledFormat
+    }
+    
+    public static string ParseAndFormatTime(string input, out double seconds, out string labeledFormat)
+    {
+        return ParseAndFormatTime(input, out seconds, out labeledFormat, out _); // Overload to default without labeledFormat
     }
     
     
@@ -65,16 +75,18 @@ public partial class UiUtilities : Node
     /// </summary>
     /// <param name="input">The raw string from the LineEdit.</param>
     /// <param name="seconds">Out: The parsed time in seconds (double).</param>
-    /// /// <param name="labeledFormat">Out: Optional labeled format (e.g., "01hr:02m:03s.000ms" or "02m:03s.000ms" if hours are 0).</param>
+    /// <param name="labeledFormat">Out: Optional labeled format (e.g., "01hr:02m:03s.000ms" or "02m:03s.000ms" if hours are 0).</param>
+    /// <param name="isValid">Out: True if the input was successfully parsed, false otherwise.</param>
     /// <returns>The formatted string (e.g., "2:02.000") or "" on parse failure.</returns>
     /// <remarks>
     /// Supports flexible formats: colon-separated (m:s.ms), plain seconds (e.g., "122" -> "2:02.000"), or partial (e.g., "2:2" -> "2:02.000").
     /// Plain numbers are treated as total seconds.
     /// </remarks>
-    public static string ParseAndFormatTime(string input, out double seconds, out string labeledFormat)
+    public static string ParseAndFormatTime(string input, out double seconds, out string labeledFormat, out bool isValid)
     {
         seconds = 0.0;
         labeledFormat = "00m:00s.000ms";
+        isValid = false;
         if (string.IsNullOrWhiteSpace(input))
         {
             GD.Print("UiUtilities:ParseAndFormatTime - Empty input, defaulting to 0.");
@@ -83,6 +95,13 @@ public partial class UiUtilities : Node
 
         try
         {
+            // Check for invalid characters before processing
+            if (!Regex.IsMatch(input, @"^[\d:.]+$"))
+            {
+                GD.PrintErr("Invalid time format: contains invalid characters");
+                return "";
+            }
+
             // Normalize input: remove any non-numeric/colon/dot characters, handle flexible formats
             input = Regex.Replace(input, @"[^0-9:.]", "");
 
@@ -125,6 +144,7 @@ public partial class UiUtilities : Node
 
                 seconds = (hour * 3600) + (min * 60) + sec + fracSec;
                 labeledFormat = FormatLabeledTime(seconds); // Compute labeled format
+                isValid = true;
                 return FormatTime(seconds);
             }
             else
@@ -157,7 +177,7 @@ public partial class UiUtilities : Node
             {
                 sec -= 60;
                 min += 1;
-                if (min >= 60) //!!!
+                if (min >= 60)
                 {
                     min -= 60;
                     hour += 1;

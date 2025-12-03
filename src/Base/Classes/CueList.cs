@@ -13,11 +13,15 @@ namespace Cue2.Base.Classes;
 
 public partial class CueList : ScrollContainer
 {
+	[Signal] public delegate void CueDragStartedEventHandler(int cueId);
+	[Signal] public delegate void CueDragEndedEventHandler(int cueId, Vector2 dropPosition);
+	[Signal] public delegate void CuesReorderedEventHandler();
+
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	
 	
-	public List<ICue> Cuelist { get; private set; }
+	public List<Cue> Cuelist { get; private set; }
 	public static System.Collections.Generic.Dictionary<int, Cue> CueIndex;
 	
 	public int ShellBeingDragged = -1;
@@ -25,9 +29,11 @@ public partial class CueList : ScrollContainer
 
 	private VBoxContainer _cueContainer;
 	
+	private PackedScene _shellBarPackedScene = SceneLoader.LoadPackedScene("uid://d207a67e3ebww", out _);
+	
 	public CueList()
 	{
-		Cuelist = new List<ICue>();
+		Cuelist = new List<Cue>();
 		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
 		
 	}
@@ -43,12 +49,6 @@ public partial class CueList : ScrollContainer
 		_cueContainer = GetNode<VBoxContainer>("%CueContainer");
 		
 		_globalSignals.CreateCue += CreateCue;
-		_globalSignals.CreateGroup += CreateGroup;
-		
-	}
-
-	public override void _Process(double delta)
-	{
 		
 	}
 
@@ -74,18 +74,20 @@ public partial class CueList : ScrollContainer
 		//FocusCue(cue); Readd select shell when finished
 		
 	}
-
-	public void CreateGroup()
+	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
+	private void CreateNewShell(Cue newCue)
 	{
-		GD.Print("Creating Group");
-		
+		var shellBar = _shellBarPackedScene.Instantiate<ShellBar>();
+		var container = GetNode<VBoxContainer>("%CueContainer");
+		container.AddChild(shellBar);
+		shellBar.SetCue(newCue);
+		newCue.ShellBar = shellBar; // Adds shellbar scene to the cue object.
+		shellBar.Set("CueId", newCue.Id); // Sets shell_bar property CueId
 	}
 	
-	
-
 	public void RemoveCue(Cue cue)
 	{
-		cue.ShellBar.Free();
+		cue.ShellBar.QueueFree();
 		Cuelist.Remove(cue);
 	}
 
@@ -100,71 +102,38 @@ public partial class CueList : ScrollContainer
 		{
 			return null;
 		}
+
 	}
 
-	// ITERATORS
-	/*public static ICue Current()
+	public void ReorderCue(int cueId, int newIndex)
 	{
-		return Cuelist[_index];
+		var cue = FetchCueFromId(cueId);
+		if (cue == null || cue.ParentId != -1) return; // Only reorder top-level cues for now
+
+		// Remove from current position
+		Cuelist.Remove(cue);
+
+		// Insert at new index
+		Cuelist.Insert(newIndex, cue);
+
+		// Update UI positions
+		UpdateShellPositions();
+
+		EmitSignal(SignalName.CuesReordered);
 	}
 
-	public static bool HasNext()
+	private void UpdateShellPositions()
 	{
-		return _index < Cuelist.Count;
+		for (int i = 0; i < Cuelist.Count; i++)
+		{
+			var cue = Cuelist[i];
+			if (cue.ParentId == -1) // Top-level
+			{
+				_cueContainer.MoveChild(cue.ShellBar, i);
+			}
+		}
 	}
-	public ICue Next()
-	{
-		if (!HasNext()) throw new Exception("No more cues");
-		_index++;
-		FocusCue(Cuelist[_index]);
-		return Cuelist[_index];
-	}*/
-
-
 	
-	public CueListState CreateState()
-	{
-		return new CueListState(Cuelist, CueIndex);
-	}
-
-	public void Restore(CueListState state)
-	{
-		Cuelist = state.GetCuelist();
-		CueIndex = state.GetCueIndex();
-	}
-		
-	/*
-	 // Old UI for add shell and group buttons - removed from UI 10/05/25
-	// Received Signal Handling
-	private void _on_add_shell_pressed()
-		// Signal from add shell button
-	{
-		CreateCue();
-	}
-
-	private void _onAddGroupPressed()
-	{
-		CreateGroup();
-	}
-	*/
-	
-	
-	
-	
-	
-	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
-	private void CreateNewShell(Cue newCue)
-	{
-		string error;
-		var shellBar = SceneLoader.LoadScene("uid://d207a67e3ebww", out error);
-		var container = GetNode<VBoxContainer>("%CueContainer");
-		container.CallDeferred("add_child", shellBar);
-		shellBar.GetNode<LineEdit>("%CueNumber").Text = newCue.CueNum; // Cue Number
-		shellBar.GetNode<LineEdit>("%CueName").Text = newCue.Name; // Cue Name
-		
-		newCue.ShellBar = shellBar; // Adds shellbar scene to the cue object.
-		shellBar.Set("CueId", newCue.Id); // Sets shell_bar property CueId
-	}
 
 	public void ShellMouseOverByDraggedShellBottomHalf(int cueId)
 	{
@@ -283,7 +252,7 @@ public partial class CueList : ScrollContainer
 		parentShellBar.GetNode<Container>("%Expanded").Visible = true;
 		childCue.ShellBar.GetNode<Container>("%OffSetWithLine").Visible = true;
 		ShellBar shellBar = (ShellBar)childCue.ShellBar;
-		shellBar.SetShellOffset(parentShellBar.ShellOffset + 1);
+		//shellBar.SetShellOffset(parentShellBar.ShellOffset + 1);
 		if (childCue.ChildCues.Count != 0) CheckChildOffsets(childCueId);
 
 	}
@@ -296,7 +265,7 @@ public partial class CueList : ScrollContainer
 		{
 			var childShellBar = (ShellBar)CueIndex[child].ShellBar;
 			var parentShellBar = (ShellBar)parent.ShellBar;
-			childShellBar.SetShellOffset(parentShellBar.ShellOffset + 1);
+			//childShellBar.SetShellOffset(parentShellBar.ShellOffset + 1);
 			if (CueIndex[child].ChildCues.Count != 0) CheckChildOffsets(child);
 		}
 	}
@@ -340,7 +309,7 @@ public partial class CueList : ScrollContainer
 		if (parentCue.ChildCues.Count == 0) parentShellBar.GetNode<Container>("%Expanded").Visible = true;
 		childCue.ShellBar.GetNode<Container>("%OffSetWithLine").Visible = false;
 		ShellBar shellBar = (ShellBar)childCue.ShellBar;
-		shellBar.SetShellOffset(0);
+		//shellBar.SetShellOffset(0);
 		if (childCue.ChildCues.Count != 0) CheckChildOffsets(cueId);
 			
 	}
@@ -372,29 +341,7 @@ public partial class CueList : ScrollContainer
 
 	
 
-	public void StructureCuelistToData(Godot.Collections.Dictionary<int, int> cueOrder)
-	{
-		// Key is child order, value is cueId
-		GD.Print("Structuring");
-		for (int i = 0; i < cueOrder.Count; i++)
-		{
-			//GD.Print(i + " " + CueIndex[cueOrder[i]].Name);
-			var cue = CueIndex[cueOrder[i]];
-			var shell = (ShellBar)cue.ShellBar;
-			//GD.Print(cue.Name);
-			_cueContainer.CallDeferred("move_child", shell, i);
-			if (cue.ParentId != -1)
-			{
-				shell.GetNode<Container>("%OffSetWithLine").Visible = true;
-				var parentShell = (ShellBar)CueIndex[cue.ParentId].ShellBar;
-				shell.CallDeferred("SetShellOffset", (parentShell.ShellOffset + 1));
-			}
-			if (cue.ChildCues.Count != 0)
-			{
-				shell.GetNode<Container>("%Expanded").Visible = true;
-			}
-		}
-	}
+
 
 	public Godot.Collections.Dictionary<int, int> GetCueOrder()
 	{
@@ -420,9 +367,9 @@ public partial class CueList : ScrollContainer
 			cue.ShellBar.Free();
 		}
 		// Resets 
-		Cuelist = new List<ICue>();
+		Cuelist = new List<Cue>();
 		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
-		_globalData.ShellSelection.SelectedShells = new List<ICue>();
+		_globalData.ShellSelection.SelectedCues = new List<ICue>();
 	}
 	
 	public Dictionary GetData()
@@ -462,7 +409,7 @@ public partial class CueList : ScrollContainer
 				Cue newCue = CreateCue(cueDict);
 				
 				
-				// Link component data
+				// Link component reference objects
 				var newCueAudioComponent = newCue.GetAudioComponent();
 				if (newCueAudioComponent != null)
 				{
@@ -517,9 +464,34 @@ public partial class CueList : ScrollContainer
 				cueOrder.Add((int)cue.Key, (int)cue.Value);
 				//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
 			}
-			StructureCuelistToData(cueOrder);	
+			StructureCuelist(cueOrder);	
+		}
+	}
+	
+	private void StructureCuelist(Godot.Collections.Dictionary<int, int> cueOrder)
+	{
+		// Key is child order, value is cueId
+		foreach (Cue cue in Cuelist)
+		{
+			// Assign child shellbars to parents
+			if (cue.ParentId != -1)
+			{
+				GD.Print($"CueList:StructureCuelist - REPARENTING {cue.Name}");
+				var parentShell = FetchCueFromId(cue.ParentId).ShellBar;
+				cue.ShellBar.Reparent(parentShell.GetNode<VBoxContainer>("%ShellChildContainer"));
+				//_cueContainer.RemoveChild(cue.ShellBar);
+				//parentShell.GetNode<VBoxContainer>("%ShellChildContainer").AddChild(cue.ShellBar);
+				//parentShell.AssignChild(cue.ShellBar);
+			}
 		}
 		
+		for (int i = 0; i < cueOrder.Count; i++)
+		{
+			var cue = CueIndex[cueOrder[i]];
+			var shell = (ShellBar)cue.ShellBar;
+			if (cue.ParentId != -1) continue;
+			_cueContainer.CallDeferred("move_child", shell, i);
+		}
 	}
 
 }

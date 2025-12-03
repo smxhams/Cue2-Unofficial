@@ -23,15 +23,34 @@ public class Cue : ICue
 {
     private static int _nextId = 0;
     public int Id { get; set; }
-    public string Name { get; set; }
-    public string Command { get; set; }
-    public string CueNum { get; set; }
+
+    private string _name;
+    public string Name
+    {
+        get => _name;
+        set
+        {
+            _name = value;
+            NameChanged?.Invoke(value);
+        }
+    }
+
+    private string _cueNum;
+    public string CueNum
+    {
+        get => _cueNum;
+        set
+        {
+            _cueNum = value;
+            CueNumChanged?.Invoke(value);
+        }
+    }
     
-    public Node ShellBar { get; set; }
+    public ShellBar ShellBar { get; set; }
 
     public int ParentId = -1;
 
-    public List<int> ChildCues = new List<int>(); // List of child cue ID's
+    public List<int> ChildCues = new List<int>(); // list of child cue ID's
     
     public double PreWait { get; set; } = 0.0;
     public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
@@ -39,17 +58,29 @@ public class Cue : ICue
     public double PostWait { get; set; } = 0.0;
     public Color Color { get; set; } = new Color(0.4f, 0.4f, 0.4f, 1.0f);
     public FollowType Follow = FollowType.None;
+    
+    // Events
+    public event Action<string> NameChanged;
+    public event Action<string> CueNumChanged;
+    public event Action<double> PreWaitChanged;
+    public event Action<double> DurationChanged;
+    public event Action<double> TotalDurationChanged;
+    public event Action<double> PostWaitChanged;
+    public event Action<Color> ColorChanged;
+    public event Action<FollowType> FollowChanged;
 
+    
     
     public List<ICueComponent> Components = new List<ICueComponent>();
     
     public Cue() // // Default constructor for base cue
     {
         Id = _nextId++;
-        Name = "New cue number " + Id.ToString();
-        CueNum = Id.ToString();
-        Command = "";
+        _name = "New cue number " + Id.ToString();
+        _cueNum = Id.ToString();
     }
+    
+    
 
     public Cue(Dictionary data) // Load from saved data - Using full namespace
     {
@@ -61,8 +92,7 @@ public class Cue : ICue
         Id = data["Id"].AsInt32();
         if (Id >= _nextId) _nextId = Id + 1;
         Name = data.ContainsKey("Name") ? (string)data["Name"] : "Unnamed Cue";
-        CueNum = data.ContainsKey("CueNum") ? (string)data["CueNum"] : Id.ToString();
-        Command = data.ContainsKey("Command") ? (string)data["Command"] : "";
+        _cueNum = data.ContainsKey("CueNum") ? (string)data["CueNum"] : Id.ToString();
         ParentId = data.ContainsKey("ParentId") ? (int)data["ParentId"] : -1;
         if (data.ContainsKey("ChildCues"))
         {
@@ -264,13 +294,15 @@ public class Cue : ICue
     {
         ParentId = parentId;
     }
+    
+    
+    
 
     public Dictionary GetData()
     {
         var dict = new Dictionary();
         dict.Add("Id", Id.ToString());
         dict.Add("Name", Name);
-        dict.Add("Command", Command);
         dict.Add("CueNum", CueNum);
         dict.Add("ParentId", ParentId.ToString());
         dict.Add("ChildCues", new Array<int>(ChildCues));

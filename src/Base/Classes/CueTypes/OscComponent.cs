@@ -39,7 +39,7 @@ public class OscComponent : ICueComponent
         await Task.Delay(1); // Show UI for 1 second
     }
     
-    public Dictionary GetData()
+    public Dictionary GetData() 
     {
         return new Dictionary()
         {

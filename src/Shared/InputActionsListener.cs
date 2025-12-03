@@ -6,17 +6,22 @@ namespace Cue2.Shared;
 public partial class InputActionsListener : Node
 {
     private GlobalSignals _globalSignals;
+    private Timer _focusExitTimer;
 
     private bool _listenForInput = true;
     
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-        
+
+        _focusExitTimer = new Timer { WaitTime = 0.1, OneShot = true };
+        AddChild(_focusExitTimer);
+        _focusExitTimer.Timeout += OnFocusExitTimerTimeout;
+
         // Signals sent from all text edit feilds when focused. This is used to toggle input actions.
         _globalSignals.TextEditFocusEntered += SetListeningFalse;
-        _globalSignals.TextEditFocusExited += SetListeningTrue;
-        
+        _globalSignals.TextEditFocusExited += OnTextEditFocusExited;
+
     }
     public override void _Process(double delta)
     {
@@ -82,14 +87,23 @@ public partial class InputActionsListener : Node
     }
     
     private void SetListening(bool listening) => _listenForInput = listening;
-    
-    private void SetListeningTrue()
+
+    private void OnTextEditFocusExited()
     {
+        //GD.Print($"InputActionsListener:OnTextEditFocusExited - Starting timer to re-enable input listening");
+        _focusExitTimer.Start();
+    }
+
+    private void OnFocusExitTimerTimeout()
+    {
+        //GD.Print($"InputActionsListener:OnFocusExitTimerTimeout - Re-enabling input listening");
         SetListening(true);
     }
 
     private void SetListeningFalse()
     {
+        //GD.Print($"InputActionsListener:SetListeningFalse");
+        _focusExitTimer.Stop(); // Stop the timer if focus entered again
         SetListening(false);
     }
 }

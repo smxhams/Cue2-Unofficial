@@ -42,12 +42,12 @@ public partial class CueCommandExectutor : CueCommandInterpreter
 
     public void GoCommand()
     {
-        if (!_globalData.ShellSelection.SelectedShells.Any())
+        if (!_globalData.ShellSelection.SelectedCues.Any())
         {
             GD.Print("CueCommandExecutor:GoCommand - No Shells Selected");
             return;
         }
-        foreach (var cue1 in _globalData.ShellSelection.SelectedShells)
+        foreach (var cue1 in _globalData.ShellSelection.SelectedCues)
         {
             var cue = (Cue)cue1; 
             ActivateCue(cue);

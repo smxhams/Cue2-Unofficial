@@ -56,6 +56,8 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void AudioDevicesChangedEventHandler();
 	[Signal] public delegate void DisplaysChangedEventHandler();
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
+
+	public static event Action<string, int> Logger;
 	
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
@@ -66,8 +68,15 @@ public partial class GlobalSignals : Node
 
 		// Listen for new nodes added dynamically
 		GetTree().NodeAdded += OnNodeAdded;
+		GetTree().NodeRemoved += OnNodeRemoved;
 	}
 
+	public static void StaticLog(string s, int i)
+	{
+		// TODO: This can be made static in the future, will require changing all calls everywhere though!
+		Logger?.Invoke("hi", 1);
+	}
+	
 	private void ScanForTextFields(Node node)
 	{
 		if (node is LineEdit || node is TextEdit)
@@ -83,9 +92,17 @@ public partial class GlobalSignals : Node
 
 	private void OnNodeAdded(Node node)
 	{
-		if (node is LineEdit || node is TextEdit)
+		if (node is LineEdit or TextEdit)
 		{
 			ConnectFocusSignals(node);
+		}
+	}
+	
+	private void OnNodeRemoved(Node node)
+	{
+		if (node is LineEdit or TextEdit)
+		{
+			DisonnectFocusSignals(node);
 		}
 	}
 
@@ -93,8 +110,28 @@ public partial class GlobalSignals : Node
 	{
 		if (node is Control textField)
 		{
-			textField.FocusEntered += () => EmitSignal(SignalName.TextEditFocusEntered);
-			textField.FocusExited += () => EmitSignal(SignalName.TextEditFocusExited);
+			textField.FocusEntered += FocusEntered;
+			textField.FocusExited += FocusExited;
 		}
 	}
+	
+	private void DisonnectFocusSignals(Node node)
+	{
+		if (node is Control textField)
+		{
+			textField.FocusEntered -= FocusEntered;
+			textField.FocusExited -= FocusExited;
+		}
+	}
+
+	private void FocusEntered()
+	{
+		EmitSignal(SignalName.TextEditFocusEntered);
+	}
+
+	private void FocusExited()
+	{
+		EmitSignal(SignalName.TextEditFocusExited);
+	}
+	
 }

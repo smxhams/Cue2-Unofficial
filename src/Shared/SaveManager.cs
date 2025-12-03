@@ -250,7 +250,7 @@ public partial class SaveManager : Node
 		catch (Exception ex)
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load session: {ex.Message}", 2);
-			GD.PrintErr("SaveManager:LoadSession - Error: " + ex.Message);
+			GD.PrintErr($"SaveManager:LoadSession - Error: {ex.Message}  \n{ex.StackTrace}");
 		}
 		
 	}

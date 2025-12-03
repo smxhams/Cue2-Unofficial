@@ -73,12 +73,19 @@ public partial class ShellInspector : Control
 	private void ShellSelected(int cueId)
 	{
 		Visible = true;
+		if (_focusedCueId == cueId) return;
+		if (_focusedCue != null)
+		{
+			_focusedCue.NameChanged -= OnNameChanged;
+		}
 		
 		_focusedCue = CueList.FetchCueFromId(cueId);
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
 		_cueNum.Text = _focusedCue.CueNum;
 		_cueName.Text = _focusedCue.Name;
+		
+		_focusedCue.NameChanged += OnNameChanged;
 
 		_cueId.Text = $"ID: {_focusedCue.Id.ToString()}";
 		if (_focusedCue.ParentId != -1)
@@ -106,17 +113,6 @@ public partial class ShellInspector : Control
 		_colorPicker.Color = _focusedCue.Color;
 
 	}
-	
-	
-	// Shell Colour
-	// Shell outline colour
-	// Delete cue
-	// pre-wait
-	// post-wait
-	// follow
-	
-	// TRIGGERS
-	// Hotkey
 
 	public void UpdateFields()
 	{
@@ -128,6 +124,11 @@ public partial class ShellInspector : Control
 			_durationValue.Text = "Until Stopped";
 		}
 		else _durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
+	}
+
+	private void OnNameChanged(string name)
+	{
+		_cueName.Text = name;
 	}
 	
 
@@ -141,7 +142,7 @@ public partial class ShellInspector : Control
 	{
 		try
 		{
-			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out var labeledTime);
+			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime);
 
 			if (time == "")
 			{
@@ -164,7 +165,7 @@ public partial class ShellInspector : Control
 			// Recalculate duration
 			var durationSecs = _focusedCue.CalculateTotalDuration();
 			_durationValue.Text =
-				UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+				UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out string durLabeledTime);
 			//? durLabeledTime : _durationValue.Text; // Fallback to previous if parse fails
 			_durationValue.TooltipText = durLabeledTime;
 			textField.ReleaseFocus();

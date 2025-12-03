@@ -30,7 +30,7 @@ public partial class EventLogger : Node
 	}
 	
 
-	private void _logEvent(String @logString, int @type)
+	private void _logEvent(string @logString, int @type)
 	{
 		var typeString = _getLogTypeName(@type);
 		var printout = typeString + "  :  " + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @logString;

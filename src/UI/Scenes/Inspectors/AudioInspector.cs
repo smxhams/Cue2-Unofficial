@@ -153,7 +153,7 @@ public partial class AudioInspector : Control
     {
         try
         {
-            var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out var labeledTime);
+            var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime);
             
             if (time == "")
             {
@@ -537,6 +537,7 @@ public partial class AudioInspector : Control
     /// <param name="cueId">The ID of the selected cue.</param>
     private async void ShellSelected(int cueId)
     {
+        if (_focusedCue != null && _focusedCue.Id == cueId) return;
         _focusedCue = CueList.FetchCueFromId(cueId);
 
         if (_focusedCue == null)
@@ -573,7 +574,7 @@ public partial class AudioInspector : Control
         _inspectorContent.Visible = true;
 
         _startTimeInput.Text =
-            UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out var startTip);
+            UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out string startTip);
         _startTimeInput.TooltipText = startTip;
         _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
         _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
@@ -777,7 +778,7 @@ public partial class AudioInspector : Control
         _focusedCue.CalculateTotalDuration();
         var durationSecs = _focusedAudioComponent.Duration;
         _durationValue.Text =
-            UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out var durLabeledTime);
+            UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out string durLabeledTime);
         _durationValue.TooltipText = durLabeledTime;
         _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
     }

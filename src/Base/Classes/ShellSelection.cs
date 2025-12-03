@@ -12,7 +12,7 @@ public partial class ShellSelection : Node
     private GlobalSignals _globalSignals;
 
 
-    public List<ICue> SelectedShells = new();
+    public List<ICue> SelectedCues = new();
 
     public override void _Ready()
     {
@@ -21,26 +21,25 @@ public partial class ShellSelection : Node
         
     }
 
-    public void SelectIndividualShell(ICue cue)
+    public void SelectIndividualShell(ICue selectedCue)
     {
-        if (SelectedShells.Any())
+        if (SelectedCues.Any())
         {
-            foreach (var shell in SelectedShells.ToList())
+            foreach (var cue in SelectedCues.ToList())
             {
-                SelectedShells.Remove(shell);
-                shell.ShellBar.GetNode<Panel>("%BackPanel").RemoveThemeStyleboxOverride("panel");
-                shell.ShellBar.Set("Selected", false); // Tell shell bar it's no longer selected
+                SelectedCues.Remove(cue);
+                cue.ShellBar.Deselect();
             }
         }
         
-        AddSelection(cue);
+        AddSelection(selectedCue);
     }
     
     public void SelectThrough(ICue pressedCue)
     {
         var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
         
-        var startShell = SelectedShells.Last().ShellBar;
+        var startShell = SelectedCues.Last().ShellBar;
         int startShellPosition = startShell.GetIndex();
         int pressedCuePosition = pressedCue.ShellBar.GetIndex();
         int start = Math.Min(startShellPosition, pressedCuePosition);
@@ -49,7 +48,7 @@ public partial class ShellSelection : Node
         {
             int cueId = cueContainer.GetChild(i).Get("CueId").AsInt32();
             ICue cue = CueList.FetchCueFromId(cueId);
-            if (SelectedShells.Contains(cue) == false)
+            if (SelectedCues.Contains(cue) == false)
             {
                 AddSelection(cue);
             }
@@ -64,9 +63,8 @@ public partial class ShellSelection : Node
     
     public void AddSelection(ICue cue)
     {
-        cue.ShellBar.GetNode<Panel>("%BackPanel").AddThemeStyleboxOverride("panel", GlobalStyles.FocusedStyle());
-        SelectedShells.Add(cue);
-        cue.ShellBar.Set("Selected", true);
+        cue.ShellBar.Select();
+        SelectedCues.Add(cue);
         _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
     }
     

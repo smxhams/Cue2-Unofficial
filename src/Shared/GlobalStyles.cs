@@ -43,6 +43,7 @@ public partial class GlobalStyles : Node
 		_theme = GetTree().Root.GetTheme();
 		
 		SetProcess(false); // This class is only for statics - disable process
+		
 		// Default Style
 		ActiveStyle.BorderWidthBottom = 0;
 		ActiveStyle.BorderWidthRight = 0;
@@ -53,10 +54,10 @@ public partial class GlobalStyles : Node
 
 
 		// Hover Style
-		_hoverStyle.BorderWidthBottom = 2;
-		_hoverStyle.BorderWidthRight = 2;
-		_hoverStyle.BorderWidthLeft = 2;
-		_hoverStyle.BorderWidthTop = 2;
+		/*_hoverStyle.BorderWidthBottom = -2;
+		_hoverStyle.BorderWidthRight = -2;
+		_hoverStyle.BorderWidthLeft = -2;
+		_hoverStyle.BorderWidthTop = -2;*/
 		_hoverStyle.BorderColor = new Color("#002326");
 		_hoverStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
 
@@ -69,12 +70,12 @@ public partial class GlobalStyles : Node
 		NextStyle.BgColor = new Color((float)0.024,(float)0.329,(float)0.361,(float)0.2);
 
 		// Selected Style
-		_focusedStyle.BorderWidthBottom = 2;
-		_focusedStyle.BorderWidthRight = 2;
-		_focusedStyle.BorderWidthLeft = 2;
-		_focusedStyle.BorderWidthTop = 2;
+		_focusedStyle.BorderWidthBottom = 1;
+		_focusedStyle.BorderWidthRight = 1;
+		_focusedStyle.BorderWidthLeft = 1;
+		_focusedStyle.BorderWidthTop = 1;
 		_focusedStyle.BorderColor = new Color("#06545C");
-		_focusedStyle.BgColor = new Color((float)0.09,(float)0.09,(float)0.09,(float)0.6);
+		_focusedStyle.BgColor = new Color((float)0.00,(float)0.09,(float)0.09,(float)0.05);
 
 		// Active Style
 		ActiveStyle.BorderWidthBottom = 2;

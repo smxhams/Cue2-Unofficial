@@ -6,8 +6,7 @@ public interface ICue
 {
     int Id { get; }
     string Name { get; set; }
-    string Command { get; set; }
     string CueNum { get; set; }
-    Node ShellBar { get; set; }
+    ShellBar ShellBar { get; set; }
     
 }
