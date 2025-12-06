@@ -1,11 +1,11 @@
-using Godot;
 using System.IO;
 using Cue2.Shared;
+using Godot;
 
 // This is a resource attached to:
 // -OpenDialog: FileDialog (Found in Cue2Base scene)
 
-namespace Cue2.Base;
+namespace Cue2.UI.Scenes.SubWindows;
 public partial class OpenDialog : FileDialog
 {
 	private GlobalSignals _globalSignals;

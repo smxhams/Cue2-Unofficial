@@ -37,22 +37,16 @@ public partial class ShellBar : PanelContainer
 	private CheckBox _followCheckBox;
 
 	private VBoxContainer _shellChildContainer;
-
-	private bool _isDragging = false;
 	
 	private bool _isEditingName = false;
 	private bool _isEditingCueNum = false;
 	private bool _isEditingPreWait = false;
 	private bool _isEditingPostWait = false;
-
-	private Panel _dragGhost;
-	private Line2D _insertionLine;
-
+	
 	public bool Selected = false;
 
-
 	public int ShellOffset = 0;
-
+	
 
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
@@ -62,33 +56,21 @@ public partial class ShellBar : PanelContainer
 		
 		DefineUi();
 		
-
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;
-
-		_dragGhost = new Panel();
-		_dragGhost.Modulate = new Color(1, 1, 1, 0.5f); // Semi-transparent
-		_dragGhost.Visible = false;
-		AddChild(_dragGhost);
-
-		_insertionLine = new Line2D();
-		_insertionLine.Width = 2;
-		_insertionLine.DefaultColor = Colors.Blue;
-		_insertionLine.Visible = false;
-		AddChild(_insertionLine);
-
+		
 		// Connect Ui events
 		GuiInput += OnInput;
 		MouseEntered += OnMouseEntered;
 		MouseExited += OnMouseExited;
 		
 		_dragButton.ButtonDown += DragPressed;
-		_dragButton.ButtonUp += DragReleased;
+		/*_dragButton.ButtonUp += DragReleased;
 
 		_topHalf.MouseEntered += MouseEnteredTopHalf;
 		_topHalf.MouseExited += MouseExitedTopHalf;
 		_bottomHalf.MouseEntered += MouseEnteredBottomHalf;
-		_bottomHalf.MouseExited += MouseExitedBottomHalf;
+		_bottomHalf.MouseExited += MouseExitedBottomHalf;*/
 		
 		_collapseButton.Pressed += CollapsedPressed;
 
@@ -276,51 +258,33 @@ public partial class ShellBar : PanelContainer
 
 	private void CollapsedPressed()
 	{
-		_globalData.Cuelist.ExpandGroup(CueId);
+		//_globalData.Cuelist.ExpandGroup(CueId);
 		GetNode<Container>("%Expanded").Visible = true;
 		GetNode<Container>("%Collapsed").Visible = false;
 	}
 
 	private void ExpandedPressed()
 	{
-		_globalData.Cuelist.CollapseGroup(CueId);
+		//_globalData.Cuelist.CollapseGroup(CueId);
 		GetNode<Container>("%Expanded").Visible = false;
 		GetNode<Container>("%Collapsed").Visible = true;
 	}
 
-
-	// Called every frame. 'delta' is the elapsed time since the previous frame.
-	public override void _Process(double delta)
-	{
-		if (_isDragging)
-		{
-			var mousePos = GetGlobalMousePosition();
-			SetGlobalPosition(new Vector2(mousePos.X + 5, GetGlobalPosition().Y));
-			_dragGhost.GlobalPosition = mousePos;
-			_globalData.Cuelist.MoveCueWithItsChildren(CueId);
-		}
-	}
-
 	private void OnMouseEntered()
 	{
-		if (_isDragging!) return;
 		if (Selected == false){
 			AddThemeStyleboxOverride("panel", GlobalStyles.HoverStyle());
 		}
-
 		if (_globalData.Cuelist.ShellBeingDragged != -1) GetNode<VBoxContainer>("%HoverSensors").Visible = true;
-
-		
 	}
+	
 	private void OnMouseExited()
 	{
-		if (_isDragging!) return;
 		if (Selected == false)
 		{
 			RemoveThemeStyleboxOverride("panel");
 		}
 		GetNode<VBoxContainer>("%HoverSensors").Visible = false;
-
 	}
 	
 
@@ -376,16 +340,18 @@ public partial class ShellBar : PanelContainer
 	// Re-ordering functions
 	private void DragPressed()
 	{
-		_isDragging = true;
+		_globalData.Cuelist.StartReorder(this);
+		
+		/*_isDragging = true;
 		_globalData.Cuelist.ShellBeingDragged = CueId;
 		AddThemeStyleboxOverride("panel", GlobalStyles.DangerStyle());
 		CreateDragGhost();
 		_dragGhost.Visible = true;
 		_globalData.Cuelist.EmitSignal("CueDragStarted", CueId);
-		GD.Print($"ShellBar:DragPressed - Started dragging cue {CueId}");
+		GD.Print($"ShellBar:DragPressed - Started dragging cue {CueId}");*/
 	}
 
-	private void CreateDragGhost()
+	/*private void CreateDragGhost()
 	{
 		_dragGhost.Size = Size;
 		_dragGhost.Position = Position;
@@ -461,7 +427,7 @@ public partial class ShellBar : PanelContainer
 	{
 		if (_isDragging!) return;
 		_insertionLine.Visible = false;
-	}
+	}*/
 
 
 }

@@ -1,9 +1,9 @@
-using Godot;
 using System;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
+using Godot;
 
-namespace Cue2.UI.Scenes;
+namespace Cue2.UI.Scenes.SubWindows;
 
 public partial class LogWindow : Window
 {

@@ -13,7 +13,12 @@ public partial class Footer : Control
     private List<string> _last5Logs = new List<string>();
     private Node _logWindow;
 
+    // Ui
     private Label _processTimeLabel;
+    private Button _logCountButton;
+    
+    private Timer _updateTimer;
+    private double _lastDelta;
     
     public override void _Ready()
     {
@@ -21,21 +26,24 @@ public partial class Footer : Control
 
         _globalSignals.LogUpdated += _updateLog;
         
+        _logCountButton = GetNode<Button>("%LogCountButton");
+        
         GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
-        GetNode<Button>("%LogCount").Toggled += _onLogCountToggled;
+        _logCountButton.Toggled += OnLogCountToggled;
         
         _processTimeLabel = GetNode<Label>("%ProcessTimeLabel");
+        
+        _updateTimer = new Timer();
+        AddChild(_updateTimer);
+        _updateTimer.WaitTime = 0.1;
+        _updateTimer.Start();
+        _updateTimer.Timeout += UpdateProcessTime;
     }
 
 
     public override void _Process(double delta)
     {
-        int ms = (int)(delta * 1000);
-        _processTimeLabel.Text = $"{ms:0000}ms";
-
-        double fps = 1.0 / delta;
-        int microseconds = (int)(delta * 1000000);
-        _processTimeLabel.TooltipText = $"{ms}ms\nFPS: {fps:F2}\nPrecise: {microseconds}μs";
+        _lastDelta = delta;
     }
 
     private void _updateLog(String @printout, int @type)
@@ -46,7 +54,7 @@ public partial class Footer : Control
         if (type == 1) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Warning);
         if (type == 2) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
         if (type == 3) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
-        GetNode<Button>("%LogCount").Text = "Log " + EventLogger.GetLogCount().ToString();
+        _logCountButton.Text = "Log " + EventLogger.GetLogCount().ToString();
         
         _last5Logs.Add(@printout);
         if (_last5Logs.Count > 5)
@@ -61,16 +69,26 @@ public partial class Footer : Control
             logPrintout.TooltipText += log + "\n";
         }
     }
+
+    private void UpdateProcessTime()
+    {
+        int ms = (int)(_lastDelta * 1000);
+        _processTimeLabel.Text = $"{ms:0000}ms";
+
+        double fps = 1.0 / _lastDelta;
+        int microseconds = (int)(_lastDelta * 1000000);
+        _processTimeLabel.TooltipText = $"{ms}ms\nFPS: {fps:F2}\nPrecise: {microseconds}μs";
+    }
     
     
-    private void _onLogCountToggled(Boolean @toggle)
+    private void OnLogCountToggled(Boolean @toggle)
     {
         if (@toggle == true){
             if (_logWindow == null)
             {
                 GD.Print("Loading settings window scene");
                 _logWindow = SceneLoader.LoadScene("uid://cg8mrxu40hjf", out string error); // Loads settings window
-                _logWindow.TreeExiting += _onLogWindowClosed;
+                _logWindow.TreeExiting += OnLogWindowClosed;
                 AddChild(_logWindow);
             }
             else {
@@ -83,9 +101,10 @@ public partial class Footer : Control
         }
     }
 
-    private void _onLogWindowClosed()
+    private void OnLogWindowClosed()
     {
+        GD.Print($"Footer:OnLogWindowClosed");
         _logWindow = null;
-        GetNode<Button>("%LogCount").ButtonPressed = false;
+        _logCountButton.ButtonPressed = false;
     }
 }

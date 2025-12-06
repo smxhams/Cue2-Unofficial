@@ -86,8 +86,8 @@ custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 size_flags_vertical = 4
 focus_mode = 0
-theme_override_colors/icon_hover_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
 theme_override_colors/icon_hover_color = Color(0.592157, 0.294118, 0.0313726, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
 theme_override_constants/icon_max_width = 12
 theme_override_icons/icon = SubResource("AtlasTexture_ky0v5")
 toggle_mode = true
@@ -125,7 +125,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="TitleHelpMenu" type="Button" parent="HBoxContainer"]
+[node name="AboutButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -135,6 +135,7 @@ Version: "
 focus_mode = 0
 theme_override_constants/icon_max_width = 12
 theme_override_icons/icon = SubResource("AtlasTexture_nuux0")
+toggle_mode = true
 text = "
 "
 icon_alignment = 1

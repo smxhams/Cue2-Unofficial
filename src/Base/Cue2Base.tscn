@@ -14,9 +14,9 @@
 [ext_resource type="PackedScene" uid="uid://d6ybxbmxkpib" path="res://src/UI/Scenes/Inspectors/VideoInspector.tscn" id="9_ht2vi"]
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
 [ext_resource type="Script" uid="uid://b54ov4k1klk3j" path="res://src/UI/Scenes/Inspectors/VideoInspector.cs" id="10_ht2vi"]
-[ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/Base/FileDialogue.cs" id="12_6nwf4"]
+[ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/UI/Scenes/SubWindows/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
-[ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/Base/OpenDialog.cs" id="14_5gc0s"]
+[ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/UI/Scenes/SubWindows/OpenDialog.cs" id="14_5gc0s"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6p57k"]
 content_margin_left = 4.0
@@ -2429,6 +2429,7 @@ drag_to_rearrange_enabled = true
 
 [node name="Cue List" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer" instance=ExtResource("4_7gle1")]
 layout_mode = 2
+metadata/_tab_index = 0
 
 [node name="Passive Cues" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer"]
 visible = false

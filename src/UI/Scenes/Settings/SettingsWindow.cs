@@ -1,10 +1,10 @@
-using Godot;
 using System;
-using System.Collections.Generic;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
+using Godot;
 
-namespace Cue2.Base;
+namespace Cue2.UI.Scenes.Settings;
+
 public partial class SettingsWindow : Window
 {
 	private GlobalSignals _globalSignals;
@@ -55,11 +55,7 @@ public partial class SettingsWindow : Window
 	{
 		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
 	}
-
-
-	private void _on_close_pressed(){
-		_globalSignals.EmitSignal(nameof(GlobalSignals.CloseSettingsWindow));
-	}
+	
 
 	// On tree item pressed display each settings menu.
 	private void _on_tree_item_selected(){

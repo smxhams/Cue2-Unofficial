@@ -59,11 +59,23 @@ public static class Version
     /// Gets the official website URL. 
     /// </summary> 
     /// <value>The website URL string.</value> 
-    public static readonly string Website = "https://github.com/smxhams/Cue2-Unofficial"; 
+    public static readonly string Website = "https://www.cue2.live/";
+
+    /// <summary>
+    /// Gets the documentation website URL.
+    /// </summary>
+    /// <value>The documentation website URL string.</value>
+    public static readonly string DocsWebsite = "https://docs.cue2.live/";
  
-    /// <summary> 
-    /// Gets the documentation version. 
-    /// </summary> 
-    /// <value>The docs version string, e.g., "latest".</value> 
-    public static readonly string Docs = "latest"; 
+    /// <summary>
+    /// Gets the documentation version.
+    /// </summary>
+    /// <value>The docs version string, e.g., "latest".</value>
+    public static readonly string Docs = "latest";
+
+    /// <summary>
+    /// Gets the full version string combining major, minor, patch, status, and code name.
+    /// </summary>
+    /// <value>The full version string in the format "v{major}.{minor}.{patch} {status} - {codeName}".</value>
+    public static readonly string FullVersionString = $"v{Major}.{Minor}.{Patch} {Status} - {CodeName}";
 }

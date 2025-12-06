@@ -1,33 +1,41 @@
 using Godot;
 using System;
 using System.Threading.Tasks;
+using Cue2.Base;
 using Cue2.Shared;
+using Cue2.UI.Scenes.SubWindows;
+using SettingsWindow = Cue2.UI.Scenes.Settings.SettingsWindow;
 
 namespace Cue2.UI.Scenes;
 
 public partial class MainTitleBarUI : Control
 {
     private GlobalSignals _globalSignals;
-    private Node _settingsWindow;
+    private SettingsWindow _settingsWindow;
+    private PackedScene _settingsWindowPackedScene = SceneLoader.LoadPackedScene("uid://cfw3syjm11bd6", out _);
+    private AboutWindow _aboutWindow;
+    private PackedScene _aboutWindowPackedScene = SceneLoader.LoadPackedScene("uid://82ylja0fq6y0", out _);
 
     private HBoxContainer _mainMenu;
     private Button _mainMenuButton;
     private bool _mainMenuActive = false;
     private bool _mouseInUi = false;
+    
+    
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         
-        GetNode<Button>("%TitleCue2Menu").Pressed += _onTitleCue2MenuPressed;
-        GetNode<Button>("%TitleMainMenu").Toggled += _onTitleMainMenuToggled;
-        GetNode<Button>("%TitleHelpMenu").Pressed += _onTitleHelpMenuPressed;
-        GetNode<Button>("%SettingsButton").Toggled += _onSettingsButtonToggled;
-        GetNode<Button>("%WindowMinimizeButton").Pressed += _onWindowMinimizeButtonPressed;
-        GetNode<Button>("%WindowExpandButton").Pressed += _onWindowExpandButtonPressed;
-        GetNode<Button>("%ExitButton").Pressed += _onExitButtonPressed;
+        GetNode<Button>("%TitleCue2Menu").Pressed += OnTitleCue2MenuPressed;
+        GetNode<Button>("%TitleMainMenu").Toggled += OnTitleMainMenuToggled;
+        GetNode<Button>("%WindowMinimizeButton").Pressed += OnWindowMinimizeButtonPressed;
+        GetNode<Button>("%WindowExpandButton").Pressed += OnWindowExpandButtonPressed;
+        GetNode<Button>("%ExitButton").Pressed += OnExitButtonPressed;
 
-        _globalSignals.CloseSettingsWindow += _closeSettingsWindow;
-
+        GetNode<Button>("%SettingsButton").Toggled += OnSettingsButtonToggled;
+        
+        GetNode<Button>("%AboutButton").Toggled += OnAboutButtonPressed;
+        
         _mainMenu = GetNode<HBoxContainer>("%MainMenuContainer");
         _mainMenuButton = GetNode<Button>("%TitleMainMenu");
         
@@ -70,12 +78,12 @@ public partial class MainTitleBarUI : Control
         GetNode<PanelContainer>("%DropMenuView").MouseEntered += () => _mouseInUi = true;
         GetNode<PanelContainer>("%DropMenuView").MouseExited += () => _mouseInUi = false;
 
-        GetNode<Button>("%TitleHelpMenu").TooltipText += GlobalData.Version;
+        GetNode<Button>("%AboutButton").TooltipText += Version.FullVersionString;
         
-        _syncHotkeys();
+        SyncHotkeys();
     }
 
-    private void _syncHotkeys()
+    private void SyncHotkeys()
     {
         GetNode<Label>("%FileNewHotkey").Text = GlobalData.ParseHotkey("NewSession");
         GetNode<Label>("%FileSaveHotkey").Text = GlobalData.ParseHotkey("SaveSession");
@@ -119,12 +127,12 @@ public partial class MainTitleBarUI : Control
         }
     }
 
-    private void _onTitleCue2MenuPressed()
+    private void OnTitleCue2MenuPressed()
     {
         throw new NotImplementedException();
     }
 
-    private void _onTitleMainMenuToggled(Boolean @toggle)
+    private void OnTitleMainMenuToggled(Boolean @toggle)
     {
         GD.Print("Main Menu");
         if (@toggle == true)
@@ -147,27 +155,48 @@ public partial class MainTitleBarUI : Control
 
 
 
-    private void _onTitleHelpMenuPressed()
+    private void OnAboutButtonPressed(Boolean toggle)
     {
-        throw new NotImplementedException();
+        if (toggle)
+        {
+            if (_aboutWindow == null)
+            {
+                _aboutWindow = _aboutWindowPackedScene.Instantiate<AboutWindow>();
+                _aboutWindow.TreeExiting += OnAboutWindowExiting;
+                AddChild(_aboutWindow);
+            }
+            else
+            {
+                _aboutWindow.Show();
+            }
+        }
+        else
+        {
+            _aboutWindow?.QueueFree();
+        }
+    }
+
+    private void OnAboutWindowExiting()
+    {
+        _aboutWindow = null;
+        GetNode<Button>("%AboutButton").ButtonPressed = false;
+        
     }
 
 
     
-    private void _onSettingsButtonToggled(Boolean @toggle)
+    private void OnSettingsButtonToggled(Boolean @toggle)
     {
         if (@toggle == true){
             if (_settingsWindow == null)
             {
                 GD.Print("Loading settings window scene");
-                _settingsWindow = GD.Load<PackedScene>("uid://cfw3syjm11bd6").Instantiate();
-                //_settingsWindow = SceneLoader.LoadScene("uid://cfw3syjm11bd6", out string error); // Loads settings window
-                _settingsWindow.TreeExiting += _onSettingsWindowClose;
+                _settingsWindow = _settingsWindowPackedScene.Instantiate<SettingsWindow>();
+                _settingsWindow.TreeExiting += OnSettingsWindowClose;
                 AddChild(_settingsWindow);
             }
             else
             {
-                GD.Print("OOOOOOOOOH MANNNNNN");
                 _settingsWindow.GetWindow().Show();
             }
         }
@@ -177,21 +206,18 @@ public partial class MainTitleBarUI : Control
         }
     }
 
-    private void _onSettingsWindowClose()
+    private void OnSettingsWindowClose()
     {
         _settingsWindow = null; 
         GetNode<Button>("%SettingsButton").ButtonPressed = false;
     }
-
-    private void _closeSettingsWindow()
-    {
-    }
     
-    private void _onWindowMinimizeButtonPressed()
+    
+    private void OnWindowMinimizeButtonPressed()
     {
         DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized, GetWindow().GetWindowId());
     }
-    private void _onWindowExpandButtonPressed()
+    private void OnWindowExpandButtonPressed()
     {
         var windowNumber = GetWindow().GetWindowId();
         if (DisplayServer.WindowGetMode() != DisplayServer.WindowMode.Fullscreen){
@@ -204,7 +230,7 @@ public partial class MainTitleBarUI : Control
             //DisplayServer.WindowSetSize(new Vector2I(600,400), window_number);
         }
     }
-    private void _onExitButtonPressed()
+    private void OnExitButtonPressed()
     {
         GetTree().Root.PropagateNotification((int)NotificationWMCloseRequest);
         Task.Delay(100);

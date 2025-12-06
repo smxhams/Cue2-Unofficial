@@ -44,7 +44,7 @@ text = "Connections"
 [node name="VSeparator2" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
 layout_mode = 2
 
-[node name="LogCount" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+[node name="LogCountButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Log, click to open full log"

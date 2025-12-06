@@ -1,3 +1,4 @@
+res://src/UI/Scenes/Settings
 res://src/UI/Assets
 res://src/UI/Scenes/Inspectors
 res://src/Base/Settings
@@ -8,7 +9,6 @@ res://src/Shared
 res://src/launcher
 res://src/UI/Utilities
 /Users/smxham/Documents/MyFiles/Cue2_Home/Ext
-res://src/UI/Scenes/Settings
 res://src/ui/Scenes
 res://src/ui
 res://src/UI

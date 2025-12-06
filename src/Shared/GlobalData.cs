@@ -16,11 +16,6 @@ namespace Cue2.Shared;
 
 public partial class GlobalData : Node
 {
-	public static string Version { get; } = "0.1-StripyHat";
-
-	public static readonly List<string> PreviousVersions = ["0.0-Dev"];
-
-	
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
 	

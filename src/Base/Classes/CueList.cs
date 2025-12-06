@@ -11,25 +11,24 @@ using Godot.Collections;
 namespace Cue2.Base.Classes;
 
 
-public partial class CueList : ScrollContainer
+public partial class CueList : VBoxContainer
 {
-	[Signal] public delegate void CueDragStartedEventHandler(int cueId);
-	[Signal] public delegate void CueDragEndedEventHandler(int cueId, Vector2 dropPosition);
-	[Signal] public delegate void CuesReorderedEventHandler();
-
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	
 	
 	public List<Cue> Cuelist { get; private set; }
 	public static System.Collections.Generic.Dictionary<int, Cue> CueIndex;
-	
+
+	private bool _isReordering;
 	public int ShellBeingDragged = -1;
 	public static int ShellDraggedOver = -1;
 
 	private VBoxContainer _cueContainer;
 	
 	private PackedScene _shellBarPackedScene = SceneLoader.LoadPackedScene("uid://d207a67e3ebww", out _);
+	
+	
 	
 	public CueList()
 	{
@@ -47,9 +46,55 @@ public partial class CueList : ScrollContainer
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 
 		_cueContainer = GetNode<VBoxContainer>("%CueContainer");
-		
+
 		_globalSignals.CreateCue += CreateCue;
-		
+
+
+	}
+
+	public override void _Process(double delta)
+	{
+		if (_isReordering)
+		{
+			//var shell = FetchCueFromId(ShellBeingDragged).ShellBar;
+			//shell.Position = new Vector2(GetGlobalMousePosition().X, GetGlobalMousePosition().Y);
+		}
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && !mb.Pressed)
+		{
+			if (_isReordering)
+			{
+				OnDragEnded(GetGlobalMousePosition());
+			}
+		}
+	}
+
+	private void OnDragEnded(Vector2 position)
+	{
+		var targetIndex = GetTargetIndex(position);
+		var cueId = ShellBeingDragged;
+		var shell = FetchCueFromId(cueId).ShellBar;
+		shell.Reparent(_cueContainer);
+		ReorderCue(cueId, targetIndex);
+		_isReordering = false;
+		ShellBeingDragged = -1;
+	}
+
+	private int GetTargetIndex(Vector2 position)
+	{
+		for (int i = 0; i < _cueContainer.GetChildCount(); i++)
+		{
+			var child = _cueContainer.GetChild<ShellBar>(i);
+			var rect = child.GetGlobalRect();
+			if (position.Y < rect.Position.Y + rect.Size.Y / 2)
+			{
+				return i;
+			}
+		}
+		return _cueContainer.GetChildCount();
 	}
 
 	public Cue CreateCue(Dictionary data) // Create a cue from data
@@ -118,8 +163,6 @@ public partial class CueList : ScrollContainer
 
 		// Update UI positions
 		UpdateShellPositions();
-
-		EmitSignal(SignalName.CuesReordered);
 	}
 
 	private void UpdateShellPositions()
@@ -135,7 +178,23 @@ public partial class CueList : ScrollContainer
 	}
 	
 
-	public void ShellMouseOverByDraggedShellBottomHalf(int cueId)
+	// Cuelist reordering
+	public void StartReorder(ShellBar shellbar)
+	{
+		GD.Print($"REORDER STARTED");
+		if (_isReordering) return;
+		if (!shellbar.Selected)
+		{
+			_globalData.ShellSelection.SelectIndividualShell(FetchCueFromId(shellbar.CueId));
+		}
+
+		_isReordering = true;
+		ShellBeingDragged = shellbar.CueId;
+		var cue = FetchCueFromId(shellbar.CueId);
+		var shell = cue.ShellBar;
+	}
+	
+	/*public void ShellMouseOverByDraggedShellBottomHalf(int cueId)
 	{
 		GD.Print("Cue: " + ShellBeingDragged + " has moused over: " + cueId);
 		var targetCue = CueIndex[cueId];
@@ -336,7 +395,9 @@ public partial class CueList : ScrollContainer
 
 		}
 		
-	}
+	}*/
+	
+	
 
 
 	

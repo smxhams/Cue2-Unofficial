@@ -1,8 +1,7 @@
-using Godot;
-using System;
 using Cue2.Shared;
+using Godot;
 
-namespace Cue2.UI.Scenes;
+namespace Cue2.UI.Scenes.SubWindows;
 
 public partial class SubWindowHandles : Control
 {
@@ -47,14 +46,14 @@ public partial class SubWindowHandles : Control
 		_topLeftHandle.GuiInput += OnTopLeftHandleGuiInput;
 		_bottomRightHandle.GuiInput += OnBottomRightHandleGuiInput;
 		
-		GetNode<Button>("%ExitButton").Pressed += _onExitButtonPressed;
+		GetNode<Button>("%ExitButton").Pressed += OnExitButtonPressed;
 	}
 	
 	
 	
-	private void _onExitButtonPressed()
+	private void OnExitButtonPressed()
 	{
-		GetParent().GetParent().QueueFree();
+		GetParent().QueueFree();
 	}
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)

@@ -2,42 +2,33 @@
 
 [ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="1_sahw6"]
 
-[node name="Cue List" type="ScrollContainer"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="CueList" type="VBoxContainer"]
+offset_right = 1152.0
+offset_bottom = 648.0
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1_sahw6")
-metadata/_tab_index = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="CueListHeader" type="HBoxContainer" parent="VBoxContainer"]
+[node name="CueListHeader" type="HBoxContainer" parent="."]
 layout_mode = 2
 
-[node name="Container" type="Container" parent="VBoxContainer/CueListHeader"]
+[node name="Control" type="Control" parent="CueListHeader"]
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.0
 
-[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader"]
+[node name="HSplitContainer" type="HSplitContainer" parent="CueListHeader"]
 custom_minimum_size = Vector2(10, 15)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 60
 
-[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader/HSplitContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="CueListHeader/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Label" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+[node name="Label" type="Label" parent="CueListHeader/HSplitContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
@@ -46,7 +37,7 @@ theme_override_font_sizes/font_size = 9
 text = "Number"
 horizontal_alignment = 1
 
-[node name="Label2" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+[node name="Label2" type="Label" parent="CueListHeader/HSplitContainer/HSplitContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -54,10 +45,10 @@ theme_override_font_sizes/font_size = 9
 text = "Name"
 horizontal_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/CueListHeader"]
+[node name="HBoxContainer" type="HBoxContainer" parent="CueListHeader"]
 layout_mode = 2
 
-[node name="Label4" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label4" type="Label" parent="CueListHeader/HBoxContainer"]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -65,10 +56,10 @@ theme_override_font_sizes/font_size = 9
 text = "Pre-Wait"
 horizontal_alignment = 1
 
-[node name="VSeparator" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator" type="VSeparator" parent="CueListHeader/HBoxContainer"]
 layout_mode = 2
 
-[node name="Label5" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label5" type="Label" parent="CueListHeader/HBoxContainer"]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -76,10 +67,10 @@ theme_override_font_sizes/font_size = 9
 text = "Diration"
 horizontal_alignment = 1
 
-[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator2" type="VSeparator" parent="CueListHeader/HBoxContainer"]
 layout_mode = 2
 
-[node name="Label6" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label6" type="Label" parent="CueListHeader/HBoxContainer"]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -87,10 +78,10 @@ theme_override_font_sizes/font_size = 9
 text = "Post-Wait"
 horizontal_alignment = 1
 
-[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator3" type="VSeparator" parent="CueListHeader/HBoxContainer"]
 layout_mode = 2
 
-[node name="Label7" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label7" type="Label" parent="CueListHeader/HBoxContainer"]
 custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -98,10 +89,16 @@ theme_override_font_sizes/font_size = 9
 text = "Follow"
 horizontal_alignment = 1
 
-[node name="VSeparator4" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator4" type="VSeparator" parent="CueListHeader/HBoxContainer"]
 layout_mode = 2
 
-[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="Cue List" type="ScrollContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+metadata/_tab_index = 0
+
+[node name="CueContainer" type="VBoxContainer" parent="Cue List"]
 unique_name_in_owner = true
 y_sort_enabled = true
 layout_mode = 2

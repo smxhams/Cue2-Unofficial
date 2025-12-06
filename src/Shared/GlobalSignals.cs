@@ -6,7 +6,6 @@ using Cue2.Base.Classes;
 namespace Cue2.Shared;
 public partial class GlobalSignals : Node
 {
-	[Signal]  public delegate void CloseSettingsWindowEventHandler();
 	[Signal]  public delegate void ShellFocusedEventHandler(int cueId);
 	[Signal]  public delegate void LogEventHandler(string log, int type);
 	// 0 = info, 1 = warning, 2 = error, 3 = alert
@@ -19,6 +18,9 @@ public partial class GlobalSignals : Node
 	[Signal]  public delegate void SaveFileEventHandler(string url, string showName);
 	[Signal] public delegate void SyncShellInspectorEventHandler();
 	
+	// Sub-window events
+	//[Signal]  public delegate void CloseSettingsWindowEventHandler();
+	//[Signal] public delegate void AboutWindowClosedEventHandler();
 	
 	// Signals Associated with InputActions
 	[Signal] public delegate void NewSessionEventHandler();
@@ -58,7 +60,8 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
 
 	public static event Action<string, int> Logger;
-	
+
+	private HashSet<Node> _connectedTextFields = new HashSet<Node>();
 
 	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
 	public override void _Ready()
@@ -108,30 +111,34 @@ public partial class GlobalSignals : Node
 
 	private void ConnectFocusSignals(Node node)
 	{
-		if (node is Control textField)
+		if (node is Control textField && !_connectedTextFields.Contains(node))
 		{
 			textField.FocusEntered += FocusEntered;
 			textField.FocusExited += FocusExited;
+			_connectedTextFields.Add(node);
 		}
 	}
 	
 	private void DisonnectFocusSignals(Node node)
 	{
-		if (node is Control textField)
+		if (_connectedTextFields.Contains(node) && node is Control textField)
 		{
 			textField.FocusEntered -= FocusEntered;
 			textField.FocusExited -= FocusExited;
+			_connectedTextFields.Remove(node);
 		}
 	}
 
 	private void FocusEntered()
 	{
 		EmitSignal(SignalName.TextEditFocusEntered);
+		GD.Print($"Not Listening");
 	}
 
 	private void FocusExited()
 	{
 		EmitSignal(SignalName.TextEditFocusExited);
+		GD.Print($"Listening");
 	}
 	
 }
