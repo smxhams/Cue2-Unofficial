@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using Cue2.Shared;
 
 namespace Cue2.Shared;
-public partial class EventLogger : Node
+	public partial class EventLogger : Node
 {
 
 	private GlobalSignals _globalSignals;
@@ -24,15 +24,15 @@ public partial class EventLogger : Node
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalSignals.Log += _logEvent;
+		_globalSignals.Log += LogEvent;
 
 		_logCount = 0;
 	}
 	
 
-	private void _logEvent(string @logString, int @type)
+	private void LogEvent(string @logString, int @type)
 	{
-		var typeString = _getLogTypeName(@type);
+		var typeString = GetLogTypeName(@type);
 		var printout = typeString + "  :  " + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss tt") + "  :  " + @logString;
 		_logList.Add(printout);
 		_logCount++;
@@ -41,7 +41,7 @@ public partial class EventLogger : Node
 		GD.Print(printout);
 	}
 
-	private string _getLogTypeName(int type)
+	private string GetLogTypeName(int type)
 	{
 		if (Enum.IsDefined(typeof(LogType), type))
 		{

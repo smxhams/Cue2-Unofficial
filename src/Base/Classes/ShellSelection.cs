@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Godot;
 
@@ -12,7 +13,7 @@ public partial class ShellSelection : Node
     private GlobalSignals _globalSignals;
 
 
-    public List<ICue> SelectedCues = new();
+    public static List<Cue> SelectedCues = new();
 
     public override void _Ready()
     {
@@ -21,7 +22,7 @@ public partial class ShellSelection : Node
         
     }
 
-    public void SelectIndividualShell(ICue selectedCue)
+    public void SelectIndividualShell(Cue selectedCue)
     {
         if (SelectedCues.Any())
         {
@@ -35,25 +36,45 @@ public partial class ShellSelection : Node
         AddSelection(selectedCue);
     }
     
-    public void SelectThrough(ICue pressedCue)
+    public void SelectThrough(Cue pressedCue)
     {
         var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
-        
+        var allShellBars = GetAllShellBarsInOrder(cueContainer);
+
         var startShell = SelectedCues.Last().ShellBar;
-        int startShellPosition = startShell.GetIndex();
-        int pressedCuePosition = pressedCue.ShellBar.GetIndex();
-        int start = Math.Min(startShellPosition, pressedCuePosition);
-        int end = Math.Max(startShellPosition, pressedCuePosition);
+        int startIndex = allShellBars.IndexOf(startShell);
+        int pressedIndex = allShellBars.IndexOf(pressedCue.ShellBar);
+        int start = Math.Min(startIndex, pressedIndex);
+        int end = Math.Max(startIndex, pressedIndex);
         for (int i = start; i <= end; i++)
         {
-            int cueId = cueContainer.GetChild(i).Get("CueId").AsInt32();
-            ICue cue = CueList.FetchCueFromId(cueId);
-            if (SelectedCues.Contains(cue) == false)
+            var sb = allShellBars[i];
+            int cueId = sb.Get("CueId").AsInt32();
+            Cue cue = CueList.FetchCueFromId(cueId);
+            if (!SelectedCues.Contains(cue))
             {
                 AddSelection(cue);
             }
         }
         _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), pressedCue.Id);
+    }
+
+    private List<ShellBar> GetAllShellBarsInOrder(VBoxContainer container)
+    {
+        List<ShellBar> result = new();
+        foreach (var child in container.GetChildren())
+        {
+            if (child is ShellBar sb)
+            {
+                result.Add(sb);
+                var childContainer = sb.GetNode<VBoxContainer>("%ShellChildContainer");
+                if (childContainer != null)
+                {
+                    result.AddRange(GetAllShellBarsInOrder(childContainer));
+                }
+            }
+        }
+        return result;
     }
     
     public void SelectAllShells()
@@ -61,7 +82,7 @@ public partial class ShellSelection : Node
         GD.Print("Selecting All Shells");
     }
     
-    public void AddSelection(ICue cue)
+    public void AddSelection(Cue cue)
     {
         cue.ShellBar.Select();
         SelectedCues.Add(cue);

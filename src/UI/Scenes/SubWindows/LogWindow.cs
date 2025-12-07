@@ -67,7 +67,7 @@ public partial class LogWindow : Window
             WrapControls = true;
             ContentScaleFactor = effectiveScale;
             ChildControlsChanged();
-            GD.Print($"LogWindow:_scaleUI - Applied effective UI scale: {effectiveScale} (user: {value} * base: {_globalData.BaseDisplayScale})"); //!!! (Prefixed as per standards)
+            GD.Print($"LogWindow:_scaleUI - Applied effective UI scale: {effectiveScale} (user: {value} * base: {_globalData.BaseDisplayScale})");
         } 
         catch (Exception ex)
         {

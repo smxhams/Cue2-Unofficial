@@ -1,5 +1,6 @@
 using Godot;
-using System;
+
+namespace Cue2.Base.Settings;
 
 public partial class AudioMatrixCheckBox : CheckBox
 {

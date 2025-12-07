@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=103 format=4 uid="uid://vidokm2ilwtk"]
+[gd_resource type="Theme" load_steps=115 format=4 uid="uid://vidokm2ilwtk"]
 
 [ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="1_hh4k7"]
 [ext_resource type="StyleBox" uid="uid://d0ar62hl8q66g" path="res://src/UI/Assets/ShellPanelStyleBox.tres" id="1_vt8rd"]
@@ -41,6 +41,13 @@ region = Rect2(64, 32, 32, 32)
 [sub_resource type="AtlasTexture" id="AtlasTexture_kr3sc"]
 atlas = ExtResource("1_hh4k7")
 region = Rect2(32, 32, 32, 32)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_jxm3t"]
+load_path = "res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_et7wo"]
+atlas = SubResource("CompressedTexture2D_jxm3t")
+region = Rect2(192, 96, 32, 32)
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_fd6x7"]
 load_path = "res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex"
@@ -132,6 +139,116 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 corner_detail = 5
+
+[sub_resource type="DPITexture" id="DPITexture_hh4k7"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"14\" height=\"14\" x=\"1\" y=\"1\" fill=\"#699ce8\" rx=\"2.33\"/><path fill=\"#fff\" d=\"M11.5 3.734 5.89 9.346 4.185 7.665l-1.5 1.499 3.204 3.18L13 5.235z\"/></svg>
+"
+base_scale = 0.85
+saturation = 0.0
+color_map = {
+Color(0.4117647, 0.6117647, 0.9098039, 1): Color(0.337255, 0.619608, 1, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_fd6x7"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"14\" height=\"14\" x=\"1\" y=\"1\" fill=\"gray\" rx=\"2.33\"/><path fill=\"#b3b3b3\" d=\"M11.5 3.734 5.89 9.346 4.185 7.665l-1.5 1.499 3.204 3.18L13 5.235z\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_jxm3t"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"#699ce8\"/><circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"#fff\"/></svg>
+"
+base_scale = 0.85
+color_map = {
+Color(0.4117647, 0.6117647, 0.9098039, 1): Color(0.337255, 0.619608, 1, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_w6urt"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"gray\"/><circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"#b3b3b3\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_mvudg"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"#e0e0e0\" fill-opacity=\".2\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_p8lwo"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><circle cx=\"8\" cy=\"8\" r=\"7\" fill=\"gray\" fill-opacity=\".2\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_wu7sp"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"14\" height=\"14\" x=\"1\" y=\"1\" fill=\"#e0e0e0\" fill-opacity=\".2\" rx=\"2.333\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="DPITexture" id="DPITexture_82g3v"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"14\" height=\"14\" x=\"1\" y=\"1\" fill=\"gray\" fill-opacity=\".2\" rx=\"2.333\"/></svg>
+"
+base_scale = 0.85
+saturation = 2.0
+color_map = {
+Color(1, 0.37254903, 0.37254903, 1): Color(1, 0.47, 0.42, 1),
+Color(0.37254903, 1, 0.5921569, 1): Color(0.45, 0.95, 0.5, 1),
+Color(1, 0.8666667, 0.39607844, 1): Color(1, 0.87, 0.4, 1)
+}
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_et7wo"]
+content_margin_left = 5.1000004
+content_margin_top = 4.25
+content_margin_right = 5.1000004
+content_margin_bottom = 4.25
+bg_color = Color(0.101568595, 0.101568595, 0.101568595, 1)
+draw_center = false
+border_color = Color(0.0798039, 0.0798039, 0.0798039, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+corner_detail = 4
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lhl8j"]
+content_margin_left = 5.1000004
+content_margin_top = 1.7
+content_margin_right = 5.1000004
+content_margin_bottom = 1.7
+bg_color = Color(0.145098, 0.145098, 0.145098, 1)
+draw_center = false
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_hh4k7"]
 atlas = ExtResource("1_hh4k7")
@@ -3169,6 +3286,7 @@ AtlasIcons/icons/Down = SubResource("AtlasTexture_w6urt")
 AtlasIcons/icons/Left = SubResource("AtlasTexture_mvudg")
 AtlasIcons/icons/Pause = SubResource("AtlasTexture_82g3v")
 AtlasIcons/icons/Play = SubResource("AtlasTexture_kr3sc")
+AtlasIcons/icons/PlusCircled = SubResource("AtlasTexture_et7wo")
 AtlasIcons/icons/Rearrange = SubResource("AtlasTexture_qsjsb")
 AtlasIcons/icons/Refresh = SubResource("AtlasTexture_h1xyv")
 AtlasIcons/icons/Right = SubResource("AtlasTexture_p8lwo")
@@ -3183,6 +3301,35 @@ Button/styles/focus = SubResource("StyleBoxFlat_tojog")
 Button/styles/hover = SubResource("StyleBoxFlat_ft43w")
 Button/styles/normal = SubResource("StyleBoxFlat_e8j8a")
 Button/styles/pressed = SubResource("StyleBoxFlat_ajrfy")
+CheckBox/colors/font_color = Color(0.7862745, 0.7862745, 0.7862745, 1)
+CheckBox/colors/font_disabled_color = Color(1, 1, 1, 0.35)
+CheckBox/colors/font_focus_color = Color(0.8931372, 0.8931372, 0.8931372, 1)
+CheckBox/colors/font_hover_color = Color(0.8931372, 0.8931372, 0.8931372, 1)
+CheckBox/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+CheckBox/colors/font_outline_color = Color(0, 0, 0, 0)
+CheckBox/colors/font_pressed_color = Color(1, 1, 1, 0.7)
+CheckBox/colors/icon_disabled_color = Color(1, 1, 1, 0.4)
+CheckBox/colors/icon_focus_color = Color(1.15, 1.15, 1.15, 1)
+CheckBox/colors/icon_hover_color = Color(1.15, 1.15, 1.15, 1)
+CheckBox/colors/icon_normal_color = Color(1, 1, 1, 1)
+CheckBox/colors/icon_pressed_color = Color(0.38784325, 0.71254915, 1.15, 1)
+CheckBox/constants/check_v_offset = 0
+CheckBox/constants/h_separation = 6
+CheckBox/constants/outline_size = 0
+CheckBox/icons/checked = SubResource("DPITexture_hh4k7")
+CheckBox/icons/checked_disabled = SubResource("DPITexture_fd6x7")
+CheckBox/icons/radio_checked = SubResource("DPITexture_jxm3t")
+CheckBox/icons/radio_checked_disabled = SubResource("DPITexture_w6urt")
+CheckBox/icons/radio_unchecked = SubResource("DPITexture_mvudg")
+CheckBox/icons/radio_unchecked_disabled = SubResource("DPITexture_p8lwo")
+CheckBox/icons/unchecked = SubResource("DPITexture_wu7sp")
+CheckBox/icons/unchecked_disabled = SubResource("DPITexture_82g3v")
+CheckBox/styles/disabled = SubResource("StyleBoxFlat_et7wo")
+CheckBox/styles/hover = SubResource("StyleBoxFlat_et7wo")
+CheckBox/styles/hover_pressed = SubResource("StyleBoxFlat_et7wo")
+CheckBox/styles/normal = SubResource("StyleBoxFlat_lhl8j")
+CheckBox/styles/normal_mirrored = SubResource("StyleBoxFlat_lhl8j")
+CheckBox/styles/pressed = SubResource("StyleBoxFlat_et7wo")
 CustomIcons/base_type = &"Button"
 CustomIcons/icons/Delete = SubResource("AtlasTexture_hh4k7")
 FontStyles/colors/SoftColor = Color(0, 0, 0, 1)

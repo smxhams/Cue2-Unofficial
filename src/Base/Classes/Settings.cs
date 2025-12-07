@@ -21,6 +21,7 @@ public partial class Settings : Node
     public float GoScale = 1.0f;
     public int WaveformResolution = 4096;
     public float StopFadeDuration = 2.0f;
+    public bool VerbosePrint = true;
     
     
     // Cuelight settings

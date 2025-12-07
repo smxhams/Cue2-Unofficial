@@ -56,8 +56,23 @@ public class Cue : ICue
     public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
     public double TotalDuration { get; set; } = 0.0;
     public double PostWait { get; set; } = 0.0;
-    public Color Color { get; set; } = new Color(0.4f, 0.4f, 0.4f, 1.0f);
+
+    private Color _color;
+    public Color Color
+    {
+        get => _color;
+        set
+        {
+            _color = value;
+            ColorChanged?.Invoke(value);
+        }
+    }
     public FollowType Follow = FollowType.None;
+    
+    /// <summary>
+    /// Stored value if it's children are expanded to view.
+    /// </summary>
+    public bool Expanded { get; set; } = false;
     
     // Events
     public event Action<string> NameChanged;
@@ -78,6 +93,7 @@ public class Cue : ICue
         Id = _nextId++;
         _name = "New cue number " + Id.ToString();
         _cueNum = Id.ToString();
+        Color = new Color(0.4f, 0.4f, 0.4f, 1.0f);
     }
     
     
