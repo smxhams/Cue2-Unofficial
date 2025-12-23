@@ -137,38 +137,10 @@ public partial class CueList : Control
 
 	public static Cue FetchCueFromId(int id)
 	{
-		try
-		{
-			CueIndex.TryGetValue(id, out Cue cue);
-			return cue;
-		}
-		catch (KeyNotFoundException)
-		{
-			return null;
-		}
-
+		CueIndex.TryGetValue(id, out Cue cue);
+		return cue;
 	}
-
-	public void ReorderCue(int cueId, int newIndex)
-	{
-		var cue = FetchCueFromId(cueId);
-		if (cue == null || cue.ParentId != -1) return; // Only reorder top-level cues for now
-		
-
-		// Update UI positions
-		UpdateShellPositions();
-	}
-
-	private void UpdateShellPositions()
-	{
-		foreach (var cue in CueIndex.Values)
-		{
-			if (cue.ParentId == -1) // Top-level
-			{
-				//_cueContainer.MoveChild(cue.ShellBar, i);
-			}
-		}
-	}
+	
 
 	private void OnMouseEntered(ShellBar shellbar)
 	{
@@ -408,8 +380,8 @@ public partial class CueList : Control
 				} 
 				Cue newCue = CreateCue(cueDict);
 				
-				
-				// Link component reference objects
+				// Patches are instantiated in load sequence seperate form cues. Once patchs and cues are created they
+				// need to be linked.
 				var newCueAudioComponent = newCue.GetAudioComponent();
 				if (newCueAudioComponent != null)
 				{

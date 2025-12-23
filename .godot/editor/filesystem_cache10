@@ -1,7 +1,7 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1765047420
+::res://::1765480555
 export_presets.cfg::TextFile::-1::1764449554::0::1::::<><><>0<>0<><>::
-icon.svg::CompressedTexture2D/CompressedTexture2D::8597863507468381028::1764449554::1764449554::1::::<><><>0<>0<>2121b297116ecef117fc369b9feee572<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
+icon.svg::CompressedTexture2D::8597863507468381028::1764449554::1765135075::1::::<><><>0<>0<>80d061c72c249930f878cc40380df297<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 README.md::TextFile::-1::1764449554::0::1::::<><><>0<>0<><>::
 Version.cs::CSharpScript::3484266656859141276::1764990664::0::1::::<><><>0<>0<><>::
 ::res://addons/::1755385628
@@ -9,76 +9,76 @@ Version.cs::CSharpScript::3484266656859141276::1764990664::0::1::::<><><>0<>0<><
 collapsible_container_inspector_plugin.gd::GDScript::8593449145882413701::1764449329::0::1::::<>EditorInspectorPlugin<><>0<>1<><>::
 collapsible_container_plugin_loader.gd::GDScript::8699811508691133935::1764449329::0::1::::<>EditorPlugin<><>0<>1<><>::
 plugin.cfg::TextFile::-1::1764449330::0::1::::<><><>0<>0<><>::
-::res://addons/collapsible_container/collapsible_elements/::1764449329
-collapsible_container.gd::GDScript::3743194857847071228::1764449329::0::1::::CollapsibleContainer<>Control<><>0<>1<><>::
-collapsible_container.svg::CompressedTexture2D/CompressedTexture2D::7091256535802334435::1764449329::1762143854::1::::<><><>0<>0<>21e351b80b856e0e791ffb082d9d5dbb<>res://.godot/imported/collapsible_container.svg-6bdfacf076bb04b60e67829b6de29657.ctex::
+::res://addons/collapsible_container/collapsible_elements/::1765135160
+collapsible_container.gd::GDScript::3743194857847071228::1764449329::0::1::::CollapsibleContainer<>Control<>res://addons/collapsible_container/collapsible_elements/collapsible_container.svg<>0<>1<><>::
+collapsible_container.svg::CompressedTexture2D::7091256535802334435::1764449329::1765135075::1::::<><><>0<>0<>b4aba709e7787b3984cae797971a19a8<>res://.godot/imported/collapsible_container.svg-6bdfacf076bb04b60e67829b6de29657.ctex::
 collapsible_inspector_buttons.gd::GDScript::4087264941882946472::1764449329::0::1::::<>EditorProperty<><>0<>0<><>::
 ::res://addons/collapsible_container/collapsible_elements/FoldingPresets/::1764449329
 folding_presets.gd::GDScript::3483960961202953066::1764449329::0::1::::<>Control<><>0<>1<><>::
 folding_presets.tscn::PackedScene::6319007483452450468::1764449329::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/collapsible_elements/FoldingPresets/folding_presets.gd<>uid://crdv3y6m67ms0::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignTopLeft.svg<>uid://c24jayottym27::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignCenterTop.svg<>uid://domepwwue1sp4::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignTopLeft.svg<>uid://mncyfyt3fogw::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignTopLeft.svg<>uid://o7fbw2f04ja3::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignCenterTop.svg<>uid://rw3up4a251tx::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignCenterTop.svg<>uid://ci3ojhpr5r086::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignCenterLeft.svg<>uid://bmxi81k7vn8hj::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignCenter.svg<>uid://dftrdw2w3g6ny::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignCenterLeft.svg<>uid://6fwpcys854s3::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignCenterLeft.svg<>uid://b05wj4o55hnfj::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignCenter.svg<>uid://dus7earmqpni0::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignCenter.svg<>uid://bvv0caighcifa::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignBottomLeft.svg<>uid://bdyjj37l24bfu::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignBottomLeft.svg<>uid://ycroqpx34b3::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignBottomLeft.svg<>uid://dgu20vyoivwhd::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignTopWide.svg<>uid://cuwpinjjsq6st::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignTopWide.svg<>uid://cv33aqd6rhsw6::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignTopWide.svg<>uid://doy16u8e3gyte::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignHCenterWide.svg<>uid://kdisonq2pqmg::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignHCenterWide.svg<>uid://bsqtr0c5kxfln::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignHCenterWide.svg<>uid://d14a4y2w3a6kj::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignLeftWide.svg<>uid://fqqdb2kdffw5::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignLeftWide.svg<>uid://bytladrq678sl::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignLeftWide.svg<>uid://fuvk0u5r057e::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignFullRect_Tips.svg<>uid://w7ggyfcx8yjr::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/ControlAlignVCenterWide.svg<>uid://bh8p8p5c1j5jg::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/ControlAlignVCenterWide.svg<>uid://bdr0865vc18jt::::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/ControlAlignVCenterWide.svg
 ::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/::1755385629
-::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/::1764449329
-ControlAlignBottomLeft.svg::CompressedTexture2D/CompressedTexture2D::2647096326409232314::1764449329::1755385630::1::::<><><>0<>0<>8417009c7030a720fbdae4d4c3a283ab<>res://.godot/imported/ControlAlignBottomLeft.svg-0755e9bb2af0c8ed6511d4ba3065964d.ctex::
-ControlAlignCenter.svg::CompressedTexture2D/CompressedTexture2D::4204426499459569343::1764449329::1755385630::1::::<><><>0<>0<>78914558a4543e1e47acaeba7e442ae8<>res://.godot/imported/ControlAlignCenter.svg-2daa7df4e303a36265efd78f9efc13bd.ctex::
-ControlAlignCenterLeft.svg::CompressedTexture2D/CompressedTexture2D::7550468191116036670::1764449329::1755385630::1::::<><><>0<>0<>d39d0bf72aa2fb108fdf69d14f07c3b2<>res://.godot/imported/ControlAlignCenterLeft.svg-727d92a266c1497ecbfd11c779309d3f.ctex::
-ControlAlignCenterTop.svg::CompressedTexture2D/CompressedTexture2D::1049010467305261592::1764449329::1755385630::1::::<><><>0<>0<>467c625b54e29e822b43ac92137fc8a9<>res://.godot/imported/ControlAlignCenterTop.svg-83b6e67dcc9cd2948e6319ca7dc22003.ctex::
-ControlAlignFullRect.svg::CompressedTexture2D/CompressedTexture2D::8850412902307548882::1764449329::1755385630::1::::<><><>0<>0<>57ed97a77e10211d62ca665ccb7ed135<>res://.godot/imported/ControlAlignFullRect.svg-1a3e7a3e91e326d115982f2403b363bb.ctex::
-ControlAlignHCenterWide.svg::CompressedTexture2D/CompressedTexture2D::708600206047938758::1764449329::1755385630::1::::<><><>0<>0<>604924f88c3b3afcfc15e1067eb82f35<>res://.godot/imported/ControlAlignHCenterWide.svg-8dd97174091bf3561856265dfac43a76.ctex::
-ControlAlignLeftWide.svg::CompressedTexture2D/CompressedTexture2D::384951186212732150::1764449329::1755385630::1::::<><><>0<>0<>3eaac26a32434ecfe81df5df9d879394<>res://.godot/imported/ControlAlignLeftWide.svg-40d414114bc20cc237e6f176d84abf20.ctex::
-ControlAlignTopLeft.svg::CompressedTexture2D/CompressedTexture2D::8166949240354610547::1764449329::1755385630::1::::<><><>0<>0<>b5f18b059e6f003defc006cee113e873<>res://.godot/imported/ControlAlignTopLeft.svg-29dac035fbf6a10147644a17e50ade06.ctex::
-ControlAlignTopWide.svg::CompressedTexture2D/CompressedTexture2D::6222960289119330803::1764449329::1755385630::1::::<><><>0<>0<>4e2ae9adbfbfd37d1e74beda790b84c7<>res://.godot/imported/ControlAlignTopWide.svg-5532fd183464fcc238a961f0183967da.ctex::
-ControlAlignVCenterWide.svg::CompressedTexture2D/CompressedTexture2D::2946837575454047832::1764449329::1755385630::1::::<><><>0<>0<>b6a549d4a855ccf8597241b096487e4e<>res://.godot/imported/ControlAlignVCenterWide.svg-b0c6f30b3150e357cf70cb0b2e67854c.ctex::
-::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/::1764449329
-ControlAlignBottomLeft.svg::CompressedTexture2D/CompressedTexture2D::49697619336524642::1764449329::1755385630::1::::<><><>0<>0<>f638aa504cb39220c11dc073b2a8e7e5<>res://.godot/imported/ControlAlignBottomLeft.svg-4bb3d8f204414f6e90998d370f3f9431.ctex::
-ControlAlignCenter.svg::CompressedTexture2D/CompressedTexture2D::8602147837186059669::1764449329::1755385630::1::::<><><>0<>0<>a5380e170df427399d9e57e0de1604a6<>res://.godot/imported/ControlAlignCenter.svg-2ac5d3511f0a4b20de1e899d36da141f.ctex::
-ControlAlignCenterLeft.svg::CompressedTexture2D/CompressedTexture2D::2187538745283894708::1764449329::1755385630::1::::<><><>0<>0<>ba4bcd8551ab5812185712cdc76ab892<>res://.godot/imported/ControlAlignCenterLeft.svg-a102d756886bb9a2ab0b575b22407963.ctex::
-ControlAlignCenterTop.svg::CompressedTexture2D/CompressedTexture2D::1240363276798295653::1764449329::1755385630::1::::<><><>0<>0<>cf0941c7722c758aa71bdf3b2e24aa35<>res://.godot/imported/ControlAlignCenterTop.svg-cf845e41080d979d10d04325611d6791.ctex::
-ControlAlignFullRect.svg::CompressedTexture2D/CompressedTexture2D::8458229823528394698::1764449329::1755385630::1::::<><><>0<>0<>660c376ad1208d36762f20c9b3849022<>res://.godot/imported/ControlAlignFullRect.svg-dade0ff26d5139e74a5e8d99cefd5de9.ctex::
-ControlAlignHCenterWide.svg::CompressedTexture2D/CompressedTexture2D::3684035212152285103::1764449329::1755385630::1::::<><><>0<>0<>9fb11ab9e0616412b05987cf949aa88f<>res://.godot/imported/ControlAlignHCenterWide.svg-c9524c2b86947d9ba34c705a778dcb0c.ctex::
-ControlAlignLeftWide.svg::CompressedTexture2D/CompressedTexture2D::4110844179854860323::1764449329::1755385630::1::::<><><>0<>0<>633f7b0e59dcff6d0e4b3c1fb634917e<>res://.godot/imported/ControlAlignLeftWide.svg-98d97fd808843aa7ea652b895d88c1a3.ctex::
-ControlAlignTopLeft.svg::CompressedTexture2D/CompressedTexture2D::869267628091376226::1764449329::1755385630::1::::<><><>0<>0<>0287505604c134eb4b33a471c6df4ce0<>res://.godot/imported/ControlAlignTopLeft.svg-b6d8f972d033e2e9d7482fab955040a9.ctex::
-ControlAlignTopWide.svg::CompressedTexture2D/CompressedTexture2D::6306310583135545019::1764449329::1755385630::1::::<><><>0<>0<>f202b504520d7f98ea7f801d094d3e29<>res://.godot/imported/ControlAlignTopWide.svg-fda3d0e68cf7c37a6a88fe21b753dc26.ctex::
-ControlAlignVCenterWide.svg::CompressedTexture2D/CompressedTexture2D::2633660167970101465::1764449329::1755385630::1::::<><><>0<>0<>ca9e3dad2791b3c4fd793cb52c05e77a<>res://.godot/imported/ControlAlignVCenterWide.svg-6269da9293518da9b14903ebbd18aa45.ctex::
-::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/::1764449329
-ControlAlignBottomLeft.svg::CompressedTexture2D/CompressedTexture2D::3905259841974498058::1764449329::1755385630::1::::<><><>0<>0<>2f5f71a8983b275b3ba174c82388483e<>res://.godot/imported/ControlAlignBottomLeft.svg-48bc76c54dedcaa0665561c2cf471225.ctex::
-ControlAlignCenter.svg::CompressedTexture2D/CompressedTexture2D::3276713545371551667::1764449329::1755385630::1::::<><><>0<>0<>e767681eaf43c132e9eb9f4e4b2d6e4f<>res://.godot/imported/ControlAlignCenter.svg-78ef476d0144df483a41a4b8379cb14d.ctex::
-ControlAlignCenterLeft.svg::CompressedTexture2D/CompressedTexture2D::5393021195296717229::1764449329::1755385630::1::::<><><>0<>0<>b786068a0b9f6d312d56f0f9ec11bf59<>res://.godot/imported/ControlAlignCenterLeft.svg-8e48c0eed0a2dd46eab99e49c09e0867.ctex::
-ControlAlignCenterTop.svg::CompressedTexture2D/CompressedTexture2D::6728354836492994998::1764449329::1755385630::1::::<><><>0<>0<>045c77af23436c853a33e1fc2134fba6<>res://.godot/imported/ControlAlignCenterTop.svg-676e0e315eee407d9e1b299454c9bbad.ctex::
-ControlAlignFullRect.svg::CompressedTexture2D/CompressedTexture2D::8060166126427691184::1764449329::1755385630::1::::<><><>0<>0<>e33f4c1a90eaa74a85f354c7dc667e62<>res://.godot/imported/ControlAlignFullRect.svg-9a4d13253a2d34b17d0690ec9374ea02.ctex::
-ControlAlignFullRect_Tips.svg::CompressedTexture2D/CompressedTexture2D::393526033425142868::1764449329::1762143854::1::::<><><>0<>0<>b924671fa3deb5db0b3635c6200ee215<>res://.godot/imported/ControlAlignFullRect_Tips.svg-ccd784ea9835e96942f0dadb4b6ed94c.ctex::
-ControlAlignHCenterWide.svg::CompressedTexture2D/CompressedTexture2D::8193086031197142938::1764449329::1755385630::1::::<><><>0<>0<>437730af8e9c5287edad2c55d184693f<>res://.godot/imported/ControlAlignHCenterWide.svg-147f9a1e90dbe65bc3cd82a124018a7a.ctex::
-ControlAlignLeftWide.svg::CompressedTexture2D/CompressedTexture2D::9044092031866276249::1764449329::1755385630::1::::<><><>0<>0<>deb3058b94263175f5e57b56429f95b4<>res://.godot/imported/ControlAlignLeftWide.svg-a62e214031ef4e35b94c4b45d15ddfa2.ctex::
-ControlAlignTopLeft.svg::CompressedTexture2D/CompressedTexture2D::5973571210609628893::1764449329::1755385630::1::::<><><>0<>0<>e81539b04498d9553d79edf904ffe4f7<>res://.godot/imported/ControlAlignTopLeft.svg-ce676f18e64fc258bbd9a141a8d97428.ctex::
-ControlAlignTopWide.svg::CompressedTexture2D/CompressedTexture2D::7623367812354306609::1764449329::1755385630::1::::<><><>0<>0<>283885817f2f5969443cb374d83d4d12<>res://.godot/imported/ControlAlignTopWide.svg-146f23bea54907f1a1b362e73ce7c91a.ctex::
-ControlAlignVCenterWide.svg::CompressedTexture2D/CompressedTexture2D::1610590933294010651::1764449329::1755385630::1::::<><><>0<>0<>8059d8421f75629b831ab1b3c8da3718<>res://.godot/imported/ControlAlignVCenterWide.svg-833e10085827783c99797d70c0d95a05.ctex::
+::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Clicked/::1765135161
+ControlAlignBottomLeft.svg::CompressedTexture2D::2647096326409232314::1764449329::1765135075::1::::<><><>0<>0<>950f7bcb280711348e78559caee7e35c<>res://.godot/imported/ControlAlignBottomLeft.svg-0755e9bb2af0c8ed6511d4ba3065964d.ctex::
+ControlAlignCenter.svg::CompressedTexture2D::4204426499459569343::1764449329::1765135075::1::::<><><>0<>0<>a10906315bf6741481ebbb8dd2d0e43a<>res://.godot/imported/ControlAlignCenter.svg-2daa7df4e303a36265efd78f9efc13bd.ctex::
+ControlAlignCenterLeft.svg::CompressedTexture2D::7550468191116036670::1764449329::1765135075::1::::<><><>0<>0<>bc09c8c0db67083cc66a0bf74053877d<>res://.godot/imported/ControlAlignCenterLeft.svg-727d92a266c1497ecbfd11c779309d3f.ctex::
+ControlAlignCenterTop.svg::CompressedTexture2D::1049010467305261592::1764449329::1765135075::1::::<><><>0<>0<>8a56da94b8f043b58cf41be7213c0398<>res://.godot/imported/ControlAlignCenterTop.svg-83b6e67dcc9cd2948e6319ca7dc22003.ctex::
+ControlAlignFullRect.svg::CompressedTexture2D::8850412902307548882::1764449329::1765135075::1::::<><><>0<>0<>da30f9d6bdd913e5ce565ffa1b62fd7e<>res://.godot/imported/ControlAlignFullRect.svg-1a3e7a3e91e326d115982f2403b363bb.ctex::
+ControlAlignHCenterWide.svg::CompressedTexture2D::708600206047938758::1764449329::1765135075::1::::<><><>0<>0<>88138c3d89deb1577e14da84c65638ee<>res://.godot/imported/ControlAlignHCenterWide.svg-8dd97174091bf3561856265dfac43a76.ctex::
+ControlAlignLeftWide.svg::CompressedTexture2D::384951186212732150::1764449329::1765135075::1::::<><><>0<>0<>17f8ebdbc1f2b679278209bae13a8c19<>res://.godot/imported/ControlAlignLeftWide.svg-40d414114bc20cc237e6f176d84abf20.ctex::
+ControlAlignTopLeft.svg::CompressedTexture2D::8166949240354610547::1764449329::1765135075::1::::<><><>0<>0<>b8f10fc7becf34f20cd90eb5ea08e935<>res://.godot/imported/ControlAlignTopLeft.svg-29dac035fbf6a10147644a17e50ade06.ctex::
+ControlAlignTopWide.svg::CompressedTexture2D::6222960289119330803::1764449329::1765135075::1::::<><><>0<>0<>b890ac089f031c9ffa497bc554ff0bb3<>res://.godot/imported/ControlAlignTopWide.svg-5532fd183464fcc238a961f0183967da.ctex::
+ControlAlignVCenterWide.svg::CompressedTexture2D::2946837575454047832::1764449329::1765135075::1::::<><><>0<>0<>ba3b510d3a8c6a8c2b83cdba206d896c<>res://.godot/imported/ControlAlignVCenterWide.svg-b0c6f30b3150e357cf70cb0b2e67854c.ctex::
+::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Hover/::1765135160
+ControlAlignBottomLeft.svg::CompressedTexture2D::49697619336524642::1764449329::1765135075::1::::<><><>0<>0<>df2d590a7f68d38ebc1a6f164803dc50<>res://.godot/imported/ControlAlignBottomLeft.svg-4bb3d8f204414f6e90998d370f3f9431.ctex::
+ControlAlignCenter.svg::CompressedTexture2D::8602147837186059669::1764449329::1765135075::1::::<><><>0<>0<>cc90aa6935daf84e754dbc07a8b9acd0<>res://.godot/imported/ControlAlignCenter.svg-2ac5d3511f0a4b20de1e899d36da141f.ctex::
+ControlAlignCenterLeft.svg::CompressedTexture2D::2187538745283894708::1764449329::1765135075::1::::<><><>0<>0<>347196012ebc47988e812ead02d75167<>res://.godot/imported/ControlAlignCenterLeft.svg-a102d756886bb9a2ab0b575b22407963.ctex::
+ControlAlignCenterTop.svg::CompressedTexture2D::1240363276798295653::1764449329::1765135075::1::::<><><>0<>0<>19d8afa6f7f77a0a8e73223472358ef4<>res://.godot/imported/ControlAlignCenterTop.svg-cf845e41080d979d10d04325611d6791.ctex::
+ControlAlignFullRect.svg::CompressedTexture2D::8458229823528394698::1764449329::1765135075::1::::<><><>0<>0<>d719c206fc6122cf12944c58d682a6a4<>res://.godot/imported/ControlAlignFullRect.svg-dade0ff26d5139e74a5e8d99cefd5de9.ctex::
+ControlAlignHCenterWide.svg::CompressedTexture2D::3684035212152285103::1764449329::1765135075::1::::<><><>0<>0<>546ae18bd9544529c086544387c8ab91<>res://.godot/imported/ControlAlignHCenterWide.svg-c9524c2b86947d9ba34c705a778dcb0c.ctex::
+ControlAlignLeftWide.svg::CompressedTexture2D::4110844179854860323::1764449329::1765135075::1::::<><><>0<>0<>380844113943cc4df8724b1af74ad6c4<>res://.godot/imported/ControlAlignLeftWide.svg-98d97fd808843aa7ea652b895d88c1a3.ctex::
+ControlAlignTopLeft.svg::CompressedTexture2D::869267628091376226::1764449329::1765135075::1::::<><><>0<>0<>37fd88cd34f433b21861b2b467488178<>res://.godot/imported/ControlAlignTopLeft.svg-b6d8f972d033e2e9d7482fab955040a9.ctex::
+ControlAlignTopWide.svg::CompressedTexture2D::6306310583135545019::1764449329::1765135075::1::::<><><>0<>0<>49b60a52d867b5bee70b41657f01be81<>res://.godot/imported/ControlAlignTopWide.svg-fda3d0e68cf7c37a6a88fe21b753dc26.ctex::
+ControlAlignVCenterWide.svg::CompressedTexture2D::2633660167970101465::1764449329::1765135075::1::::<><><>0<>0<>07b5cd1697886e59bec2789c88b2948f<>res://.godot/imported/ControlAlignVCenterWide.svg-6269da9293518da9b14903ebbd18aa45.ctex::
+::res://addons/collapsible_container/collapsible_elements/FoldingPresets/icons/Normal/::1765135161
+ControlAlignBottomLeft.svg::CompressedTexture2D::3905259841974498058::1764449329::1765135075::1::::<><><>0<>0<>3caa40c457f5a0fb677a45b3f9786a79<>res://.godot/imported/ControlAlignBottomLeft.svg-48bc76c54dedcaa0665561c2cf471225.ctex::
+ControlAlignCenter.svg::CompressedTexture2D::3276713545371551667::1764449329::1765135075::1::::<><><>0<>0<>16ab38f0a92d63e99699d4f2a5526380<>res://.godot/imported/ControlAlignCenter.svg-78ef476d0144df483a41a4b8379cb14d.ctex::
+ControlAlignCenterLeft.svg::CompressedTexture2D::5393021195296717229::1764449329::1765135075::1::::<><><>0<>0<>0451dfaae20e334024ee8c548ed6741a<>res://.godot/imported/ControlAlignCenterLeft.svg-8e48c0eed0a2dd46eab99e49c09e0867.ctex::
+ControlAlignCenterTop.svg::CompressedTexture2D::6728354836492994998::1764449329::1765135075::1::::<><><>0<>0<>d762672c4d742945594d8bd9438081c9<>res://.godot/imported/ControlAlignCenterTop.svg-676e0e315eee407d9e1b299454c9bbad.ctex::
+ControlAlignFullRect.svg::CompressedTexture2D::8060166126427691184::1764449329::1765135075::1::::<><><>0<>0<>85baaef43d6f3eebc77271e41ec11400<>res://.godot/imported/ControlAlignFullRect.svg-9a4d13253a2d34b17d0690ec9374ea02.ctex::
+ControlAlignFullRect_Tips.svg::CompressedTexture2D::393526033425142868::1764449329::1765135075::1::::<><><>0<>0<>8707d67a21cfec4dd135df8e256b4337<>res://.godot/imported/ControlAlignFullRect_Tips.svg-ccd784ea9835e96942f0dadb4b6ed94c.ctex::
+ControlAlignHCenterWide.svg::CompressedTexture2D::8193086031197142938::1764449329::1765135075::1::::<><><>0<>0<>55b2fb66ea9a6e529355f25dc724198f<>res://.godot/imported/ControlAlignHCenterWide.svg-147f9a1e90dbe65bc3cd82a124018a7a.ctex::
+ControlAlignLeftWide.svg::CompressedTexture2D::9044092031866276249::1764449329::1765135075::1::::<><><>0<>0<>c842b0dd6301350dbc9e8019995b79c7<>res://.godot/imported/ControlAlignLeftWide.svg-a62e214031ef4e35b94c4b45d15ddfa2.ctex::
+ControlAlignTopLeft.svg::CompressedTexture2D::5973571210609628893::1764449329::1765135075::1::::<><><>0<>0<>f969741cf21d45331f927f991c2c4c15<>res://.godot/imported/ControlAlignTopLeft.svg-ce676f18e64fc258bbd9a141a8d97428.ctex::
+ControlAlignTopWide.svg::CompressedTexture2D::7623367812354306609::1764449329::1765135075::1::::<><><>0<>0<>898749c2d6b4a5d2eff5986c8f2ba120<>res://.godot/imported/ControlAlignTopWide.svg-146f23bea54907f1a1b362e73ce7c91a.ctex::
+ControlAlignVCenterWide.svg::CompressedTexture2D::1610590933294010651::1764449329::1765135075::1::::<><><>0<>0<>6cbb170e3f41748e367bfb2e6566b78e<>res://.godot/imported/ControlAlignVCenterWide.svg-833e10085827783c99797d70c0d95a05.ctex::
 ::res://addons/collapsible_container/examples (OPTIONAL)/::1755385630
 ::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/::1764449329
 accordion_menu.tscn::PackedScene::5718306870135069498::1764449329::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/collapsible_elements/collapsible_container.gd<>res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/horizontal_menu.gd<>uid://dqm8hk0rif0jg::::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_button.tscn
 horizontal_menu.gd::GDScript::2180653109461689928::1764449329::0::1::::<>Control<><>0<>0<><>::
-::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/::1764449329
-collapsible_button.gd::GDScript::6205898055688929455::1764449329::0::1::::<>Button<><>0<>1<><>::
+::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/::1765135160
+collapsible_button.gd::GDScript::6205898055688929455::1764449329::0::1::::<>Button<>res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_container_button.svg<>0<>1<><>::
 collapsible_button.tscn::PackedScene::8309072808292096676::1764449329::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/examples (OPTIONAL)/accordion_menu_example/collapsible_optional_button/collapsible_button.gd
-collapsible_container_button.svg::CompressedTexture2D/CompressedTexture2D::3159317658515649253::1764449329::1762143854::1::::<><><>0<>0<>8440399925e4ec6cf8ffece88fcc8485<>res://.godot/imported/collapsible_container_button.svg-6fc636468a98337e8075fd3ee3a6d6cf.ctex::
+collapsible_container_button.svg::CompressedTexture2D::3159317658515649253::1764449329::1765135075::1::::<><><>0<>0<>a78629affe78e39f32fae2c01dea4ca2<>res://.godot/imported/collapsible_container_button.svg-6fc636468a98337e8075fd3ee3a6d6cf.ctex::
 ::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/::1764449330
 layout_logic.gd::GDScript::1826400049586456193::1764449330::0::1::::<>Node<><>0<>0<><>::
 layout_preset_example.tscn::PackedScene::1610472462086195869::1764449330::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/collapsible_elements/collapsible_container.gd<>uid://dyf5mpespmthb::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/frog-2240764_640.jpg<>res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/layout_logic.gd<>uid://dnlq4coc1l4hy::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/urn/urn.svg<>uid://olgdto6i6dke::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/blur-1239439_640.jpg<>uid://b1u4xl3dao0y2::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/train-60539_640.jpg<>uid://b15ef3yvpjlbp::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/urn/urn_colored.svg<>res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/urn.gd<>uid://ckvxmlv3qpjuf::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/train-62849_640.jpg<>uid://ceq707cy3cm58::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/train-3758523_640.jpg<>uid://d1c4qkinesey2::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/urn/urn -negative space.svg<>uid://dvo6x7u6grqtk::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/frog-111179_640.jpg<>uid://cxfb8w5b6bdg3::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/frog-3312038_640.jpg<>uid://b00wvmlkyo5cm::::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/frog-3644865_640.jpg
 urn.gd::GDScript::516450720061299355::1764449330::0::1::::<>TextureButton<><>0<>0<><>::
 ::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/::1755385629
 ::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/::1755385629
-::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/::1764449330
-frog-111179_640.jpg::CompressedTexture2D/CompressedTexture2D::8664054069130889496::1764449329::1755385630::1::::<><><>0<>0<>5fe518a02115a691f200a06fe5193810<>res://.godot/imported/frog-111179_640.jpg-e2bde70f680abcc7bb4920fac700fec3.ctex::
-frog-2240764_640.jpg::CompressedTexture2D/CompressedTexture2D::8855959921340078283::1764449330::1755385630::1::::<><><>0<>0<>59e81af19222e2227bcaf4b8706a8a90<>res://.godot/imported/frog-2240764_640.jpg-7d63763c94c49a68ea3d3e60d6fea0bb.ctex::
-frog-3312038_640.jpg::CompressedTexture2D/CompressedTexture2D::6397627509967614348::1764449330::1755385630::1::::<><><>0<>0<>e103697262d6032f565d9ba79480a28a<>res://.godot/imported/frog-3312038_640.jpg-df30b566b539f8be84748c7b9cc3e860.ctex::
-frog-3644865_640.jpg::CompressedTexture2D/CompressedTexture2D::4194125141768331704::1764449330::1755385630::1::::<><><>0<>0<>4c618b5716c31f82c3b53362007f086b<>res://.godot/imported/frog-3644865_640.jpg-7c72b4d9fa3e5de929fd02d0c7d53c17.ctex::
-::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/::1764449330
-blur-1239439_640.jpg::CompressedTexture2D/CompressedTexture2D::1005722646556750012::1764449330::1755385630::1::::<><><>0<>0<>05bed2c48ab640be4ba853f8c5bc3745<>res://.godot/imported/blur-1239439_640.jpg-cd96adafc9b1690bdc7e9994902d3253.ctex::
-train-60539_640.jpg::CompressedTexture2D/CompressedTexture2D::4254420660561440127::1764449330::1755385630::1::::<><><>0<>0<>dea8f88f10d2b33e8547e3ace0f64f79<>res://.godot/imported/train-60539_640.jpg-b0826d607521cafac6fcf426ab3d8fb1.ctex::
-train-62849_640.jpg::CompressedTexture2D/CompressedTexture2D::5519500268454186889::1764449330::1755385630::1::::<><><>0<>0<>b82525e2834910c9b31ec77e98304a60<>res://.godot/imported/train-62849_640.jpg-711ca2b01b0e125708cf53542cb556f7.ctex::
-train-3758523_640.jpg::CompressedTexture2D/CompressedTexture2D::5088616059584211869::1764449330::1755385630::1::::<><><>0<>0<>866f7ffaf7d0d094f7ccf473927cb025<>res://.godot/imported/train-3758523_640.jpg-e0d2c24c8eeeedf20ad2c4e4bd203b34.ctex::
-::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/urn/::1764449330
-urn -negative space.svg::CompressedTexture2D/CompressedTexture2D::8990090644857626059::1764449330::1762143854::1::::<><><>0<>0<>66afff757c7f22e0c202ff59e3d862d2<>res://.godot/imported/urn -negative space.svg-0eb6c7007654a57cd04d1f87377d6059.ctex::
-urn.svg::CompressedTexture2D/CompressedTexture2D::8095448560375930930::1764449330::1762143854::1::::<><><>0<>0<>21476014fd4f84b2daa1846ccdc03b87<>res://.godot/imported/urn.svg-f291d72363436c68c1cf7f69ef6ae414.ctex::
-urn_colored.svg::CompressedTexture2D/CompressedTexture2D::4273515256547992117::1764449330::1762143854::1::::<><><>0<>0<>badd7e7a0609001c17e863cd740f94ae<>res://.godot/imported/urn_colored.svg-1f788931d91f11300344dc8f10a32a7b.ctex::
+::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/frogs/::1765135161
+frog-111179_640.jpg::CompressedTexture2D::8664054069130889496::1764449329::1765135075::1::::<><><>0<>0<>ecbf45eb69d8697b9d40bbd8a32ba52f<>res://.godot/imported/frog-111179_640.jpg-e2bde70f680abcc7bb4920fac700fec3.ctex::
+frog-2240764_640.jpg::CompressedTexture2D::8855959921340078283::1764449330::1765135075::1::::<><><>0<>0<>93b2fac07baa0c72d514f4ed05d29a6e<>res://.godot/imported/frog-2240764_640.jpg-7d63763c94c49a68ea3d3e60d6fea0bb.ctex::
+frog-3312038_640.jpg::CompressedTexture2D::6397627509967614348::1764449330::1765135075::1::::<><><>0<>0<>a67166cba9dc02692e7b27cf6fa15964<>res://.godot/imported/frog-3312038_640.jpg-df30b566b539f8be84748c7b9cc3e860.ctex::
+frog-3644865_640.jpg::CompressedTexture2D::4194125141768331704::1764449330::1765135075::1::::<><><>0<>0<>aa383c310fcc67cd449e77131a187410<>res://.godot/imported/frog-3644865_640.jpg-7c72b4d9fa3e5de929fd02d0c7d53c17.ctex::
+::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/trains/::1765135161
+blur-1239439_640.jpg::CompressedTexture2D::1005722646556750012::1764449330::1765135075::1::::<><><>0<>0<>3ce1457933dc13b86165ad81e0f39cda<>res://.godot/imported/blur-1239439_640.jpg-cd96adafc9b1690bdc7e9994902d3253.ctex::
+train-60539_640.jpg::CompressedTexture2D::4254420660561440127::1764449330::1765135075::1::::<><><>0<>0<>737076e09dc3400e4a5a8ea10c1b075e<>res://.godot/imported/train-60539_640.jpg-b0826d607521cafac6fcf426ab3d8fb1.ctex::
+train-62849_640.jpg::CompressedTexture2D::5519500268454186889::1764449330::1765135075::1::::<><><>0<>0<>e2c0d2ae0479592fa1af93fda98117ef<>res://.godot/imported/train-62849_640.jpg-711ca2b01b0e125708cf53542cb556f7.ctex::
+train-3758523_640.jpg::CompressedTexture2D::5088616059584211869::1764449330::1765135075::1::::<><><>0<>0<>8b5ff5039be953cceb4b200f595caab8<>res://.godot/imported/train-3758523_640.jpg-e0d2c24c8eeeedf20ad2c4e4bd203b34.ctex::
+::res://addons/collapsible_container/examples (OPTIONAL)/layout_preset_example/assets/images/urn/::1765135161
+urn -negative space.svg::CompressedTexture2D::8990090644857626059::1764449330::1765135075::1::::<><><>0<>0<>f464e4b8a8b674632edb4e29324ad00f<>res://.godot/imported/urn -negative space.svg-0eb6c7007654a57cd04d1f87377d6059.ctex::
+urn.svg::CompressedTexture2D::8095448560375930930::1764449330::1765135075::1::::<><><>0<>0<>560e6af39f4c15b01ba6664eb593a34b<>res://.godot/imported/urn.svg-f291d72363436c68c1cf7f69ef6ae414.ctex::
+urn_colored.svg::CompressedTexture2D::4273515256547992117::1764449330::1765135075::1::::<><><>0<>0<>790116f25c68a15057541bff7a3d8fcc<>res://.godot/imported/urn_colored.svg-1f788931d91f11300344dc8f10a32a7b.ctex::
 ::res://addons/collapsible_container/examples (OPTIONAL)/signal_example/::1764449330
 signal_example.tscn::PackedScene::5697067499366212836::1764449330::0::1::::<><><>0<>0<><>::res://addons/collapsible_container/examples (OPTIONAL)/signal_example/signal_example_script.gd<>res://addons/collapsible_container/collapsible_elements/collapsible_container.gd<>uid://yji7vga2as48::::res://icon.svg
 signal_example_script.gd::GDScript::7572096448436812187::1764449330::0::1::::<>Node<><>0<>0<><>::
@@ -88,13 +88,13 @@ signal_example_script.gd::GDScript::7572096448436812187::1764449330::0::1::::<>N
 ::res://bin/macos/::1762843335
 ::res://bin/win64/::1762817428
 ::res://bin/winarm64/::1762817515
-::res://Cue2.run/::1764449554
-Player.run.xml::TextFile::-1::1764449670::0::1::::<><><>0<>0<><>::
+::res://Cue2.run/::1765135038
+Player.run.xml::TextFile::-1::1765135495::0::1::::<><><>0<>0<><>::
 ::res://Cue2Mac.run/::1764449554
 PlayerMac.run.xml::TextFile::-1::1764449554::0::1::::<><><>0<>0<><>::
 ::res://Files/::1764449554
-Challenger (Loop).wav::AudioStreamWAV/AudioStreamWAV::8889465709718550112::1764449554::1764449554::1::::<><><>0<>0<>3b6f6947fe28da16f09780b247d25e3f<>res://.godot/imported/Challenger (Loop).wav-3cec7401635d6954cab5d88e8b9a6705.sample::
-Searching (Loop).wav::AudioStreamWAV/AudioStreamWAV::928424272324044172::1764449554::1764449554::1::::<><><>0<>0<>b93b951987460724a528dbd474654c14<>res://.godot/imported/Searching (Loop).wav-cc88f5ac7eba7187d293ced7b0a653a7.sample::
+Challenger (Loop).wav::AudioStreamWAV::8889465709718550112::1764449554::1765135075::1::::<><><>0<>0<>3b6f6947fe28da16f09780b247d25e3f<>res://.godot/imported/Challenger (Loop).wav-3cec7401635d6954cab5d88e8b9a6705.sample::
+Searching (Loop).wav::AudioStreamWAV::928424272324044172::1764449554::1765135075::1::::<><><>0<>0<>b93b951987460724a528dbd474654c14<>res://.godot/imported/Searching (Loop).wav-cc88f5ac7eba7187d293ced7b0a653a7.sample::
 ::res://src/::1764449554
 AGENTS.md::TextFile::-1::1764449330::0::1::::<><><>0<>0<><>::
 CodeReview.MD::TextFile::-1::1764449330::0::1::::<><><>0<>0<><>::
@@ -103,32 +103,32 @@ package-lock.json::JSON::-1::1764449330::0::1::::<><><>0<>0<><>::
 proposed_README.md::TextFile::-1::1764449330::0::1::::<><><>0<>0<><>::
 README.md::TextFile::-1::1764449330::0::1::::<><><>0<>0<><>::
 TestFFmpeg.cs::CSharpScript::8351639140068111610::1764449554::0::1::::<>TextureRect<><>0<>0<><>::
-::res://src/Base/::1765055333
+::res://src/Base/::1765100021
 ActiveCueBar.tscn::PackedScene::8559962263874904924::1764449554::0::1::::<><><>0<>0<><>::uid://cb7g4xgryo2dg::::res://src/UI/Scenes/ComponentProgressBar.tscn
 Cue2Base.cs::CSharpScript::3855806022055526979::1764449554::0::1::::<>Control<><>0<>0<><>::
 Cue2Base.tscn::PackedScene::2680440110688548987::1764925246::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://bu61tdqw7n060::::res://src/Base/Cue2Base.cs<>uid://cd4xfma7ijlpi::::res://src/UI/Scenes/Header.tscn<>uid://db8fxhod3yfo6::::res://src/UI/Scenes/MainTitleBar.tscn<>uid://bya2tf86xcdn6::::res://src/UI/Scenes/CueListUI.tscn<>uid://c7uaftlqmt1qj::::res://src/UI/Scenes/ActiveCueContainer.tscn<>uid://cm5s0bi03612d::::res://src/UI/Scenes/Inspectors/ShellInspector.tscn<>uid://dge4tv6ikfteh::::res://src/UI/Scenes/Inspectors/LibraryInspector.tscn<>uid://c2oerlmq8wmp7::::res://src/UI/Scenes/Inspectors/AudioInspector.tscn<>uid://b6v72f8k5o0oy::::res://src/UI/Scenes/Footer.tscn<>uid://ghgo66ss8d58::::res://src/UI/Scenes/Inspectors/ConnectionInspector.tscn<>uid://d6ybxbmxkpib::::res://src/UI/Scenes/Inspectors/VideoInspector.tscn<>uid://cn3w3e20ljw3m::::res://src/UI/Scenes/Inspectors/TimelineInspector.tscn<>uid://b54ov4k1klk3j::::res://src/UI/Scenes/Inspectors/VideoInspector.cs<>uid://vrjj42fn2k2a::::res://src/UI/Scenes/SubWindows/FileDialogue.cs<>uid://bpxw1fu0sgxtl::::res://src/UI/Scenes/MainWindowHandles.cs<>uid://b6p30ddy04yla::::res://src/UI/Scenes/SubWindows/OpenDialog.cs
 Devices.cs::CSharpScript::4640135516718921988::1764449554::0::1::::<>Node<><>0<>0<><>::
 SettingsWindow.tscn::PackedScene::5170935391298064441::1764974331::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://bf4ggwkuvwx4c::::res://src/UI/Scenes/Settings/SettingsWindow.cs<>uid://bjka1uto8v7i3::::res://src/Base/Settings/SettingsGeneral.cs<>uid://cu1ujebi3h7vu::::res://src/Base/Settings/SettingsAudioOutputPatch.cs<>uid://dpemt56x826sd::::res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn<>uid://c1b0pu4blunqr::::res://src/UI/Scenes/Settings/SettingsOscConnections.tscn<>uid://b6sx83qucwbua::::res://src/Base/Settings/SettingsAudio.tscn<>uid://ci4ndmhqsbvlh::::res://src/UI/Scenes/Settings/SettingsOscListen.tscn<>uid://msbmpql2gk17::::res://src/UI/Scenes/Settings/SettingsCueLights.tscn<>uid://ceydom3514ip::::res://src/UI/Scenes/Settings/SettingsCanvasEditor.tscn
-ShellBar.cs::CSharpScript::6895522173830298125::1765055256::0::1::::<>PanelContainer<><>0<>0<><>::
-ShellBar.tscn::PackedScene::9107914894803112806::1764841522::0::1::::<><><>0<>0<><>::uid://c5iiiivhxukfl::::res://src/Base/ShellBar.cs<>uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
+ShellBar.cs::CSharpScript::6895522173830298125::1765100021::0::1::::<>PanelContainer<><>0<>0<><>::
+ShellBar.tscn::PackedScene::9107914894803112806::1765134502::0::1::::<><><>0<>0<><>::uid://c5iiiivhxukfl::::res://src/Base/ShellBar.cs<>uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
 Tree.cs::CSharpScript::7884482730491309119::1764449554::0::1::::<>Tree<><>0<>0<><>::
 VideoCanvas.tscn::PackedScene::3836405259099407617::1764449554::0::1::::<><><>0<>0<><>::
 VideoPlayback.gdshader::Shader::9163745258136980093::1765055333::0::1::::<><><>0<>0<><>::
 VideoTextureRectMaterial.tres::ShaderMaterial::6796633086412818829::1764449554::0::1::::<><><>0<>0<><>::uid://d3s8ssw0tvkc0::::res://src/Base/VideoPlayback.gdshader
 video_output.tscn::PackedScene::7321502229609095143::1764449554::0::1::::<><><>0<>0<><>::uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs<>uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres
-::res://src/Base/Classes/::1765055693
+::res://src/Base/Classes/::1765099867
 ActiveAudioPlayback.cs::CSharpScript::1865291930392215703::1764449554::0::1::::<>GodotObject<><>0<>0<><>::
 ActiveCue.cs::CSharpScript::5737088265893442501::1764449554::0::1::::<>GodotObject<><>0<>0<><>::
 ActiveVideoPlayback.cs::CSharpScript::45345226016531640::1764449554::0::1::::<>Node<><>0<>0<><>::
 AudioFileMetadata.cs::CSharpScript::8559262123915468989::1764449554::0::1::::<><><>0<>0<><>::
 AudioOutputPatch.cs::CSharpScript::8759237685733553493::1764449554::0::1::::<>GodotObject<><>0<>0<><>::
 Canvas.cs::CSharpScript::2062328623190078110::1764449554::0::1::::<><><>0<>0<><>::
-CueList.cs::CSharpScript::3873147453304376545::1765055693::0::1::::<>VBoxContainer<><>0<>0<><>::
+CueList.cs::CSharpScript::3873147453304376545::1765099867::0::1::::<>Control<><>0<>0<><>::
 CueListState.cs::CSharpScript::5670477637566534882::1764449554::0::1::::<><><>0<>0<><>::
 CuePatch.cs::CSharpScript::4637230464141836879::1764449554::0::1::::<><><>0<>0<><>::
 IAudioPlayback.cs::CSharpScript::1699728015628010498::1764449554::0::1::::<><><>0<>0<><>::
-Settings.cs::CSharpScript::394974176764252106::1764449554::0::1::::<>Node<><>0<>0<><>::
-ShellSelection.cs::CSharpScript::5331747436567085945::1764736878::0::1::::<>Node<><>0<>0<><>::
+Settings.cs::CSharpScript::394974176764252106::1765070393::0::1::::<>Node<><>0<>0<><>::
+ShellSelection.cs::CSharpScript::5331747436567085945::1765070002::0::1::::<>Node<><>0<>0<><>::
 VideoFileMetadata.cs::CSharpScript::295705225554600001::1764449554::0::1::::<><><>0<>0<><>::
 VideoTargetLayer.cs::CSharpScript::8020275012442606114::1764449554::0::1::::<><><>0<>0<><>::
 ::res://src/Base/Classes/Connections/::1764456065
@@ -137,9 +137,9 @@ IConnection.cs::CSharpScript::7530413401892383701::1764449554::0::1::::<><><>0<>
 NetworkConnection.cs::CSharpScript::3082627154984857173::1764449554::0::1::::<><><>0<>0<><>::
 OscConnections.cs::CSharpScript::2170561468456572646::1764456065::0::1::::<>Node<><>0<>0<><>::
 OscListen.cs::CSharpScript::414331499218454256::1764449554::0::1::::<>Node<><>0<>0<><>::
-::res://src/Base/Classes/CueTypes/::1764749146
+::res://src/Base/Classes/CueTypes/::1765099120
 AudioComponent.cs::CSharpScript::1412146281864083926::1764449554::0::1::::<><><>0<>0<><>::
-Cue.cs::CSharpScript::3639028604513860391::1764749146::0::1::::<><><>0<>0<><>::
+Cue.cs::CSharpScript::3639028604513860391::1765099196::0::1::::<><><>0<>0<><>::
 CueLightComponent.cs::CSharpScript::8489904256279940453::1764449554::0::1::::<><><>0<>0<><>::
 ICue.cs::CSharpScript::996752497635676688::1764736685::0::1::::<><><>0<>0<><>::
 ICueComponent.cs::CSharpScript::4343116087747824550::1764449554::0::1::::<><><>0<>0<><>::
@@ -150,18 +150,18 @@ VideoComponent.cs::CSharpScript::5523620875526065957::1764449554::0::1::::<><><>
 AudioDevice.cs::CSharpScript::6446443018377227328::1764449554::0::1::::<><><>0<>0<><>::
 IDevice.cs::CSharpScript::4565481549115337284::1764449554::0::1::::<><><>0<>0<><>::
 VideoOutputDevice.cs::CSharpScript::8257113282842745685::1764449554::0::1::::<>Window<><>0<>0<><>::
-::res://src/Base/CommandInterpreter/::1764736550
-CueCommandExecutor.cs::CSharpScript::3366189962627137426::1764736550::0::1::::<><><>0<>0<><>::
+::res://src/Base/CommandInterpreter/::1765068131
+CueCommandExecutor.cs::CSharpScript::3366189962627137426::1765068131::0::1::::<><><>0<>0<><>::
 CueCommandInterpreter.cs::CSharpScript::2352544297264544318::1764449554::0::1::::<>Node<><>0<>0<><>::
 CueCommandWriter.cs::CSharpScript::2862840890905029016::1764449554::0::1::::<>Node<><>0<>0<><>::
 ::res://src/Base/Minor/::1764449554
 BottomRightContainer.cs::CSharpScript::6071437864036876800::1764449554::0::1::::<>HBoxContainer<><>0<>0<><>::
 CurrentTime.cs::CSharpScript::9107337195524859843::1764449554::0::1::::<>Label<><>0<>0<><>::
-::res://src/Base/Settings/::1764449554
-AudioMatrixCheckBox.cs::CSharpScript::6151597833365611159::1764449554::0::1::::<>CheckBox<><>0<>0<><>::
+::res://src/Base/Settings/::1765065784
+AudioMatrixCheckBox.cs::CSharpScript::6151597833365611159::1765065784::0::1::::<>CheckBox<><>0<>0<><>::
 AudioOutputPatchMatrix.cs::CSharpScript::2248798794791323924::1764449554::0::1::::<>Control<><>0<>0<><>::
 AudioOutputPatchMatrix.tscn::PackedScene::7631581973006044173::1764449554::0::1::::<><><>0<>0<><>::uid://7blngcdj0grc::::res://src/Base/Settings/AudioOutputPatchMatrix.cs
-AudioPatchMatrixCheckBox.tscn::PackedScene::4849241908405314162::1764449554::0::1::::<><><>0<>0<><>::uid://ctv46gxu5v3od::::res://src/Base/Settings/AudioMatrixCheckBox.cs<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
+AudioPatchMatrixCheckBox.tscn::PackedScene::4849241908405314162::1765057098::0::1::::<><><>0<>0<><>::uid://ctv46gxu5v3od::::res://src/Base/Settings/AudioMatrixCheckBox.cs
 DeviceOutputPatchMatrix.cs::CSharpScript::4041314046027674403::1764449554::0::1::::<>Panel<><>0<>0<><>::
 PatchMatrixDeviceHeader.tscn::PackedScene::5372596220777729847::1764449554::0::1::::<><><>0<>0<><>::uid://bxtv3714tdei2::::res://src/Base/Settings/DeviceOutputPatchMatrix.cs
 PatchMatrixDeviceOutputHeader.cs::CSharpScript::4619182488158708769::1764449554::0::1::::<>Panel<><>0<>0<><>::
@@ -173,15 +173,15 @@ SettingsGeneral.cs::CSharpScript::3038811565116862052::1764449554::0::1::::<>Scr
 launcher.tscn::PackedScene::4200433581996456708::1764449554::0::1::::<><><>0<>0<><>::uid://bmbs6kyrh6uq7::::res://src/launcher/LaunchManager.cs<>uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs
 LauncherHandles.cs::CSharpScript::3194261988031518947::1764449554::0::1::::<>Control<><>0<>0<><>::
 LaunchManager.cs::CSharpScript::3231900013676203672::1764449554::0::1::::<>Control<><>0<>0<><>::
-::res://src/Shared/::1764990640
+::res://src/Shared/::1765094669
 AudioDevices.cs::CSharpScript::3123637818016137637::1764449554::0::1::::<>Node<><>0<>0<><>::
 CueLightManager.cs::CSharpScript::9051166078888758983::1764449554::0::1::::<>Node<><>0<>0<><>::
 DisplaysManager.cs::CSharpScript::7330541336050863412::1764449554::0::1::::<>Node<><>0<>0<><>::
-EventLogger.cs::CSharpScript::1029115469543193390::1764725428::0::1::::<>Node<><>0<>0<><>::
+EventLogger.cs::CSharpScript::1029115469543193390::1765070469::0::1::::<>Node<><>0<>0<><>::
 FFmpegAudioDecoder.cs::CSharpScript::5809092426450096512::1764449554::0::1::::<><><>0<>0<><>::
 FFmpegVideoDecoder.cs::CSharpScript::2877055216710050276::1764449554::0::1::::<><><>0<>0<><>::
-GlobalData.cs::CSharpScript::4503515704991174087::1764990640::0::1::::<>Node<><>0<>0<><>::
-GlobalSignals.cs::CSharpScript::5558519815270985299::1764974305::0::1::::<>Node<><>0<>0<><>::
+GlobalData.cs::CSharpScript::4503515704991174087::1765094560::0::1::::<>Node<><>0<>0<><>::
+GlobalSignals.cs::CSharpScript::5558519815270985299::1765094669::0::1::::<>Node<><>0<>0<><>::
 GlobalStyles.cs::CSharpScript::2132265063379963223::1764748112::0::1::::<>Node<><>0<>0<><>::
 InputActionsListener.cs::CSharpScript::701186509687432226::1764738757::0::1::::<>Node<><>0<>0<><>::
 LogType.cs::CSharpScript::4263738573660771563::1764449554::0::1::::<><><>0<>0<><>::
@@ -190,24 +190,24 @@ SaveManager.cs::CSharpScript::6032995468372215493::1764709714::0::1::::<>Node<><
 SceneLoader.cs::CSharpScript::3619610303397267705::1764449554::0::1::::<><><>0<>0<><>::
 WorkspaceStates.cs::CSharpScript::5194139032810158273::1764449554::0::1::::<><><>0<>0<><>::
 ::res://src/UI/::1764449554
-::res://src/UI/Assets/::1765055333
-base_theme.tres::Theme::1490688435533186208::1765055333::0::1::::<><><>0<>0<><>::uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png<>uid://d0ar62hl8q66g::::res://src/UI/Assets/ShellPanelStyleBox.tres
-Cue2Logo.png::CompressedTexture2D/CompressedTexture2D::212281043120088473::1764449554::1747211403::1::::<><><>0<>0<>73813301e9c8e98c3682bcf14fb4bb2c<>res://.godot/imported/Cue2Logo.png-bf316d3e2ba32a1392ad91ca1310b9c8.ctex::
-Cue2Logo.svg::CompressedTexture2D::7427865761489828516::1764836175::1764984252::1::::<><><>0<>0<>4467b5355c00797ee7de86d7a02c021c<>res://.godot/imported/Cue2Logo.svg-319ccf9310e0b73493c5f8c68550621f.ctex::
+::res://src/UI/Assets/::1765135160
+base_theme.tres::Theme::1490688435533186208::1765056890::0::1::::<><><>0<>0<><>::uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png<>uid://d0ar62hl8q66g::::res://src/UI/Assets/ShellPanelStyleBox.tres
+Cue2Logo.png::CompressedTexture2D::212281043120088473::1764449554::1765135075::1::::<><><>0<>0<>cbe3357627be505c9c6f46dc5273d9c4<>res://.godot/imported/Cue2Logo.png-bf316d3e2ba32a1392ad91ca1310b9c8.ctex::
+Cue2Logo.svg::CompressedTexture2D::7427865761489828516::1764836175::1765135075::1::::<><><>0<>0<>4467b5355c00797ee7de86d7a02c021c<>res://.godot/imported/Cue2Logo.svg-319ccf9310e0b73493c5f8c68550621f.ctex::
 editor_theme.tres::Theme::8645934644417242001::1764449554::0::1::::<><><>0<>0<><>::
-g1.png::CompressedTexture2D/CompressedTexture2D::7466298583711910844::1764449554::1747211383::1::::<><><>0<>0<>65016d2f376b1da824ac6e3e060fa811<>res://.godot/imported/g1.png-3676b10e7bbb9649d9486af38e8f920a.ctex::
-g2.png::CompressedTexture2D/CompressedTexture2D::7812880378910333155::1764449554::1747211383::1::::<><><>0<>0<>f916815f6f97d47bf6ec258a35d4f248<>res://.godot/imported/g2.png-c8e92543354ca8371e366048360c449a.ctex::
+g1.png::CompressedTexture2D::7466298583711910844::1764449554::1765135075::1::::<><><>0<>0<>1174415591b64a16c209590acb8de932<>res://.godot/imported/g1.png-3676b10e7bbb9649d9486af38e8f920a.ctex::
+g2.png::CompressedTexture2D::7812880378910333155::1764449554::1765135075::1::::<><><>0<>0<>302b585efda534b5917cdb4ea179588d<>res://.godot/imported/g2.png-c8e92543354ca8371e366048360c449a.ctex::
 GO_theme.tres::Theme::2262122229249097788::1765055333::0::1::::<><><>0<>0<><>::
-icon32.png::CompressedTexture2D/CompressedTexture2D::8610604953915555270::1764449554::1747211383::1::::<><><>0<>0<>dcf4866cd8f4c54dbea246901691be85<>res://.godot/imported/icon32.png-d99466a1c13b8c884daab28f2904fce6.ctex::
-icons.png::CompressedTexture2D/CompressedTexture2D::7037938117856060676::1765055943::1765055965::1::::<><><>0<>0<>98814f8ed59d5397908b35b5c44c7054<>res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex::
+icon32.png::CompressedTexture2D::8610604953915555270::1764449554::1765135075::1::::<><><>0<>0<>92f514d9ffb1c887d0c71a96bd9a2e85<>res://.godot/imported/icon32.png-d99466a1c13b8c884daab28f2904fce6.ctex::
+icons.png::CompressedTexture2D::7037938117856060676::1765055943::1765135075::1::::<><><>0<>0<>98814f8ed59d5397908b35b5c44c7054<>res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex::
 icon_atlas_texture.tres::AtlasTexture::2448630440108534118::1764449554::0::1::::<><><>0<>0<><>::uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png
 ShellPanelStyleBox.tres::StyleBoxFlat::8915072120006833744::1764449554::0::1::::<><><>0<>0<><>::
-::res://src/UI/Scenes/::1765055333
+::res://src/UI/Scenes/::1765074991
 ActiveCueContainer.cs::CSharpScript::2345135716127170500::1764449554::0::1::::<>PanelContainer<><>0<>0<><>::
 ActiveCueContainer.tscn::PackedScene::7060181863534239913::1764449554::0::1::::<><><>0<>0<><>::uid://8oabpi8j7qka::::res://src/UI/Scenes/ActiveCueContainer.cs<>uid://c7jh2vkj0tntc::::res://src/UI/Assets/icons.png<>uid://dt7rlfag7yr2c::::res://src/Base/ActiveCueBar.tscn
 ButtonStyles.cs::CSharpScript::3842833391458543593::1764449554::0::1::::<>Button<><>0<>0<><>::
 ComponentProgressBar.tscn::PackedScene::4909507607244923752::1764449554::0::1::::<><><>0<>0<><>::
-CueListUI.tscn::PackedScene::4072626534929378693::1765055333::0::1::::<><><>0<>0<><>::uid://bvggf4vdf2pc0::::res://src/Base/Classes/CueList.cs
+CueListUI.tscn::PackedScene::4072626534929378693::1765074991::0::1::::<><><>0<>0<><>::uid://bvggf4vdf2pc0::::res://src/Base/Classes/CueList.cs
 DisplayLayer.tscn::PackedScene::8731379054162327301::1764449554::0::1::::<><><>0<>0<><>::
 Footer.cs::CSharpScript::2162986026356572401::1764928100::0::1::::<>Control<><>0<>0<><>::
 Footer.tscn::PackedScene::4607618243601639720::1764927980::0::1::::<><><>0<>0<><>::uid://521cf2c4d6w8::::res://src/UI/Scenes/Footer.cs<>uid://d20wrpbn8dhip::::res://src/Base/Minor/CurrentTime.cs
@@ -252,7 +252,7 @@ VideoTargetLayerCard.tscn::PackedScene::8585249090551736662::1764449554::0::1:::
 ::res://src/UI/Scenes/SubWindows/::1765053594
 AboutWindow.cs::CSharpScript::1415594244520658413::1765008634::0::1::::<>Window<><>0<>0<><>::
 AboutWindow.tscn::PackedScene::2373447364827415733::1764989941::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://ufyvoyx782er::::res://src/UI/Scenes/SubWindows/AboutWindow.cs<>uid://dpemt56x826sd::::res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn<>uid://dd3d4mvor8g41::::res://src/UI/Assets/Cue2Logo.svg
-Cue2Logo.svg::CompressedTexture2D::6711698632694896800::1764984252::1764984252::1::::<><><>0<>0<>cfb0a35ac038b480039c6645249c9f8f<>res://.godot/imported/Cue2Logo.svg-e0e2317322f8065c6ee1a7805055f691.ctex::
+Cue2Logo.svg::CompressedTexture2D::6711698632694896800::1764984252::1765135075::1::::<><><>0<>0<>cfb0a35ac038b480039c6645249c9f8f<>res://.godot/imported/Cue2Logo.svg-e0e2317322f8065c6ee1a7805055f691.ctex::
 FileDialogue.cs::CSharpScript::1509624228430235078::1764927242::0::1::::<>FileDialog<><>0<>0<><>::
 LogWindow.cs::CSharpScript::5025226084286812668::1765053594::0::1::::<>Window<><>0<>0<><>::
 LogWindow.tscn::PackedScene::154789973464482731::1764925162::0::1::::<><><>0<>0<><>::uid://vidokm2ilwtk::::res://src/UI/Assets/base_theme.tres<>uid://cdui0e054gao7::::res://src/UI/Scenes/SubWindows/LogWindow.cs<>uid://dpemt56x826sd::::res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn
