@@ -795,7 +795,7 @@ public partial class AudioInspector : Control
         _fileDialog.Access = FileDialog.AccessEnum.Filesystem;
         _fileDialog.Title = "Open an Audio File";
         _fileDialog.UseNativeDialog = true;
-        _fileDialog.AddFilter("*.wav,*.mp3,*.mp4,*.mov,*.avi,*.mpg,*.ogg, *.aac, *.flac, *.m4a", "Audio Files");
+        _fileDialog.AddFilter(string.Join(",", GlobalData.AudioFileFilters), "Audio Files");
         AddChild(_fileDialog);
         _fileDialog.PopupCentered();
         _fileDialog.Canceled += ClearFileDialog;

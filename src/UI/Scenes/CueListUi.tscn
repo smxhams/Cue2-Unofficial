@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://bya2tf86xcdn6"]
+[gd_scene format=3 uid="uid://bya2tf86xcdn6"]
 
 [ext_resource type="Script" uid="uid://bvggf4vdf2pc0" path="res://src/Base/Classes/CueList.cs" id="1_sahw6"]
 
@@ -12,7 +12,7 @@ border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.5921569, 0.29411766, 0.03137255, 1)
 
-[node name="CueList" type="Control"]
+[node name="CueList" type="Control" unique_id=1963146478]
 layout_mode = 3
 anchors_preset = 0
 offset_right = 1152.0
@@ -21,7 +21,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1_sahw6")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=718818816]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -29,10 +29,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="CueListHeader" type="HBoxContainer" parent="VBoxContainer"]
+[node name="CueListHeader" type="HBoxContainer" parent="VBoxContainer" unique_id=1538249072]
 layout_mode = 2
 
-[node name="AddCueButton" type="Button" parent="VBoxContainer/CueListHeader"]
+[node name="AddCueButton" type="Button" parent="VBoxContainer/CueListHeader" unique_id=365856005]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(15, 15)
 layout_mode = 2
@@ -41,7 +41,7 @@ Inserts below slection."
 icon_alignment = 1
 expand_icon = true
 
-[node name="ExpandAllButton" type="Button" parent="VBoxContainer/CueListHeader"]
+[node name="ExpandAllButton" type="Button" parent="VBoxContainer/CueListHeader" unique_id=1991841564]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(15, 15)
 layout_mode = 2
@@ -50,22 +50,22 @@ tooltip_text = "Expand/Collapse all groups.
 icon_alignment = 1
 expand_icon = true
 
-[node name="Control" type="Control" parent="VBoxContainer/CueListHeader"]
+[node name="Control" type="Control" parent="VBoxContainer/CueListHeader" unique_id=961686289]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.01
 
-[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader"]
+[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader" unique_id=2037596024]
 custom_minimum_size = Vector2(10, 15)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 60
 
-[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader/HSplitContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="VBoxContainer/CueListHeader/HSplitContainer" unique_id=948328380]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Label" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+[node name="Label" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer" unique_id=100622831]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.1
@@ -74,7 +74,7 @@ theme_override_font_sizes/font_size = 9
 text = "Number"
 horizontal_alignment = 1
 
-[node name="Label2" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer"]
+[node name="Label2" type="Label" parent="VBoxContainer/CueListHeader/HSplitContainer/HSplitContainer" unique_id=96903790]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -82,10 +82,10 @@ theme_override_font_sizes/font_size = 9
 text = "Name"
 horizontal_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/CueListHeader"]
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/CueListHeader" unique_id=740064184]
 layout_mode = 2
 
-[node name="Label4" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label4" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=1711954511]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -93,10 +93,10 @@ theme_override_font_sizes/font_size = 9
 text = "Pre-Wait"
 horizontal_alignment = 1
 
-[node name="VSeparator" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=1968234793]
 layout_mode = 2
 
-[node name="Label5" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label5" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=631243891]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -104,10 +104,10 @@ theme_override_font_sizes/font_size = 9
 text = "Diration"
 horizontal_alignment = 1
 
-[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=2035876571]
 layout_mode = 2
 
-[node name="Label6" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label6" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=1064203605]
 custom_minimum_size = Vector2(55, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -115,10 +115,10 @@ theme_override_font_sizes/font_size = 9
 text = "Post-Wait"
 horizontal_alignment = 1
 
-[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=1193683032]
 layout_mode = 2
 
-[node name="Label7" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="Label7" type="Label" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=777184129]
 custom_minimum_size = Vector2(30, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
@@ -126,16 +126,16 @@ theme_override_font_sizes/font_size = 9
 text = "Follow"
 horizontal_alignment = 1
 
-[node name="VSeparator4" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer"]
+[node name="VSeparator4" type="VSeparator" parent="VBoxContainer/CueListHeader/HBoxContainer" unique_id=1745171627]
 layout_mode = 2
 
-[node name="Cue List" type="ScrollContainer" parent="VBoxContainer"]
+[node name="Cue List" type="ScrollContainer" parent="VBoxContainer" unique_id=1280030487]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 metadata/_tab_index = 0
 
-[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List"]
+[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List" unique_id=1662551638]
 unique_name_in_owner = true
 y_sort_enabled = true
 layout_mode = 2
@@ -143,12 +143,12 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 2
 
-[node name="ReorderCueControl" type="Control" parent="."]
+[node name="ReorderCueControl" type="Control" parent="." unique_id=1402983651]
 unique_name_in_owner = true
 anchors_preset = 0
 mouse_filter = 2
 
-[node name="Panel" type="Panel" parent="ReorderCueControl"]
+[node name="Panel" type="Panel" parent="ReorderCueControl" unique_id=2098171884]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -158,29 +158,29 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_a77uv")
 
-[node name="ReorderIndicatorPanel" type="Panel" parent="ReorderCueControl"]
+[node name="ReorderIndicatorPanel" type="Panel" parent="ReorderCueControl" unique_id=1648874344]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_swmxb")
 
-[node name="PanelContainer" type="PanelContainer" parent="ReorderCueControl"]
+[node name="PanelContainer" type="PanelContainer" parent="ReorderCueControl" unique_id=509376387]
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="ReorderCueControl/PanelContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="ReorderCueControl/PanelContainer" unique_id=1703080402]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="ReorderLocationLabel" type="Label" parent="ReorderCueControl/PanelContainer/VBoxContainer"]
+[node name="ReorderLocationLabel" type="Label" parent="ReorderCueControl/PanelContainer/VBoxContainer" unique_id=811768750]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "Where"
 
-[node name="ReorderListContainer" type="VBoxContainer" parent="ReorderCueControl/PanelContainer/VBoxContainer"]
+[node name="ReorderListContainer" type="VBoxContainer" parent="ReorderCueControl/PanelContainer/VBoxContainer" unique_id=332765194]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2

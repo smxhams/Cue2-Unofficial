@@ -365,8 +365,8 @@ public partial class VideoInspector : Control
 		_fileDialog.UseNativeDialog = true;
 
 		// Add filters from GlobalData
-		_fileDialog.AddFilter(GlobalData.VideoFileFilters, "Video Files");
-		_fileDialog.AddFilter(GlobalData.ImageFileFilters, "Image Files");
+		_fileDialog.AddFilter(string.Join(",", GlobalData.VideoFileFilters), "Video Files");
+		_fileDialog.AddFilter(string.Join(",", GlobalData.ImageFileFilters), "Image Files");
 		
 		AddChild(_fileDialog);
 		_fileDialog.PopupCentered();

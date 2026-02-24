@@ -85,14 +85,20 @@ public partial class GlobalData : Node
 	public string SessionWaveformsPath;
 	
 	// File filters for media files (FFmpeg compatible)
-	public static readonly string VideoFileFilters = "*.mp4,*.avi,*.mkv,*.mov,*.flv,*.webm,*.m4v,*.3gp,*.asf," +
-	                                                 "*.wmv,*.mpg,*.mpeg,*.ts,*.mts,*.vob,*.ogv,*.rm,*.rmvb," +
-	                                                 "*.divx,*.xvid";
-	public static readonly string ImageFileFilters = "*.png,*.jpg,*.jpeg,*.bmp,*.tiff,*.tif,*.gif,*.webp,*.tga," +
-	                                                 "*.dds,*.exr,*.hdr,*.svg";
-	public static readonly string AudioFileFilters = "*.mp3,*.wav,*.flac,*.aac,*.ogg,*.m4a,*.wma,*.aiff,*.au,*.ra," +
-	                                                 "*.ape,*.ac3,*.dts,*.pcm";
-	public static readonly string AllSupportedFileFilters = VideoFileFilters + "," + ImageFileFilters + "," + AudioFileFilters;
+	public static readonly List<string> VideoFileFilters = new List<string> {
+		"*.mp4", "*.avi", "*.mkv", "*.mov", "*.flv", "*.webm", "*.m4v", "*.3gp", "*.asf",
+		"*.wmv", "*.mpg", "*.mpeg", "*.ts", "*.mts", "*.vob", "*.ogv", "*.rm", "*.rmvb",
+		"*.divx", "*.xvid"
+	};
+	public static readonly List<string> ImageFileFilters = new List<string> {
+		"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tiff", "*.tif", "*.gif", "*.webp", "*.tga",
+		"*.dds", "*.exr", "*.hdr", "*.svg"
+	};
+	public static readonly List<string> AudioFileFilters = new List<string> {
+		"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.m4a", "*.wma", "*.aiff", "*.au", "*.ra",
+		"*.ape", "*.ac3", "*.dts", "*.pcm"
+	};
+	public static readonly string AllSupportedFileFilters = string.Join(",", VideoFileFilters.Concat(ImageFileFilters).Concat(AudioFileFilters));
 
 
 	public override void _Ready()

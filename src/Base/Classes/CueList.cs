@@ -68,11 +68,12 @@ public partial class CueList : Control
 		_addCueButton.Icon = GetThemeIcon("PlusCircled", "AtlasIcons");
 		_expandAllButton.Icon = GetThemeIcon("Right", "AtlasIcons");
 
+		_reorderCueControl.Visible = false;
+
 		_globalSignals.CreateCue += CreateCue;
 		_addCueButton.Pressed += CreateCue;
-
 	}
-
+	
 	public Cue CreateCue(Dictionary data) // Create a cue from data
 	{
 		var newCue = new Cue(data);

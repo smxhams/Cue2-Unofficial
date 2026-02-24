@@ -365,6 +365,7 @@ public partial class ShellBar : PanelContainer
 	// Re-ordering functions
 	private void DragPressed()
 	{
+		GD.Print("START REORDER");
 		_globalData.Cuelist.StartReorder(this);
 	}
 }

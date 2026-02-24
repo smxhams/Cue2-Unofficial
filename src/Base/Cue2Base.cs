@@ -1,11 +1,6 @@
 using Godot;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
-// DOES THIS UPDATE?
-// This script handles:
-// -Activation of cues
-// -Main window UI handling
-//
 
 namespace Cue2.Base;
 
@@ -29,18 +24,12 @@ public partial class Cue2Base : Control
 	{
 		//Connect global signals
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 
 		_globalSignals.UiScaleChanged += ScaleUI;
 		
-		GD.Print("Main Window ID is: " + GetWindow().GetWindowId());
-
 		UiUtilities.RescaleWindow(GetWindow(), _globalData.BaseDisplayScale);
 		UiUtilities.RescaleUi(GetWindow(), _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
-		var uiScale = _globalData.BaseDisplayScale;
-
-		var windowDimensions = GetWindow().Size;
 	}
 
 	private void ScaleUI(float uiScale)

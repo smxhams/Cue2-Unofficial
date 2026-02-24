@@ -40,6 +40,7 @@ public partial class GlobalSignals : Node
 	[Signal]  public delegate void LogUpdatedEventHandler(string printout, int type);
 	[Signal] public delegate void LogAlertEventHandler();
 	[Signal]  public delegate void FileSelectedEventHandler(string path);
+	[Signal]  public delegate void FileDroppedEventHandler(string[] files, string targetControlName);
 	[Signal]  public delegate void CueGoEventHandler(int playbackId, int cueId);
 	[Signal]  public delegate void UpdateShellBarEventHandler(int cue);
 	[Signal]  public delegate void OpenSelectedSessionEventHandler(string path);

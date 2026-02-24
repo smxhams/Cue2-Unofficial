@@ -9,12 +9,12 @@
       "Cue2/1.0.0": {
         "dependencies": {
           "FFmpeg.AutoGen": "8.0.0",
-          "Godot.SourceGenerators": "4.5.1",
-          "GodotSharp": "4.5.1",
-          "GodotSharpEditor": "4.5.1",
+          "Godot.SourceGenerators": "4.6.1",
+          "GodotSharp": "4.6.1",
+          "GodotSharpEditor": "4.6.1",
           "Rug.Osc": "1.2.5",
-          "SDL3-CS": "3.3.2.1",
-          "SDL3-CS.Native": "3.3.2"
+          "SDL3-CS": "3.3.7",
+          "SDL3-CS.Native": "3.3.7"
         },
         "runtime": {
           "Cue2.dll": {}
@@ -28,23 +28,23 @@
           }
         }
       },
-      "Godot.SourceGenerators/4.5.1": {},
-      "GodotSharp/4.5.1": {
+      "Godot.SourceGenerators/4.6.1": {},
+      "GodotSharp/4.6.1": {
         "runtime": {
           "lib/net8.0/GodotSharp.dll": {
-            "assemblyVersion": "4.5.1.0",
-            "fileVersion": "4.5.1.0"
+            "assemblyVersion": "4.6.1.0",
+            "fileVersion": "4.6.1.0"
           }
         }
       },
-      "GodotSharpEditor/4.5.1": {
+      "GodotSharpEditor/4.6.1": {
         "dependencies": {
-          "GodotSharp": "4.5.1"
+          "GodotSharp": "4.6.1"
         },
         "runtime": {
           "lib/net8.0/GodotSharpEditor.dll": {
-            "assemblyVersion": "4.5.1.0",
-            "fileVersion": "4.5.1.0"
+            "assemblyVersion": "4.6.1.0",
+            "fileVersion": "4.6.1.0"
           }
         }
       },
@@ -56,19 +56,19 @@
           }
         }
       },
-      "SDL3-CS/3.3.2.1": {
+      "SDL3-CS/3.3.7": {
         "runtime": {
           "lib/net8.0/SDL3-CS.dll": {
-            "assemblyVersion": "3.3.2.1",
-            "fileVersion": "3.3.2.1"
+            "assemblyVersion": "3.3.7.0",
+            "fileVersion": "3.3.7.0"
           }
         }
       },
-      "SDL3-CS.Native/3.3.2": {
+      "SDL3-CS.Native/3.3.7": {
         "runtime": {
           "lib/net8.0/SDL3-CS.Native.dll": {
-            "assemblyVersion": "3.3.2.0",
-            "fileVersion": "3.3.2.0"
+            "assemblyVersion": "3.3.7.0",
+            "fileVersion": "3.3.7.0"
           }
         },
         "runtimeTargets": {
@@ -95,12 +95,12 @@
           "runtimes/win-arm64/native/SDL3.dll": {
             "rid": "win-arm64",
             "assetType": "native",
-            "fileVersion": "0.0.0.0"
+            "fileVersion": "3.3.7.0"
           },
           "runtimes/win-x64/native/SDL3.dll": {
             "rid": "win-x64",
             "assetType": "native",
-            "fileVersion": "0.0.0.0"
+            "fileVersion": "3.3.7.0"
           }
         }
       }
@@ -119,26 +119,26 @@
       "path": "ffmpeg.autogen/8.0.0",
       "hashPath": "ffmpeg.autogen.8.0.0.nupkg.sha512"
     },
-    "Godot.SourceGenerators/4.5.1": {
+    "Godot.SourceGenerators/4.6.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-HOHYJQO5A/kzf5CUobeTPOX+JawSvjkDE0v/Fyo4EMYEC2MvCTGUvpJFjqQQmHYLNsiiB7RLVilcnup+jiVfdA==",
-      "path": "godot.sourcegenerators/4.5.1",
-      "hashPath": "godot.sourcegenerators.4.5.1.nupkg.sha512"
+      "sha512": "sha512-cWkxb0mUptImMFeJEq5iM7fsJr1bo+ZPDjGk1ppy9U+ErWZRcrYq7G8IP4jN8BPzsUf6eno86R03AuawUjyItw==",
+      "path": "godot.sourcegenerators/4.6.1",
+      "hashPath": "godot.sourcegenerators.4.6.1.nupkg.sha512"
     },
-    "GodotSharp/4.5.1": {
+    "GodotSharp/4.6.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-5CFnEHT+FByv5desNHMipz/209SCrWR9CGWFZjGHnXupl1Rw8U8q4nf65/unqZVL97Rx+3J5hskPMoDGaiZL9g==",
-      "path": "godotsharp/4.5.1",
-      "hashPath": "godotsharp.4.5.1.nupkg.sha512"
+      "sha512": "sha512-FQc5iM5ftSAIegboeP7CsOeNtG0GLgjkqNshUHISZhnc8secWLwZqmCPFHGYshVPIqqJFCfQQ5ttjdmNKLKKEw==",
+      "path": "godotsharp/4.6.1",
+      "hashPath": "godotsharp.4.6.1.nupkg.sha512"
     },
-    "GodotSharpEditor/4.5.1": {
+    "GodotSharpEditor/4.6.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-8CM49047b0Us3qPJo6L7kdldreOvR7JCoXlKoSHzpA0TQP6+Qnoxz/26GZ1ONg2wW4vV9uzor0AHXSGUFP9XSw==",
-      "path": "godotsharpeditor/4.5.1",
-      "hashPath": "godotsharpeditor.4.5.1.nupkg.sha512"
+      "sha512": "sha512-WtUHTHUegXO3OwHXa2pW2a6UIBV3TcVui2lbQ6eQt4RuKSZwuzNGdBy3GYIDJ3pkqJZEjqvM9zA32ARxhUygTQ==",
+      "path": "godotsharpeditor/4.6.1",
+      "hashPath": "godotsharpeditor.4.6.1.nupkg.sha512"
     },
     "Rug.Osc/1.2.5": {
       "type": "package",
@@ -147,19 +147,19 @@
       "path": "rug.osc/1.2.5",
       "hashPath": "rug.osc.1.2.5.nupkg.sha512"
     },
-    "SDL3-CS/3.3.2.1": {
+    "SDL3-CS/3.3.7": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-Ux0C+5TrCoXbgY+tng6xcNDlRY19at08USzfvO+xdXQJKWvFfWK9cwhkHXYlJANLhz5IALWZkuiahQwwe8VS0Q==",
-      "path": "sdl3-cs/3.3.2.1",
-      "hashPath": "sdl3-cs.3.3.2.1.nupkg.sha512"
+      "sha512": "sha512-DOSLveTGRSr1wHmjNqqcdDabQe/FGhWoPzMB3QKJ2SYaHZGaXEKyyWAqBuidog4TOLctRWhB0xswyalg2CTPxw==",
+      "path": "sdl3-cs/3.3.7",
+      "hashPath": "sdl3-cs.3.3.7.nupkg.sha512"
     },
-    "SDL3-CS.Native/3.3.2": {
+    "SDL3-CS.Native/3.3.7": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-W48m97wQVanfkYm42X05fCnAVhcol9HHBNSPx4ceXa+S0mjilyyo5iBNbn5Hw9ojTW01CD+aqDA3wYYdVTN/Kw==",
-      "path": "sdl3-cs.native/3.3.2",
-      "hashPath": "sdl3-cs.native.3.3.2.nupkg.sha512"
+      "sha512": "sha512-wRHNL5bba+RJ9ZwoG4pKZZkh2QduIE0ZzcMnhYNAgnc40e3vpDK5kJ2U1EH1hwTN+F8y+CEj2KRkegO7+ehVqQ==",
+      "path": "sdl3-cs.native/3.3.7",
+      "hashPath": "sdl3-cs.native.3.3.7.nupkg.sha512"
     }
   }
 }
