@@ -128,7 +128,9 @@ public partial class ShellInspector : Control
 
 	private void OnNameChanged(string name)
 	{
+		int caretPosition = _cueName.CaretColumn;
 		_cueName.Text = name;
+		_cueName.SetCaretColumn(caretPosition);
 	}
 	
 

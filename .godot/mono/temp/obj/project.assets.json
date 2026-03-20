@@ -2,7 +2,7 @@
   "version": 3,
   "targets": {
     "net8.0": {
-      "FFmpeg.AutoGen/8.0.0": {
+      "FFmpeg.AutoGen/8.0.0.1": {
         "type": "package",
         "compile": {
           "lib/netstandard2.1/FFmpeg.AutoGen.dll": {
@@ -59,7 +59,7 @@
           "lib/Rug.Osc.dll": {}
         }
       },
-      "SDL3-CS/3.3.7": {
+      "SDL3-CS/3.4.2": {
         "type": "package",
         "compile": {
           "lib/net8.0/SDL3-CS.dll": {
@@ -72,7 +72,7 @@
           }
         }
       },
-      "SDL3-CS.Native/3.3.7": {
+      "SDL3-CS.Native/3.4.2": {
         "type": "package",
         "compile": {
           "lib/net8.0/SDL3-CS.Native.dll": {
@@ -114,16 +114,16 @@
     }
   },
   "libraries": {
-    "FFmpeg.AutoGen/8.0.0": {
-      "sha512": "GgMk5O74HAyPkAb+EC1QbxF32OISwjQE8u252SjHUAd9b5m6nRNrkQ/T8pMMccsRHIDdToDQc4Xp6pWgf/PE/A==",
+    "FFmpeg.AutoGen/8.0.0.1": {
+      "sha512": "GrkNQjYwjOI56yh3cKhOP4yGm74gBXY2qU0blBEBfQtIho9SD6KemnVvh/loouop8wGnPHOrpL/WB3htgT2jkg==",
       "type": "package",
-      "path": "ffmpeg.autogen/8.0.0",
+      "path": "ffmpeg.autogen/8.0.0.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "LICENSE.txt",
         "README.md",
-        "ffmpeg.autogen.8.0.0.nupkg.sha512",
+        "ffmpeg.autogen.8.0.0.1.nupkg.sha512",
         "ffmpeg.autogen.nuspec",
         "lib/netstandard2.0/FFmpeg.AutoGen.dll",
         "lib/netstandard2.0/FFmpeg.AutoGen.xml",
@@ -183,10 +183,10 @@
         "rug.osc.nuspec"
       ]
     },
-    "SDL3-CS/3.3.7": {
-      "sha512": "DOSLveTGRSr1wHmjNqqcdDabQe/FGhWoPzMB3QKJ2SYaHZGaXEKyyWAqBuidog4TOLctRWhB0xswyalg2CTPxw==",
+    "SDL3-CS/3.4.2": {
+      "sha512": "n6TAJACALo/JOVjItB5Sve981U6AmH3vodepQRKP8mH3RL1eHNGTxbVq/RliJFu60uyJB4/pfI+/M255cUuyGQ==",
       "type": "package",
-      "path": "sdl3-cs/3.3.7",
+      "path": "sdl3-cs/3.4.2",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -204,14 +204,14 @@
         "lib/net9.0/SDL3-CS.dll",
         "lib/net9.0/SDL3-CS.xml",
         "logo.png",
-        "sdl3-cs.3.3.7.nupkg.sha512",
+        "sdl3-cs.3.4.2.nupkg.sha512",
         "sdl3-cs.nuspec"
       ]
     },
-    "SDL3-CS.Native/3.3.7": {
-      "sha512": "wRHNL5bba+RJ9ZwoG4pKZZkh2QduIE0ZzcMnhYNAgnc40e3vpDK5kJ2U1EH1hwTN+F8y+CEj2KRkegO7+ehVqQ==",
+    "SDL3-CS.Native/3.4.2": {
+      "sha512": "Auef0/QUXRNqJYK45/8DNwTNPyxaG4R1s0zjjvyU3lKRi9hj+E6ygQ0Iw9Fj9Qw1eystK6puhtSkLhkJUH/V3w==",
       "type": "package",
-      "path": "sdl3-cs.native/3.3.7",
+      "path": "sdl3-cs.native/3.4.2",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -232,36 +232,36 @@
         "runtimes/osx-x64/native/libSDL3.dylib",
         "runtimes/win-arm64/native/SDL3.dll",
         "runtimes/win-x64/native/SDL3.dll",
-        "sdl3-cs.native.3.3.7.nupkg.sha512",
+        "sdl3-cs.native.3.4.2.nupkg.sha512",
         "sdl3-cs.native.nuspec"
       ]
     }
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "FFmpeg.AutoGen >= 8.0.0",
+      "FFmpeg.AutoGen >= 8.0.0.1",
       "Godot.SourceGenerators >= 4.6.1",
       "GodotSharp >= 4.6.1",
       "GodotSharpEditor >= 4.6.1",
       "Rug.Osc >= 1.2.5",
-      "SDL3-CS >= 3.3.7",
-      "SDL3-CS.Native >= 3.3.7"
+      "SDL3-CS >= 3.4.2",
+      "SDL3-CS.Native >= 3.4.2"
     ]
   },
   "packageFolders": {
-    "C:\\Users\\smxham\\.nuget\\packages\\": {}
+    "/Users/smxham/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
+      "projectUniqueName": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
       "projectName": "Cue2",
-      "projectPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
-      "packagesPath": "C:\\Users\\smxham\\.nuget\\packages\\",
-      "outputPath": "C:\\MyFiles\\Cue2_Home\\Cue2\\.godot\\mono\\temp\\obj\\",
+      "projectPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj",
+      "packagesPath": "/Users/smxham/.nuget/packages/",
+      "outputPath": "/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\smxham\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "/Users/smxham/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -284,7 +284,8 @@
         "enableAudit": "true",
         "auditLevel": "low",
         "auditMode": "direct"
-      }
+      },
+      "SdkAnalysisLevel": "9.0.300"
     },
     "frameworks": {
       "net8.0": {
@@ -292,7 +293,7 @@
         "dependencies": {
           "FFmpeg.AutoGen": {
             "target": "Package",
-            "version": "[8.0.0, )"
+            "version": "[8.0.0.1, )"
           },
           "Godot.SourceGenerators": {
             "target": "Package",
@@ -315,11 +316,11 @@
           },
           "SDL3-CS": {
             "target": "Package",
-            "version": "[3.3.7, )"
+            "version": "[3.4.2, )"
           },
           "SDL3-CS.Native": {
             "target": "Package",
-            "version": "[3.3.7, )"
+            "version": "[3.4.2, )"
           }
         },
         "imports": [
@@ -333,12 +334,22 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[8.0.20, 8.0.20]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[8.0.20, 8.0.20]"
+          }
+        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.303/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.305/PortableRuntimeIdentifierGraph.json"
       }
     }
   },

@@ -33,6 +33,7 @@ using Cue2.Base;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Connections;
 using Cue2.Base.CommandInterpreter;
+using Cue2.Base.Minor;
 using Godot;
 using Godot.Collections;
 using SDL3;
@@ -55,6 +56,8 @@ public partial class GlobalData : Node
 	public CueLightManager CueLightManager;
 	public Canvas VideoCanvas;
 	public DisplaysManager DisplaysManager;
+
+	public FileDropper FileDropper;
 	//public AudioDevices AudioDevices;
 	
 	
@@ -133,6 +136,9 @@ public partial class GlobalData : Node
 		
 		CueLightManager = new CueLightManager();
 		AddChild(CueLightManager);
+		
+		FileDropper = new FileDropper();
+		AddChild(FileDropper);
 
 		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 		

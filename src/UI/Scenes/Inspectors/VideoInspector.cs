@@ -227,40 +227,7 @@ public partial class VideoInspector : Control
 			GD.Print("VideoInspector:ShellSelected - Refreshed metadata from file");
 		}
 
-		_selectFileContainer.Visible = true;
-		_infoLabel.Text = "";
-		_inspectorContent.Visible = true;
-		
-		// Insert values from data
-		_fileUrl.Text = file;
-		_startTimeInput.Text =
-			UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
-		_startTimeInput.TooltipText = startTip;
-		_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
-		_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
-		_fileDurationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Metadata.Duration);
-		_loopInput.ButtonPressed = _focusedVideoComponent.Loop;
-		_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
-
-		// Populate metadata label
-		var meta = _focusedVideoComponent.Metadata;
-		string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
-		                      $"Resolution: {meta.Width}x{meta.Height} \n" +
-		                      $"Frame Rate: {meta.FrameRate:F1} fps \n" +
-		                      $"Codec: {meta.Codec} \n" +
-		                      $"Format: {meta.Format}";
-		if (meta.AudioChannels > 0)
-		{
-			metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +
-			                $"Audio Sample Rate: {meta.AudioSampleRate} Hz \n" +
-			                $"Audio Bit Depth: {meta.AudioBitDepth} \n" +
-			                $"Audio Codec: {meta.AudioCodec}";
-		}
-		else
-		{
-			metadataText += "\nNo Audio";
-		}
-		_fileUrl.TooltipText = metadataText;
+		UpdateVideoUiFields(file);
 
 		// Populate target layer options
 		_targetLayerOptionButton.Clear();
@@ -285,13 +252,6 @@ public partial class VideoInspector : Control
 			_targetLayerOptionButton.Select(_targetLayerOptionButton.ItemCount - 1);
 		} 
 
-		// Set scale and offset values
-		_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString();
-		_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString();
-		_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString();
-		_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString();
-		
-		
 		// Initalize preview
 		if (_previewContainer.Visible)
 		{
@@ -303,11 +263,18 @@ public partial class VideoInspector : Control
 			// Fluch video decoder if residual from previous shell selected remains
 			_videoPreviewer.ClearDecoder();
 		}
-		
 
-		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
-		var volumeDb = UiUtilities.LinearToDb((float)volume);
-		_volumeInput.Text = $"{volumeDb}dB";
+		// Handle audio UI based on presence of audio in video file
+		if (_focusedVideoComponent.HasAudio)
+		{
+			GD.Print($"VideoInspector:ShellSelected - Patch: {_focusedVideoComponent.PatchId}");
+			_useAudioCheckButton.Visible = true;
+			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
+			_useAudioLabel.Text = "Use Embedded Audio";
+			if (_focusedVideoComponent.UseAudio) ToggleAccordian(_audioAccordian, _audioCollapseButton);
+			PopulateOutputOptions();
+			BuildRoutingMatrix();
+		}
 
 		// Generate waveform data if not cached
 		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio && (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)) // Check cache
@@ -375,41 +342,188 @@ public partial class VideoInspector : Control
 	
 	
 	/// <summary>
-	/// Handles file selection from dialog. Adds AudioComponent, fetches metadata asynchronously if possible.
+	/// Handles file selection from dialog. Adds VideoComponent, fetches metadata asynchronously if possible.
 	/// </summary>
 	/// <param name="path">The selected file path.</param>
-	private async void FileSelected(string path)
+	private void FileSelected(string path)
 	{
 		ClearFileDialog();
-		if (!File.Exists(path))
+		if (_focusedCue == null)
 		{
-			GD.Print("AudioInspector:FileSelected - Selected audio file not found.");
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:FileSelected -  Selected audio file not found: {path}", 2);
+			GD.Print("VideoInspector:FileSelected - No cue selected");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:No cue selected", 2);
 			return;
 		}
-		
-		_fileUrl.Text = path;
-		_focusedVideoComponent = _focusedCue.AddVideoComponent(path);
-		_inspectorContent.Visible = true;
-		
-		// Fetch metadata asynchronously to avoid UI blocking
-		var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(path);
+		SetVideoFile(path, createNewComponent: true);
+	}
+	
+	/// <summary>
+	/// Handles setting video file URL from drag-and-drop. Creates VideoComponent if none exists.
+	/// </summary>
+	/// <param name="filePath">The dropped file path.</param>
+	public void SetVideoFileUrlFromDrop(string filePath)
+	{
+		if (_focusedCue == null)
+		{
+			GD.Print("VideoInspector:SetVideoFileUrlFromDrop - No cue selected");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:No cue selected for video file drop", 2);
+			return;
+		}
+		SetVideoFile(filePath, createNewComponent: false);
+	}
+	
+	/// <summary>
+	/// Sets the video file for the focused cue. Handles component creation or update, metadata refresh, and time validation.
+	/// </summary>
+	/// <param name="filePath">The video file path.</param>
+	/// <param name="createNewComponent">If true, always creates a new VideoComponent. If false, updates existing or creates new.</param>
+	private async void SetVideoFile(string filePath, bool createNewComponent)
+	{
+		if (!File.Exists(filePath))
+		{
+			GD.Print($"VideoInspector:SetVideoFile - File not found: {filePath}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:File not found: {filePath}", 2);
+			return;
+		}
+
+		_fileUrl.Text = filePath;
+
+		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
+		if (existingVideo != null && !createNewComponent)
+		{
+			_focusedVideoComponent = existingVideo;
+			_focusedVideoComponent.VideoFile = filePath;
+			
+			if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
+			{
+				try
+				{
+					_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
+					if (_focusedVideoComponent.WaveformData.Length == 0)
+					{
+						_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:SetVideoFile - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
+					}
+				}
+				catch (Exception ex)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:SetVideoFile - Error generating waveform: {ex.Message}", 2);
+				}
+			}
+		}
+		else
+		{
+			_focusedVideoComponent = _focusedCue.AddVideoComponent(filePath);
+			_inspectorContent.Visible = true;
+		}
+
+		var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(filePath);
 		_focusedVideoComponent.Metadata = fileMetadata;
-		var fileDuration = fileMetadata.Duration;
-		_focusedVideoComponent.EndTime = fileDuration > 0 ? fileDuration : 0;
-		_focusedVideoComponent.StartTime = 0.0;
-		_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0 ? true : false; // If Audiochannels in metadata Audio is present.
-		_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio; // Enable by default if has audio
+		_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0;
+		_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
 		_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
 		_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
 		
-		ShellSelected(_focusedCue.Id);
-		GD.Print($"VideoInspector:FileSelected - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
+		var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
+		
+		if (createNewComponent)
+		{
+			_focusedVideoComponent.StartTime = 0.0;
+			_focusedVideoComponent.EndTime = -1.0; // Undefined = play to end
+			GD.Print($"VideoInspector:SetVideoFile - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
+		}
+		else
+		{
+			if (_focusedVideoComponent.StartTime >= fileDuration)
+			{
+				_focusedVideoComponent.StartTime = 0.0;
+				GD.Print($"VideoInspector:SetVideoFile - Reset start time (exceeded file duration)");
+			}
+			
+			if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
+			{
+				_focusedVideoComponent.EndTime = -1.0; // Reset to undefined
+				GD.Print($"VideoInspector:SetVideoFile - Reset end time to undefined (exceeded file duration)");
+			}
+			else if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime <= _focusedVideoComponent.StartTime)
+			{
+				_focusedVideoComponent.EndTime = -1.0; // Reset to undefined
+				GD.Print($"VideoInspector:SetVideoFile - Reset end time to undefined (was <= start time)");
+			}
+		}
 
+		UpdateVideoUiFields(filePath);
+		
+		if (_waveformAccordian.Visible && _focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
+		{
+			await DrawWaveform();
+		}
+		
+		GD.Print($"VideoInspector:SetVideoFile - Set video file: {filePath}");
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:Set video file to: {Path.GetFileName(filePath)}", 0);
+	}
+	
+	/// <summary>
+	/// Updates the video-related UI fields from the current VideoComponent state.
+	/// </summary>
+	/// <param name="file">The video file path to display.</param>
+	private void UpdateVideoUiFields(string file)
+	{
+		_selectFileContainer.Visible = true;
+		_infoLabel.Text = "";
+		_inspectorContent.Visible = true;
+		
+		_fileUrl.Text = file;
+		_startTimeInput.Text = UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
+		_startTimeInput.TooltipText = startTip;
+		
+		if (_focusedVideoComponent.EndTime < 0)
+		{
+			_endTimeInput.Text = $"Full ({UiUtilities.FormatTime(_focusedVideoComponent.Metadata.Duration)})";
+		}
+		else
+		{
+			_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
+		}
+		_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
+		_fileDurationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Metadata.Duration);
+		_loopInput.ButtonPressed = _focusedVideoComponent.Loop;
+		_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
+		
+		// Update metadata label
+		var meta = _focusedVideoComponent.Metadata;
+		string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
+		                      $"Resolution: {meta.Width}x{meta.Height} \n" +
+		                      $"Frame Rate: {meta.FrameRate:F1} fps \n" +
+		                      $"Codec: {meta.Codec} \n" +
+		                      $"Format: {meta.Format}";
+		if (meta.AudioChannels > 0)
+		{
+			metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +
+			                $"Audio Sample Rate: {meta.AudioSampleRate} Hz \n" +
+			                $"Audio Bit Depth: {meta.AudioBitDepth} \n" +
+			                $"Audio Codec: {meta.AudioCodec}";
+		}
+		else
+		{
+			metadataText += "\nNo Audio";
+		}
+		_fileUrl.TooltipText = metadataText;
+		
+		// Update scale and offset
+		_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString();
+		_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString();
+		_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString();
+		_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString();
+		
+		// Update volume
+		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
+		var volumeDb = UiUtilities.LinearToDb((float)volume);
+		_volumeInput.Text = $"{volumeDb}dB";
 	}
 	
 	/// <summary>
 	/// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
+	/// Blank or -1 input sets end time to undefined.
 	/// </summary>
 	/// <param name="text">The submitted text.</param>
 	/// <param name="textField">The LineEdit field.</param>
@@ -417,11 +531,34 @@ public partial class VideoInspector : Control
 	{
 		try
 		{
+			if (string.IsNullOrWhiteSpace(text) || text.Trim() == "-1")
+			{
+				if (textField == _startTimeInput)
+				{
+					_focusedVideoComponent.StartTime = 0.0;
+					textField.Text = "00:00.000";
+					textField.TooltipText = "00m:00s.000ms";
+					GD.Print("VideoInspector:TimeFieldSubmitted - Start time reset to 0");
+				}
+				else if (textField == _endTimeInput)
+				{
+					_focusedVideoComponent.EndTime = -1.0; // Undefined = play to end
+					textField.Text = $"Full ({UiUtilities.FormatTime(_focusedVideoComponent.Metadata.Duration)})";
+					textField.TooltipText = "End time undefined (plays full file)";
+					GD.Print("VideoInspector:TimeFieldSubmitted - End time set to undefined (full)");
+				}
+				
+				SyncDuration();
+				textField.ReleaseFocus();
+				_ = DrawWaveform();
+				return;
+			}
+			
 			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime);
             
 			if (time == "")
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1); // Warning log
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1);
 				return;
 			}
 			textField.Text = time;
@@ -432,21 +569,17 @@ public partial class VideoInspector : Control
 			}
 			else if (textField == _endTimeInput)
 			{
-				_focusedVideoComponent.EndTime = timeSecs < 0 ? _focusedVideoComponent.Metadata.Duration : timeSecs; // Handles -1 as full duration
+				_focusedVideoComponent.EndTime = timeSecs;
 			}
             
-			// Recalculate duration
 			SyncDuration();
-
 			textField.ReleaseFocus();
-
-			// Update waveform
 			_ = DrawWaveform();
 
 		}
 		catch (Exception ex)
 		{
-			GD.Print($"AudioInspector:TimeFieldSubmitted - Error parsing time: {ex.Message}");
+			GD.Print($"VideoInspector:TimeFieldSubmitted - Error parsing time: {ex.Message}");
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing time: {ex.Message}", 2);
 		}
 	}
@@ -952,7 +1085,8 @@ public partial class VideoInspector : Control
 		float binWidth = width / binCount;
 
 		float startNorm = (float)(_focusedVideoComponent.StartTime / _focusedVideoComponent.Metadata.Duration);
-		float endNorm = (float)(_focusedVideoComponent.EndTime / _focusedVideoComponent.Metadata.Duration);
+		float endTime = _focusedVideoComponent.EndTime < 0 ? (float)_focusedVideoComponent.Metadata.Duration : (float)_focusedVideoComponent.EndTime;
+		float endNorm = (float)(endTime / _focusedVideoComponent.Metadata.Duration);
 		int startBin = (int)(startNorm * binCount);
 		int endBin = (int)(endNorm * binCount);
 

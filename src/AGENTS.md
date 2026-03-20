@@ -1,7 +1,7 @@
 # Cue2 Agent Guidelines
 
 ## Project Overview
-This project is a multi-platform event playback software, similar to QLab 5, developed in C# using Godot 4.5.1 Mono, FFmpeg.AutoGen 8.0, and SDL3-CS 3.3.2.1. The software targets Windows 10+, macOS, and Linux, with a focus on minimal OS-dependent code to ensure cross-platform compatibility. The project will be open-sourced, so code must be clean, modular, well-documented, and maintainable for community contributions.
+This project is a multi-platform event playback software, similar to QLab 5, developed in C# using Godot 4.6.1 Mono, FFmpeg.AutoGen 8.0.0.1, and SDL3-CS 3.4.2 The software targets Windows 10+, macOS, and Linux, with a focus on minimal OS-dependent code to ensure cross-platform compatibility. The project will be open-sourced, so code must be clean, modular, well-documented, and maintainable for community contributions.
 
 This project is public on GitHub at: https://github.com/smxhams/Cue2-Unofficial. Refer to the GitHub page to fill in any knowledge gaps.
 
@@ -20,10 +20,12 @@ This project is public on GitHub at: https://github.com/smxhams/Cue2-Unofficial.
 - Optimization for wide hardware compatibility while prioritizing no stuttering or delays in playback
 
 ## Build Commands
-- .csproj for building is here: C:\MyFiles\Cue2_Home\Cue2\Cue2.csproj
-- **Build**: `dotnet build` (Godot.NET.Sdk handles compilation)
+- .csproj for building is here: 
+  - Windows: `C:\MyFiles\Cue2_Home\Cue2\Cue2.csproj`
+  - macOS: `/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/Cue2.csproj`
+- **Build**: `dotnet build <path-to-csproj>` (Godot.NET.Sdk handles compilation)
 - **Run**: Use Godot editor or `godot --path . --run` for runtime execution
-- **Clean**: `dotnet clean`
+- **Clean**: `dotnet clean <path-to-csproj>`
 
 ## Test Commands
 - No dedicated test framework - use Godot editor for UI testing
@@ -278,7 +280,7 @@ public event EventHandler<EventArgs> EventName;
 - **Consider edge cases**: Handle error conditions and boundary values
 
 ## Response Expectations for AI Assistance
-- Provide C# code snippets compatible with Godot 4.4 Mono, FFmpeg.AutoGen 7.1.1, and SDL3-CS 3.2.18
+- Provide C# code snippets compatible with Godot 4.6 Mono, FFmpeg.AutoGen 7.1.1, and SDL3-CS 3.3.7
 - Include error handling and logging in all code examples
 - If a user's idea is flawed/unrealistic, provide constructive reality checks with alternatives
 - Suggest optimizations for performance, readability, or maintainability

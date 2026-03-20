@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=4 uid="uid://begopskfmco7t"]
+[gd_scene format=4 uid="uid://begopskfmco7t"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_0cx45"]
 [ext_resource type="Script" uid="uid://bu61tdqw7n060" path="res://src/Base/Cue2Base.cs" id="2_5r320"]
@@ -144,6 +144,15 @@ data = PackedByteArray("d09GMgABAAAAALU4ABEAAAABjRQAALTXAAEAAAAAAAAAAAAAAAAAAAAA
 font_name = "Open Sans"
 style_name = "SemiBold"
 font_weight = 600
+cache/0/variation_coordinates = {}
+cache/0/face_index = 0
+cache/0/embolden = 0.0
+cache/0/transform = Transform2D(1, 0, 0, 1, 0, 0)
+cache/0/spacing_top = 0
+cache/0/spacing_bottom = 0
+cache/0/spacing_space = 0
+cache/0/spacing_glyph = 0
+cache/0/baseline_offset = 0.0
 cache/0/16/0/ascent = 18.0
 cache/0/16/0/descent = 5.0
 cache/0/16/0/underline_position = 1.60938
@@ -2360,7 +2369,7 @@ border_width_right = 1
 border_width_bottom = 1
 border_color = Color(0.00392157, 0.231373, 0.25098, 1)
 
-[node name="Cue2Base" type="Control"]
+[node name="Cue2Base" type="Control" unique_id=1838126996]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -2373,7 +2382,7 @@ theme = ExtResource("1_0cx45")
 theme_type_variation = &"AtlasIcons"
 script = ExtResource("2_5r320")
 
-[node name="Panel" type="Panel" parent="."]
+[node name="Panel" type="Panel" parent="." unique_id=1419799970]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -2381,7 +2390,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=822002420]
 clip_contents = true
 custom_minimum_size = Vector2(5, 0)
 layout_mode = 1
@@ -2395,30 +2404,30 @@ theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 2
 theme_override_constants/margin_bottom = 2
 
-[node name="BoxContainer" type="BoxContainer" parent="MarginContainer"]
+[node name="BoxContainer" type="BoxContainer" parent="MarginContainer" unique_id=1026935193]
 layout_direction = 2
 layout_mode = 2
 vertical = true
 
-[node name="TitleBarSpacer" type="BoxContainer" parent="MarginContainer/BoxContainer"]
+[node name="TitleBarSpacer" type="BoxContainer" parent="MarginContainer/BoxContainer" unique_id=1609597833]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 
-[node name="Header" parent="MarginContainer/BoxContainer" instance=ExtResource("3_7gle1")]
+[node name="Header" parent="MarginContainer/BoxContainer" unique_id=1832227011 instance=ExtResource("3_7gle1")]
 layout_mode = 2
 
-[node name="VSplitContainer" type="VSplitContainer" parent="MarginContainer/BoxContainer"]
+[node name="VSplitContainer" type="VSplitContainer" parent="MarginContainer/BoxContainer" unique_id=1449471864]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 0
 
-[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer" unique_id=1775225660]
 clip_contents = true
 layout_direction = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="TabContainer" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer"]
+[node name="TabContainer" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer" unique_id=2144526718]
 clip_contents = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
@@ -2427,81 +2436,84 @@ current_tab = 0
 tabs_visible = false
 drag_to_rearrange_enabled = true
 
-[node name="CueListUi" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer" instance=ExtResource("4_7gle1")]
+[node name="CueListUi" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer" unique_id=2092298391 instance=ExtResource("4_7gle1")]
+unique_name_in_owner = true
 layout_mode = 2
 metadata/_tab_index = 0
 
-[node name="Passive Cues" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer"]
+[node name="Passive Cues" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/TabContainer" unique_id=1392566475]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 1
 
-[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer"]
+[node name="HSplitContainer" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer" unique_id=1806784331]
 clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 0.3
 
-[node name="ActiveCueContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" instance=ExtResource("6_jn5cm")]
+[node name="ActiveCueContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer/HSplitContainer" unique_id=188779598 instance=ExtResource("6_jn5cm")]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="HSplitContainer2" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer"]
+[node name="HSplitContainer2" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer" unique_id=139014194]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ShellInspector" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2" instance=ExtResource("7_7gle1")]
+[node name="ShellInspector" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2" unique_id=342859456 instance=ExtResource("7_7gle1")]
 unique_name_in_owner = true
 visible = false
 clip_contents = true
 layout_mode = 2
 size_flags_stretch_ratio = 0.3
 
-[node name="InspectorTabs" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2"]
+[node name="InspectorTabs" type="TabContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2" unique_id=2050946412]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-current_tab = 4
+current_tab = 1
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
 
-[node name="Library" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("7_ht2vi")]
+[node name="Library" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1755330176 instance=ExtResource("7_ht2vi")]
 visible = false
 layout_mode = 2
 
-[node name="Audio" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("8_7gle1")]
-visible = false
+[node name="Audio" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1937287223 instance=ExtResource("8_7gle1")]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Video" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("9_ht2vi")]
+[node name="Video" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1649765970 instance=ExtResource("9_ht2vi")]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("10_ht2vi")
 
-[node name="Timeline" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("9_r56tl")]
+[node name="Timeline" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=2102696013 instance=ExtResource("9_r56tl")]
 visible = false
 layout_mode = 2
 
-[node name="Connection" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" instance=ExtResource("9_7xm62")]
+[node name="Connection" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=2027123769 instance=ExtResource("9_7xm62")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 
-[node name="Network" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
+[node name="Network" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1403571718]
 visible = false
 layout_mode = 2
 tooltip_text = "Network commands"
 metadata/_tab_index = 5
 
-[node name="Control" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs"]
+[node name="Control" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=245796318]
 visible = false
 layout_mode = 2
 tooltip_text = "Control commands to itself or other cues."
 metadata/_tab_index = 6
 
-[node name="Footer" parent="MarginContainer/BoxContainer" instance=ExtResource("8_jn5cm")]
+[node name="Footer" parent="MarginContainer/BoxContainer" unique_id=149458541 instance=ExtResource("8_jn5cm")]
 layout_mode = 2
 
-[node name="MainWindowHandles" type="Control" parent="."]
+[node name="MainWindowHandles" type="Control" parent="." unique_id=1985802328]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -2511,7 +2523,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("12_7xm62")
 
-[node name="HeaderHandle" type="Control" parent="MainWindowHandles"]
+[node name="HeaderHandle" type="Control" parent="MainWindowHandles" unique_id=569233195]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(10, 28)
 layout_mode = 1
@@ -2524,14 +2536,14 @@ grow_horizontal = 2
 mouse_default_cursor_shape = 6
 theme = SubResource("Theme_5ouab")
 
-[node name="MainTitleBar" parent="MainWindowHandles" instance=ExtResource("3_7xm62")]
+[node name="MainTitleBar" parent="MainWindowHandles" unique_id=1021798260 instance=ExtResource("3_7xm62")]
 custom_minimum_size = Vector2(0, 28)
 layout_mode = 1
 anchors_preset = 10
 anchor_bottom = 0.0
 grow_vertical = 1
 
-[node name="RightHandle" type="Control" parent="MainWindowHandles"]
+[node name="RightHandle" type="Control" parent="MainWindowHandles" unique_id=53748771]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2543,7 +2555,7 @@ grow_horizontal = 0
 grow_vertical = 2
 mouse_default_cursor_shape = 10
 
-[node name="LeftHandle" type="Control" parent="MainWindowHandles"]
+[node name="LeftHandle" type="Control" parent="MainWindowHandles" unique_id=1851783089]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2552,7 +2564,7 @@ anchor_bottom = 1.0
 grow_vertical = 2
 mouse_default_cursor_shape = 10
 
-[node name="BottomHandle" type="Control" parent="MainWindowHandles"]
+[node name="BottomHandle" type="Control" parent="MainWindowHandles" unique_id=1894430175]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2564,7 +2576,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_default_cursor_shape = 9
 
-[node name="TopHandle" type="Control" parent="MainWindowHandles"]
+[node name="TopHandle" type="Control" parent="MainWindowHandles" unique_id=846264988]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2573,7 +2585,7 @@ anchor_right = 1.0
 grow_horizontal = 2
 mouse_default_cursor_shape = 9
 
-[node name="BottomRightCornerHandle" type="Control" parent="MainWindowHandles"]
+[node name="BottomRightCornerHandle" type="Control" parent="MainWindowHandles" unique_id=1635508645]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2588,7 +2600,7 @@ grow_horizontal = 0
 grow_vertical = 0
 mouse_default_cursor_shape = 12
 
-[node name="BottomLeftCornerHandle" type="Control" parent="MainWindowHandles"]
+[node name="BottomLeftCornerHandle" type="Control" parent="MainWindowHandles" unique_id=620352602]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2600,7 +2612,7 @@ offset_right = 5.0
 grow_vertical = 0
 mouse_default_cursor_shape = 11
 
-[node name="TopRightCornerHandle" type="Control" parent="MainWindowHandles"]
+[node name="TopRightCornerHandle" type="Control" parent="MainWindowHandles" unique_id=113004726]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2612,7 +2624,7 @@ offset_bottom = 5.0
 grow_horizontal = 0
 mouse_default_cursor_shape = 11
 
-[node name="TopLeftCornerHandle" type="Control" parent="MainWindowHandles"]
+[node name="TopLeftCornerHandle" type="Control" parent="MainWindowHandles" unique_id=1306502810]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(5, 5)
 layout_mode = 1
@@ -2621,7 +2633,7 @@ offset_right = 5.0
 offset_bottom = 5.0
 mouse_default_cursor_shape = 12
 
-[node name="Border" type="Panel" parent="MainWindowHandles"]
+[node name="Border" type="Panel" parent="MainWindowHandles" unique_id=1318516804]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -2632,7 +2644,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_e2apv")
 
-[node name="FileDialog" type="FileDialog" parent="."]
+[node name="FileDialog" type="FileDialog" parent="." unique_id=732834157]
 title = "Open a File"
 initial_position = 2
 size = Vector2i(371, 175)
@@ -2642,7 +2654,7 @@ access = 2
 use_native_dialog = true
 script = ExtResource("12_6nwf4")
 
-[node name="OpenDialog" type="FileDialog" parent="."]
+[node name="OpenDialog" type="FileDialog" parent="." unique_id=979686721]
 unique_name_in_owner = true
 auto_translate_mode = 1
 title = "Open a File"

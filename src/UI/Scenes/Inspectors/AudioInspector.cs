@@ -146,6 +146,7 @@ public partial class AudioInspector : Control
     
     /// <summary>
     /// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
+    /// Blank or -1 input sets time to undefined (EndTime=-1, StartTime=0).
     /// </summary>
     /// <param name="text">The submitted text.</param>
     /// <param name="textField">The LineEdit field.</param>
@@ -153,13 +154,37 @@ public partial class AudioInspector : Control
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(text) || text.Trim() == "-1")
+            {
+                if (textField == _startTimeInput)
+                {
+                    _focusedAudioComponent.StartTime = 0.0;
+                    textField.Text = "00:00.000";
+                    textField.TooltipText = "00m:00s.000ms";
+                    GD.Print("AudioInspector:TimeFieldSubmitted - Start time reset to 0");
+                }
+                else if (textField == _endTimeInput)
+                {
+                    _focusedAudioComponent.EndTime = -1.0; // Undefined = play to end
+                    textField.Text = $"Full ({UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration)})";
+                    textField.TooltipText = "End time undefined (plays full file)";
+                    GD.Print("AudioInspector:TimeFieldSubmitted - End time set to undefined (full)");
+                }
+                
+                SyncDuration();
+                textField.ReleaseFocus();
+                DrawWaveform();
+                return;
+            }
+            
             var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime);
             
             if (time == "")
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1); // Warning log
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1);
                 return;
             }
+            
             textField.Text = time;
             textField.TooltipText = labeledTime;
             if (textField == _startTimeInput)
@@ -168,15 +193,11 @@ public partial class AudioInspector : Control
             }
             else if (textField == _endTimeInput)
             {
-                _focusedAudioComponent.EndTime = timeSecs < 0 ? _focusedAudioComponent.Metadata.Duration : timeSecs; // Handles -1 as full duration
+                _focusedAudioComponent.EndTime = timeSecs;
             }
             
-            // Recalculate duration
             SyncDuration();
-            
             textField.ReleaseFocus();
-            
-            // Update waveform
             DrawWaveform();
 
         }
@@ -568,21 +589,7 @@ public partial class AudioInspector : Control
             GD.Print("AudioInspector:ShellSelected - Refreshed metadata from file.");
         }
         
-        _selectFileContainer.Visible = true;
-        _fileUrl.Text = file;
-        _infoLabel.Text = "";
-        _inspectorContent.Visible = true;
-
-        _startTimeInput.Text =
-            UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out string startTip);
-        _startTimeInput.TooltipText = startTip;
-        _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
-        _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
-        _fileDurationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration);
-        _loopInput.ButtonPressed = _focusedAudioComponent.Loop;
-        _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
-        var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
-        _volumeInput.Text = $"{volumeDb}dB";
+        UpdateAudioUiFields(file);
         
         PopulateOutputOptions();
         BuildRoutingMatrix();
@@ -609,6 +616,37 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Using cached waveform for {_focusedAudioComponent.AudioFile}", 0);
         }
         await DrawWaveform();
+    }
+
+    /// <summary>
+    /// Updates the audio-related UI fields from the current AudioComponent state.
+    /// </summary>
+    /// <param name="file">The audio file path to display.</param>
+    private void UpdateAudioUiFields(string file)
+    {
+        _selectFileContainer.Visible = true;
+        _fileUrl.Text = file;
+        _infoLabel.Text = "";
+        _inspectorContent.Visible = true;
+
+        _startTimeInput.Text =
+            UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out string startTip);
+        _startTimeInput.TooltipText = startTip;
+        
+        if (_focusedAudioComponent.EndTime < 0)
+        {
+            _endTimeInput.Text = $"Full ({UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration)})";
+        }
+        else
+        {
+            _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
+        }
+        _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
+        _fileDurationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration);
+        _loopInput.ButtonPressed = _focusedAudioComponent.Loop;
+        _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
+        var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
+        _volumeInput.Text = $"{volumeDb}dB";
     }
 
     /// <summary>
@@ -655,7 +693,8 @@ public partial class AudioInspector : Control
         float binWidth = width / binCount;
 
         float startNorm = (float)(_focusedAudioComponent.StartTime / _focusedAudioComponent.Metadata.Duration);
-        float endNorm = (float)(_focusedAudioComponent.EndTime / _focusedAudioComponent.Metadata.Duration);
+        float endTime = _focusedAudioComponent.EndTime < 0 ? (float)_focusedAudioComponent.Metadata.Duration : (float)_focusedAudioComponent.EndTime;
+        float endNorm = (float)(endTime / _focusedAudioComponent.Metadata.Duration);
         int startBin = (int)(startNorm * binCount);
         int endBin = (int)(endNorm * binCount);
         
@@ -807,29 +846,116 @@ public partial class AudioInspector : Control
     /// Handles file selection from dialog. Adds AudioComponent, fetches metadata asynchronously if possible.
     /// </summary>
     /// <param name="path">The selected file path.</param>
-    private async void FileSelected(string path)
+    private void FileSelected(string path)
     {
         ClearFileDialog();
-        if (!File.Exists(path))
+        if (_focusedCue == null)
         {
-            GD.Print("AudioInspector:FileSelected - Selected audio file not found.");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:FileSelected -  Selected audio file not found: {path}", 2);
+            GD.Print("AudioInspector:FileSelected - No cue selected");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:No cue selected", 2);
             return;
         }
+        SetAudioFile(path, createNewComponent: true);
+    }
+
+    /// <summary>
+    /// Handles setting audio file URL from drag-and-drop. Creates AudioComponent if none exists.
+    /// </summary>
+    /// <param name="filePath">The dropped file path.</param>
+    public void SetAudioFileUrlFromDrop(string filePath)
+    {
+        if (_focusedCue == null)
+        {
+            GD.Print("AudioInspector:SetAudioFileUrlFromDrop - No cue selected");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:No cue selected for audio file drop", 2);
+            return;
+        }
+        SetAudioFile(filePath, createNewComponent: false);
+    }
+
+    /// <summary>
+    /// Sets the audio file for the focused cue. Handles component creation or update, metadata refresh, and time validation.
+    /// </summary>
+    /// <param name="filePath">The audio file path.</param>
+    /// <param name="createNewComponent">If true, always creates a new AudioComponent. If false, updates existing or creates new.</param>
+    private async void SetAudioFile(string filePath, bool createNewComponent)
+    {
+        if (!File.Exists(filePath))
+        {
+            GD.Print($"AudioInspector:SetAudioFile - File not found: {filePath}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:File not found: {filePath}", 2);
+            return;
+        }
+
+        _fileUrl.Text = filePath;
+
+        var existingAudio = _focusedCue.Components.OfType<AudioComponent>().FirstOrDefault();
+        if (existingAudio != null && !createNewComponent)
+        {
+            _focusedAudioComponent = existingAudio;
+            _focusedAudioComponent.AudioFile = filePath;
+            
+            try
+            {
+                _focusedAudioComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                if (_focusedAudioComponent.WaveformData.Length == 0)
+                {
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:SetAudioFile - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
+                }
+            }
+            catch (Exception ex)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:SetAudioFile - Error generating waveform: {ex.Message}", 2);
+            }
+        }
+        else
+        {
+            _focusedAudioComponent = _focusedCue.AddAudioComponent(filePath);
+            _inspectorContent.Visible = true;
+        }
+
+        var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(filePath);
+        _focusedAudioComponent.Metadata = fileMetadata;
         
-        _fileUrl.Text = path;
-        _focusedAudioComponent =_focusedCue.AddAudioComponent(path);
-        _inspectorContent.Visible = true;
+        var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
         
-        // Fetch metadata asynchronously to avoid UI blocking
-        var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(path);
-        _focusedAudioComponent.Metadata = fileMetadata; // Set full metadata on component
-        var fileDuration = fileMetadata.Duration;
-        _focusedAudioComponent.EndTime = fileDuration > 0 ? fileDuration : 0.0;
-        _focusedAudioComponent.StartTime = 0.0;
+        if (createNewComponent)
+        {
+            _focusedAudioComponent.StartTime = 0.0;
+            _focusedAudioComponent.EndTime = -1.0; // Undefined = play to end
+            GD.Print($"AudioInspector:SetAudioFile - Metadata loaded: Duration {fileDuration}s, Channels {fileMetadata.Channels}");
+        }
+        else
+        {
+            if (_focusedAudioComponent.StartTime >= fileDuration)
+            {
+                _focusedAudioComponent.StartTime = 0.0;
+                GD.Print($"AudioInspector:SetAudioFile - Reset start time (exceeded file duration)");
+            }
+            
+            if (_focusedAudioComponent.EndTime >= 0 && _focusedAudioComponent.EndTime > fileDuration)
+            {
+                _focusedAudioComponent.EndTime = -1.0; // Reset to undefined
+                GD.Print($"AudioInspector:SetAudioFile - Reset end time to undefined (exceeded file duration)");
+            }
+            else if (_focusedAudioComponent.EndTime >= 0 && _focusedAudioComponent.EndTime <= _focusedAudioComponent.StartTime)
+            {
+                _focusedAudioComponent.EndTime = -1.0; // Reset to undefined
+                GD.Print($"AudioInspector:SetAudioFile - Reset end time to undefined (was <= start time)");
+            }
+        }
+
+        UpdateAudioUiFields(filePath);
+        PopulateOutputOptions();
+        BuildRoutingMatrix();
         
-        ShellSelected(_focusedCue.Id);
-        GD.Print($"AudioInspector:FileSelected - Metadata loaded: Duration {fileDuration}s, Channels {fileMetadata.Channels}");
+        if (_waveformAccordian.Visible)
+        {
+            await DrawWaveform();
+        }
+        
+        GD.Print($"AudioInspector:SetAudioFile - Set audio file: {filePath}");
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:Set audio file to: {Path.GetFileName(filePath)}", 0);
     }
 
     /// <summary>
@@ -856,6 +982,5 @@ public partial class AudioInspector : Control
             await DrawWaveform();
         }
     }
-
 }
 
