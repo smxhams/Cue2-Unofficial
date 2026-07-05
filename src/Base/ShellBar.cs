@@ -320,7 +320,7 @@ public partial class ShellBar : PanelContainer
 		if (@event is not InputEventMouseButton mouseEvent || !mouseEvent.Pressed || mouseEvent.ButtonIndex != MouseButton.Left)
 			return;
 
-		GD.Print($"Shell Clicked");
+		// Selection logging is low-volume; retained or replace with conditional _globalSignals if desired.
 		if (Input.IsKeyPressed(Key.Shift))
 		{
 			_globalData.ShellSelection.SelectThrough(CueList.FetchCueFromId(CueId));
@@ -365,7 +365,6 @@ public partial class ShellBar : PanelContainer
 	// Re-ordering functions
 	private void DragPressed()
 	{
-		GD.Print("START REORDER");
 		_globalData.Cuelist.StartReorder(this);
 	}
 }

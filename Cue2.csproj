@@ -11,29 +11,9 @@
 <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />  
 </ItemGroup>  
 <ItemGroup>
-  <Folder Include="bin\linux\" />
+  <Compile Remove="bin\**" />
 </ItemGroup>  
 <ItemGroup>
-  <Content Include="bin\macos\libavcodec.62.dylib" />
-  <Content Include="bin\macos\libavdevice.62.dylib" />
-  <Content Include="bin\macos\libavfilter.11.dylib" />
-  <Content Include="bin\macos\libavformat.62.dylib" />
-  <Content Include="bin\macos\libavutil.60.dylib" />
-  <Content Include="bin\macos\libswresample.6.dylib" />
-  <Content Include="bin\macos\libswscale.9.dylib" />
-  <Content Include="bin\win64\avcodec-62.dll" />
-  <Content Include="bin\win64\avdevice-62.dll" />
-  <Content Include="bin\win64\avfilter-11.dll" />
-  <Content Include="bin\win64\avformat-62.dll" />
-  <Content Include="bin\win64\avutil-60.dll" />
-  <Content Include="bin\win64\swresample-6.dll" />
-  <Content Include="bin\win64\swscale-9.dll" />
-  <Content Include="bin\winarm64\avcodec-62.dll" />
-  <Content Include="bin\winarm64\avdevice-62.dll" />
-  <Content Include="bin\winarm64\avfilter-11.dll" />
-  <Content Include="bin\winarm64\avformat-62.dll" />
-  <Content Include="bin\winarm64\avutil-60.dll" />
-  <Content Include="bin\winarm64\swresample-6.dll" />
-  <Content Include="bin\winarm64\swscale-9.dll" />
+  <EmbeddedResource Remove="bin\**" />
 </ItemGroup>  
 </Project> 
