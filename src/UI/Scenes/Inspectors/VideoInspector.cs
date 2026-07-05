@@ -264,58 +264,7 @@ public partial class VideoInspector : Control
 			_videoPreviewer.ClearDecoder();
 		}
 
-		// Handle audio UI based on presence of audio in video file
-		if (_focusedVideoComponent.HasAudio)
-		{
-			GD.Print($"VideoInspector:ShellSelected - Patch: {_focusedVideoComponent.PatchId}");
-			_useAudioCheckButton.Visible = true;
-			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
-			_useAudioLabel.Text = "Use Embedded Audio";
-			if (_focusedVideoComponent.UseAudio) ToggleAccordian(_audioAccordian, _audioCollapseButton);
-			PopulateOutputOptions();
-			BuildRoutingMatrix();
-		}
-
-		// Generate waveform data if not cached
-		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio && (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)) // Check cache
-		{
-			GD.Print($"VideoInspector:ShellSelected - No waveform found");
-			try
-			{
-				_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
-				if (_focusedVideoComponent.WaveformData.Length == 0)
-				{
-					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
-				}
-			}
-			catch (Exception ex)
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Error generating waveform: {ex.Message}", 2);
-			}
-		}
-		else if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Using cached waveform for {_focusedVideoComponent.VideoFile}", 0);
-		}
-
-		// Handle audio UI based on presence of audio in video file
-		if (_focusedVideoComponent.HasAudio)
-		{
-			GD.Print($"VideoInspector:ShellSelected - Patch: {_focusedVideoComponent.PatchId}");
-			_useAudioCheckButton.Visible = true;
-			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
-			_useAudioLabel.Text = "Use Embedded Audio";
-			if (_focusedVideoComponent.UseAudio) ToggleAccordian(_audioAccordian, _audioCollapseButton);
-			PopulateOutputOptions();
-			BuildRoutingMatrix();
-			await DrawWaveform(); // This can move to if useaudio selected.
-		}
-		else
-		{
-			_audioCollapseButton.Visible = false;
-			_useAudioCheckButton.Visible = false;
-			_useAudioLabel.Text = "No audio in file";
-		}
+		await RefreshAudioUiState();
 
 	}
 
@@ -393,22 +342,6 @@ public partial class VideoInspector : Control
 		{
 			_focusedVideoComponent = existingVideo;
 			_focusedVideoComponent.VideoFile = filePath;
-			
-			if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
-			{
-				try
-				{
-					_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
-					if (_focusedVideoComponent.WaveformData.Length == 0)
-					{
-						_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:SetVideoFile - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
-					}
-				}
-				catch (Exception ex)
-				{
-					_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:SetVideoFile - Error generating waveform: {ex.Message}", 2);
-				}
-			}
 		}
 		else
 		{
@@ -453,13 +386,66 @@ public partial class VideoInspector : Control
 
 		UpdateVideoUiFields(filePath);
 		
-		if (_waveformAccordian.Visible && _focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
-		{
-			await DrawWaveform();
-		}
+		await RefreshAudioUiState();
 		
 		GD.Print($"VideoInspector:SetVideoFile - Set video file: {filePath}");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:Set video file to: {Path.GetFileName(filePath)}", 0);
+	}
+	
+	/// <summary>
+	/// Refreshes the audio-related UI elements based on the current VideoComponent's audio state.
+	/// Handles visibility of audio controls, labels, output options, routing matrix, and waveform.
+	/// </summary>
+	private async Task RefreshAudioUiState()
+	{
+		if (_focusedVideoComponent.HasAudio)
+		{
+			_useAudioCheckButton.Visible = true;
+			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
+			_useAudioLabel.Text = "Use Embedded Audio";
+			_audioCollapseButton.Visible = true;
+			
+			PopulateOutputOptions();
+			BuildRoutingMatrix();
+			
+			if (_focusedVideoComponent.UseAudio)
+			{
+				if (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)
+				{
+					try
+					{
+						_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
+						if (_focusedVideoComponent.WaveformData.Length == 0)
+						{
+							_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:RefreshAudioUiState - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
+						}
+					}
+					catch (Exception ex)
+					{
+						_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:RefreshAudioUiState - Error generating waveform: {ex.Message}", 2);
+					}
+				}
+				
+				await DrawWaveform();
+			}
+			else
+			{
+				_waveformAccordian.Visible = false;
+				_waveformCollapseButton.ButtonPressed = false;
+			}
+		}
+		else
+		{
+			_audioCollapseButton.Visible = false;
+			_useAudioCheckButton.Visible = false;
+			_useAudioLabel.Text = "No audio in file";
+			_audioAccordian.Visible = false;
+			_audioCollapseButton.ButtonPressed = false;
+			_waveformAccordian.Visible = false;
+			_waveformCollapseButton.ButtonPressed = false;
+			_routingAccordian.Visible = false;
+			_routingCollapseButton.ButtonPressed = false;
+		}
 	}
 	
 	/// <summary>

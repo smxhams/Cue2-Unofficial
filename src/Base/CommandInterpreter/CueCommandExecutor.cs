@@ -9,7 +9,7 @@ using Godot;
 
 namespace Cue2.Base.CommandInterpreter;
 
-public partial class CueCommandExectutor : CueCommandInterpreter
+public partial class CueCommandExectutor : Node
 {
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;

@@ -18,6 +18,8 @@ config/name="Cue2"
 config/version="0.00.003"
 run/main_scene="res://src/Base/Cue2Base.tscn"
 run/print_header=false
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Techmop/Cue2"
 config/features=PackedStringArray("4.6", "C#")
 boot_splash/stretch_mode=0
 boot_splash/image="uid://da3ic4ewddkb"
@@ -50,6 +52,7 @@ window/vsync/vsync_mode=0
 [dotnet]
 
 project/assembly_name="Cue2"
+project/solution_directory="res://Cue2.sln"
 
 [editor]
 

@@ -50,7 +50,7 @@ public partial class GlobalData : Node
 	
 	public CueList Cuelist;
 	public ShellSelection ShellSelection;
-	public CueCommandInterpreter CueCommandInterpreter;
+	public CueCommandExectutor CueCommandExectutor;
 	public Settings Settings;
 	public Devices Devices;
 	public CueLightManager CueLightManager;
@@ -58,8 +58,6 @@ public partial class GlobalData : Node
 	public DisplaysManager DisplaysManager;
 
 	public FileDropper FileDropper;
-	//public AudioDevices AudioDevices;
-	
 	
 	public int FocusedCue = -1;
 	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
@@ -86,6 +84,12 @@ public partial class GlobalData : Node
 	public string SessionPath;
 	public string SessionMediaPath;
 	public string SessionWaveformsPath;
+
+	/// <summary>
+	/// The absolute filesystem path that Godot resolves "user://" to.
+	/// Useful for debugging or storing app-specific data in the user data directory.
+	/// </summary>
+	public string GodotUserDataPath { get; private set; } //!!!
 	
 	// File filters for media files (FFmpeg compatible)
 	public static readonly List<string> VideoFileFilters = new List<string> {
@@ -109,6 +113,14 @@ public partial class GlobalData : Node
 		// Init MediaManager class so can be referenced everywhere
 		//if (autoloadOnStartup == true){loadShow("Last");}
 
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		_saveManager = GetNode<SaveManager>("/root/SaveManager");
+
+		// Print the full resolved path for user:// (Godot's user data directory) as early as possible
+		GodotUserDataPath = ProjectSettings.GlobalizePath("user://");
+		GD.Print("GlobalData:_Ready - Godot user:// resolves to full path: " + GodotUserDataPath);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Godot user:// full path: {GodotUserDataPath}", 0);
+
 		// Initialize SDL with audio, events, and video
 		if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events | SDL.InitFlags.Video) == false)
 		{
@@ -119,14 +131,11 @@ public partial class GlobalData : Node
 		}
 		GD.Print("GlobalData:_Ready - SDL initialized successfully.");
 
-		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_saveManager = GetNode<SaveManager>("/root/SaveManager");
-		
 		ShellSelection = new ShellSelection();
 		AddChild(ShellSelection);
 		
-		CueCommandInterpreter = new CueCommandInterpreter();
-		AddChild(CueCommandInterpreter);
+		CueCommandExectutor = new CueCommandExectutor();
+		AddChild(CueCommandExectutor);
 		
 		Settings = new Settings();
 		AddChild(Settings);

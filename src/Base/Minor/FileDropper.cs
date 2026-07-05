@@ -153,22 +153,28 @@ public partial class FileDropper : Control
         if (cue2Base == null)
             return (FileDropTargetType.None, "");
         
-        var audioInspector = cue2Base.GetNode("%Audio");
-        var audioFileUrl = audioInspector?.GetNode<LineEdit>("%FileURL");
-        if (audioFileUrl != null && audioFileUrl.Visible && audioFileUrl.GetGlobalRect().HasPoint(mousePos))
+        var audioInspector = cue2Base.GetNode<Control>("%Audio");
+        if (audioInspector != null && audioInspector.Visible)
         {
-            GD.Print("FileDropper:GetDropTarget - Audio URL drop detected");
-            return (FileDropTargetType.FileUrlAudio, "AudioFileURL");
+            var audioFileUrl = audioInspector?.GetNode<LineEdit>("%FileURL");
+            if (audioFileUrl != null && audioFileUrl.Visible && audioFileUrl.GetGlobalRect().HasPoint(mousePos))
+            {
+                GD.Print("FileDropper:GetDropTarget - Audio URL drop detected");
+                return (FileDropTargetType.FileUrlAudio, "AudioFileURL");
+            }
         }
-
-        var videoInspector = cue2Base.GetNode("%Video");
-        var videoFileUrl = videoInspector?.GetNode<LineEdit>("%FileUrl");
-        if (videoFileUrl != null && videoFileUrl.Visible && videoFileUrl.GetGlobalRect().HasPoint(mousePos))
+        
+        var videoInspector = cue2Base.GetNode<Control>("%Video");
+        if (videoInspector != null && videoInspector.Visible)
         {
-            GD.Print("FileDropper:GetDropTarget - Video URL drop detected");
-            return (FileDropTargetType.FileUrlVideo, "VideoFileURL");
+            var videoFileUrl = videoInspector?.GetNode<LineEdit>("%FileUrl");
+            if (videoFileUrl != null && videoFileUrl.Visible && videoFileUrl.GetGlobalRect().HasPoint(mousePos))
+            {
+                GD.Print("FileDropper:GetDropTarget - Video URL drop detected");
+                return (FileDropTargetType.FileUrlVideo, "VideoFileURL");
+            }
         }
-
+         
         var cueListUi = cue2Base.GetNode("%CueListUi") as Control;
         var cueContainer = cueListUi?.GetNode<VBoxContainer>("%CueContainer");
         
