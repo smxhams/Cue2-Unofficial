@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Godot;
 using Godot.Collections;
 
 using Cue2.Base.Classes.Connections;
 using Cue2.Base.Classes.CueTypes;
+using Cue2.Base.Minor;
 using Cue2.Shared;
 
 // This script is attached to the cuelist in main UI
@@ -122,7 +125,272 @@ public partial class CueList : Control
 		AddCue(newCue);
 
 	}
-	
+
+	/// <summary>
+	/// Creates one or more cues from dropped media files and inserts them according to the given parameters.
+	/// This is the main entry point for file drag-and-drop cue creation.
+	/// Supports single/multiple files, audio/video/images, group wrapping, and precise insert positions.
+	/// </summary>
+	/// <param name="files">Full paths to valid media files.</param>
+	/// <param name="targetCueId">If dropping relative to a specific cue/shell, its ID; otherwise -1.</param>
+	/// <param name="insertMode">Desired position relative to target (ignored or treated as AtEnd if no target).</param>
+	/// <param name="asGroup">When true and multiple files, wrap the created cues inside a new parent group cue.</param>
+	public void CreateCuesFromDroppedFiles(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
+	{
+		if (files == null || files.Length == 0) return;
+
+		var mediaEngine = GetNodeOrNull<MediaEngine>("/root/MediaEngine");
+		var newCues = new List<Cue>();
+		Cue groupCue = null;
+
+		// Determine insertion base location once
+		var (targetContainer, baseInsertIndex, parentIdForNew) = ResolveInsertLocation(targetCueId, insertMode);
+
+		if (asGroup && files.Length > 1)
+		{
+			// Create a wrapper group cue first
+			groupCue = new Cue();
+			groupCue.Name = $"Group ({files.Length} files)";
+			groupCue.CueNum = groupCue.Id.ToString();
+
+			var groupShell = CreateShellAndInsert(groupCue, targetContainer, baseInsertIndex, parentIdForNew);
+			newCues.Add(groupCue);
+
+			// Subsequent children go into the group's child container, at end of it
+			targetContainer = groupCue.ShellBar?.ShellChildContainer ?? targetContainer;
+			baseInsertIndex = targetContainer.GetChildCount(); // append children
+			parentIdForNew = groupCue.Id;
+			// Expand the new group
+			groupCue.Expanded = true;
+		}
+
+		int currentIndex = baseInsertIndex;
+
+		foreach (string filePath in files)
+		{
+			if (!File.Exists(filePath)) continue;
+
+			var cue = new Cue();
+			string baseName = Path.GetFileNameWithoutExtension(filePath);
+			cue.Name = string.IsNullOrWhiteSpace(baseName) ? $"Cue {cue.Id}" : baseName;
+			cue.CueNum = cue.Id.ToString();
+
+			// Add the appropriate component
+			string ext = Path.GetExtension(filePath).ToLowerInvariant();
+			bool isAudio = GlobalData.AudioFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+			bool isVideoOrImage = GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)) ||
+			                       GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+
+			if (isAudio)
+			{
+				cue.AddAudioComponent(filePath);
+			}
+			else if (isVideoOrImage)
+			{
+				var vcomp = cue.AddVideoComponent(filePath);
+				// Video may contain audio - we will discover on metadata
+			}
+			else
+			{
+				continue; // should have been filtered
+			}
+
+			// For children inside a just-created group, always append to keep order simple
+			int useIndex = (groupCue != null && parentIdForNew == groupCue.Id)
+				? targetContainer.GetChildCount()
+				: currentIndex;
+
+			var shell = CreateShellAndInsert(cue, targetContainer, useIndex, parentIdForNew);
+
+			// Advance only for non-group-child sequential inserts
+			if (!(groupCue != null && parentIdForNew == groupCue.Id))
+			{
+				currentIndex = targetContainer.GetChildCount();
+			}
+
+			newCues.Add(cue);
+
+			// Kick off async metadata + waveform (fire and forget with logging)
+			_ = ApplyMetadataToNewCueAsync(cue, filePath, mediaEngine);
+		}
+
+		if (newCues.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "CueList:CreateCuesFromDroppedFiles - No cues were created from the provided files.", (int)LogType.Warning);
+			return;
+		}
+
+		// Select the first newly created cue (or the group if we made one)
+		var cueToFocus = groupCue ?? newCues.FirstOrDefault();
+		if (cueToFocus != null)
+		{
+			_globalData?.ShellSelection?.SelectIndividualShell(cueToFocus);
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), cueToFocus.Id);
+		}
+
+		// Recalculate durations for affected area (simple: recalc the new ones + parents)
+		foreach (var c in newCues)
+		{
+			c.CalculateTotalDuration();
+		}
+		if (groupCue != null) groupCue.CalculateTotalDuration();
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"CueList: Created {newCues.Count} cue(s) from drop" + (groupCue != null ? " (grouped)" : ""), (int)LogType.Info);
+
+		GD.Print($"CueList:CreateCuesFromDroppedFiles - Created {newCues.Count} cue(s).");
+	}
+
+	/// <summary>
+	/// Resolves the target UI container, insert index, and logical parent ID for a drop insertion.
+	/// </summary>
+	private (VBoxContainer container, int index, int parentId) ResolveInsertLocation(int targetCueId, DropInsertMode mode)
+	{
+		if (targetCueId < 0 || mode == DropInsertMode.AtEnd)
+		{
+			// End of top level
+			return (_cueContainer, _cueContainer.GetChildCount(), -1);
+		}
+
+		var targetCue = FetchCueFromId(targetCueId);
+		if (targetCue == null || targetCue.ShellBar == null)
+		{
+			return (_cueContainer, _cueContainer.GetChildCount(), -1);
+		}
+
+		var targetShell = targetCue.ShellBar;
+
+		switch (mode)
+		{
+			case DropInsertMode.Above:
+				if (targetCue.ParentId != -1)
+				{
+					var p = FetchCueFromId(targetCue.ParentId);
+					var cont = p?.ShellBar?.ShellChildContainer ?? _cueContainer;
+					int idx = targetShell.GetIndex();
+					return (cont, idx, targetCue.ParentId);
+				}
+				else
+				{
+					int idx = targetShell.GetIndex();
+					return (_cueContainer, idx, -1);
+				}
+
+			case DropInsertMode.Below:
+				if (targetCue.ParentId != -1)
+				{
+					var p = FetchCueFromId(targetCue.ParentId);
+					var cont = p?.ShellBar?.ShellChildContainer ?? _cueContainer;
+					int idx = targetShell.GetIndex() + 1;
+					return (cont, idx, targetCue.ParentId);
+				}
+				else
+				{
+					int idx = targetShell.GetIndex() + 1;
+					return (_cueContainer, idx, -1);
+				}
+
+			case DropInsertMode.AsChild:
+				var childCont = targetShell.ShellChildContainer ?? _cueContainer;
+				return (childCont, childCont.GetChildCount(), targetCue.Id);
+
+			default:
+				return (_cueContainer, _cueContainer.GetChildCount(), -1);
+		}
+	}
+
+	/// <summary>
+	/// Creates the ShellBar UI, wires it, inserts it into the given container at index, updates data model.
+	/// </summary>
+	private ShellBar CreateShellAndInsert(Cue cue, VBoxContainer container, int insertIndex, int parentId)
+	{
+		var shellBar = _shellBarPackedScene.Instantiate<ShellBar>();
+
+		int countBefore = container.GetChildCount();
+		container.AddChild(shellBar);
+
+		int desired = insertIndex;
+		if (desired < 0 || desired > countBefore)
+			desired = countBefore;
+
+		container.MoveChild(shellBar, desired);
+
+		shellBar.MouseEntered += () => OnMouseEntered(shellBar);
+		shellBar.SetCue(cue);
+		cue.ShellBar = shellBar;
+		shellBar.Set("CueId", cue.Id);
+
+		if (!CueIndex.ContainsKey(cue.Id))
+			CueIndex.Add(cue.Id, cue);
+		else
+			CueIndex[cue.Id] = cue;
+
+		cue.ParentId = parentId;
+		if (parentId != -1)
+		{
+			var parent = FetchCueFromId(parentId);
+			if (parent != null && !parent.ChildCues.Contains(cue.Id))
+			{
+				parent.ChildCues.Add(cue.Id);
+				bool wasEmpty = parent.ChildCues.Count == 1;
+				if (wasEmpty) parent.Expanded = true;
+				parent.ShellBar?.RelationshipChanged();
+			}
+		}
+
+		return shellBar;
+	}
+
+	/// <summary>
+	/// Asynchronously fetches metadata (and waveform for audio), attaches it to the component, and updates cue duration.
+	/// Safe to fire-and-forget.
+	/// </summary>
+	private async Task ApplyMetadataToNewCueAsync(Cue cue, string filePath, MediaEngine mediaEngine)
+	{
+		if (cue == null || string.IsNullOrEmpty(filePath) || mediaEngine == null) return;
+
+		try
+		{
+			var audioComp = cue.GetAudioComponent();
+			var videoComp = cue.GetVideoComponent();
+
+			if (audioComp != null)
+			{
+				var meta = await mediaEngine.GetAudioFileMetadataAsync(filePath);
+				audioComp.Metadata = meta;
+				audioComp.RecalculateDuration();
+
+				// Optional waveform (best effort)
+				try
+				{
+					audioComp.WaveformData = await mediaEngine.GenerateWaveformAsync(filePath);
+				}
+				catch { /* non-fatal */ }
+			}
+			else if (videoComp != null)
+			{
+				var meta = await mediaEngine.GetVideoFileMetadataAsync(filePath);
+				videoComp.Metadata = meta;
+				videoComp.HasAudio = meta.AudioChannels > 0;
+				videoComp.UseAudio = videoComp.HasAudio;
+				videoComp.ScaledWidth = meta.Width;
+				videoComp.ScaledHeight = meta.Height;
+
+				// For video we don't auto-gen full waveform here (inspector does when opened)
+			}
+
+			cue.CalculateTotalDuration();
+
+			// Notify UI that a shell may need refresh (duration etc.)
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
+		}
+		catch (Exception ex)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"CueList: Failed to load metadata for dropped file '{Path.GetFileName(filePath)}': {ex.Message}", (int)LogType.Warning);
+		}
+	}
+
 	private void AddCue(Cue cue)
 	{
 		CreateNewShell(cue);

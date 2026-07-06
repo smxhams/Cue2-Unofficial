@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,13 +23,90 @@ public enum FileDropTargetType
     ShellBar
 }
 
-// Conditions on file drop
+/// <summary>
+/// Describes where to insert cues created from dropped files relative to a target cue.
+/// </summary>
+public enum DropInsertMode
+{
+    /// <summary>Append at end of list (top-level) or parent's children.</summary>
+    AtEnd,
+    /// <summary>Insert immediately above the target cue as sibling.</summary>
+    Above,
+    /// <summary>Insert immediately below the target cue as sibling.</summary>
+    Below,
+    /// <summary>Make the new cue(s) children of the target cue.</summary>
+    AsChild
+}
+
+/// <summary>
+/// User choices returned from the file drop confirmation popup.
+/// </summary>
+public class FileDropChoices
+{
+    /// <summary>Desired insert position (used when a specific shell was the drop target).</summary>
+    public DropInsertMode InsertMode { get; set; } = DropInsertMode.Below;
+
+    /// <summary>
+    /// For multiple files: if true, create a single Group cue and place the per-file cues as its children.
+    /// </summary>
+    public bool CreateAsGroup { get; set; } = false;
+}
+
+// ===========================
+// DESIGN: All supported drop scenarios (single & multiple files)
+// ===========================
+// 1. Single valid media file dropped on visible Audio inspector FileURL LineEdit:
+//    - Requires a focused/selected cue.
+//    - Calls AudioInspector to set/replace the AudioComponent (existing path).
+//
+// 2. Single valid media file dropped on visible Video inspector FileURL LineEdit:
+//    - Same as above for VideoComponent.
+//
+// 3. Single valid audio file dropped on CueList background (not over a shell bar):
+//    - AUTO create: 1 new top-level cue with AudioComponent at end (or logical insert point).
+//    - No popup.
+//
+// 4. Single valid video file dropped on CueList background:
+//    - AUTO create: 1 new top-level cue with VideoComponent.
+//
+// 5. Single valid file dropped directly over a ShellBar:
+//    - SHOW popup with position choices: Above / Below / AsChild of that cue.
+//    - Default: Below. Confirm creates 1 cue in chosen position.
+//
+// 6. Multiple files (any valid mix of audio/video) dropped on CueList background:
+//    - SHOW popup.
+//    - Options: "separate cues" (default) or "wrap in one Group cue".
+//    - Insert at end / after selection.
+//
+// 7. Multiple files dropped over a specific ShellBar:
+//    - SHOW popup with BOTH position choices + separate-vs-group.
+//    - Creates N cues (or 1 group + N children) inserted at chosen relation to target.
+//
+// 8. Mixed valid + invalid files in one drop:
+//    - Silently filter to only supported extensions (audio + video + images as video).
+//    - If none remain valid, log warning and abort (no popup).
+//
+// 9. Drop of images (png/jpg etc):
+//    - Treated as VideoComponent targets (still image support via video path or future dedicated).
+//    - Validated via GlobalData.ImageFileFilters.
+//
+// 10. Drop with 0 files or only unsupported:
+//     - Log + no action + no popup.
+//
+// Notes:
+// - Inspector URL drops stay direct (single file only).
+// - List/shell drops create *new* cues (primary use case).
+// - Replacing media on existing cue is done via inspector URL drop or file picker.
+// - New cues derive their Name from the filename (without extension).
+// - Metadata + waveform are fetched asynchronously after creation.
+// - New cue(s) are selected after creation.
+// ===========================
+
+// Conditions on file drop (historical)
 // Onto audio URL -> only one file -> validate valid audio file -> replace URL
 // Onto video URL -> Only one file -> validate valid video file -> replace video URL
-// Onto cuelist -> filecount /
-//                  if one file -> new cue
-//                  if multiple files options: All new cues, as group
-// Onto existing shell bar -> as above + option to add as children, above or below. 
+// Onto cuelist -> filecount / if one file -> new cue ; if multiple -> options
+// Onto existing shell bar -> as above + position relative to the bar (above/below/child)
 
 /// <summary>
 /// Manages file drop detection and routing to appropriate targets.
@@ -36,11 +114,13 @@ public enum FileDropTargetType
 public partial class FileDropper : Control
 {
     private GlobalSignals _globalSignals;
+    private GlobalData _globalData;
     private FileDropPopup _activeFileDropPopup;
 
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNode<GlobalData>("/root/GlobalData");
         
         GD.Print("FileDropper ready");
 
@@ -57,6 +137,9 @@ public partial class FileDropper : Control
     {
         if (_activeFileDropPopup != null && IsInstanceValid(_activeFileDropPopup))
         {
+            // Disconnect to avoid leaks
+            _activeFileDropPopup.Confirmed -= OnPopupConfirmed;
+            _activeFileDropPopup.Cancelled -= OnPopupCancelled;
             _activeFileDropPopup.QueueFree();
             _activeFileDropPopup = null;
         }
@@ -64,24 +147,23 @@ public partial class FileDropper : Control
 
     private void OnFilesDropped(string[] files)
     {
-        GD.Print("Files dropped");
-        
-        var (targetType, targetInfo) = GetDropTarget(GetGlobalMousePosition());
-        GD.Print($"FileDropper:OnFilesDropped - targetType={targetType}, files={files.Length}");
-        
-        if (targetType == FileDropTargetType.FileUrlAudio)
+        GD.Print("FileDropper:OnFilesDropped - Files dropped");
+
+        var dropInfo = GetDropTarget(GetGlobalMousePosition());
+        GD.Print($"FileDropper:OnFilesDropped - targetType={dropInfo.TargetType}, files={files?.Length ?? 0}, targetCueId={dropInfo.TargetCueId}");
+
+        // --- Inspector URL targets (single file only, direct, no popup) ---
+        if (dropInfo.TargetType == FileDropTargetType.FileUrlAudio)
         {
             GD.Print("FileDropper:Audio URL drop detected");
-            if (files.Length != 1)
+            if (files == null || files.Length != 1)
             {
-                GD.Print("FileDropper:Audio URL drop requires exactly 1 file");
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper:Audio URL drop requires exactly 1 file", 1);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: Audio URL drop requires exactly 1 file", (int)LogType.Warning);
             }
-            else
+            else if (IsSupportedMediaFile(files[0]))
             {
                 var cue2Base = GetTree().Root.GetNode("Cue2Base");
                 var audioInspector = cue2Base?.GetNode<AudioInspector>("%Audio");
-                GD.Print($"FileDropper:audioInspector={(audioInspector != null ? "found" : "null")}");
                 if (audioInspector != null)
                 {
                     audioInspector.SetAudioFileUrlFromDrop(files[0]);
@@ -89,20 +171,18 @@ public partial class FileDropper : Control
             }
             return;
         }
-        
-        if (targetType == FileDropTargetType.FileUrlVideo)
+
+        if (dropInfo.TargetType == FileDropTargetType.FileUrlVideo)
         {
             GD.Print("FileDropper:Video URL drop detected");
-            if (files.Length != 1)
+            if (files == null || files.Length != 1)
             {
-                GD.Print("FileDropper:Video URL drop requires exactly 1 file");
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper:Video URL drop requires exactly 1 file", 1);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: Video URL drop requires exactly 1 file", (int)LogType.Warning);
             }
-            else
+            else if (IsSupportedMediaFile(files[0]))
             {
                 var cue2Base = GetTree().Root.GetNode("Cue2Base");
                 var videoInspector = cue2Base?.GetNode<VideoInspector>("%Video");
-                GD.Print($"FileDropper:videoInspector={(videoInspector != null ? "found" : "null")}");
                 if (videoInspector != null)
                 {
                     videoInspector.SetVideoFileUrlFromDrop(files[0]);
@@ -110,85 +190,170 @@ public partial class FileDropper : Control
             }
             return;
         }
-        
-        if (targetType == FileDropTargetType.ShellBar || targetType == FileDropTargetType.CueList)
-        {
-            string targetName = targetType.ToString();
-            
-            if (targetType == FileDropTargetType.ShellBar && int.TryParse(targetInfo, out int cueId))
-            {
-                CueList.CueIndex.TryGetValue(cueId, out Cue cue);
-                targetName = cue?.Name ?? "Unknown";
-                GD.Print($"FileDropper:Dropped {files.Length} file(s) on ShellBar for cue '{targetName}' (ID: {cueId})");
-            }
-            
-            GD.Print("FileDropper:Showing FileDropPopup");
-            
-            CloseActivePopup();
-            
-            var fileDropPopup = SceneLoader.LoadScene("uid://cwvgtrsfp0vjh", out string error);
-            if (fileDropPopup != null && fileDropPopup is FileDropPopup popup)
-            {
-                _activeFileDropPopup = popup;
-                popup.SetDropInfo(files, targetName);
-                popup.TreeExiting += () => _activeFileDropPopup = null;
-                AddChild(popup);
-            }
-            else
-            {
-                GD.PrintErr($"FileDropper:Failed to load FileDropPopup: {error}");
-            }
-        }
-        
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-            $"FileDropper:Dropped {files.Length} file(s) on '{targetType}'. {targetInfo}", 0);
 
-        ProcessDroppedFiles(files, targetType, targetInfo);
+        // --- List / Shell targets: filter files first ---
+        if (files == null || files.Length == 0)
+            return;
+
+        var validFiles = FilterValidMediaFiles(files);
+        if (validFiles.Count == 0)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: No supported media files in drop (supported: audio, video, images).", (int)LogType.Warning);
+            return;
+        }
+
+        string targetDisplay = dropInfo.TargetType.ToString();
+        int targetCueId = dropInfo.TargetCueId;
+
+        if (dropInfo.TargetType == FileDropTargetType.ShellBar && targetCueId >= 0)
+        {
+            CueList.CueIndex.TryGetValue(targetCueId, out Cue cue);
+            targetDisplay = cue?.Name ?? $"Cue {targetCueId}";
+            GD.Print($"FileDropper: Drop on ShellBar '{targetDisplay}' (ID {targetCueId}) with {validFiles.Count} valid file(s)");
+        }
+        else if (dropInfo.TargetType == FileDropTargetType.CueList)
+        {
+            targetDisplay = "Cue List";
+        }
+
+        // AUTO-CREATE for the simplest case: single file dropped on the list background (not a specific shell)
+        if (dropInfo.TargetType == FileDropTargetType.CueList && validFiles.Count == 1)
+        {
+            GD.Print("FileDropper: Auto-creating single cue from list drop (no popup).");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"FileDropper: Creating cue from dropped file: {Path.GetFileName(validFiles[0])}", (int)LogType.Info);
+            CreateCuesFromDrop(validFiles.ToArray(), targetCueId: -1, DropInsertMode.AtEnd, asGroup: false);
+            return;
+        }
+
+        // All other list/shell cases (multiple files, or drop on specific shell) → show interactive popup
+        GD.Print("FileDropper: Showing FileDropPopup for choices.");
+        CloseActivePopup();
+
+        var popupNode = SceneLoader.LoadScene("uid://cwvgtrsfp0vjh", out string loadErr);
+        if (popupNode == null || popupNode is not FileDropPopup popup)
+        {
+            GD.PrintErr($"FileDropper: Failed to load FileDropPopup: {loadErr}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to open file drop options.", (int)LogType.Error);
+            return;
+        }
+
+        _activeFileDropPopup = popup;
+        popup.ConfigureForDrop(validFiles.ToArray(), dropInfo.TargetType, targetDisplay, targetCueId);
+
+        // Capture state for callback
+        _pendingDropFiles = validFiles.ToArray();
+        _pendingTargetCueId = targetCueId;
+
+        popup.Confirmed += OnPopupConfirmed;
+        popup.Cancelled += OnPopupCancelled;
+
+        popup.TreeExiting += () =>
+        {
+            if (_activeFileDropPopup == popup) _activeFileDropPopup = null;
+        };
+
+        AddChild(popup);
+        popup.ShowConfigured();
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"FileDropper: Dropped {validFiles.Count} file(s) on '{dropInfo.TargetType}'. Awaiting user choices.", (int)LogType.Info);
     }
 
-    private (FileDropTargetType, string) GetDropTarget(Vector2 mousePos)
+    private void OnPopupConfirmed(FileDropChoices choices)
+    {
+        string[] files = _pendingDropFiles;
+        int targetId = _pendingTargetCueId;
+        var mode = choices.InsertMode;
+        bool asGroup = choices.CreateAsGroup;
+
+        if (_activeFileDropPopup != null)
+        {
+            _activeFileDropPopup.Confirmed -= OnPopupConfirmed;
+            _activeFileDropPopup.Cancelled -= OnPopupCancelled;
+        }
+        CloseActivePopup();
+        _pendingDropFiles = null;
+
+        if (files == null || files.Length == 0)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: No files to create after popup confirmation.", (int)LogType.Warning);
+            return;
+        }
+
+        GD.Print($"FileDropper: Popup confirmed. mode={mode}, asGroup={asGroup}, target={targetId}, count={files.Length}");
+        CreateCuesFromDrop(files, targetId, mode, asGroup);
+    }
+
+    private void OnPopupCancelled()
+    {
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: Drop cancelled by user.", (int)LogType.Info);
+        CloseActivePopup();
+        _pendingDropFiles = null;
+    }
+
+    /// <summary>
+    /// Rich result from target detection.
+    /// </summary>
+    private readonly struct DropTarget
+    {
+        public FileDropTargetType TargetType { get; init; }
+        public string TargetInfo { get; init; }
+        public int TargetCueId { get; init; }
+    }
+
+    private DropTarget GetDropTarget(Vector2 mousePos)
     {
         var root = GetTree().Root;
         var cue2Base = root.GetNode("Cue2Base");
         if (cue2Base == null)
-            return (FileDropTargetType.None, "");
-        
-        var audioInspector = cue2Base.GetNode<Control>("%Audio");
+            return new DropTarget { TargetType = FileDropTargetType.None };
+
+        // Inspector URL targets take precedence when visible
+        var audioInspector = cue2Base.GetNodeOrNull<Control>("%Audio");
         if (audioInspector != null && audioInspector.Visible)
         {
-            var audioFileUrl = audioInspector?.GetNode<LineEdit>("%FileURL");
+            var audioFileUrl = audioInspector.GetNodeOrNull<LineEdit>("%FileURL");
             if (audioFileUrl != null && audioFileUrl.Visible && audioFileUrl.GetGlobalRect().HasPoint(mousePos))
             {
                 GD.Print("FileDropper:GetDropTarget - Audio URL drop detected");
-                return (FileDropTargetType.FileUrlAudio, "AudioFileURL");
+                return new DropTarget { TargetType = FileDropTargetType.FileUrlAudio, TargetInfo = "AudioFileURL" };
             }
         }
-        
-        var videoInspector = cue2Base.GetNode<Control>("%Video");
+
+        var videoInspector = cue2Base.GetNodeOrNull<Control>("%Video");
         if (videoInspector != null && videoInspector.Visible)
         {
-            var videoFileUrl = videoInspector?.GetNode<LineEdit>("%FileUrl");
+            var videoFileUrl = videoInspector.GetNodeOrNull<LineEdit>("%FileUrl");
             if (videoFileUrl != null && videoFileUrl.Visible && videoFileUrl.GetGlobalRect().HasPoint(mousePos))
             {
                 GD.Print("FileDropper:GetDropTarget - Video URL drop detected");
-                return (FileDropTargetType.FileUrlVideo, "VideoFileURL");
+                return new DropTarget { TargetType = FileDropTargetType.FileUrlVideo, TargetInfo = "VideoFileURL" };
             }
         }
-         
-        var cueListUi = cue2Base.GetNode("%CueListUi") as Control;
-        var cueContainer = cueListUi?.GetNode<VBoxContainer>("%CueContainer");
-        
+
+        var cueListUi = cue2Base.GetNodeOrNull("%CueListUi") as Control;
+        var cueContainer = cueListUi?.GetNodeOrNull<VBoxContainer>("%CueContainer");
+
         if (cueContainer != null)
         {
             var shellBar = FindShellBarInContainer(cueContainer, mousePos);
             if (shellBar != null && IsMouseInVisibleShellBarArea(shellBar, mousePos))
-                return (FileDropTargetType.ShellBar, shellBar.CueId.ToString());
+            {
+                return new DropTarget
+                {
+                    TargetType = FileDropTargetType.ShellBar,
+                    TargetInfo = shellBar.CueId.ToString(),
+                    TargetCueId = shellBar.CueId
+                };
+            }
         }
-        
+
         if (cueListUi != null && cueListUi.GetGlobalRect().HasPoint(mousePos))
-            return (FileDropTargetType.CueList, "CueList");
-        
-        return (FileDropTargetType.None, "");
+        {
+            return new DropTarget { TargetType = FileDropTargetType.CueList, TargetInfo = "CueList", TargetCueId = -1 };
+        }
+
+        return new DropTarget { TargetType = FileDropTargetType.None };
     }
 
 
@@ -231,28 +396,72 @@ public partial class FileDropper : Control
         return true;
     }
 
-    private void ProcessDroppedFiles(string[] files, FileDropTargetType targetType, string targetInfo)
+    // --- Pending drop state for popup callback ---
+    private string[] _pendingDropFiles;
+    private int _pendingTargetCueId;
+    private DropInsertMode _pendingInsertMode = DropInsertMode.AtEnd;
+
+    /// <summary>
+    /// Creates cues from dropped files using the supplied parameters.
+    /// Delegates to CueList.
+    /// </summary>
+    private void CreateCuesFromDrop(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
     {
-        List<string> validFiles = new();
+        if (files == null || files.Length == 0) return;
 
-        foreach (string file in files)
+        if (_globalData?.Cuelist == null)
         {
-            string extension = Path.GetExtension(file).ToLowerInvariant();
-            if (IsValidMediaExtension(extension))
-            {
-                validFiles.Add(file);
-            }
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "FileDropper: No active CueList to create cues into.", (int)LogType.Error);
+            return;
         }
 
-        if (validFiles.Count > 0)
-        {
-            string targetName = targetType.ToString();
-            _globalSignals.EmitSignal(nameof(GlobalSignals.FileDropped), validFiles.ToArray(), targetName);
-        }
+        _globalData.Cuelist.CreateCuesFromDroppedFiles(files, targetCueId, insertMode, asGroup);
     }
 
-    private bool IsValidMediaExtension(string extension)
+    // --- Helpers ---
+
+    private List<string> FilterValidMediaFiles(string[] files)
     {
-        return GlobalData.AudioFileFilters.Any(ext => ext.TrimStart('*').Equals(extension, System.StringComparison.OrdinalIgnoreCase));
+        var result = new List<string>();
+        foreach (string f in files)
+        {
+            if (IsSupportedMediaFile(f))
+                result.Add(f);
+        }
+        return result;
+    }
+
+    private bool IsSupportedMediaFile(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        if (string.IsNullOrEmpty(ext)) return false;
+
+        // Audio
+        if (GlobalData.AudioFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Video
+        if (GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Images (treated as video cues for now)
+        if (GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns a human friendly description of the media type for a file.
+    /// </summary>
+    private string GetMediaTypeForFile(string path)
+    {
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        if (GlobalData.AudioFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase))) return "Audio";
+        if (GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase))) return "Video";
+        if (GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase))) return "Image";
+        return "Media";
     }
 }

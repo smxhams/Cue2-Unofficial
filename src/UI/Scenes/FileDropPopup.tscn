@@ -73,4 +73,18 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 10
 text = "Files:"
 
+[node name="ActionBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=987654321]
+layout_mode = 2
+alignment = 2
+
+[node name="CancelButton" type="Button" parent="MarginContainer/VBoxContainer/ActionBar" unique_id=987654322]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="CreateButton" type="Button" parent="MarginContainer/VBoxContainer/ActionBar" unique_id=987654323]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create Cues"
+
 [node name="SubWindowHandles" parent="." unique_id=1614905911 instance=ExtResource("1_scr2m")]
