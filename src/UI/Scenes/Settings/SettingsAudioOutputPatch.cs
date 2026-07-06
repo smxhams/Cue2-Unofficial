@@ -2,14 +2,13 @@ using System.Collections.Generic;
 using Cue2.Shared;
 using Godot;
 
-namespace Cue2.Base.Settings;
+namespace Cue2.UI.Scenes.Settings;
 
 public partial class SettingsAudioOutputPatch : ScrollContainer
 {
 	private GlobalData _globalData;
 
 	private OptionButton _deviceOptionsDropMenu;
-	private AudioOutputPatchMatrix _audioOutputPatchMatrix;
 
 	private Label _deviceQuantityLabel;
 

@@ -19,5 +19,13 @@
 <ItemGroup>
   <Content Include="src\Base\Minor\FileDropper.cs.uid" />
   <Content Include="src\UI\Scenes\FileDropPopup.tscn" />
+  <Content Include="src\UI\Scenes\Settings\InputActionCard.cs.uid" />
+  <Content Include="src\UI\Scenes\Settings\InputActionCard.tscn" />
+  <Content Include="src\UI\Scenes\Settings\SettingsAudio.tscn" />
+  <Content Include="src\UI\Scenes\Settings\SettingsAudioOutputPatch.cs.uid" />
+  <Content Include="src\UI\Scenes\Settings\SettingsGeneral.cs.uid" />
+  <Content Include="src\UI\Scenes\Settings\SettingsInputMap.cs.uid" />
+  <Content Include="src\UI\Scenes\Settings\SettingsInputMap.tscn" />
+  <Content Include="src\UI\Scenes\Settings\SettingsWindow.tscn" />
 </ItemGroup>  
 </Project> 

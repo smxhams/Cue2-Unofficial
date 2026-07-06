@@ -112,7 +112,9 @@ public partial class Settings : Node
         CueLightGoColour = new Color(0f, 1f, 0f, 1f);
         CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
         CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
-        
+
+        // Restore input map bindings to project defaults (e.g. on New Session)
+        _globalData?.ResetInputBindingsToDefaults();
     }
 
     public Dictionary GetData()
@@ -149,6 +151,12 @@ public partial class Settings : Node
         
         // Osc Connections
         saveTable.Add("OscConnections", GetNode<OscConnections>("/root/OscConnections").GetData());
+
+        // Per-session custom input bindings (from live InputMap)
+        if (_globalData != null)
+            saveTable.Add("InputMap", _globalData.GetCustomInputBindings());
+        else
+            saveTable.Add("InputMap", new Dictionary());
         
         return saveTable;
     }
@@ -219,6 +227,13 @@ public partial class Settings : Node
             GD.Print($"Settings:LoadSettings - Loading OscConnections");
             var oscConnectionsAsDict = oscConnections.AsGodotDictionary();
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
+        }
+
+        // Custom input map bindings saved with the session
+        if (settingsData.TryGetValue("InputMap", out var inputMapData) && _globalData != null)
+        {
+            GD.Print($"Settings:LoadSettings - Loading custom InputMap bindings");
+            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
         }
     }
     

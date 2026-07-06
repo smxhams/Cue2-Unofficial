@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://b6sx83qucwbua"]
+[gd_scene format=3 uid="uid://b6sx83qucwbua"]
 
-[ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/Base/Settings/SettingsGeneral.cs" id="1_v1qap"]
+[ext_resource type="Script" uid="uid://bjka1uto8v7i3" path="res://src/UI/Scenes/Settings/SettingsGeneral.cs" id="1_v1qap"]
 
 [node name="SettingsAudio" type="ScrollContainer"]
 anchors_preset = 15

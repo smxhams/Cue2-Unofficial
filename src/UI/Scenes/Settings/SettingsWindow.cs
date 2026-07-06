@@ -85,6 +85,7 @@ public partial class SettingsWindow : Window
 		action switch // Name corresponded to node name in UI.
 		{
 			"General" => "SettingsGeneral",
+			"Input Map" => "SettingsInputMap",
 			"Audio" => "SettingsAudio",
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Canvas Editor" => "CanvasEditor",

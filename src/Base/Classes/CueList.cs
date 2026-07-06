@@ -100,6 +100,7 @@ public partial class CueList : Control
 		_reorderCueControl.Visible = false;
 
 		_globalSignals.CreateCue += CreateCue;
+		_globalSignals.GroupSelectedCues += GroupSelectedCues;
 		_addCueButton.Pressed += CreateCue;
 		_expandAllButton.Pressed += OnExpandAllPressed;
 	}
@@ -124,6 +125,119 @@ public partial class CueList : Control
 		var newCue = new Cue(); // Create a cue with default values
 		AddCue(newCue);
 
+	}
+
+	/// <summary>
+	/// Groups the currently selected cues under a newly created group cue.
+	/// If no cues are selected, emits an error log.
+	/// The new group is inserted at the position of the first selected cue (preserving its nesting level),
+	/// and all selected cues are moved to become direct children of the group.
+	/// </summary>
+	public void GroupSelectedCues()
+	{
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		if (selected.Count == 0)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"CueList:GroupSelectedCues - No cues selected. Select one or more cues then press the Group shortcut.", (int)LogType.Error);
+			return;
+		}
+
+		// Work on a snapshot to avoid issues if selection changes during the operation
+		var toGroup = selected;
+
+		// Determine insertion point from the first selected cue's current location.
+		// The group will be inserted as a sibling at the same level as the anchor.
+		Cue anchor = toGroup[0];
+		VBoxContainer targetContainer = _cueContainer;
+		int insertIndex = _cueContainer.GetChildCount();
+		int newGroupParentId = -1;
+
+		if (anchor.ShellBar != null)
+		{
+			var currentParentNode = anchor.ShellBar.GetParent();
+			if (currentParentNode is VBoxContainer vc)
+			{
+				targetContainer = vc;
+				insertIndex = anchor.ShellBar.GetIndex();
+			}
+
+			if (anchor.ParentId != -1)
+			{
+				newGroupParentId = anchor.ParentId;
+			}
+		}
+
+		// Create the wrapping group cue
+		var groupCue = new Cue();
+		groupCue.Name = $"Group ({toGroup.Count} cues)";
+		groupCue.CueNum = groupCue.Id.ToString();
+
+		// Insert the group shell at the anchor's former position (sibling level)
+		var groupShellBar = CreateShellAndInsert(groupCue, targetContainer, insertIndex, newGroupParentId);
+		groupCue.Expanded = true;
+
+		var groupChildContainer = groupCue.ShellBar?.ShellChildContainer ?? _cueContainer;
+
+		var oldParentsToRefresh = new HashSet<Cue>();
+
+		// Only move the "top level" of the selection (cues whose direct parent is not also selected).
+		// Their descendants (if any were selected) will travel with them because child ShellBars live inside the parent's ShellChildContainer.
+		var selectedIds = new HashSet<int>(toGroup.Select(c => c.Id));
+		var topLevelToMove = toGroup
+			.Where(c => c.ParentId == -1 || !selectedIds.Contains(c.ParentId))
+			.ToList();
+
+		// Detach the top-level selected shells and reparent them (with their subtrees) under the group
+		foreach (var cue in topLevelToMove)
+		{
+			if (cue?.ShellBar == null) continue;
+
+			// Record old parent for later UI refresh
+			if (cue.ParentId != -1)
+			{
+				var oldParent = FetchCueFromId(cue.ParentId);
+				if (oldParent != null)
+				{
+					oldParent.ChildCues.Remove(cue.Id);
+					oldParentsToRefresh.Add(oldParent);
+				}
+			}
+
+			// Remove the shell (and any contained child shells) from its current location
+			var currentParent = cue.ShellBar.GetParent();
+			currentParent?.RemoveChild(cue.ShellBar);
+
+			// Place inside the new group's child area
+			groupChildContainer.AddChild(cue.ShellBar);
+
+			// Update data model for this subtree root
+			cue.ParentId = groupCue.Id;
+			if (!groupCue.ChildCues.Contains(cue.Id))
+			{
+				groupCue.ChildCues.Add(cue.Id);
+			}
+		}
+
+		// Refresh relationship UI on former parents (they may have lost children)
+		foreach (var oldP in oldParentsToRefresh)
+		{
+			oldP.ShellBar?.RelationshipChanged();
+		}
+
+		// Update the new group
+		groupCue.ShellBar?.RelationshipChanged();
+
+		// Select the group cue (replacing the previous multi-selection)
+		_globalData.ShellSelection.SelectIndividualShell(groupCue);
+
+		// Recalculate durations (children first conceptually, then group)
+		groupCue.CalculateTotalDuration();
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"CueList:GroupSelectedCues - Created group containing {toGroup.Count} cue(s).", (int)LogType.Info);
+
+		GD.Print($"CueList:GroupSelectedCues - Group cue {groupCue.Id} now contains {groupCue.ChildCues.Count} children.");
 	}
 
 	/// <summary>

@@ -66,7 +66,7 @@ public partial class GlobalSignals : Node
 	
 	[Signal] public delegate void CreateCueEventHandler();
 	
-	[Signal] public delegate void CreateGroupEventHandler();
+	[Signal] public delegate void GroupSelectedCuesEventHandler();
 	
 	
 	

@@ -77,10 +77,10 @@ public partial class InputActionsListener : Node
             _globalSignals.EmitSignal(nameof(GlobalSignals.CreateCue));
         }
 
-        if (Input.IsActionJustPressed("CreateGroup", true))
+        if (Input.IsActionJustPressed("GroupSelectedCues", true))
         {
-            GD.Print("Input Action: Create Group");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.CreateGroup));
+            GD.Print("Input Action: Group Selected Cues");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.GroupSelectedCues));
         }
         
         

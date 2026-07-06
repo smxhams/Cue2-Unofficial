@@ -47,6 +47,11 @@ public partial class GlobalData : Node
 {
 	private GlobalSignals _globalSignals;
 	private SaveManager _saveManager;
+
+	/// <summary>
+	/// Captured at startup from the project.godot [input] definitions. Used to restore "factory" bindings on New Session.
+	/// </summary>
+	private System.Collections.Generic.Dictionary<string, Godot.Collections.Array<InputEvent>> _defaultInputBindings = new();
 	
 	public CueList Cuelist;
 	public ShellSelection ShellSelection;
@@ -106,6 +111,21 @@ public partial class GlobalData : Node
 		"*.ape", "*.ac3", "*.dts", "*.pcm"
 	};
 	public static readonly string AllSupportedFileFilters = string.Join(",", VideoFileFilters.Concat(ImageFileFilters).Concat(AudioFileFilters));
+
+	/// <summary>
+	/// List of input actions whose bindings can be customized by the user and persisted with sessions.
+	/// </summary>
+	public static readonly string[] MappableInputActions =
+	{
+		"NewSession",
+		"OpenSession",
+		"SaveSession",
+		"SaveAsSession",
+		"Go",
+		"StopAll",
+		"CreateCue",
+		"GroupSelectedCues"
+	};
 
 
 	public override void _Ready()
@@ -177,6 +197,7 @@ public partial class GlobalData : Node
 			}
 		}
 
+		CaptureDefaultInputBindings();
 	}
 
 	public override void _ExitTree()
@@ -221,6 +242,129 @@ public partial class GlobalData : Node
 		return "";
 	}
 
+	/// <summary>
+	/// Captures the original input bindings as defined in project.godot for all mappable actions.
+	/// Must be called once early in startup before any user rebinding.
+	/// </summary>
+	private void CaptureDefaultInputBindings()
+	{
+		_defaultInputBindings.Clear();
+		foreach (var action in MappableInputActions)
+		{
+			if (InputMap.HasAction(action))
+			{
+				var events = InputMap.ActionGetEvents(action);
+				var clone = new Godot.Collections.Array<InputEvent>();
+				foreach (InputEvent e in events)
+				{
+					clone.Add((InputEvent)e.Duplicate());
+				}
+				_defaultInputBindings[action] = clone;
+			}
+		}
+		GD.Print($"GlobalData:CaptureDefaultInputBindings - Captured defaults for {_defaultInputBindings.Count} actions.");
+	}
+
+	/// <summary>
+	/// Serializes the current state of all mappable input actions into a Dictionary suitable for saving with the session.
+	/// Empty lists are included so that "cleared" bindings are preserved.
+	/// </summary>
+	public Dictionary GetCustomInputBindings()
+	{
+		var data = new Dictionary();
+		foreach (var action in MappableInputActions)
+		{
+			if (!InputMap.HasAction(action)) continue;
+
+			var events = InputMap.ActionGetEvents(action);
+			var eventList = new Array();
+			foreach (InputEvent ev in events)
+			{
+				if (ev is InputEventKey key)
+				{
+					var evData = new Dictionary();
+					evData["type"] = "InputEventKey";
+					evData["keycode"] = (int)key.Keycode;
+					evData["physical_keycode"] = (int)key.PhysicalKeycode;
+					evData["ctrl"] = key.CtrlPressed;
+					evData["shift"] = key.ShiftPressed;
+					evData["alt"] = key.AltPressed;
+					evData["meta"] = key.MetaPressed;
+					eventList.Add(evData);
+				}
+				// TODO: support other InputEvent types (joypad, mouse, etc.) in the future
+			}
+			// Always include the key so cleared actions (0 events) are saved explicitly.
+			data[action] = eventList;
+		}
+		return data;
+	}
+
+	/// <summary>
+	/// Applies a previously saved set of input bindings to the live InputMap.
+	/// Existing events for the action are erased first.
+	/// </summary>
+	/// <param name="bindingsData">Dictionary from save file (under "InputMap" key).</param>
+	public void ApplyInputBindings(Dictionary bindingsData)
+	{
+		if (bindingsData == null || bindingsData.Count == 0) return;
+
+		foreach (var action in MappableInputActions)
+		{
+			if (!InputMap.HasAction(action)) continue;
+			if (!bindingsData.ContainsKey(action)) continue;
+
+			InputMap.ActionEraseEvents(action);
+
+			var evList = bindingsData[action].AsGodotArray();
+			foreach (var item in evList)
+			{
+				var evDict = item.AsGodotDictionary();
+				if (evDict == null) continue;
+
+				if (!evDict.TryGetValue("type", out var typeVal) || typeVal.AsString() != "InputEventKey")
+					continue;
+
+				var keyEvent = new InputEventKey();
+
+				if (evDict.TryGetValue("keycode", out var kc))
+					keyEvent.Keycode = (Key)kc.AsInt32();
+				if (evDict.TryGetValue("physical_keycode", out var pkc))
+					keyEvent.PhysicalKeycode = (Key)pkc.AsInt32();
+				if (evDict.TryGetValue("ctrl", out var ctrl))
+					keyEvent.CtrlPressed = ctrl.AsBool();
+				if (evDict.TryGetValue("shift", out var shift))
+					keyEvent.ShiftPressed = shift.AsBool();
+				if (evDict.TryGetValue("alt", out var alt))
+					keyEvent.AltPressed = alt.AsBool();
+				if (evDict.TryGetValue("meta", out var meta))
+					keyEvent.MetaPressed = meta.AsBool();
+
+				InputMap.ActionAddEvent(action, keyEvent);
+			}
+		}
+		GD.Print("GlobalData:ApplyInputBindings - Restored custom input bindings from session data.");
+	}
+
+	/// <summary>
+	/// Restores every mappable action to the original bindings captured from project.godot at startup.
+	/// Called on New Session.
+	/// </summary>
+	public void ResetInputBindingsToDefaults()
+	{
+		foreach (var kvp in _defaultInputBindings)
+		{
+			string action = kvp.Key;
+			if (!InputMap.HasAction(action)) continue;
+
+			InputMap.ActionEraseEvents(action);
+			foreach (InputEvent ev in kvp.Value)
+			{
+				InputMap.ActionAddEvent(action, (InputEvent)ev.Duplicate());
+			}
+		}
+		GD.Print("GlobalData:ResetInputBindingsToDefaults - Input bindings restored to project defaults.");
+	}
 
 	public Dictionary GetAvailableConnections()
 	{

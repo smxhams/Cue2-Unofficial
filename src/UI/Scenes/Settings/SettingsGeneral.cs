@@ -1,8 +1,7 @@
-using Godot;
-using System;
 using Cue2.Shared;
+using Godot;
 
-namespace Cue2.Base.Settings;
+namespace Cue2.UI.Scenes.Settings;
 
 public partial class SettingsGeneral : ScrollContainer
 {
