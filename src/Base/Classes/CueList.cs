@@ -39,6 +39,7 @@ public partial class CueList : Control
 	private bool _insertAbove;
 	private bool _insertBelow;
 	private bool _insertMakeChild;
+	private bool _dropAtEndAsTopLevel;
 	
 	/// <summary>
 	/// The cue ID currently being dragged for reorder (set during StartReorder).
@@ -63,6 +64,9 @@ public partial class CueList : Control
 	private Label _reorderLocationLabel;
 	private VBoxContainer _reorderListContainer;
 	private Panel _reorderIndicatorPanel;
+
+	// Expand/collapse all state
+	private bool _allExpanded = false;
 	
 	public CueList()
 	{
@@ -94,6 +98,7 @@ public partial class CueList : Control
 
 		_globalSignals.CreateCue += CreateCue;
 		_addCueButton.Pressed += CreateCue;
+		_expandAllButton.Pressed += OnExpandAllPressed;
 	}
 	
 	/// <summary>
@@ -150,7 +155,12 @@ public partial class CueList : Control
 				parent.ShellBar.ShellChildContainer.AddChild(shellBar);
 				parent.ShellBar.ShellChildContainer.MoveChild(shellBar, newIndex);
 				newCue.ParentId = selectedCue.ParentId;
+				bool wasNewParent = parent.ChildCues.Count == 0;
 				parent.ChildCues.Add(newCue.Id);
+				if (wasNewParent)
+				{
+					parent.Expanded = true;
+				}
 				parent.ShellBar.RelationshipChanged();
 			}
 		}
@@ -163,12 +173,21 @@ public partial class CueList : Control
 	
 	/// <summary>
 	/// Removes the cue from the index and queues its ShellBar for deletion.
-	/// Note: Does not currently prune references from parent ChildCues lists (see RemoveCue improvements).
+	/// Prunes from parent's ChildCues (if any) and refreshes the parent's collapse/expand UI.
 	/// </summary>
 	/// <param name="cue">The cue to remove.</param>
 	public void RemoveCue(Cue cue)
 	{
-		cue.ShellBar.QueueFree();
+		if (cue.ParentId != -1)
+		{
+			var p = FetchCueFromId(cue.ParentId);
+			if (p != null)
+			{
+				p.ChildCues.Remove(cue.Id);
+				p.ShellBar?.RelationshipChanged();
+			}
+		}
+		cue.ShellBar?.QueueFree();
 		CueIndex.Remove(cue.Id);
 	}
 
@@ -230,6 +249,7 @@ public partial class CueList : Control
 		_insertAbove = false;
 		_insertBelow = false;
 		_insertMakeChild = false;
+		_dropAtEndAsTopLevel = false;
 
 		var cue = FetchCueFromId(shellbar.CueId);
 		var shell = cue?.ShellBar;
@@ -242,58 +262,89 @@ public partial class CueList : Control
 		if (@event is InputEventMouseMotion eventMouseMotion)
 		{
 			_reorderCueControl.GlobalPosition = new Vector2(eventMouseMotion.Position.X, eventMouseMotion.Position.Y);
+			var mouseY = eventMouseMotion.GlobalPosition.Y;
 			var check = IsValidDropTarget();
-			if (check && _mouseOverShellBar != null)
+
+			bool handledAsEnd = false;
+
+			// Detect blank space below the *entire* list (after the visually last cue).
+			// This should always result in a top-level append, even if the last cue is nested.
+			var lastShell = GetLastVisibleShellBar();
+			if (lastShell != null)
 			{
-				var targetCueId = _mouseOverShellBar.CueId;
-				var shellPosY = _mouseOverShellBar.GetGlobalPosition().Y;
-				var shellSizeY = ShellHeight;
-				var mouseY = eventMouseMotion.GlobalPosition.Y;
-				var margin = shellSizeY / ShellMarginDiv;
-
-				_insertAbove = mouseY < shellPosY + margin;
-				_insertBelow = mouseY > shellPosY + margin * 3;
-				var targetCue = FetchCueFromId(targetCueId);
-				_insertMakeChild = targetCue != null && targetCue.ParentId != -1;
-
-				string targetName = targetCue?.Name ?? "?";
-				string parentName = "";
-				if (_insertMakeChild && targetCue != null)
+				float lastBottom = lastShell.GetGlobalPosition().Y + lastShell.Size.Y;
+				if (mouseY > lastBottom + 8)  // tolerance for "blank area below everything"
 				{
-					var p = FetchCueFromId(targetCue.ParentId);
-					parentName = p?.Name ?? "?";
-				}
+					_insertAbove = false;
+					_insertBelow = true;
+					_insertMakeChild = false;
+					_dropAtEndAsTopLevel = true;
 
-				if (_insertBelow)
-				{
-					_reorderLocationLabel.Text = _insertMakeChild
-						? $"Reorder below: {targetName} and child of: {parentName}"
-						: $"Reorder below: {targetName}";
-					_reorderIndicatorPanel.GlobalPosition = new Vector2(_mouseOverShellBar.GetGlobalPosition().X, _mouseOverShellBar.GetGlobalPosition().Y + _mouseOverShellBar.Size.Y);
-					_reorderIndicatorPanel.Size = new Vector2(_mouseOverShellBar.Size.X, 1);
+					_reorderLocationLabel.Text = "Reorder at end (top level)";
+					_reorderIndicatorPanel.GlobalPosition = new Vector2(_cueContainer.GetGlobalPosition().X, lastBottom);
+					_reorderIndicatorPanel.Size = new Vector2(_cueContainer.Size.X, 2);
 					_reorderIndicatorPanel.Visible = true;
+
+					handledAsEnd = true;
+					check = true; // blank end is always a valid drop target
 				}
-				else if (_insertAbove)
+			}
+
+			if (!handledAsEnd)
+			{
+				_dropAtEndAsTopLevel = false;
+
+				if (check && _mouseOverShellBar != null)
 				{
-					_reorderLocationLabel.Text = _insertMakeChild
-						? $"Reorder above: {targetName} and child of: {parentName}"
-						: $"Reorder above: {targetName}";
-					_reorderIndicatorPanel.GlobalPosition = _mouseOverShellBar.GetGlobalPosition();
-					_reorderIndicatorPanel.Size = new Vector2(_mouseOverShellBar.Size.X, 1);
-					_reorderIndicatorPanel.Visible = true;
+					var targetCueId = _mouseOverShellBar.CueId;
+					var shellPosY = _mouseOverShellBar.GetGlobalPosition().Y;
+					var shellSizeY = ShellHeight;
+					var margin = shellSizeY / ShellMarginDiv;
+
+					_insertAbove = mouseY < shellPosY + margin;
+					_insertBelow = mouseY > shellPosY + margin * 3;
+					var targetCue = FetchCueFromId(targetCueId);
+					_insertMakeChild = targetCue != null && targetCue.ParentId != -1;
+
+					string targetName = targetCue?.Name ?? "?";
+					string parentName = "";
+					if (_insertMakeChild && targetCue != null)
+					{
+						var p = FetchCueFromId(targetCue.ParentId);
+						parentName = p?.Name ?? "?";
+					}
+
+					if (_insertBelow)
+					{
+						_reorderLocationLabel.Text = _insertMakeChild
+							? $"Reorder below: {targetName} and child of: {parentName}"
+							: $"Reorder below: {targetName}";
+						_reorderIndicatorPanel.GlobalPosition = new Vector2(_mouseOverShellBar.GetGlobalPosition().X, _mouseOverShellBar.GetGlobalPosition().Y + _mouseOverShellBar.Size.Y);
+						_reorderIndicatorPanel.Size = new Vector2(_mouseOverShellBar.Size.X, 1);
+						_reorderIndicatorPanel.Visible = true;
+					}
+					else if (_insertAbove)
+					{
+						_reorderLocationLabel.Text = _insertMakeChild
+							? $"Reorder above: {targetName} and child of: {parentName}"
+							: $"Reorder above: {targetName}";
+						_reorderIndicatorPanel.GlobalPosition = _mouseOverShellBar.GetGlobalPosition();
+						_reorderIndicatorPanel.Size = new Vector2(_mouseOverShellBar.Size.X, 1);
+						_reorderIndicatorPanel.Visible = true;
+					}
+					else
+					{
+						_reorderLocationLabel.Text = $"Make child of: {targetName}";
+						_reorderIndicatorPanel.GlobalPosition = _mouseOverShellBar.GetGlobalPosition();
+						_reorderIndicatorPanel.Size = _mouseOverShellBar.Size;
+						_reorderIndicatorPanel.Visible = true;
+					}
 				}
 				else
 				{
-					_reorderLocationLabel.Text = $"Make child of: {targetName}";
-					_reorderIndicatorPanel.GlobalPosition = _mouseOverShellBar.GetGlobalPosition();
-					_reorderIndicatorPanel.Size = _mouseOverShellBar.Size;
-					_reorderIndicatorPanel.Visible = true;
+					_reorderLocationLabel.Text = "Cannot reorder here";
+					_reorderIndicatorPanel.Visible = false;
 				}
-			}
-			else
-			{
-				_reorderLocationLabel.Text = "Cannot reorder here";
-				_reorderIndicatorPanel.Visible = false;
 			}
 		}
 
@@ -316,29 +367,33 @@ public partial class CueList : Control
 
 	private void EndReorder()
 	{
-		// Validate location
-		if (!IsValidDropTarget())
+		// Validate location. Blank end-of-list is always allowed.
+		bool isEndDrop = _dropAtEndAsTopLevel;
+		if (!isEndDrop && !IsValidDropTarget())
 		{
 			CleanupReorder(keepChanges: false);
 			return;
 		}
 
-		var targetCue = FetchCueFromId(_mouseOverShellBar.CueId);
-		if (targetCue == null)
+		var targetCue = isEndDrop ? null : FetchCueFromId(_mouseOverShellBar?.CueId ?? -1);
+		if (!isEndDrop && targetCue == null)
 		{
 			CleanupReorder(keepChanges: false);
 			return;
 		}
 
-		// Check for cycles for any of the moved items
-		foreach (var sc in ShellSelection.SelectedCues)
+		// Check for cycles for any of the moved items (skip for end-of-list top level drop)
+		if (!isEndDrop)
 		{
-			int prospective = (!_insertAbove && !_insertBelow) ? targetCue.Id : targetCue.ParentId;
-			if (WouldCreateCycle(sc, prospective))
+			foreach (var sc in ShellSelection.SelectedCues)
 			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"CueList:EndReorder - Cycle would be created; aborting reorder for {sc.Name}", (int)LogType.Warning);
-				CleanupReorder(keepChanges: false);
-				return;
+				int prospective = (!_insertAbove && !_insertBelow) ? targetCue.Id : targetCue.ParentId;
+				if (WouldCreateCycle(sc, prospective))
+				{
+					_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"CueList:EndReorder - Cycle would be created; aborting reorder for {sc.Name}", (int)LogType.Warning);
+					CleanupReorder(keepChanges: false);
+					return;
+				}
 			}
 		}
 
@@ -366,6 +421,24 @@ public partial class CueList : Control
 			return;
 		}
 
+		// Snapshot child counts before any structural changes (used to detect cues that just became parents)
+		var childCountBefore = new System.Collections.Generic.Dictionary<Cue, int>();
+		foreach (var c in CueIndex.Values)
+		{
+			childCountBefore[c] = c.ChildCues.Count;
+		}
+
+		// Track parents that will lose or gain children so we can refresh their collapse/expand UI
+		var affectedParents = new System.Collections.Generic.HashSet<Cue>();
+		foreach (var mc in ShellSelection.SelectedCues)
+		{
+			if (mc != null && mc.ParentId != -1)
+			{
+				var op = FetchCueFromId(mc.ParentId);
+				if (op != null) affectedParents.Add(op);
+			}
+		}
+
 		// Compute final target using helper (after possible removals we will adjust)
 		var (targetContainer, rawInsertIndex, newParentId, isMakeChild) = DetermineReorderTarget();
 
@@ -389,17 +462,23 @@ public partial class CueList : Control
 		// Re-compute insert index in the (now smaller) target container
 		int insertIndex = Math.Clamp(rawInsertIndex, 0, Math.Max(0, targetContainer.GetChildCount()));
 
+		if (_dropAtEndAsTopLevel)
+		{
+			insertIndex = targetContainer.GetChildCount();
+		}
+
 		// Insert the moved items (preserve relative order from toMove snapshot)
 		foreach (var sb in toMove)
 		{
 			targetContainer.AddChild(sb); // append first
-			if (!isMakeChild && (_insertAbove || _insertBelow))
+			if (!_dropAtEndAsTopLevel && !isMakeChild && (_insertAbove || _insertBelow))
 			{
 				// For sibling inserts, place at desired spot (subsequent moves will push later ones)
 				targetContainer.MoveChild(sb, insertIndex);
 				// Advance insertIndex so next sibling of the block goes after this one
 				insertIndex++;
 			}
+			// For _dropAtEndAsTopLevel we just AddChild successively → they go at the true end as top level.
 			// else: make-child or non-sibling: leave appended at end of target container
 		}
 
@@ -430,6 +509,32 @@ public partial class CueList : Control
 			sb.RelationshipChanged();
 		}
 
+		// Add any new parents (the containers that received the moved cues)
+		foreach (var sb in toMove)
+		{
+			var mc = FetchCueFromId(sb.CueId);
+			if (mc != null && mc.ParentId != -1)
+			{
+				var np = FetchCueFromId(mc.ParentId);
+				if (np != null) affectedParents.Add(np);
+			}
+		}
+
+		// Refresh collapse/expand UI on all affected parents.
+		// For cues that just acquired their first child(ren) in this reorder, default to expanded.
+		foreach (var parent in affectedParents)
+		{
+			if (parent.ShellBar != null)
+			{
+				int before = childCountBefore.TryGetValue(parent, out var b) ? b : 0;
+				if (parent.ChildCues.Count > 0 && before == 0)
+				{
+					parent.Expanded = true;
+				}
+				parent.ShellBar.RelationshipChanged();
+			}
+		}
+
 		CleanupReorder(keepChanges: true);
 	}
 
@@ -449,6 +554,7 @@ public partial class CueList : Control
 		_insertAbove = false;
 		_insertBelow = false;
 		_insertMakeChild = false;
+		_dropAtEndAsTopLevel = false;
 		ShellBeingDragged = -1;
 
 		if (!keepChanges)
@@ -493,6 +599,12 @@ public partial class CueList : Control
 	/// </summary>
 	private (VBoxContainer targetContainer, int insertIndex, int newParentId, bool isMakeChild) DetermineReorderTarget()
 	{
+		if (_dropAtEndAsTopLevel)
+		{
+			// Special case: blank space below the entire list → always append as top-level
+			return (_cueContainer, _cueContainer.GetChildCount(), -1, false);
+		}
+
 		var targetShell = _mouseOverShellBar;
 		if (targetShell == null)
 			return (_cueContainer, 0, -1, false);
@@ -552,8 +664,66 @@ public partial class CueList : Control
 		return !ShellSelection.SelectedCues.Contains(targetCue);
 	}
 
+	/// <summary>
+	/// Returns the visually last (bottom-most) ShellBar in the current list,
+	/// walking into expanded child containers. Used to detect "blank space below everything".
+	/// </summary>
+	private ShellBar GetLastVisibleShellBar()
+	{
+		return FindLastShell(_cueContainer);
+	}
 
-	
+	private ShellBar FindLastShell(VBoxContainer container)
+	{
+		ShellBar last = null;
+		foreach (var child in container.GetChildren())
+		{
+			if (child is ShellBar sb)
+			{
+				last = sb;
+				var subContainer = sb.GetNodeOrNull<VBoxContainer>("%ShellChildContainer");
+				if (subContainer != null && subContainer.GetChildCount() > 0 && subContainer.Visible)
+				{
+					var subLast = FindLastShell(subContainer);
+					if (subLast != null)
+						last = subLast;
+				}
+			}
+		}
+		return last;
+	}
+
+	/// <summary>
+	/// Handler for the Expand/Collapse All button. Toggles the expanded state of all groups
+	/// (recursively) and updates the button icon.
+	/// </summary>
+	private void OnExpandAllPressed()
+	{
+		_allExpanded = !_allExpanded;
+		SetAllExpanded(_allExpanded);
+		_expandAllButton.Icon = GetThemeIcon(_allExpanded ? "Down" : "Right", "AtlasIcons");
+	}
+
+	private void SetAllExpanded(bool expanded)
+	{
+		SetExpandedRecursive(_cueContainer, expanded);
+	}
+
+	private void SetExpandedRecursive(VBoxContainer container, bool expanded)
+	{
+		foreach (var child in container.GetChildren())
+		{
+			if (child is ShellBar shellBar)
+			{
+				shellBar.SetExpanded(expanded);
+				var childCont = shellBar.ShellChildContainer;
+				if (childCont != null)
+				{
+					SetExpandedRecursive(childCont, expanded);
+				}
+			}
+		}
+	}
 
 	//--- Save and load ---//
 	
@@ -740,6 +910,16 @@ public partial class CueList : Control
 			if (shell == null || cue.ParentId != -1) continue;
 			// Use direct call; defer only if needed for init timing (kept simple here)
 			_cueContainer.MoveChild(shell, i);
+		}
+
+		// Refresh collapse/expand buttons and visibility for any groups after load structure
+		// (SetCue ran early; child shells have now been moved into containers)
+		foreach (var cue in CueIndex.Values)
+		{
+			if (cue.ChildCues.Count > 0 && cue.ShellBar != null)
+			{
+				cue.ShellBar.RelationshipChanged();
+			}
 		}
 	}
 

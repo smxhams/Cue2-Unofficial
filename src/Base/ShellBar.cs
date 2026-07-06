@@ -116,20 +116,8 @@ public partial class ShellBar : PanelContainer
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
 		if (cue.Follow == FollowType.Follow) _followCheckBox.ButtonPressed = true;
 		else _followCheckBox.ButtonPressed = false;
-		if (cue.ChildCues.Count > 0)
-		{
-			_collapseButton.Visible = true;
-			if (cue.Expanded)
-			{
-				ShellChildContainer.Visible = true;
-				_collapseButton.Icon = GetThemeIcon("Down", "AtlasIcons");
-			}
-			else
-			{
-				ShellChildContainer.Visible = false;
-				_collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-			}
-		}
+		// Initialize collapse/expand UI based on children (SetCue path)
+		UpdateCollapseUI();
 
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;
@@ -265,37 +253,59 @@ public partial class ShellBar : PanelContainer
 
 	public void RelationshipChanged()
 	{
-		if (_cue.ChildCues.Count > 0)
+		// Always update collapse UI state. Do not early-return on transient mismatch;
+		// after sync in reorder or structure the counts should align.
+		if (_cue != null && _cue.ChildCues.Count > 0 &&
+			ShellChildContainer.GetChildCount() != _cue.ChildCues.Count)
 		{
-			if (ShellChildContainer.GetChildCount() != _cue.ChildCues.Count)
-			{
-				GD.Print($"ShellBar:RelationshipChanged - Mismatch of data with Ui elements");
-				return;
-			}
-
-			_collapseButton.Visible = true;
-
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"ShellBar:RelationshipChanged - Mismatch of data with UI elements for cue {_cue.Id}", (int)LogType.Warning);
 		}
-		else
-		{
-			_collapseButton.Visible = false;
-		}
+
+		UpdateCollapseUI();
 	}
 
 	private void CollapsedPressed()
 	{
-		if (_cue.Expanded)
+		if (_cue == null) return;
+		_cue.Expanded = !_cue.Expanded;
+		UpdateCollapseUI();
+	}
+
+	/// <summary>
+	/// Central method to show/hide collapse button, set container visibility and icon
+	/// based on the cue's current Expanded state (and whether it has children).
+	/// The "default to expanded" for newly parented cues is applied at the point
+	/// children are added (see CreateNewShell and EndReorder).
+	/// </summary>
+	private void UpdateCollapseUI()
+	{
+		if (_cue == null || _collapseButton == null) return;
+
+		bool hasChildren = _cue.ChildCues.Count > 0;
+
+		_collapseButton.Visible = hasChildren;
+
+		if (hasChildren)
 		{
-			_cue.Expanded = false;
-			ShellChildContainer.Visible = false;
-			_collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+			ShellChildContainer.Visible = _cue.Expanded;
+			_collapseButton.Icon = GetThemeIcon(_cue.Expanded ? "Down" : "Right", "AtlasIcons");
 		}
 		else
 		{
-			_cue.Expanded = true;
-			ShellChildContainer.Visible = true;
-			_collapseButton.Icon = GetThemeIcon("Down", "AtlasIcons");
+			ShellChildContainer.Visible = false;
 		}
+	}
+
+	/// <summary>
+	/// Public helper to set the expanded/collapsed state for this group (used by Expand All).
+	/// </summary>
+	/// <param name="expanded">Whether children should be shown.</param>
+	public void SetExpanded(bool expanded)
+	{
+		if (_cue == null || _cue.ChildCues.Count == 0) return;
+		_cue.Expanded = expanded;
+		UpdateCollapseUI();
 	}
 
 	private void OnMouseEntered()

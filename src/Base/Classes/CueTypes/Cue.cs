@@ -123,6 +123,7 @@ public class Cue : ICue
         TotalDuration = data.ContainsKey("TotalDuration") ? (double)data["TotalDuration"] : 0.0;
         PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : 0.0;
         Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
+        Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : false;
         Color = data.TryGetValue("Color", out var value) ? Color.FromString(value.AsString(), Color) : Color;
 
         
@@ -327,6 +328,7 @@ public class Cue : ICue
         dict.Add("TotalDuration", TotalDuration);
         dict.Add("PostWait", PostWait);
         dict.Add("Follow", (int)Follow);
+        dict.Add("Expanded", Expanded);
         dict.Add("Color", Color.ToHtml());
 
         var compData = new Array();
