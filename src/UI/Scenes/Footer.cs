@@ -16,6 +16,7 @@ public partial class Footer : Control
     // Ui
     private Label _processTimeLabel;
     private Button _logCountButton;
+    private string _logPrintoutBaseTooltip = "Log";
     
     private Timer _updateTimer;
     private double _lastDelta;
@@ -32,6 +33,8 @@ public partial class Footer : Control
         _logCountButton.Toggled += OnLogCountToggled;
 
         _globalSignals.ToggleLogWindow += ToggleLogWindow;
+
+        _syncHotkeys();
         
         _processTimeLabel = GetNode<Label>("%ProcessTimeLabel");
         
@@ -65,7 +68,7 @@ public partial class Footer : Control
         }
         
         //Update log tooltip to show last 5 logs
-        logPrintout.TooltipText = "Last 5 log messages:\n";
+        logPrintout.TooltipText = _logPrintoutBaseTooltip + "\n\nLast 5 log messages:\n";
         foreach (var log in _last5Logs)
         {    
             logPrintout.TooltipText += log + "\n";
@@ -113,5 +116,17 @@ public partial class Footer : Control
     private void ToggleLogWindow()
     {
         _logCountButton.ButtonPressed = !_logCountButton.ButtonPressed;
+    }
+
+    private void _syncHotkeys()
+    {
+        string logHotkey = GlobalData.ParseHotkey("ToggleLog");
+        _logCountButton.TooltipText = "Log, click to open full log" + (!string.IsNullOrEmpty(logHotkey) ? "\nHotkey: " + logHotkey : "");
+
+        var logPrintout = GetNode<Button>("%LogPrintout");
+        _logPrintoutBaseTooltip = "Log";
+        if (!string.IsNullOrEmpty(logHotkey))
+            _logPrintoutBaseTooltip += "\nHotkey: " + logHotkey;
+        logPrintout.TooltipText = _logPrintoutBaseTooltip;
     }
 }

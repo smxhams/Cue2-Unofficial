@@ -91,6 +91,10 @@ public partial class MainTitleBarUI : Control
         GetNode<Label>("%FileSaveHotkey").Text = GlobalData.ParseHotkey("SaveSession");
         GetNode<Label>("%FileSaveAsHotkey").Text = GlobalData.ParseHotkey("SaveAsSession");
         GetNode<Label>("%FileOpenHotkey").Text = GlobalData.ParseHotkey("OpenSession");
+
+        var settingsBtn = GetNode<Button>("%SettingsButton");
+        string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");
+        settingsBtn.TooltipText = "Settings" + (!string.IsNullOrEmpty(settingsHotkey) ? "\nHotkey: " + settingsHotkey : "");
     }
     
 

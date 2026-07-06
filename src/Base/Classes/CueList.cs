@@ -85,6 +85,8 @@ public partial class CueList : Control
 
 		_reorderCueControl.Visible = false;
 
+		_syncHotkeys();
+
 		_reorderController = new CueReorder(this, _reorderCueControl, _reorderLocationLabel, _reorderListContainer, _reorderIndicatorPanel, _cueContainer);
 
 		_globalSignals.CreateCue += CreateCue;
@@ -116,6 +118,22 @@ public partial class CueList : Control
 		var newCue = new Cue(); // Create a cue with default values
 		AddCue(newCue);
 
+	}
+
+	private void _syncHotkeys()
+	{
+		string createHotkey = GlobalData.ParseHotkey("CreateCue");
+		string expandHotkey = GlobalData.ParseHotkey("ToggleExpandAll");
+
+		string createTip = "Add a new cue.\nInserts below selection.";
+		if (!string.IsNullOrEmpty(createHotkey))
+			createTip += "\nHotkey: " + createHotkey;
+		_addCueButton.TooltipText = createTip;
+
+		string expandTip = "Expand/Collapse all groups.";
+		if (!string.IsNullOrEmpty(expandHotkey))
+			expandTip += "\nHotkey: " + expandHotkey;
+		_expandAllButton.TooltipText = expandTip;
 	}
 
 	/// <summary>
