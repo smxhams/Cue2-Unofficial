@@ -16,4 +16,8 @@
 <ItemGroup>
   <EmbeddedResource Remove="bin\**" />
 </ItemGroup>  
+<ItemGroup>
+  <Content Include="src\Base\Minor\FileDropper.cs.uid" />
+  <Content Include="src\UI\Scenes\FileDropPopup.tscn" />
+</ItemGroup>  
 </Project> 
