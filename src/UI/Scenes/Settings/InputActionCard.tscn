@@ -16,51 +16,61 @@ corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
 [node name="InputActionCard" type="PanelContainer"]
-custom_minimum_size = Vector2(180, 0)
+custom_minimum_size = Vector2(170, 0)
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("InputCardStyle")
 script = ExtResource("1_card")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 2
-theme_override_constants/margin_left = 6
-theme_override_constants/margin_top = 6
-theme_override_constants/margin_right = 6
-theme_override_constants/margin_bottom = 6
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 3
 
-[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+[node name="Content" type="HBoxContainer" parent="MarginContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 4
 
-[node name="ActionName" type="Label" parent="MarginContainer/VBox"]
+[node name="ActionName" type="Label" parent="MarginContainer/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(75, 0)
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 10
 text = "ActionName"
-horizontal_alignment = 0
 vertical_alignment = 1
 text_overrun_behavior = 3
 
-[node name="BindingRow" type="HBoxContainer" parent="MarginContainer/VBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="BindingButton" type="Button" parent="MarginContainer/VBox/BindingRow"]
+[node name="BindingButton" type="Button" parent="MarginContainer/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(45, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
+theme_override_font_sizes/font_size = 10
 text = "Unbound"
 clip_text = true
 text_overrun_behavior = 1
 tooltip_text = "Click to change binding"
 
-[node name="ClearButton" type="Button" parent="MarginContainer/VBox/BindingRow"]
+[node name="ResetButton" type="Button" parent="MarginContainer/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(24, 24)
+custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 focus_mode = 0
-theme_override_constants/icon_max_width = 14
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="ClearButton" type="Button" parent="MarginContainer/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
 expand_icon = true
 tooltip_text = "Clear binding"
 

@@ -11,11 +11,13 @@ namespace Cue2.UI.Scenes.Settings;
 public partial class InputActionCard : PanelContainer
 {
     private GlobalSignals _globalSignals;
+    private GlobalData _globalData;
 
     [Export] public string Action { get; set; } = "";
 
     private Label _actionNameLabel;
     private Button _bindingButton;
+    private Button _resetButton;
     private Button _clearButton;
 
     private bool _isListeningForInput;
@@ -23,15 +25,19 @@ public partial class InputActionCard : PanelContainer
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNode<GlobalData>("/root/GlobalData");
 
         _actionNameLabel = GetNode<Label>("%ActionName");
         _bindingButton = GetNode<Button>("%BindingButton");
+        _resetButton = GetNode<Button>("%ResetButton");
         _clearButton = GetNode<Button>("%ClearButton");
 
         _bindingButton.Pressed += OnBindingButtonPressed;
+        _resetButton.Pressed += OnResetButtonPressed;
         _clearButton.Pressed += OnClearButtonPressed;
 
         _clearButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        _resetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
         RefreshDisplay();
     }
@@ -69,6 +75,7 @@ public partial class InputActionCard : PanelContainer
 
     /// <summary>
     /// Updates the binding button text from the current state of InputMap for this action.
+    /// Also updates visibility and tooltip of the reset-to-default button.
     /// </summary>
     public void RefreshDisplay()
     {
@@ -76,6 +83,7 @@ public partial class InputActionCard : PanelContainer
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action))
         {
             _bindingButton.Text = "Unbound";
+            UpdateResetButton();
             return;
         }
 
@@ -83,6 +91,7 @@ public partial class InputActionCard : PanelContainer
         if (events.Count == 0)
         {
             _bindingButton.Text = "Unbound";
+            UpdateResetButton();
             return;
         }
 
@@ -92,7 +101,7 @@ public partial class InputActionCard : PanelContainer
         foreach (InputEvent ev in events)
         {
             if (shown >= 2) break;
-            string s = FormatEvent(ev);
+            string s = GlobalData.FormatInputEvent(ev);
             if (!string.IsNullOrEmpty(s))
             {
                 parts.Add(s);
@@ -104,25 +113,22 @@ public partial class InputActionCard : PanelContainer
         {
             _bindingButton.Text += " …";
         }
+
+        UpdateResetButton();
     }
 
-    private static string FormatEvent(InputEvent ev)
+    private void UpdateResetButton()
     {
-        if (ev is InputEventKey key)
-        {
-            string keyName = OS.GetKeycodeString(key.Keycode);
-            if (string.IsNullOrEmpty(keyName) || keyName == "None") keyName = key.PhysicalKeycode.ToString();
+        if (_resetButton == null) return;
 
-            string mods = "";
-            if (key.CtrlPressed) mods += "Ctrl+";
-            if (key.ShiftPressed) mods += "Shift+";
-            if (key.AltPressed) mods += "Alt+";
-            if (key.MetaPressed) mods += "Meta+";
-            // Note: CommandOrControlAutoremap is serialized; at runtime we just show modifiers as present.
-            return mods + keyName;
+        bool atDefault = _globalData != null && _globalData.IsInputActionAtDefault(Action);
+        _resetButton.Visible = !atDefault;
+
+        if (!atDefault)
+        {
+            string defaultText = _globalData?.GetDefaultBindingDisplay(Action) ?? "default";
+            _resetButton.TooltipText = $"Reset to default: {defaultText}";
         }
-        // Future: handle InputEventJoypadButton etc.
-        return ev.AsText();
     }
 
     private void OnBindingButtonPressed()
@@ -142,6 +148,15 @@ public partial class InputActionCard : PanelContainer
 
         InputMap.ActionEraseEvents(Action);
         GD.Print($"InputActionCard:OnClearButtonPressed - Cleared events for action '{Action}'");
+        RefreshDisplay();
+    }
+
+    private void OnResetButtonPressed()
+    {
+        if (string.IsNullOrEmpty(Action) || _globalData == null) return;
+
+        _globalData.ResetInputActionToDefault(Action);
+        GD.Print($"InputActionCard:OnResetButtonPressed - Reset '{Action}' to default via refresh button.");
         RefreshDisplay();
     }
 
@@ -180,7 +195,7 @@ public partial class InputActionCard : PanelContainer
         RefreshDisplay();
         GetViewport().SetInputAsHandled();
         _globalSignals.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
-        GD.Print($"InputActionCard:_UnhandledInput - Set binding for '{Action}' to {FormatEvent(keyEvent)}");
+        GD.Print($"InputActionCard:_UnhandledInput - Set binding for '{Action}' to {GlobalData.FormatInputEvent(keyEvent)}");
     }
 
     private void ApplyNewBinding(InputEventKey source)

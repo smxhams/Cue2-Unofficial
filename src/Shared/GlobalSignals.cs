@@ -67,6 +67,16 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void CreateCueEventHandler();
 	
 	[Signal] public delegate void GroupSelectedCuesEventHandler();
+
+	[Signal] public delegate void SelectNextCueEventHandler();
+	[Signal] public delegate void SelectPreviousCueEventHandler();
+	
+	[Signal] public delegate void ToggleSettingsWindowEventHandler();
+	[Signal] public delegate void ToggleLogWindowEventHandler();
+
+	[Signal] public delegate void CuelistExpandOneLayerEventHandler();
+	[Signal] public delegate void CuelistCollapseOneLayerEventHandler();
+	[Signal] public delegate void ToggleExpandAllEventHandler();
 	
 	
 	

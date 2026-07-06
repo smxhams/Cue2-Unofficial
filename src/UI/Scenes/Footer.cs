@@ -30,6 +30,8 @@ public partial class Footer : Control
         
         GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
         _logCountButton.Toggled += OnLogCountToggled;
+
+        _globalSignals.ToggleLogWindow += ToggleLogWindow;
         
         _processTimeLabel = GetNode<Label>("%ProcessTimeLabel");
         
@@ -106,5 +108,10 @@ public partial class Footer : Control
         GD.Print($"Footer:OnLogWindowClosed");
         _logWindow = null;
         _logCountButton.ButtonPressed = false;
+    }
+
+    private void ToggleLogWindow()
+    {
+        _logCountButton.ButtonPressed = !_logCountButton.ButtonPressed;
     }
 }

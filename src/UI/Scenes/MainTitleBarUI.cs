@@ -35,6 +35,8 @@ public partial class MainTitleBarUI : Control
         GetNode<Button>("%SettingsButton").Toggled += OnSettingsButtonToggled;
         
         GetNode<Button>("%AboutButton").Toggled += OnAboutButtonPressed;
+
+        _globalSignals.ToggleSettingsWindow += ToggleSettingsWindow;
         
         _mainMenu = GetNode<HBoxContainer>("%MainMenuContainer");
         _mainMenuButton = GetNode<Button>("%TitleMainMenu");
@@ -210,6 +212,15 @@ public partial class MainTitleBarUI : Control
     {
         _settingsWindow = null; 
         GetNode<Button>("%SettingsButton").ButtonPressed = false;
+    }
+
+    private void ToggleSettingsWindow()
+    {
+        var btn = GetNodeOrNull<Button>("%SettingsButton");
+        if (btn != null)
+        {
+            btn.ButtonPressed = !btn.ButtonPressed;
+        }
     }
     
     

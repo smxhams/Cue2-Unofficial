@@ -9,7 +9,11 @@ public partial class InputActionsListener : Node
     private Timer _focusExitTimer;
 
     private bool _listenForInput = true;
-    
+
+    // Data-driven mapping to avoid long chain of if statements.
+    // Key = input action name, Value = (handler, useExactMatch)
+    private readonly System.Collections.Generic.Dictionary<string, (System.Action handler, bool exact)> _actionMap = new();
+
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
@@ -22,68 +26,58 @@ public partial class InputActionsListener : Node
         _globalSignals.TextEditFocusEntered += SetListeningFalse;
         _globalSignals.TextEditFocusExited += OnTextEditFocusExited;
 
+        RegisterActions();
     }
+
+    private void RegisterActions()
+    {
+        Register("NewSession", nameof(GlobalSignals.NewSession), "New Session", true);
+        Register("OpenSession", nameof(GlobalSignals.OpenSession), "Open Session", true);
+        Register("SaveSession", nameof(GlobalSignals.Save), "Save", true);
+        Register("SaveAsSession", nameof(GlobalSignals.SaveAs), "Save As", true);
+        Register("Go", nameof(GlobalSignals.Go), "Go", false);
+        Register("StopAll", nameof(GlobalSignals.StopAll), "Stop All", false);
+        Register("CreateCue", nameof(GlobalSignals.CreateCue), "Create Cue", true);
+        Register("GroupSelectedCues", nameof(GlobalSignals.GroupSelectedCues), "Group Selected Cues", true);
+        Register("SelectNext", nameof(GlobalSignals.SelectNextCue), "Select Next Cue", true);
+        Register("SelectPrevious", nameof(GlobalSignals.SelectPreviousCue), "Select Previous Cue", true);
+        Register("PauseAll", nameof(GlobalSignals.PauseAll), "Pause All Cues", true);
+        Register("ResumeAll", nameof(GlobalSignals.ResumeAll), "Resume All Cues", true);
+        Register("ToggleSettings", nameof(GlobalSignals.ToggleSettingsWindow), "Toggle Settings Window", true);
+        Register("ToggleLog", nameof(GlobalSignals.ToggleLogWindow), "Toggle Log Window", true);
+        Register("ExpandOneLayer", nameof(GlobalSignals.CuelistExpandOneLayer), "Expand One Group Layer", true);
+        Register("CollapseOneLayer", nameof(GlobalSignals.CuelistCollapseOneLayer), "Collapse One Group Layer", true);
+        Register("ToggleExpandAll", nameof(GlobalSignals.ToggleExpandAll), "Toggle Expand/Collapse Groups", true);
+    }
+
+    private void Register(string action, string signalName, string logName, bool exact)
+    {
+        _actionMap[action] = (() =>
+        {
+            GD.Print($"InputActionsListener:Actions - Input Action: {logName}");
+            _globalSignals.EmitSignal(signalName);
+        }, exact);
+    }
+
     public override void _Process(double delta)
     {
         if (!_listenForInput) return;
-        
+
         if (Input.IsAnythingPressed())
         {
             Actions();
         }
     }
-    
+
     private void Actions()
     {
-        if (Input.IsActionJustPressed("NewSession", true))
+        foreach (var kvp in _actionMap)
         {
-            GD.Print("InputActionsListener:Actions - Input Action: New Session");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
+            if (Input.IsActionJustPressed(kvp.Key, kvp.Value.exact))
+            {
+                kvp.Value.handler();
+            }
         }
-        
-        if (Input.IsActionJustPressed("OpenSession", true))
-        {
-            GD.Print("Input Action: Open Session");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));
-        }
-        
-        if (Input.IsActionJustPressed("SaveSession", true))
-        {
-            GD.Print("Input Action: Save");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Save));
-        }
-        
-        if (Input.IsActionJustPressed("SaveAsSession", true))
-        {
-            GD.Print("Input Action: Save As");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.SaveAs));
-        }
-        
-        if (Input.IsActionJustPressed("Go"))
-        {
-            GD.Print("Input Action: Go");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Go));
-        }
-        
-        if (Input.IsActionJustPressed("StopAll")) 
-        {
-            GD.Print("Input Action: Stop All");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
-        }
-
-        if (Input.IsActionJustPressed("CreateCue", true))
-        {
-            GD.Print("Input Action: Create Cue");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.CreateCue));
-        }
-
-        if (Input.IsActionJustPressed("GroupSelectedCues", true))
-        {
-            GD.Print("Input Action: Group Selected Cues");
-            _globalSignals.EmitSignal(nameof(GlobalSignals.GroupSelectedCues));
-        }
-        
-        
     }
     
     private void SetListening(bool listening) => _listenForInput = listening;

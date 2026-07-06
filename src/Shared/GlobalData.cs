@@ -124,7 +124,16 @@ public partial class GlobalData : Node
 		"Go",
 		"StopAll",
 		"CreateCue",
-		"GroupSelectedCues"
+		"GroupSelectedCues",
+		"SelectNext",
+		"SelectPrevious",
+		"PauseAll",
+		"ResumeAll",
+		"ToggleSettings",
+		"ToggleLog",
+		"ExpandOneLayer",
+		"CollapseOneLayer",
+		"ToggleExpandAll"
 	};
 
 
@@ -221,7 +230,7 @@ public partial class GlobalData : Node
 				if (@event is InputEventKey keyEvent)
 				{
 					// Get the key and modifiers
-					string keyName = OS.GetKeycodeString(keyEvent.Keycode);
+					string keyName = GetKeyDisplayName(keyEvent.Keycode);
 					bool ctrlPressed = keyEvent.CtrlPressed;
 					bool shiftPressed = keyEvent.ShiftPressed;
 					bool altPressed = keyEvent.AltPressed;
@@ -364,6 +373,157 @@ public partial class GlobalData : Node
 			}
 		}
 		GD.Print("GlobalData:ResetInputBindingsToDefaults - Input bindings restored to project defaults.");
+	}
+
+	/// <summary>
+	/// Returns a copy of the default events captured for the given action, or empty array if none.
+	/// </summary>
+	public Godot.Collections.Array<InputEvent> GetDefaultInputEvents(string action)
+	{
+		if (string.IsNullOrEmpty(action) || !_defaultInputBindings.TryGetValue(action, out var events))
+			return new Godot.Collections.Array<InputEvent>();
+		// Return a shallow copy of the stored array (events are already duplicated at capture time)
+		var copy = new Godot.Collections.Array<InputEvent>();
+		foreach (var e in events)
+			copy.Add(e);
+		return copy;
+	}
+
+	/// <summary>
+	/// Returns true if the current binding for the action exactly matches the captured default.
+	/// </summary>
+	public bool IsInputActionAtDefault(string action)
+	{
+		if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action))
+			return true;
+
+		if (!_defaultInputBindings.TryGetValue(action, out var defaults) || defaults == null)
+			return true;
+
+		var current = InputMap.ActionGetEvents(action);
+		if (current.Count != defaults.Count)
+			return false;
+
+		for (int i = 0; i < current.Count; i++)
+		{
+			if (!InputEventsEqual(current[i], defaults[i]))
+				return false;
+		}
+		return true;
+	}
+
+	/// <summary>
+	/// Restores only the specified action to its captured default binding.
+	/// </summary>
+	public void ResetInputActionToDefault(string action)
+	{
+		if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action))
+			return;
+
+		if (!_defaultInputBindings.TryGetValue(action, out var defaults) || defaults == null)
+			return;
+
+		InputMap.ActionEraseEvents(action);
+		foreach (InputEvent ev in defaults)
+		{
+			InputMap.ActionAddEvent(action, (InputEvent)ev.Duplicate());
+		}
+		GD.Print($"GlobalData:ResetInputActionToDefault - Restored '{action}' to default binding.");
+	}
+
+	/// <summary>
+	/// Returns a human readable string for the default binding of an action (e.g. "Ctrl+G" or "Space").
+	/// </summary>
+	public string GetDefaultBindingDisplay(string action)
+	{
+		var defaults = GetDefaultInputEvents(action);
+		if (defaults.Count == 0)
+			return "Unbound";
+
+		var parts = new System.Collections.Generic.List<string>();
+		int shown = 0;
+		foreach (InputEvent ev in defaults)
+		{
+			if (shown >= 2) break;
+			string s = FormatInputEvent(ev);
+			if (!string.IsNullOrEmpty(s))
+			{
+				parts.Add(s);
+				shown++;
+			}
+		}
+		string result = string.Join(" / ", parts);
+		if (defaults.Count > 2)
+			result += " …";
+		return result;
+	}
+
+	/// <summary>
+	/// Returns a user-friendly display name for a keycode.
+	/// Uses symbols for punctuation keys instead of "BracketLeft", "QuoteLeft", etc.
+	/// </summary>
+	public static string GetKeyDisplayName(Key keycode)
+	{
+		string name = OS.GetKeycodeString(keycode);
+		if (string.IsNullOrEmpty(name) || name == "None")
+		{
+			name = keycode.ToString();
+			if (name.StartsWith("Key"))
+				name = name.Substring(3);
+		}
+
+		// Map ugly key names to nice symbols / short names
+		switch (name)
+		{
+			case "BracketLeft": return "[";
+			case "BracketRight": return "]";
+			case "QuoteLeft": return "`";
+			case "Apostrophe": return "'";
+			case "Semicolon": return ";";
+			case "Comma": return ",";
+			case "Period": return ".";
+			case "Slash": return "/";
+			case "Backslash": return "\\";
+			case "Minus": return "-";
+			case "Equal": return "=";
+			case "Escape": return "Esc";
+			default:
+				return name;
+		}
+	}
+
+	/// <summary>
+	/// Formats a single input event for display (matches card formatting style).
+	/// </summary>
+	public static string FormatInputEvent(InputEvent ev)
+	{
+		if (ev is InputEventKey key)
+		{
+			string keyName = GetKeyDisplayName(key.Keycode);
+			if (string.IsNullOrEmpty(keyName) || keyName == "None") keyName = key.PhysicalKeycode.ToString();
+
+			string mods = "";
+			if (key.CtrlPressed) mods += "Ctrl+";
+			if (key.ShiftPressed) mods += "Shift+";
+			if (key.AltPressed) mods += "Alt+";
+			if (key.MetaPressed) mods += "Meta+";
+			return mods + keyName;
+		}
+		return ev.AsText();
+	}
+
+	private bool InputEventsEqual(InputEvent a, InputEvent b)
+	{
+		if (a is InputEventKey ka && b is InputEventKey kb)
+		{
+			return ka.Keycode == kb.Keycode &&
+			       ka.PhysicalKeycode == kb.PhysicalKeycode &&
+			       ka.CtrlPressed == kb.CtrlPressed &&
+			       ka.ShiftPressed == kb.ShiftPressed &&
+			       ka.AltPressed == kb.AltPressed &&
+			       ka.MetaPressed == kb.MetaPressed;
+		}
+		return a.AsText() == b.AsText();
 	}
 
 	public Dictionary GetAvailableConnections()

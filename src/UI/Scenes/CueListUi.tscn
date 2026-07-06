@@ -135,7 +135,13 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 metadata/_tab_index = 0
 
-[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List" unique_id=1662551638]
+[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer/Cue List"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_bottom = 80
+
+[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List/MarginContainer" unique_id=1662551638]
 unique_name_in_owner = true
 y_sort_enabled = true
 layout_mode = 2
