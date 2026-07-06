@@ -35,6 +35,12 @@ public partial class MediaEngine : Node
         }
         
     }
+
+    // NOTE ON LICENSING:
+    // The native FFmpeg libraries loaded here are distributed under the LGPLv2.1 (or later).
+    // See docs/FFmpeg-Licensing.md and the LGPL-2.1.txt in the LICENSES folder.
+    // This code uses dynamic loading (NativeLibrary.Load + RootPath) which is the
+    // recommended pattern for LGPL compliance when bundling.
     
     /// <summary>
     /// Dynamically links FFmpeg native libraries manually for cross-platform compatibility in Godot Mono.

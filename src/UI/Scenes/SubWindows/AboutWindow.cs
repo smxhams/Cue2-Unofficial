@@ -50,7 +50,7 @@ public partial class AboutWindow : Window
 
         _authorsRichTextLabel.Text = Authors;
         
-        _licenseRichTextLabel.Text = Cue2License;
+        _licenseRichTextLabel.Text = Cue2License + "\n\nThis product uses FFmpeg under the LGPLv2.1 (see third-party licenses).";
         _cue2LicenseLinkButton.Uri = Version.Website;
         
 
@@ -62,6 +62,7 @@ public partial class AboutWindow : Window
         var dependencies = new Dictionary<string, (string License, string Url)>
         {
             { "FFmpeg.AutoGen v8.0.0", (FfmpegLicenseAutogen, "https://github.com/Ruslan-B/FFmpeg.AutoGen/blob/8.0/LICENSE.txt") },
+            { "FFmpeg (native libraries)", (FfmpegNativeLicense, "https://ffmpeg.org/legal.html") },
             { "Godot v4.5.1", (GodotLicense, "https://github.com/godotengine/godot/blob/master/LICENSE.txt") },
             { "SDL3-CS v3.3.2.1", (Sdl3CsLicense, "https://github.com/edwardgushchin/SDL3-CS/blob/master/LICENSE") },
             { "Rug.Osc v1.2.5", (RugOscLicense, "https://bitbucket.org/rugcode/rug.osc/wiki/License") }
@@ -190,6 +191,24 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.";
+
+    private const string FfmpegNativeLicense = @"FFmpeg native libraries (avcodec, avformat, etc.)
+
+This software uses libraries from the FFmpeg project under the
+GNU Lesser General Public License version 2.1 or later (LGPLv2.1+).
+
+FFmpeg itself is licensed under the LGPL (core libraries) with some optional
+components under the GPL. The bundled libraries in this project are intended
+to be built using only LGPL-compatible options (no --enable-gpl, no --enable-nonfree).
+
+You can obtain the corresponding source code for the exact version of FFmpeg
+used to build these libraries from the project releases or by following the
+instructions in docs/FFmpeg-Licensing.md.
+
+Full FFmpeg legal information: https://ffmpeg.org/legal.html
+LGPLv2.1 text: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+Copyright © 2000-2025 the FFmpeg developers";
 
     private const string Sdl3CsLicense = @"SDL3-CS v3.3.2.1 : zlib License
 
