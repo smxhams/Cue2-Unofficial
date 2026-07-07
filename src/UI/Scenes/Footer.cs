@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Cue2.Shared;
 
 namespace Cue2.UI.Scenes;
@@ -20,6 +21,12 @@ public partial class Footer : Control
     
     private Timer _updateTimer;
     private double _lastDelta;
+
+    // Devices status
+    private GlobalData _globalData;
+    private AudioDevices _audioDevices;
+    private DisplaysManager _displaysManager;
+    private Button _devicesFooterButton;
     
     public override void _Ready()
     {
@@ -29,7 +36,17 @@ public partial class Footer : Control
         
         _logCountButton = GetNode<Button>("%LogCountButton");
         
-        GetNode<Button>("%DevicesFooterButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
+        _globalData = GetNode<GlobalData>("/root/GlobalData");
+        _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+        _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
+        _devicesFooterButton = GetNode<Button>("%DevicesFooterButton");
+        _devicesFooterButton.TooltipText = "Devices";
+        _devicesFooterButton.Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
+        _devicesFooterButton.MouseEntered += UpdateDevicesFooterTooltip;
+        
+        _globalSignals.AudioDevicesChanged += UpdateDevicesFooterTooltip;
+        _globalSignals.DisplaysChanged += UpdateDevicesFooterTooltip;
+        
         _logCountButton.Toggled += OnLogCountToggled;
 
         _globalSignals.ToggleLogWindow += ToggleLogWindow;
@@ -43,6 +60,8 @@ public partial class Footer : Control
         _updateTimer.WaitTime = 0.1;
         _updateTimer.Start();
         _updateTimer.Timeout += UpdateProcessTime;
+
+        UpdateDevicesFooterTooltip(); // initial status
     }
 
 
@@ -128,5 +147,68 @@ public partial class Footer : Control
         if (!string.IsNullOrEmpty(logHotkey))
             _logPrintoutBaseTooltip += "\nHotkey: " + logHotkey;
         logPrintout.TooltipText = _logPrintoutBaseTooltip;
+    }
+
+    /// <summary>
+    /// Updates the DevicesFooterButton tooltip and color with the status of used audio devices and video outputs.
+    /// Green (🟢) = connected/available.
+    /// Red (🔴) = configured/used but target not currently available.
+    /// Tints the button green (Success) when all are OK, red (Danger) if any problems.
+    /// </summary>
+    private void UpdateDevicesFooterTooltip()
+    {
+        if (_devicesFooterButton == null) return;
+
+        var audioStatuses = _audioDevices?.GetUsedAudioDeviceStatuses() ?? new Dictionary<string, bool>();
+        var videoStatuses = _displaysManager?.GetVideoOutputStatuses() ?? new Dictionary<string, bool>();
+
+        if (audioStatuses.Count == 0 && videoStatuses.Count == 0)
+        {
+            _devicesFooterButton.TooltipText = "Devices\n\nNo audio or video devices are currently used or configured.";
+            _devicesFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
+            return;
+        }
+
+        bool hasProblem = false;
+        string tooltip = "Devices:\n";
+
+        if (audioStatuses.Count > 0)
+        {
+            tooltip += "\nAudio Devices:\n";
+            foreach (var entry in audioStatuses.OrderBy(e => e.Key))
+            {
+                bool connected = entry.Value;
+                if (!connected) hasProblem = true;
+
+                string indicator = connected ? "🟢 " : "🔴 ";
+                string status = connected ? "connected" : "being used but not connected";
+                tooltip += $"{indicator}{entry.Key} ({status})\n";
+            }
+        }
+
+        if (videoStatuses.Count > 0)
+        {
+            tooltip += "\nVideo Outputs:\n";
+            foreach (var entry in videoStatuses.OrderBy(e => e.Key))
+            {
+                bool connected = entry.Value;
+                if (!connected) hasProblem = true;
+
+                string indicator = connected ? "🟢 " : "🔴 ";
+                string status = connected ? "connected" : "target monitor unavailable";
+                tooltip += $"{indicator}{entry.Key} ({status})\n";
+            }
+        }
+
+        _devicesFooterButton.TooltipText = tooltip.TrimEnd('\n', '\r');
+
+        if (hasProblem)
+        {
+            _devicesFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+        }
+        else
+        {
+            _devicesFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
+        }
     }
 }

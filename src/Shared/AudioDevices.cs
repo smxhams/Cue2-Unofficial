@@ -178,6 +178,8 @@ public partial class AudioDevices : Node
 	    _openDevices.Add(device.DeviceId, device);
 	    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
 
+	    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+
 	    error = "";
 	    return device;
     }
@@ -234,6 +236,55 @@ public partial class AudioDevices : Node
 	    }
 
 	    return deviceNames;
+    }
+
+    /// <summary>
+    /// Returns the audio devices that are "used" (configured in any AudioOutputPatch or currently opened via direct/patch)
+    /// mapped to whether they are currently connected and available.
+    /// Used by the footer to display status on hover.
+    /// </summary>
+    /// <returns>Dictionary of device name → isConnected. True means green/connected; false means red (used but not connected).</returns>
+    public Dictionary<string, bool> GetUsedAudioDeviceStatuses()
+    {
+        var result = new Dictionary<string, bool>();
+        var availableList = GetAvailableAudioDeviceNames() ?? new List<string>();
+        var available = new HashSet<string>(availableList);
+        var openList = GetOpenAudioDevicesNames();
+        var open = new HashSet<string>(openList);
+
+        var used = new HashSet<string>(open);
+
+        // Include devices configured in audio output patches (these are the persistent "used" devices)
+        if (_globalData?.Settings != null)
+        {
+            try
+            {
+                var patches = _globalData.Settings.GetAudioOutputPatches();
+                foreach (var patch in patches.Values)
+                {
+                    if (patch?.OutputDevices != null)
+                    {
+                        foreach (var deviceName in patch.OutputDevices.Keys)
+                        {
+                            used.Add(deviceName);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"AudioDevices:GetUsedAudioDeviceStatuses - Error reading patches: {ex.Message}");
+            }
+        }
+
+        foreach (var name in used)
+        {
+            // Connected if present in available devices or successfully opened
+            bool isConnected = available.Contains(name) || open.Contains(name);
+            result[name] = isConnected;
+        }
+
+        return result;
     }
 
     /// <summary>

@@ -456,6 +456,33 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Returns the configured video outputs mapped to whether their target monitor is currently available.
+    /// "Connected" means the TargetMonitor index is valid given the current number of screens.
+    /// Used by the footer to display combined device status.
+    /// </summary>
+    /// <returns>Dictionary of "Name (Monitor N)" → isConnected (true = green/available).</returns>
+    public Dictionary<string, bool> GetVideoOutputStatuses()
+    {
+        var result = new Dictionary<string, bool>();
+        if (Outputs == null || Outputs.Count == 0)
+            return result;
+
+        int screenCount = DisplayServer.GetScreenCount();
+
+        foreach (var output in Outputs)
+        {
+            // Connected if the target monitor index is currently valid.
+            // This mirrors the checks in VideoOutputDevice.UpdateOutputRegion and load logic.
+            bool isConnected = output.TargetMonitor >= 0 && output.TargetMonitor < screenCount;
+
+            string key = $"{output.OutputName} (Monitor {output.TargetMonitor})";
+            result[key] = isConnected;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Serializes the displays manager data.
     /// </summary>
     /// <returns>Dictionary containing layers and outputs data.</returns>

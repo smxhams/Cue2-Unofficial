@@ -35,4 +35,3 @@ builds/
 .idea/
 
 /src/Dumper.cs
-# /bin/     <-- removed: we will track native libs via Git LFS instead of ignoring them

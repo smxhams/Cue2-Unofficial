@@ -28,6 +28,7 @@ public partial class GlobalStyles : Node
 	
 	public static Color Danger = new Color("#ff806f"); 
 	public static Color Warning = new Color("#ffb45d");
+	public static Color Success = new Color("#9aff92");
 
 	// List zebra styles
 	private static StyleBoxFlat _evenRowStyle;
