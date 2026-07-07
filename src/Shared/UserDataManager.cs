@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using Godot;
 using Godot.Collections;
 
@@ -134,6 +135,26 @@ public partial class UserDataManager : Node
 		GD.Print("UserDataManager:_Ready - Initialized. Recent show files loaded: " + _recentShowFiles.Count);
 	}
 
+	internal string NormalizeForRecent(string path)
+	{
+		if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+		try
+		{
+			string full = Path.GetFullPath(path);
+			full = full.Replace('\\', '/');
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				full = full.ToLowerInvariant();
+			return full;
+		}
+		catch
+		{
+			string f = path.Replace('\\', '/').Trim();
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				f = f.ToLowerInvariant();
+			return f;
+		}
+	}
+
 	/// <summary>
 	/// Adds the specified show file path to the top of the recent files list.
 	/// Duplicates are moved to the top rather than added again. The list is trimmed
@@ -148,10 +169,12 @@ public partial class UserDataManager : Node
 			return;
 		}
 
-		// Remove existing entry (case-sensitive; typical for file paths on most systems)
-		_recentShowFiles.Remove(path);
+		string norm = NormalizeForRecent(path);
 
-		// Insert at front (most recent)
+		// Remove ALL existing entries that match (handles case, separators, relative paths etc.)
+		_recentShowFiles.RemoveAll(p => NormalizeForRecent(p) == norm);
+
+		// Insert the provided path at front (most recent). We could store norm instead, but keep caller's form.
 		_recentShowFiles.Insert(0, path);
 
 		// Trim to limit
@@ -172,7 +195,18 @@ public partial class UserDataManager : Node
 	/// <returns>A new List containing the current recent show file paths.</returns>
 	public List<string> GetRecentShowFiles()
 	{
-		return new List<string>(_recentShowFiles);
+		// Return deduplicated copy (using normalization) as a safety net
+		var seen = new HashSet<string>();
+		var result = new List<string>();
+		foreach (string p in _recentShowFiles)
+		{
+			string n = NormalizeForRecent(p);
+			if (seen.Add(n))
+			{
+				result.Add(p);
+			}
+		}
+		return result;
 	}
 
 	/// <summary>
@@ -293,6 +327,27 @@ public partial class UserDataManager : Node
 						_recentShowFiles.Add(p);
 					}
 				}
+			}
+
+			// Deduplicate any legacy entries using path normalization (case, separators, etc.)
+			var seen = new HashSet<string>();
+			var deduped = new List<string>();
+			foreach (string p in _recentShowFiles)
+			{
+				string n = NormalizeForRecent(p);
+				if (!seen.Contains(n))
+				{
+					seen.Add(n);
+					deduped.Add(p);
+				}
+			}
+			int beforeDedup = _recentShowFiles.Count;
+			_recentShowFiles = deduped;
+
+			if (_recentShowFiles.Count < beforeDedup)
+			{
+				// Persist the deduplicated list
+				SaveUserData();
 			}
 
 			// Window state

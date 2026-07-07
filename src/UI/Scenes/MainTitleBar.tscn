@@ -102,21 +102,21 @@ layout_mode = 2
 
 [node name="MainMenuFile" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1199056670]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
+custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
 text = "File"
 
 [node name="MainMenuEdit" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=197758606]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
+custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
 text = "Edit"
 
 [node name="MainMenuView" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1002245581]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 0)
+custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
 text = "View"
@@ -257,7 +257,7 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 mouse_filter = 1
-text = "Open Recent ▶"
+text = "Open Recent "
 alignment = 0
 
 [node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=374009381]
@@ -308,6 +308,17 @@ text = "Hotkey"
 horizontal_alignment = 2
 vertical_alignment = 1
 
+[node name="FileOpenRecentArrow" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=311594630]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62172264, 0.62172264, 0.62172264, 1)
+theme_override_font_sizes/font_size = 8
+text = "▶"
+horizontal_alignment = 2
+vertical_alignment = 1
+
 [node name="DropMenuEdit" type="PanelContainer" parent="." unique_id=1141345260]
 unique_name_in_owner = true
 visible = false
@@ -353,12 +364,11 @@ layout_mode = 2
 [node name="DropMenuRecent" type="PanelContainer" parent="." unique_id=632060967]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(220, 60)
-layout_mode = 0
-offset_left = 195.0
-offset_top = 30.0
-offset_right = 430.0
-offset_bottom = 250.0
+layout_mode = 1
+offset_left = 260.0
+offset_top = 145.0
+offset_right = 264.0
+offset_bottom = 149.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
 
 [node name="MarginContainer" type="MarginContainer" parent="DropMenuRecent" unique_id=1895878778]

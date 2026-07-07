@@ -30,6 +30,9 @@ public partial class MainTitleBarUI : Control
     private PanelContainer _recentMenuPanel;
     private VBoxContainer _recentContainer;
 
+    // Timer for delayed close of submenus when mouse leaves the entire header menu area
+    private Timer _menuHideTimer;
+
     private Label _titleLabel;
     
     
@@ -46,6 +49,11 @@ public partial class MainTitleBarUI : Control
 
         _recentMenuPanel = GetNode<PanelContainer>("%DropMenuRecent");
         _recentContainer = _recentMenuPanel.GetNode<VBoxContainer>("MarginContainer/RecentContainer");
+
+        // Create timer for delayed submenu close on mouse leave
+        _menuHideTimer = new Timer { OneShot = true, WaitTime = 0.25f }; // 250ms delay for comfortable menu navigation
+        _menuHideTimer.Timeout += OnMenuHideTimeout;
+        AddChild(_menuHideTimer);
         
         GetNode<Button>("%TitleCue2Menu").Pressed += OnTitleCue2MenuPressed;
         GetNode<Button>("%TitleMainMenu").Toggled += OnTitleMainMenuToggled;
@@ -97,23 +105,24 @@ public partial class MainTitleBarUI : Control
         
         // Mouse over behavior
         GetNode<Button>("%MainMenuFile").MouseEntered += _onMainMenuFileHover;
-        GetNode<Button>("%MainMenuFile").MouseExited += () => _mouseInUi = false;
+        GetNode<Button>("%MainMenuFile").MouseExited += ScheduleMenuHide;
         GetNode<Button>("%MainMenuEdit").MouseEntered += _onMainMenuEditHover;
-        GetNode<Button>("%MainMenuEdit").MouseExited += () => _mouseInUi = false;
+        GetNode<Button>("%MainMenuEdit").MouseExited += ScheduleMenuHide;
         GetNode<Button>("%MainMenuView").MouseEntered += _onMainMenuViewHover;
-        GetNode<Button>("%MainMenuView").MouseExited += () => _mouseInUi = false;
-        GetNode<PanelContainer>("%DropMenuFile").MouseEntered += () => _mouseInUi = true;
-        GetNode<PanelContainer>("%DropMenuFile").MouseExited += () => _mouseInUi = false;
-        GetNode<PanelContainer>("%DropMenuEdit").MouseEntered += () => _mouseInUi = true;
-        GetNode<PanelContainer>("%DropMenuEdit").MouseExited += () => _mouseInUi = false;
-        GetNode<PanelContainer>("%DropMenuView").MouseEntered += () => _mouseInUi = true;
-        GetNode<PanelContainer>("%DropMenuView").MouseExited += () => _mouseInUi = false;
+        GetNode<Button>("%MainMenuView").MouseExited += ScheduleMenuHide;
+
+        GetNode<PanelContainer>("%DropMenuFile").MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
+        GetNode<PanelContainer>("%DropMenuFile").MouseExited += ScheduleMenuHide;
+        GetNode<PanelContainer>("%DropMenuEdit").MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
+        GetNode<PanelContainer>("%DropMenuEdit").MouseExited += ScheduleMenuHide;
+        GetNode<PanelContainer>("%DropMenuView").MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
+        GetNode<PanelContainer>("%DropMenuView").MouseExited += ScheduleMenuHide;
 
         // Recent submenu hover support
         GetNode<Button>("%FileOpenRecent").MouseEntered += _onFileOpenRecentHover;
-        GetNode<Button>("%FileOpenRecent").MouseExited += () => _mouseInUi = false;
-        GetNode<PanelContainer>("%DropMenuRecent").MouseEntered += () => _mouseInUi = true;
-        GetNode<PanelContainer>("%DropMenuRecent").MouseExited += () => _mouseInUi = false;
+        GetNode<Button>("%FileOpenRecent").MouseExited += ScheduleMenuHide;
+        GetNode<PanelContainer>("%DropMenuRecent").MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
+        GetNode<PanelContainer>("%DropMenuRecent").MouseExited += ScheduleMenuHide;
 
         GetNode<Button>("%AboutButton").TooltipText += Version.FullVersionString;
         
@@ -251,7 +260,7 @@ public partial class MainTitleBarUI : Control
         if (filePanel != null && filePanel.Visible)
         {
             // Use local position relative to our parent (same as other drops)
-            _recentMenuPanel.Position = new Vector2(filePanel.Position.X + filePanel.Size.X - 5, filePanel.Position.Y);
+            _recentMenuPanel.Position = new Vector2(filePanel.Position.X + filePanel.Size.X, GetNode<Button>("%FileOpenRecent").Position.Y);
         }
 
         _recentMenuPanel.Visible = true;
@@ -277,8 +286,56 @@ public partial class MainTitleBarUI : Control
         HideRecentSubmenu();
     }
 
+    private void ScheduleMenuHide()
+    {
+        _menuHideTimer?.Stop();
+        _menuHideTimer?.Start();
+    }
+
+    private void CancelMenuHide()
+    {
+        _menuHideTimer?.Stop();
+    }
+
+    private void OnMenuHideTimeout()
+    {
+        if (IsMouseOverMenuArea())
+        {
+            return; // mouse came back, keep open
+        }
+
+        HideAllDropdowns();
+        _mouseInUi = false;
+    }
+
+    private bool IsMouseOverMenuArea()
+    {
+        var mousePos = GetViewport().GetMousePosition();
+
+        if (IsControlUnderMouse("%MainMenuFile", mousePos)) return true;
+        if (IsControlUnderMouse("%MainMenuEdit", mousePos)) return true;
+        if (IsControlUnderMouse("%MainMenuView", mousePos)) return true;
+
+        if (IsControlUnderMouse("%DropMenuFile", mousePos)) return true;
+        if (IsControlUnderMouse("%DropMenuEdit", mousePos)) return true;
+        if (IsControlUnderMouse("%DropMenuView", mousePos)) return true;
+
+        if (IsControlUnderMouse("%FileOpenRecent", mousePos)) return true;
+        if (IsControlUnderMouse("%DropMenuRecent", mousePos)) return true;
+
+        return false;
+    }
+
+    private bool IsControlUnderMouse(string nodePath, Vector2 mousePos)
+    {
+        var ctrl = GetNodeOrNull<Control>(nodePath);
+        if (ctrl == null || !ctrl.Visible) return false;
+        return ctrl.GetGlobalRect().HasPoint(mousePos);
+    }
+
     private void _onMainMenuFileHover()
     {
+        CancelMenuHide();
         HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = true;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
@@ -288,6 +345,7 @@ public partial class MainTitleBarUI : Control
 
     private void _onMainMenuEditHover()
     {
+        CancelMenuHide();
         HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = true;
@@ -297,6 +355,7 @@ public partial class MainTitleBarUI : Control
 
     private void _onMainMenuViewHover()
     {
+        CancelMenuHide();
         HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
@@ -306,6 +365,7 @@ public partial class MainTitleBarUI : Control
 
     private void _onFileOpenRecentHover()
     {
+        CancelMenuHide();
         // Keep the parent File menu visible while showing the hover submenu to the right
         GetNode<PanelContainer>("%DropMenuFile").Visible = true;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
@@ -346,6 +406,7 @@ public partial class MainTitleBarUI : Control
             GD.Print("MainTitleBarUI:OnTitleMainMenuToggled - Hiding main menu");
             _mainMenu.Visible = false;
             _mainMenuActive = false;
+            _menuHideTimer?.Stop();
             HideAllDropdowns();
         }
     }
