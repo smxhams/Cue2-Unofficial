@@ -28,6 +28,25 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		VisibilityChanged += DisplayPatchMatrix;
 	}
 
+	public override void _ExitTree()
+	{
+		VisibilityChanged -= DisplayPatchMatrix;
+
+		// Explicitly free any generated patch matrix UI nodes (the objects created
+		// by instantiating AudioOutputPatchMatrix scenes and their dynamic children).
+		// This ensures no orphaned nodes when the audio patch settings UI is torn down
+		// (e.g. on quit, even if parent removal order is unusual).
+		var patchMatrixContainer = GetNodeOrNull<VBoxContainer>("%PatchesVBoxContainer");
+		if (patchMatrixContainer != null && IsInstanceValid(patchMatrixContainer))
+		{
+			foreach (Node child in patchMatrixContainer.GetChildren())
+			{
+				if (IsInstanceValid(child))
+					child.QueueFree();
+			}
+		}
+	}
+
 	private void NewPatchButtonPressed()
 	{
 		_globalData.Settings.CreateNewPatch();
@@ -45,7 +64,7 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		// Below loads 'AudioOutputPatchMatrix' instanced scene.
 		PackedScene patchMatrixScene = SceneLoader.LoadPackedScene("uid://dgy2bmmm4rjpt", out _);
 		
-		if (patchMatrixContainer.GetChildCount() > 0) {GD.Print("Has child, lets see if it finds a match"); }
+		if (patchMatrixContainer.GetChildCount() > 0) { GD.Print("SettingsAudioOutputPatch:DisplayPatchMatrix - Has child, let's see if it finds a match"); }
 
 		var childList = patchMatrixContainer.GetChildren();
 		var alreadyExistingPatches = new List<int>(); // List of patch ids that already have a patch matrix inst
@@ -53,7 +72,7 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		// Clean existing patch instances.
 		foreach (Node child in childList)
 		{
-			var id = child.Get("PatchId").AsInt16();
+			var id = child.Get("PatchId").AsInt32();
 			if (!patches.ContainsKey(id))
 			{
 				GD.Print($"Removing patch matrix {child.Name} as it does not exist in settings patch list");
@@ -62,7 +81,7 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 			else
 			{
 				alreadyExistingPatches.Add(id);
-				// TODO: Tell patch instance to check it's data
+				// TODO: Tell patch instance to check its data and refresh if needed
 			}
 		}
 		

@@ -1,3 +1,4 @@
+using System.Linq;
 using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
 using Godot;
@@ -38,6 +39,21 @@ public partial class Settings : Node
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
+    }
+
+    public override void _ExitTree()
+    {
+        // Ensure all AudioOutputPatch GodotObjects (which are never added to the scene tree)
+        // are explicitly Freed on shutdown to prevent leaks. They are owned by this static
+        // collection and the audio patch settings UI.
+        foreach (var patch in _audioOutputPatches.Values.ToList())
+        {
+            if (patch != null && GodotObject.IsInstanceValid(patch))
+            {
+                patch.Free();
+            }
+        }
+        _audioOutputPatches.Clear();
     }
     
     public Dictionary<int, AudioOutputPatch> GetAudioOutputPatches() => _audioOutputPatches;

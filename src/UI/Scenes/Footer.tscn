@@ -1,9 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://b6v72f8k5o0oy"]
+[gd_scene format=3 uid="uid://b6v72f8k5o0oy"]
 
 [ext_resource type="Script" uid="uid://521cf2c4d6w8" path="res://src/UI/Scenes/Footer.cs" id="1_48urq"]
 [ext_resource type="Script" uid="uid://d20wrpbn8dhip" path="res://src/Base/Minor/CurrentTime.cs" id="1_xxxho"]
 
-[node name="Footer" type="BoxContainer"]
+[node name="Footer" type="BoxContainer" unique_id=1180317834]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -14,16 +14,16 @@ grow_vertical = 0
 size_flags_horizontal = 3
 script = ExtResource("1_48urq")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="."]
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1842886661]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="BottomLeftContainer" type="HBoxContainer" parent="HBoxContainer"]
+[node name="BottomLeftContainer" type="HBoxContainer" parent="HBoxContainer" unique_id=640462786]
 layout_mode = 2
 size_flags_horizontal = 3
 alignment = 2
 
-[node name="DevicesFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+[node name="DevicesFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer" unique_id=361832124]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -31,20 +31,20 @@ theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
 theme_override_font_sizes/font_size = 9
 text = "Devices"
 
-[node name="VSeparator" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
+[node name="VSeparator" type="VSeparator" parent="HBoxContainer/BottomLeftContainer" unique_id=2111055442]
 layout_mode = 2
 
-[node name="ConnectionsFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+[node name="ConnectionsFooterButton" type="Button" parent="HBoxContainer/BottomLeftContainer" unique_id=750256126]
 layout_mode = 2
 focus_mode = 0
 theme_override_colors/font_color = Color(0.603922, 1, 0.572549, 1)
 theme_override_font_sizes/font_size = 9
 text = "Connections"
 
-[node name="VSeparator2" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
+[node name="VSeparator2" type="VSeparator" parent="HBoxContainer/BottomLeftContainer" unique_id=1977317024]
 layout_mode = 2
 
-[node name="LogCountButton" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+[node name="LogCountButton" type="Button" parent="HBoxContainer/BottomLeftContainer" unique_id=197043291]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Log, click to open full log"
@@ -53,10 +53,10 @@ theme_override_font_sizes/font_size = 9
 toggle_mode = true
 text = "Log 0"
 
-[node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomLeftContainer"]
+[node name="VSeparator3" type="VSeparator" parent="HBoxContainer/BottomLeftContainer" unique_id=1108915888]
 layout_mode = 2
 
-[node name="LogPrintout" type="Button" parent="HBoxContainer/BottomLeftContainer"]
+[node name="LogPrintout" type="Button" parent="HBoxContainer/BottomLeftContainer" unique_id=1540509163]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -68,32 +68,32 @@ alignment = 0
 text_overrun_behavior = 3
 clip_text = true
 
-[node name="BottomRightContainer" type="HBoxContainer" parent="HBoxContainer"]
+[node name="BottomRightContainer" type="HBoxContainer" parent="HBoxContainer" unique_id=249767914]
 layout_mode = 2
 alignment = 2
 
-[node name="BkgProcessStatusBar" type="ProgressBar" parent="HBoxContainer/BottomRightContainer"]
+[node name="BkgProcessStatusBar" type="ProgressBar" parent="HBoxContainer/BottomRightContainer" unique_id=1709098813]
 layout_mode = 2
 show_percentage = false
 
-[node name="VSeparator5" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
+[node name="VSeparator5" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=1068444882]
 layout_mode = 2
 
-[node name="ProcessTimeLabel" type="Label" parent="HBoxContainer/BottomRightContainer"]
+[node name="ProcessTimeLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578692]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Process tick latency"
 mouse_filter = 1
 
-[node name="VSeparator4" type="VSeparator" parent="HBoxContainer/BottomRightContainer"]
+[node name="VSeparator4" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=760459398]
 layout_mode = 2
 
-[node name="CurrentTime" type="Label" parent="HBoxContainer/BottomRightContainer"]
+[node name="CurrentTime" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=527951374]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 horizontal_alignment = 1
 script = ExtResource("1_xxxho")
 
-[node name="PanelContainer" type="PanelContainer" parent="HBoxContainer"]
+[node name="PanelContainer" type="PanelContainer" parent="HBoxContainer" unique_id=1032232413]
 visible = false
 layout_mode = 2

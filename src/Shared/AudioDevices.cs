@@ -159,7 +159,7 @@ public partial class AudioDevices : Node
 		    error = "Failed to open audio device: " + SDL.GetError();
 		    return null;
 	    }
-	    
+	     
 	    //Register Device
 	    var device = new AudioDevice(name, audioDevice, out string adError);
 	    if (adError != "")

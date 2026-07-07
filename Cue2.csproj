@@ -28,4 +28,7 @@
   <Content Include="src\UI\Scenes\Settings\SettingsInputMap.tscn" />
   <Content Include="src\UI\Scenes\Settings\SettingsWindow.tscn" />
 </ItemGroup>  
+<ItemGroup>
+  <Folder Include="src\Shared\Decoders\" />
+</ItemGroup>  
 </Project> 

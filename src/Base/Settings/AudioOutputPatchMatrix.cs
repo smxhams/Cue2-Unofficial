@@ -35,7 +35,8 @@ public partial class AudioOutputPatchMatrix : Control
     private Button _deletePatchButton;
     private Button _addChannelButton;
     
-    private int _deviceCount;
+    private bool _isRebuilding;
+    private bool _isDisposed;
     
     /// <summary>
     /// Initializes the node, loads required scenes, sets up UI elements, and connects signals.
@@ -63,11 +64,10 @@ public partial class AudioOutputPatchMatrix : Control
         
         
         // Load its patch info
-        GD.Print("AudioOutputPatchMatrix:_Ready - Patch matrix loaded with id: " + PatchId + " and name: " + Patch.Name);
-        
+        GD.Print($"AudioOutputPatchMatrix:_Ready - Patch matrix loaded with id: {PatchId} and name: {Patch?.Name}");
+
         _patchName = GetNode<LineEdit>("%PatchName");
-        _patchName.Text = Patch.Name;
-        GD.Print("AudioOutputPatchMatrix:_Ready - Patch name: " + Patch.Name);
+        _patchName.Text = Patch?.Name ?? "Unnamed";
         _patchName.TextChanged += PatchNameOnTextChanged;
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
@@ -76,10 +76,9 @@ public partial class AudioOutputPatchMatrix : Control
         _addChannelButton = GetNode<Button>("%AddChannelButton");
         _addChannelButton.Pressed += AddChannelButtonPressed;
         
-        // Signal from AudioDevices events
+        // Signal from AudioDevices events (hotplug etc). We unsubscribe in _ExitTree.
         _globalSignals.AudioDevicesChanged += SyncAudioDeviceDisplays;
-        
-        
+
         SyncAudioDeviceDisplays();
     }
 
@@ -88,6 +87,8 @@ public partial class AudioOutputPatchMatrix : Control
     /// </summary>
     private void DeletePatchButtonPressed()
     {
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
         _globalData.Settings.DeletePatch(Patch.Id);
         QueueFree();
     }
@@ -98,61 +99,72 @@ public partial class AudioOutputPatchMatrix : Control
     /// </summary>
     private async void SyncAudioDeviceDisplays()
     {
-        GD.Print("Syncing devices in audio output patch matrix");
-        // For now we remove devices and start fresh while developing, in future match agaisnt info instead.
-        
-        var deviceHeaders = _deviceContainer.GetChildren();
-        foreach (var deviceHeader in deviceHeaders)
-        {
-            deviceHeader.QueueFree();
-        }
-        var channelRows = _channelList.GetChildren();
-        foreach (var channelRow in channelRows)
-        {
-            if (channelRow.Name == "AddChannelButton") continue; // Excempt add channel butrton from being deleted.
-            channelRow.QueueFree();
-        }
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
+        if (_isRebuilding)
+            return;
 
-        await ToSignal(GetTree(), "process_frame");
-        
-        _availableDeviceList = _audioDevices.GetAvailableAudioDeviceNames();
-        
-        // CHANNELS (ROWS)
-        var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
-        foreach (var channel in sortedChannels)
+        _isRebuilding = true;
+        try
         {
-            NewChannelRow(channel);
-        }
+            GD.Print("AudioOutputPatchMatrix:SyncAudioDeviceDisplays - Syncing devices in audio output patch matrix");
+            // For now we remove devices and start fresh while developing, in future match against info instead.
 
-        // DEVICES (COLUMNS)
-        var unusedDeviceList = _availableDeviceList;
-        
-        foreach (var device in Patch.OutputDevices)
-        {
-            if (_availableDeviceList.Contains(device.Key))
+            var deviceHeaders = _deviceContainer.GetChildren();
+            foreach (var deviceHeader in deviceHeaders)
             {
-                NewUsedDeviceColumn(device.Key, device.Value);
-                unusedDeviceList.Remove(device.Key);
+                deviceHeader.QueueFree();
             }
-                
-            else
+            var channelRows = _channelList.GetChildren();
+            foreach (var channelRow in channelRows)
             {
-                NewUsedButNotFoundDeviceColumn(device.Key, device.Value);
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Device used in audio patch but not found: {device.Key}", 3);
-                unusedDeviceList.Remove(device.Key);
+                if (channelRow.Name == "AddChannelButton") continue; // Exempt add channel button from being deleted.
+                channelRow.QueueFree();
             }
-        }
 
-        foreach (var device in unusedDeviceList)
+            await ToSignal(GetTree(), "process_frame");
+
+            var available = _audioDevices.GetAvailableAudioDeviceNames() ?? new List<string>();
+            _availableDeviceList = available;
+
+            // CHANNELS (ROWS)
+            var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
+            foreach (var channel in sortedChannels)
+            {
+                NewChannelRow(channel);
+            }
+
+            // DEVICES (COLUMNS)
+            // Copy to avoid mutating the original available list when removing used devices.
+            var unusedDeviceList = new List<string>(_availableDeviceList);
+
+            foreach (var device in Patch.OutputDevices)
+            {
+                if (_availableDeviceList.Contains(device.Key))
+                {
+                    NewUsedDeviceColumn(device.Key, device.Value);
+                    unusedDeviceList.Remove(device.Key);
+                }
+                else
+                {
+                    NewUsedButNotFoundDeviceColumn(device.Key, device.Value);
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Device used in audio patch but not found: {device.Key}", 3);
+                    unusedDeviceList.Remove(device.Key);
+                }
+            }
+
+            foreach (var device in unusedDeviceList)
+            {
+                NewUnusedDeviceColumn(device);
+            }
+
+            // Then build all checkboxes between cue output channels and devices/device channels.
+            BuildPatchMatrix();
+        }
+        finally
         {
-            NewUnusedDeviceColumn(device);
+            _isRebuilding = false;
         }
-        
-
-        _deviceCount = _availableDeviceList.Count;
-        
-        // Then build all check boxs between cue output channels and devices/devicechannels.
-        BuildPatchMatrix();
     }
 
     
@@ -180,6 +192,8 @@ public partial class AudioOutputPatchMatrix : Control
         channelHBox.AddChild(deleteChannelButton);
         deleteChannelButton.Pressed += () =>
         {
+            if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+                return;
             Patch.RemoveChannel(channel.Key);
             SyncAudioDeviceDisplays();
         };
@@ -199,6 +213,8 @@ public partial class AudioOutputPatchMatrix : Control
         
         channelLabel.TextChanged += newText =>
         {
+            if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+                return;
             try
             {
                 Patch.RenameChannel(channel.Key, newText);
@@ -206,15 +222,14 @@ public partial class AudioOutputPatchMatrix : Control
             catch (Exception ex)
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to rename channel {channel.Key}: {ex.Message}", 2);
-                Console.WriteLine(ex);
-                throw;
+                GD.PrintErr($"AudioOutputPatchMatrix:NewChannelRow - Rename exception: {ex}");
             }
         };
     }
     
     private void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
     {
-        //Double check the device has been opened.
+        // Double-check the device is open (no-op + no emit if already open).
         _audioDevices.OpenAudioDevice(deviceName, out var _);
         
         
@@ -237,12 +252,10 @@ public partial class AudioOutputPatchMatrix : Control
         var label = header.GetChild<Label>(1);
         label.TooltipText = $"{deviceName}: Is used in patch but is currently unavailable.";
         var style = new StyleBoxFlat();
-        style.BgColor = new Color((float)1.0,(float)0.00,(float)0.00,(float)0.5);
+        style.BgColor = new Color(1.0f, 0.0f, 0.0f, 0.5f);
 
         header.AddThemeStyleboxOverride("panel", style);
-        
-        //label.AddThemeColorOverride("font_color", GlobalStyles.Danger);
-        
+
         var outputNodes = AddDeviceOutputColumns(deviceName, outputChannels);
         foreach (var outputNode in outputNodes)
         {
@@ -250,10 +263,13 @@ public partial class AudioOutputPatchMatrix : Control
         }
     }
     
+    /// <summary>
+    /// Creates header for a device that is available but not enabled in this patch.
+    /// </summary>
     private void NewUnusedDeviceColumn(string deviceName)
     {
         var header = LoadDeviceOutputDeviceHeader(deviceName);
-        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled";
+        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled (enable to use in patch)";
     }
 
 
@@ -272,20 +288,23 @@ public partial class AudioOutputPatchMatrix : Control
             outHeader.Set("ParentDevice", deviceName);
             outHeader.Set("OutputIndex", outputIndex);
         
+            // Capture locals for the closure
+            int capturedIndex = outputIndex;
             outputNameEdit.TextChanged += newText =>
             {
-                int idx = (int)outHeader.Get("OutputIndex");
-                if (!Patch.RenameDeviceChannel(deviceName, idx, newText))
+                if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+                    return;
+                if (!Patch.RenameDeviceChannel(deviceName, capturedIndex, newText))
                 {
                     // Revert to current (unchanged) name on failure
-                    string currentName = Patch.GetDeviceOutputName(deviceName, idx);
+                    string currentName = Patch.GetDeviceOutputName(deviceName, capturedIndex);
                     if (currentName != null)
                     {
                         outputNameEdit.Text = currentName;
                     }
                     else
                     {
-                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to revert output name for device '{deviceName}' at index {idx}", 2);
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to revert output name for device '{deviceName}' at index {capturedIndex}", 2);
                     }
                 }
             };
@@ -294,12 +313,17 @@ public partial class AudioOutputPatchMatrix : Control
         return deviceOutputNodes;
     }
     
+    /// <summary>
+    /// Adds a new default channel to the patch and refreshes the matrix.
+    /// </summary>
     private void AddChannelButtonPressed()
     {
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
         Patch.NewChannel("New Channel", out var error);
         if (error != null)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"{error}", 2);
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), error, 2);
             return;
         }
         SyncAudioDeviceDisplays();
@@ -318,28 +342,46 @@ public partial class AudioOutputPatchMatrix : Control
         toggleDeviceButton.SetPressed(state);
         
         // Connect functions to the use device check button. 
-        toggleDeviceButton.Toggled += presssed =>
+        // Temporarily unsubscribe from AudioDevicesChanged during Open+Sync to avoid the
+        // double-rebuild: OpenAudioDevice emits the signal, and we explicitly rebuild after model change.
+        toggleDeviceButton.Toggled += pressed =>
         {
-            if (presssed)
+            if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             {
-                AudioDevice enabledDevice = _audioDevices.OpenAudioDevice(name, out string error);
-                GD.Print("AudioOutputPatchMatrix:NewUnusedDeviceColumn - When enabling audio device: " + error);
-                if (enabledDevice == null)
+                return;
+            }
+            _globalSignals.AudioDevicesChanged -= SyncAudioDeviceDisplays;
+            try
+            {
+                if (pressed)
                 {
-                    GD.Print($"AudioOutputPatchMatrix:NewUnusedDeviceColumn - Error enabling audio device. {error}");
-                    return;
+                    AudioDevice enabledDevice = _audioDevices.OpenAudioDevice(name, out string error);
+                    if (enabledDevice == null)
+                    {
+                        // Revert visual state without re-triggering Toggled
+                        toggleDeviceButton.SetPressedNoSignal(false);
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to enable audio device '{name}': {error}", 2);
+                        return;
+                    }
+
+                    int outputCount = enabledDevice.Channels;
+                    Patch.AddDeviceOutputs(name, outputCount);
+                    instance.Set("DeviceId", enabledDevice.DeviceId);
+                }
+                else
+                {
+                    Patch.RemoveOutputDevice(name);
                 }
 
-                int outputCount = enabledDevice.Channels;
-                Patch.AddDeviceOutputs(name, outputCount);
-                instance.Set("DeviceId", enabledDevice.DeviceId);
-
+                SyncAudioDeviceDisplays();
             }
-            else
+            finally
             {
-                Patch.RemoveOutputDevice(name);
+                if (!_isDisposed && GodotObject.IsInstanceValid(this))
+                {
+                    _globalSignals.AudioDevicesChanged += SyncAudioDeviceDisplays;
+                }
             }
-            SyncAudioDeviceDisplays();
         };
         return instance;
     }
@@ -349,7 +391,10 @@ public partial class AudioOutputPatchMatrix : Control
     /// </summary>
     private async void BuildPatchMatrix()
     {
-        // For now remove everything and start over on each build - eventauly should build once and update
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
+
+        // For now remove everything and start over on each build - eventually should build once and update
         var children = _patchMatrix.GetChildren();
         foreach (var child in children)
         {
@@ -361,17 +406,16 @@ public partial class AudioOutputPatchMatrix : Control
         var deviceHeaders = _deviceContainer.GetChildren();
 
         // Calculate column count
-        var culumnCount = deviceHeaders.Count;
-        _patchMatrix.Columns = culumnCount;
+        var columnCount = deviceHeaders.Count;
+        _patchMatrix.Columns = columnCount;
 
         var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
 
         foreach (var channel in sortedChannels)
         {
             int channelId = channel.Key;
-            //GD.Print($"{channel.Key} : {channel.Value}");
 
-            for (int col = 0; col < culumnCount; col++)
+            for (int col = 0; col < columnCount; col++)
             {
                 var header = deviceHeaders[col];
 
@@ -385,47 +429,17 @@ public partial class AudioOutputPatchMatrix : Control
 
                     CheckBox checkBox = _checkBoxScene.Instantiate<CheckBox>();
 
-                    // Check if this channel is already routed to this output
-                    if (Patch.OutputDevices.TryGetValue(deviceName, out var outputs) &&
-                        outputIndex >= 0 && outputIndex < outputs.Count)
-                    {
-                        var channelList = outputs[outputIndex].RoutedChannels;
-                        checkBox.ButtonPressed = channelList.Contains(channelId);
-                    }
-                    else
-                    {
-                        checkBox.ButtonPressed = false;
-                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                            $"Output at index {outputIndex} not found for device {deviceName} during matrix build", 1);
-                    }
+                    // Use helper for initial state
+                    checkBox.ButtonPressed = Patch.IsChannelRouted(deviceName, outputIndex, channelId);
 
                     checkBox.Toggled += pressed =>
                     {
+                        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+                            return;
                         try
                         {
-                            if (Patch.OutputDevices.TryGetValue(deviceName, out var outputsInner) &&
-                                outputIndex >= 0 && outputIndex < outputsInner.Count)
-                            {
-                                var channelListInner = outputsInner[outputIndex].RoutedChannels;
-                                if (pressed)
-                                {
-                                    if (!channelListInner.Contains(channelId))
-                                    {
-                                        channelListInner.Add(channelId);
-                                        GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix - Routed channel {channelId} to {deviceName}:index {outputIndex}");
-                                    }
-                                }
-                                else
-                                {
-                                    channelListInner.Remove(channelId);
-                                    GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix -Unrouted channel {channelId} from {deviceName}:index {outputIndex}");
-                                }
-                            }
-                            else
-                            {
-                                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                                    $"Failed to update routing for {deviceName}:index {outputIndex}", 2);
-                            }
+                            Patch.SetRouting(deviceName, outputIndex, channelId, pressed);
+                            GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix - {(pressed ? "Routed" : "Unrouted")} channel {channelId} to {deviceName}:index {outputIndex}");
                         }
                         catch (Exception ex)
                         {
@@ -433,7 +447,6 @@ public partial class AudioOutputPatchMatrix : Control
                                 $"Error updating channel routing: {ex.Message}", 2);
                         }
                     };
-
 
                     _patchMatrix.AddChild(checkBox);
                 }
@@ -454,6 +467,8 @@ public partial class AudioOutputPatchMatrix : Control
     /// <param name="newtext">The new text entered by the user.</param>
     private void PatchNameOnTextChanged(string newtext)
     {
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
         Patch.Name = newtext;
         _globalData.Settings.UpdatePatch(Patch);
     }
@@ -463,10 +478,55 @@ public partial class AudioOutputPatchMatrix : Control
     /// </summary>
     private void _onRefreshButtonPressed()
     {
+        if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
         SyncAudioDeviceDisplays();
     }
     
     
 
-    
+    /// <summary>
+    /// Unsubscribes from global signals, disconnects handlers, and explicitly frees
+    /// dynamically generated child nodes (channel rows, device headers/outputs, checkboxes,
+    /// filler controls etc.) created during patch matrix building. This prevents leaks
+    /// of Godot objects that were instantiated for the UI but might not be freed if
+    /// parents are removed without cascading properly (especially on app quit).
+    /// </summary>
+    public override void _ExitTree()
+    {
+        _isDisposed = true;
+
+        if (_globalSignals != null && GodotObject.IsInstanceValid(_globalSignals))
+        {
+            _globalSignals.AudioDevicesChanged -= SyncAudioDeviceDisplays;
+        }
+
+        // Disconnect direct child signal handlers (release any captured references in method groups).
+        if (_patchName != null && GodotObject.IsInstanceValid(_patchName))
+            _patchName.TextChanged -= PatchNameOnTextChanged;
+        if (_deletePatchButton != null && GodotObject.IsInstanceValid(_deletePatchButton))
+            _deletePatchButton.Pressed -= DeletePatchButtonPressed;
+        if (_addChannelButton != null && GodotObject.IsInstanceValid(_addChannelButton))
+            _addChannelButton.Pressed -= AddChannelButtonPressed;
+
+        // Proactively QueueFree all objects we generated while building the matrix UI.
+        // These include: channel HBoxes + their Buttons/LineEdits, device header Panels,
+        // output header Panels, CheckBoxes for the matrix, and empty filler Controls.
+        FreeDynamicChildren(_deviceContainer);
+        FreeDynamicChildren(_channelList, skipName: "AddChannelButton");
+        FreeDynamicChildren(_patchMatrix);
+    }
+
+    private void FreeDynamicChildren(Node parent, string skipName = null)
+    {
+        if (parent == null || !GodotObject.IsInstanceValid(parent)) return;
+
+        var children = parent.GetChildren();
+        foreach (Node child in children)
+        {
+            if (skipName != null && child.Name == skipName) continue;
+            if (GodotObject.IsInstanceValid(child))
+                child.QueueFree();
+        }
+    }
 }

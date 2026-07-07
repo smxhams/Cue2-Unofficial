@@ -221,6 +221,53 @@ public partial class AudioOutputPatch : Godot.GodotObject
         }
         GD.Print($"Could not remove device: {deviceName} from patch: {Name}");
     }
+
+    /// <summary>
+    /// Returns whether the specified patch channel is routed to a device output.
+    /// </summary>
+    /// <param name="deviceName">Name of the output device.</param>
+    /// <param name="outputIndex">Index of the output on the device.</param>
+    /// <param name="channelId">Patch channel ID.</param>
+    /// <returns>True if routed; otherwise false.</returns>
+    public bool IsChannelRouted(string deviceName, int outputIndex, int channelId)
+    {
+        if (OutputDevices.TryGetValue(deviceName, out var outputs) &&
+            outputIndex >= 0 && outputIndex < outputs.Count)
+        {
+            return outputs[outputIndex].RoutedChannels.Contains(channelId);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Sets or clears routing of a patch channel to a specific device output.
+    /// </summary>
+    /// <param name="deviceName">Name of the output device.</param>
+    /// <param name="outputIndex">Index of the output on the device.</param>
+    /// <param name="channelId">Patch channel ID.</param>
+    /// <param name="routed">True to route (add), false to unroute (remove).</param>
+    public void SetRouting(string deviceName, int outputIndex, int channelId, bool routed)
+    {
+        if (!OutputDevices.TryGetValue(deviceName, out var outputs) ||
+            outputIndex < 0 || outputIndex >= outputs.Count)
+        {
+            GD.PrintErr($"AudioOutputPatch:SetRouting - Invalid device/output for {deviceName}:{outputIndex}");
+            return;
+        }
+
+        var list = outputs[outputIndex].RoutedChannels;
+        if (routed)
+        {
+            if (!list.Contains(channelId))
+            {
+                list.Add(channelId);
+            }
+        }
+        else
+        {
+            list.Remove(channelId);
+        }
+    }
     
     public string GetDeviceOutputName(string deviceName, int outputIndex)
     {
