@@ -20,6 +20,12 @@ public partial class MainWindowHandles: Control
 	private Vector2I _dragOffset;
 
 	private Vector2I _minWindowSize = new Vector2I(600, 370);
+
+	// Debounce timer for window resize saves (only persist final size after mouse release / resize completes)
+	private Timer _resizeSaveTimer;
+	private Vector2I _pendingWindowSize;
+	private Vector2I _pendingWindowPosition;
+	private Vector2I _lastKnownPosition;
 	
 	private GlobalSignals _globalSignals;
 
@@ -47,6 +53,11 @@ public partial class MainWindowHandles: Control
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_windowId = GetWindow().GetWindowId();
 
+		// Setup debounce timer for efficient window size saving (only save after resize completes)
+		_resizeSaveTimer = new Timer { OneShot = true, WaitTime = 0.25f };
+		_resizeSaveTimer.Timeout += SavePendingWindowSize;
+		AddChild(_resizeSaveTimer);
+
 		// Set window size constraints
 		var window = GetWindow();
 		window.MinSize = _minWindowSize;
@@ -63,6 +74,56 @@ public partial class MainWindowHandles: Control
 		}
 		Vector2I totalSize = maxPos - minPos;
 		window.MaxSize = totalSize;
+
+		// Restore previous window size / position / maximized state from persistent user data.
+		// Position is restored relative to the display that currently contains the mouse cursor.
+		var udm = _globalData.UserDataManager;
+		if (udm != null)
+		{
+			var win = GetWindow();
+			if (udm.WasMaximized)
+			{
+				win.Mode = Window.ModeEnum.Maximized;
+			}
+			else if (udm.LastWindowSize.X >= _minWindowSize.X && udm.LastWindowSize.Y >= _minWindowSize.Y)
+			{
+				win.Size = udm.LastWindowSize;
+
+				// Place on the display where the mouse currently is, using last relative position
+				Vector2I mousePos = DisplayServer.MouseGetPosition();
+				int targetScreenIdx = 0;
+				Vector2I targetScreenPos = Vector2I.Zero;
+				int numScreens = DisplayServer.GetScreenCount();
+				for (int i = 0; i < numScreens; i++)
+				{
+					Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+					Vector2I scrSize = DisplayServer.ScreenGetSize(i);
+					Rect2I screenRect = new Rect2I(sPos, scrSize);
+					if (screenRect.HasPoint(mousePos))
+					{
+						targetScreenIdx = i;
+						targetScreenPos = sPos;
+						break;
+					}
+				}
+
+				Vector2I targetPos = targetScreenPos + udm.LastWindowPosition;
+
+				// Clamp so the window is at least partially visible on the target display
+				Vector2I targetMonitorSize = DisplayServer.ScreenGetSize(targetScreenIdx);
+				targetPos.X = Mathf.Clamp(targetPos.X, targetScreenPos.X, targetScreenPos.X + targetMonitorSize.X - 200);
+				targetPos.Y = Mathf.Clamp(targetPos.Y, targetScreenPos.Y, targetScreenPos.Y + targetMonitorSize.Y - 80);
+
+				win.Position = targetPos;
+			}
+		}
+
+		// Ensure initial state is persisted (first run or after restore)
+		{
+			SaveCurrentWindowState();
+		}
+
+		_lastKnownPosition = GetWindow().Position;
 
 		_globalSignals.LogAlert += _alertReceived;
 		
@@ -92,6 +153,9 @@ public partial class MainWindowHandles: Control
 		_bottomLeftHandle.GuiInput += OnBottomLeftHandleGuiInput;
 		_topLeftHandle.GuiInput += OnTopLeftHandleGuiInput;
 		_bottomRightHandle.GuiInput += OnBottomRightHandleGuiInput;
+
+		// Save window state on size changes (when not maximized)
+		GetWindow().SizeChanged += OnWindowSizeChanged;
 	}
 
 	private async void _alertReceived()
@@ -118,8 +182,14 @@ public partial class MainWindowHandles: Control
 				}
 				else
 				{
+					// Save current normal size/position before maximizing
+					_resizeSaveTimer.Stop();
+					SaveCurrentWindowState();
 					window.Mode = Window.ModeEnum.Maximized;
 				}
+
+				// Persist the resulting state
+				SaveCurrentWindowState();
 			}
 			else if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
 			{
@@ -203,5 +273,88 @@ public partial class MainWindowHandles: Control
 
 			_boarderStylebox.BorderColor = lerpedColor;
 		}
+
+		// Debounce save for window moves (position changes during drag)
+		CheckAndDebounceWindowPosition();
+	}
+
+	private void OnWindowSizeChanged()
+	{
+		var win = GetWindow();
+		if (win.Mode != Window.ModeEnum.Maximized)
+		{
+			_pendingWindowSize = win.Size;
+			_pendingWindowPosition = win.Position;
+			_resizeSaveTimer.Start();  // restart the debounce timer
+		}
+	}
+
+	private void SavePendingWindowSize()
+	{
+		SaveCurrentWindowState();
+	}
+
+	/// <summary>
+	/// Saves the current window size, relative position (to its display), and maximized state.
+	/// Computes relative position so that on restore we can place it at the matching relative spot on the mouse's current display.
+	/// </summary>
+	private void SaveCurrentWindowState()
+	{
+		var win = GetWindow();
+		bool isMax = win.Mode == Window.ModeEnum.Maximized;
+		Vector2I size = win.Size;
+		Vector2I globalPos = win.Position;
+
+		Vector2I relPos = globalPos;
+
+		if (!isMax)
+		{
+			// Find the screen the window's top-left belongs to (fallback to center)
+			int screenCount = DisplayServer.GetScreenCount();
+			for (int i = 0; i < screenCount; i++)
+			{
+				Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+				Vector2I sSize = DisplayServer.ScreenGetSize(i);
+				Rect2I screenRect = new Rect2I(sPos, sSize);
+
+				if (screenRect.HasPoint(globalPos))
+				{
+					relPos = globalPos - sPos;
+					break;
+				}
+
+				// Check window center as fallback
+				Vector2I center = globalPos + (size / 2);
+				if (screenRect.HasPoint(center))
+				{
+					relPos = globalPos - sPos;
+					break;
+				}
+			}
+		}
+
+		_globalData?.UserDataManager?.SetWindowState(size, relPos, isMax);
+	}
+
+	private void CheckAndDebounceWindowPosition()
+	{
+		var win = GetWindow();
+		if (win.Mode != Window.ModeEnum.Maximized)
+		{
+			Vector2I currentPos = win.Position;
+			if (currentPos != _lastKnownPosition)
+			{
+				_lastKnownPosition = currentPos;
+				_pendingWindowPosition = currentPos;
+				_pendingWindowSize = win.Size;  // capture size too
+				_resizeSaveTimer.Start();
+			}
+		}
+	}
+
+	public override void _ExitTree()
+	{
+		_resizeSaveTimer?.Stop();
+		SaveCurrentWindowState();
 	}
 }

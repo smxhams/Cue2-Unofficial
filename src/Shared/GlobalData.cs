@@ -63,6 +63,7 @@ public partial class GlobalData : Node
 	public DisplaysManager DisplaysManager;
 
 	public FileDropper FileDropper;
+	public UserDataManager UserDataManager;
 	
 	public int FocusedCue = -1;
 	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
@@ -178,6 +179,9 @@ public partial class GlobalData : Node
 		FileDropper = new FileDropper();
 		AddChild(FileDropper);
 
+		UserDataManager = new UserDataManager();
+		AddChild(UserDataManager);
+
 		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 		
 		int currentScreen = DisplayServer.WindowGetCurrentScreen(GetWindow().GetWindowId());
@@ -203,6 +207,28 @@ public partial class GlobalData : Node
 				GD.Print("Opening file: " + args.Last());
 				LaunchLoadPath = args.Last(); 
 				
+			}
+		}
+
+		// Apply startup preference only if no explicit file was provided via command line.
+		if (LaunchLoadPath == null && UserDataManager != null)
+		{
+			if (UserDataManager.Startup == UserDataManager.StartupBehavior.OpenLastShowfile)
+			{
+				var recents = UserDataManager.GetRecentShowFiles();
+				if (recents.Count > 0)
+				{
+					LaunchLoadPath = recents[0];
+					GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + LaunchLoadPath);
+				}
+				else
+				{
+					GD.Print("GlobalData:_Ready - Startup preference set to open last, but no recent showfiles found.");
+				}
+			}
+			else
+			{
+				GD.Print("GlobalData:_Ready - Startup preference: new showfile.");
 			}
 		}
 
@@ -301,7 +327,6 @@ public partial class GlobalData : Node
 					evData["meta"] = key.MetaPressed;
 					eventList.Add(evData);
 				}
-				// TODO: support other InputEvent types (joypad, mouse, etc.) in the future
 			}
 			// Always include the key so cleared actions (0 events) are saved explicitly.
 			data[action] = eventList;

@@ -2,6 +2,7 @@ using System;
 using Godot;
 using System.IO;
 using System.Threading.Tasks;
+using Cue2.UI.Scenes;
 using Cue2.UI.Utilities;
 using Godot.Collections;
 
@@ -26,6 +27,8 @@ public partial class SaveManager : Node
 	
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
+	private Timer _autosaveTimer;
+
 	public override void _Ready()
 	{
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
@@ -42,9 +45,18 @@ public partial class SaveManager : Node
 		_globalSignals.OpenSelectedSession += OpenSelectedSession;
 		
 		
+		// Setup autosave timer (disabled by default until interval set)
+		_autosaveTimer = new Timer { OneShot = false };
+		_autosaveTimer.Timeout += PerformAutosave;
+		AddChild(_autosaveTimer);
+
 		if (_globalData.LaunchLoadPath != null)
 		{
 			LoadOnLaunch();
+		}
+		else
+		{
+			ConfigureAutosave();
 		}
 		
 	}
@@ -57,6 +69,27 @@ public partial class SaveManager : Node
 		await ToSignal(GetTree(), "process_frame");
 		GD.Print("SaveManager:LoadOnLaunch - Load On Launch");
 		OpenSelectedSession(_globalData.LaunchLoadPath);
+		ConfigureAutosave();
+	}
+
+	/// <summary>
+	/// Configures the autosave timer based on UserDataManager.AutosaveInterval (in minutes).
+	/// If interval is 0 or no active session, autosave is disabled.
+	/// </summary>
+	public void ConfigureAutosave()
+	{
+		if (_autosaveTimer == null) return;
+
+		int intervalMinutes = _globalData.UserDataManager?.AutosaveInterval ?? 0;
+		if (intervalMinutes <= 0 || string.IsNullOrEmpty(_globalData.SessionPath))
+		{
+			_autosaveTimer.Stop();
+			return;
+		}
+
+		_autosaveTimer.WaitTime = intervalMinutes * 60.0;
+		_autosaveTimer.Start();
+		GD.Print($"SaveManager:ConfigureAutosave - Autosave enabled every {intervalMinutes} minute(s).");
 	}
 	
 	/// <summary>
@@ -162,6 +195,14 @@ public partial class SaveManager : Node
 		_globalData.SessionName = Path.GetFileNameWithoutExtension(sessionPath);
 		_globalData.SessionMediaPath = mediaPath;
 		_globalData.SessionWaveformsPath = waveFormPath;
+
+		// Also track newly saved shows in recents
+		_globalData.UserDataManager?.AddRecentShowFile(sessionPath);
+
+		ConfigureAutosave();
+
+		// Update title (in case signal timing)
+		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
 	}
 	
 	/// <summary>
@@ -185,15 +226,22 @@ public partial class SaveManager : Node
 			GD.PrintErr("SaveManager:LoadSession - File not found: " + selectedPath);
 			return;
 		}
+
+		// Set name early so title updates see it (signal handlers run in connection order)
+		_globalData.SessionPath = selectedPath;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
 		
 		ResetSession();
 		
 		LoadSession(selectedPath);
 		
-		// Update session info
-		_globalData.SessionPath = selectedPath;
-		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
-		
+		// Track in persistent recent files for "Open Recent" in header
+		_globalData.UserDataManager?.AddRecentShowFile(selectedPath);
+
+		ConfigureAutosave();
+
+		// Update title bar
+		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
 	}
 
 	private void ResetSession()
@@ -281,5 +329,124 @@ public partial class SaveManager : Node
 		GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
 		return false;
 	} 
+
+	/// <summary>
+	/// Performs an autosave by saving the current session data as a backup.
+	/// Also ensures the main file is up to date.
+	/// </summary>
+	private void PerformAutosave()
+	{
+		if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
+		{
+			_autosaveTimer?.Stop();
+			return;
+		}
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Performing autosave...", 0);
+		GD.Print("SaveManager:PerformAutosave - Autosave triggered.");
+
+		// First, update the main file
+		SaveSession(_globalData.SessionPath);
+
+		// Then create a backup copy in the Backups folder
+		CreateAutosaveBackup();
+	}
+
+	/// <summary>
+	/// Creates a timestamped backup of the current session in the session's Backups folder.
+	/// Prunes old backups to respect the BackupDepth setting.
+	/// </summary>
+	private void CreateAutosaveBackup()
+	{
+		if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
+			return;
+
+		string sessionDir = _globalData.SessionPath.GetBaseDir();
+		string backupDir = sessionDir + "/Backups";
+
+		try
+		{
+			if (!DirAccess.DirExistsAbsolute(backupDir))
+			{
+				DirAccess.MakeDirAbsolute(backupDir);
+			}
+
+			int depth = _globalData.UserDataManager?.BackupDepth ?? 3;
+			if (depth < 1) depth = 1;
+
+			string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+			string backupName = $"{_globalData.SessionName}_autosave_{timestamp}.c2";
+			string backupPath = backupDir + "/" + backupName;
+
+			// Serialize current data (same as SaveSession)
+			var saveData = new Dictionary();
+			var cueSaveData = _globalData.Cuelist.GetData();
+			saveData.Add("cues", cueSaveData);
+
+			var settingsData = _globalData.Settings.GetData();
+			saveData.Add("settings", settingsData);
+
+			string jsonString = Json.Stringify(saveData);
+
+			using var file = Godot.FileAccess.OpenEncryptedWithPass(backupPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
+			if (file != null)
+			{
+				file.StoreString(jsonString);
+				file.Close();
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Autosave backup created: {backupName}", 0);
+				GD.Print($"SaveManager:CreateAutosaveBackup - Backup saved to {backupPath}");
+			}
+
+			// Prune old backups
+			PruneAutosaveBackups(backupDir, depth);
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Autosave backup failed: {ex.Message}", 2);
+			GD.PrintErr($"SaveManager:CreateAutosaveBackup - Error: {ex.Message}");
+		}
+	}
+
+	/// <summary>
+	/// Removes old autosave backups so that only 'depth' most recent ones remain.
+	/// </summary>
+	private void PruneAutosaveBackups(string backupDir, int maxBackups)
+	{
+		if (!DirAccess.DirExistsAbsolute(backupDir)) return;
+
+		var dir = DirAccess.Open(backupDir);
+		if (dir == null) return;
+
+		var backupFiles = new System.Collections.Generic.List<string>();
+		string fileName = dir.GetNext();
+		while (!string.IsNullOrEmpty(fileName))
+		{
+			if (!dir.CurrentIsDir() && fileName.Contains("_autosave_") && fileName.EndsWith(".c2"))
+			{
+				backupFiles.Add(backupDir + "/" + fileName);
+			}
+			fileName = dir.GetNext();
+		}
+
+		if (backupFiles.Count <= maxBackups) return;
+
+		// Sort by last write time, oldest first
+		backupFiles.Sort((a, b) => File.GetLastWriteTime(a).CompareTo(File.GetLastWriteTime(b)));
+
+		int count = backupFiles.Count;
+		int toDelete = count - maxBackups;
+		for (int i = 0; i < toDelete; i++)
+		{
+			try
+			{
+				File.Delete(backupFiles[i]);
+				GD.Print($"SaveManager:PruneAutosaveBackups - Deleted old backup {backupFiles[i]}");
+			}
+			catch (Exception ex)
+			{
+				GD.PrintErr($"SaveManager:PruneAutosaveBackups - Failed to delete {backupFiles[i]}: {ex.Message}");
+			}
+		}
+	}
 }
 

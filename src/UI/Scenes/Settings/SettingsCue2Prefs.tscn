@@ -1,0 +1,134 @@
+[gd_scene format=3 uid="uid://i5x3q04qutpg"]
+
+[ext_resource type="Script" uid="uid://8n0qcelm34wc" path="res://src/UI/Scenes/Settings/SettingsCue2Prefs.cs" id="1_2fks0"]
+
+[node name="SettingsCue2Prefs" type="ScrollContainer" unique_id=1335538034]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_2fks0")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1641340464]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Header" type="Label" parent="VBoxContainer" unique_id=681831879]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Cue2 Preferences"
+vertical_alignment = 1
+uppercase = true
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer" unique_id=1889948562]
+layout_mode = 2
+
+[node name="Row1" type="HBoxContainer" parent="VBoxContainer" unique_id=1910086939]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBoxContainer/Row1" unique_id=244064248]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "General preferences, these are persistant independant of show file settings."
+
+[node name="StartupRow" type="HBoxContainer" parent="VBoxContainer" unique_id=1234567890]
+layout_mode = 2
+
+[node name="StartupLabel" type="Label" parent="VBoxContainer/StartupRow" unique_id=9876543210]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Startup"
+vertical_alignment = 1
+tooltip_text = "What to do on launch if no file is specified via command line"
+
+[node name="StartupOptionButton" type="OptionButton" parent="VBoxContainer/StartupRow" unique_id=1122334455]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+focus_mode = 0
+selected = 0
+item_count = 2
+popup/item_0/text = "Open last showfile"
+popup/item_0/id = 0
+popup/item_1/text = "New showfile"
+popup/item_1/id = 1
+tooltip_text = "What to do on launch if no file is specified via command line"
+
+[node name="StartupResetButton" type="Button" parent="VBoxContainer/StartupRow" unique_id=5566778899]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="AutosaveRow" type="HBoxContainer" parent="VBoxContainer" unique_id=6677889900]
+layout_mode = 2
+
+[node name="AutosaveLabel" type="Label" parent="VBoxContainer/AutosaveRow" unique_id=7788990011]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Autosave Interval (min, 0=off)"
+vertical_alignment = 1
+tooltip_text = "Minutes between automatic saves. 0 disables autosave."
+
+[node name="AutosaveInterval" type="SpinBox" parent="VBoxContainer/AutosaveRow" unique_id=8899001122]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 60.0
+value = 5.0
+allow_greater = true
+allow_lesser = false
+tooltip_text = "Minutes between automatic saves. 0 disables autosave."
+
+[node name="AutosaveResetButton" type="Button" parent="VBoxContainer/AutosaveRow" unique_id=2233445566]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="BackupRow" type="HBoxContainer" parent="VBoxContainer" unique_id=9900112233]
+layout_mode = 2
+
+[node name="BackupLabel" type="Label" parent="VBoxContainer/BackupRow" unique_id=0011223344]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Backup Depth"
+vertical_alignment = 1
+tooltip_text = "How many previous autosave versions to keep in the Backups folder."
+
+[node name="BackupDepth" type="SpinBox" parent="VBoxContainer/BackupRow" unique_id=1122334455]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 20.0
+value = 3.0
+allow_greater = true
+allow_lesser = false
+tooltip_text = "How many previous autosave versions to keep in the Backups folder."
+
+[node name="BackupResetButton" type="Button" parent="VBoxContainer/BackupRow" unique_id=3344556677]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"

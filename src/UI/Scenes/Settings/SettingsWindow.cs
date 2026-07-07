@@ -92,6 +92,7 @@ public partial class SettingsWindow : Window
 			"Cue Lights" => "CueLights",
 			"OSC Connections" => "SettingsOscConnections",
 			"OSC Listener" => "SettingsOscListen",
+			"Cue2 Preferences" => "SettingsCue2Prefs",
 			_ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
 		};
 	
@@ -147,6 +148,10 @@ public partial class SettingsWindow : Window
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiVideoCueDefaults.SetText(0, "Video Defaults");
 		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues.");
+		
+		TreeItem tiCue2Preferences = _setTree.CreateItem(root);
+		tiCue2Preferences.SetText(0, "Cue2 Preferences");
+		tiCue2Preferences.SetTooltipText(0, "Set showfile independant preferences");
 	}
 
 	public override void _ExitTree()

@@ -1,5 +1,7 @@
 using Godot;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Cue2.Base;
 using Cue2.Shared;
@@ -20,11 +22,30 @@ public partial class MainTitleBarUI : Control
     private Button _mainMenuButton;
     private bool _mainMenuActive = false;
     private bool _mouseInUi = false;
+
+    private GlobalData _globalData;
+    private VBoxContainer _fileMenuContainer;
+
+    // Recent submenu (hover activated from File > Open Recent)
+    private PanelContainer _recentMenuPanel;
+    private VBoxContainer _recentContainer;
+
+    private Label _titleLabel;
     
     
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNode<GlobalData>("/root/GlobalData");
+
+        _titleLabel = GetNode<Label>("%TitleLabel");
+        UpdateTitle();
+
+        _fileMenuContainer = GetNode<PanelContainer>("%DropMenuFile")
+            .GetNode<VBoxContainer>("MarginContainer/dmFileContainer");
+
+        _recentMenuPanel = GetNode<PanelContainer>("%DropMenuRecent");
+        _recentContainer = _recentMenuPanel.GetNode<VBoxContainer>("MarginContainer/RecentContainer");
         
         GetNode<Button>("%TitleCue2Menu").Pressed += OnTitleCue2MenuPressed;
         GetNode<Button>("%TitleMainMenu").Toggled += OnTitleMainMenuToggled;
@@ -42,11 +63,19 @@ public partial class MainTitleBarUI : Control
         _mainMenuButton = GetNode<Button>("%TitleMainMenu");
         
         GetNode<Button>("%TitleMainMenu").MouseEntered += () => _mainMenuButton.ButtonPressed = true;
+
+        _globalSignals.NewSession += UpdateTitle;
+        _globalSignals.OpenSelectedSession += _ => CallDeferred(nameof(UpdateTitle));
+        _globalSignals.Save += UpdateTitle;
+        _globalSignals.SaveAs += UpdateTitle;
     
         // Drop down menu button behavior
         // File drop down
         GetNode<Button>("%FileNew").Pressed += () =>
         {
+            _globalData.SessionName = null;
+            _globalData.SessionPath = null;
+            UpdateTitle();
             _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
             _mainMenuButton.ButtonPressed = false;
         };
@@ -80,6 +109,12 @@ public partial class MainTitleBarUI : Control
         GetNode<PanelContainer>("%DropMenuView").MouseEntered += () => _mouseInUi = true;
         GetNode<PanelContainer>("%DropMenuView").MouseExited += () => _mouseInUi = false;
 
+        // Recent submenu hover support
+        GetNode<Button>("%FileOpenRecent").MouseEntered += _onFileOpenRecentHover;
+        GetNode<Button>("%FileOpenRecent").MouseExited += () => _mouseInUi = false;
+        GetNode<PanelContainer>("%DropMenuRecent").MouseEntered += () => _mouseInUi = true;
+        GetNode<PanelContainer>("%DropMenuRecent").MouseExited += () => _mouseInUi = false;
+
         GetNode<Button>("%AboutButton").TooltipText += Version.FullVersionString;
         
         SyncHotkeys();
@@ -96,27 +131,186 @@ public partial class MainTitleBarUI : Control
         string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");
         settingsBtn.TooltipText = "Settings" + (!string.IsNullOrEmpty(settingsHotkey) ? "\nHotkey: " + settingsHotkey : "");
     }
-    
+
+    public void UpdateTitle()
+    {
+        if (_titleLabel == null || _globalData == null) return;
+
+        if (!string.IsNullOrEmpty(_globalData.SessionName))
+        {
+            _titleLabel.Text = $"Cue2 - {_globalData.SessionName}";
+        }
+        else
+        {
+            _titleLabel.Text = "Cue2";
+        }
+    }
+
+    /// <summary>
+    /// Clears all children from the recent submenu container (used before repopulating).
+    /// </summary>
+    private void ClearRecentSubmenu()
+    {
+        if (_recentContainer == null) return;
+        foreach (Node child in _recentContainer.GetChildren())
+        {
+            if (IsInstanceValid(child))
+                child.QueueFree();
+        }
+    }
+
+    /// <summary>
+    /// Populates the hover submenu (DropMenuRecent) with recent show files.
+    /// Shows a "No recent files" message or the list + Clear option.
+    /// </summary>
+    private void PopulateRecentSubmenu()
+    {
+        ClearRecentSubmenu();
+        if (_recentContainer == null || _globalData?.UserDataManager == null) return;
+
+        var recents = _globalData.UserDataManager.GetRecentShowFiles();
+
+        if (recents.Count == 0)
+        {
+            var label = new Label
+            {
+                Text = "(No recent files)",
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            label.AddThemeColorOverride("font_color", new Color(0.55f, 0.55f, 0.55f));
+            _recentContainer.AddChild(label);
+            return;
+        }
+
+        // Small header for the submenu
+        var header = new Label
+        {
+            Text = "Recent Files",
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        header.AddThemeFontSizeOverride("font_size", 9);
+        header.AddThemeColorOverride("font_color", new Color(0.7f, 0.7f, 0.7f));
+        _recentContainer.AddChild(header);
+
+        const int maxToShow = 8;
+        int displayed = 0;
+        foreach (var path in recents)
+        {
+            if (displayed >= maxToShow) break;
+            displayed++;
+
+            string displayName = Path.GetFileName(path);
+            if (displayName.Length > 32)
+                displayName = displayName.Substring(0, 29) + "…";
+
+            var btn = new Button
+            {
+                Text = displayName,
+                Alignment = HorizontalAlignment.Left,
+                MouseFilter = Control.MouseFilterEnum.Pass,
+                TooltipText = path
+            };
+
+            string captured = path;
+            btn.Pressed += () => OnRecentFileSelected(captured);
+            _recentContainer.AddChild(btn);
+        }
+
+        // Separator + Clear
+        var sep = new HSeparator();
+        _recentContainer.AddChild(sep);
+
+        var clearBtn = new Button
+        {
+            Text = "Clear Recent",
+            Alignment = HorizontalAlignment.Left,
+            MouseFilter = Control.MouseFilterEnum.Pass
+        };
+        clearBtn.Pressed += OnClearRecents;
+        _recentContainer.AddChild(clearBtn);
+    }
+
+    private void OnRecentFileSelected(string path)
+    {
+        _globalSignals.EmitSignal(nameof(GlobalSignals.OpenSelectedSession), path);
+        _mainMenuButton.ButtonPressed = false; // close entire menu system
+    }
+
+    private void OnClearRecents()
+    {
+        _globalData?.UserDataManager?.ClearRecentShowFiles();
+        PopulateRecentSubmenu(); // refresh submenu in place to reflect empty state
+    }
+
+    private void ShowRecentSubmenu()
+    {
+        if (_recentMenuPanel == null) return;
+
+        // Position the recent submenu to the right of the File dropdown (improves on pure hardcoded offsets)
+        var filePanel = GetNodeOrNull<PanelContainer>("%DropMenuFile");
+        if (filePanel != null && filePanel.Visible)
+        {
+            // Use local position relative to our parent (same as other drops)
+            _recentMenuPanel.Position = new Vector2(filePanel.Position.X + filePanel.Size.X - 5, filePanel.Position.Y);
+        }
+
+        _recentMenuPanel.Visible = true;
+        PopulateRecentSubmenu();
+    }
+
+    private void HideRecentSubmenu()
+    {
+        if (_recentMenuPanel != null)
+        {
+            _recentMenuPanel.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// Hides all dropdown panels. Called on full menu close.
+    /// </summary>
+    private void HideAllDropdowns()
+    {
+        GetNodeOrNull<PanelContainer>("%DropMenuFile")?.Hide();
+        GetNodeOrNull<PanelContainer>("%DropMenuEdit")?.Hide();
+        GetNodeOrNull<PanelContainer>("%DropMenuView")?.Hide();
+        HideRecentSubmenu();
+    }
 
     private void _onMainMenuFileHover()
     {
+        HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = true;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
         GetNode<PanelContainer>("%DropMenuView").Visible = false;
         _mouseInUi = true;
     }
+
     private void _onMainMenuEditHover()
     {
+        HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = true;
         GetNode<PanelContainer>("%DropMenuView").Visible = false;
         _mouseInUi = true;
     }
+
     private void _onMainMenuViewHover()
     {
+        HideRecentSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
         GetNode<PanelContainer>("%DropMenuView").Visible = true;
+        _mouseInUi = true;
+    }
+
+    private void _onFileOpenRecentHover()
+    {
+        // Keep the parent File menu visible while showing the hover submenu to the right
+        GetNode<PanelContainer>("%DropMenuFile").Visible = true;
+        GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
+        GetNode<PanelContainer>("%DropMenuView").Visible = false;
+        ShowRecentSubmenu();
         _mouseInUi = true;
     }
     public override void _Input(InputEvent @event)
@@ -140,23 +334,20 @@ public partial class MainTitleBarUI : Control
 
     private void OnTitleMainMenuToggled(Boolean @toggle)
     {
-        GD.Print("Main Menu");
         if (@toggle == true)
         {
-            GD.Print("Hiding main menu");
+            GD.Print("MainTitleBarUI:OnTitleMainMenuToggled - Showing main menu");
             _mainMenu.Visible = true;
             _mainMenuActive = true;
+            // Note: actual File submenu population is lazy on hover
         }
         else
         {
-            GD.Print("Showing Main Menu");
+            GD.Print("MainTitleBarUI:OnTitleMainMenuToggled - Hiding main menu");
             _mainMenu.Visible = false;
             _mainMenuActive = false;
-            GetNode<PanelContainer>("%DropMenuFile").Visible = false;
-            GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
-            GetNode<PanelContainer>("%DropMenuView").Visible = false;
+            HideAllDropdowns();
         }
-
     }
 
 

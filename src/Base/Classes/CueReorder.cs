@@ -7,14 +7,17 @@ using Cue2.Shared;
 namespace Cue2.Base.Classes;
 
 /// <summary>
-/// Encapsulates the complex state machine, mouse tracking, drop target calculation,
+/// Encapsulates the state machine, mouse tracking, drop target calculation,
 /// and commit/cancel logic for reordering cues (including nesting support).
-/// This keeps CueList focused on higher-level concerns.
 /// </summary>
-internal sealed class CueReorder
+internal sealed class CueReorder(
+    CueList owner,
+    Control reorderCueControl,
+    Label reorderLocationLabel,
+    VBoxContainer reorderListContainer,
+    Panel reorderIndicatorPanel,
+    VBoxContainer cueContainer)
 {
-    private readonly CueList _owner;
-
     public bool IsActive { get; private set; }
     public ShellBar MouseOverShellBar { get; private set; }
     public bool InsertAbove { get; private set; }
@@ -23,34 +26,18 @@ internal sealed class CueReorder
     public bool DropAtEndAsTopLevel { get; private set; }
     public int DraggedCueId { get; private set; } = -1;
 
-    public CueReorder(CueList owner, Control reorderCueControl, Label reorderLocationLabel, VBoxContainer reorderListContainer, Panel reorderIndicatorPanel, VBoxContainer cueContainer)
-    {
-        _owner = owner;
-        _reorderCueControl = reorderCueControl;
-        _reorderLocationLabel = reorderLocationLabel;
-        _reorderListContainer = reorderListContainer;
-        _reorderIndicatorPanel = reorderIndicatorPanel;
-        _cueContainer = cueContainer;
-    }
-
-    private readonly Control _reorderCueControl;
-    private readonly Label _reorderLocationLabel;
-    private readonly VBoxContainer _reorderListContainer;
-    private readonly Panel _reorderIndicatorPanel;
-    private readonly VBoxContainer _cueContainer;
-
     public void Start(ShellBar shellbar)
     {
         if (IsActive) return;
 
         if (!shellbar.Selected)
         {
-            _owner.SelectIndividualForReorder(shellbar.CueId);
+            owner.SelectIndividualForReorder(shellbar.CueId);
         }
 
-        if (_reorderListContainer.GetChildCount() > 0)
+        if (reorderListContainer.GetChildCount() > 0)
         {
-            foreach (var child in _reorderListContainer.GetChildren())
+            foreach (var child in reorderListContainer.GetChildren())
             {
                 child.QueueFree();
             }
@@ -58,7 +45,7 @@ internal sealed class CueReorder
 
         PrepareReorderPreviewLabels();
 
-        _reorderCueControl.Visible = true;
+        reorderCueControl.Visible = true;
         IsActive = true;
         DraggedCueId = shellbar.CueId;
         ResetDropFlags();
@@ -73,7 +60,7 @@ internal sealed class CueReorder
 
         if (@event is InputEventMouseMotion eventMouseMotion)
         {
-            var reorderControl = _reorderCueControl;
+            var reorderControl = reorderCueControl;
             reorderControl.GlobalPosition = new Vector2(eventMouseMotion.Position.X, eventMouseMotion.Position.Y);
             UpdateDropTarget(eventMouseMotion.GlobalPosition.Y);
         }
@@ -102,7 +89,7 @@ internal sealed class CueReorder
 
         // Detect blank space below the *entire* list (after the visually last cue).
         // This should always result in a top-level append, even if the last cue is nested.
-        var lastShell = _owner.GetLastVisibleShellBar();
+        var lastShell = owner.GetLastVisibleShellBar();
         if (lastShell != null)
         {
             float lastBottom = lastShell.GetGlobalPosition().Y + lastShell.Size.Y;
@@ -113,10 +100,10 @@ internal sealed class CueReorder
                 InsertMakeChild = false;
                 DropAtEndAsTopLevel = true;
 
-                _reorderLocationLabel.Text = "Reorder at end (top level)";
-                var indicator = _reorderIndicatorPanel;
-                indicator.GlobalPosition = new Vector2(_cueContainer.GetGlobalPosition().X, lastBottom);
-                indicator.Size = new Vector2(_cueContainer.Size.X, 2);
+                reorderLocationLabel.Text = "Reorder at end (top level)";
+                var indicator = reorderIndicatorPanel;
+                indicator.GlobalPosition = new Vector2(cueContainer.GetGlobalPosition().X, lastBottom);
+                indicator.Size = new Vector2(cueContainer.Size.X, 2);
                 indicator.Visible = true;
 
                 handledAsEnd = true;
@@ -148,8 +135,8 @@ internal sealed class CueReorder
                     parentName = p?.Name ?? "?";
                 }
 
-                var label = _reorderLocationLabel;
-                var indicator = _reorderIndicatorPanel;
+                var label = reorderLocationLabel;
+                var indicator = reorderIndicatorPanel;
 
                 if (InsertBelow)
                 {
@@ -179,8 +166,8 @@ internal sealed class CueReorder
             }
             else
             {
-                _reorderLocationLabel.Text = "Cannot reorder here";
-                _reorderIndicatorPanel.Visible = false;
+                reorderLocationLabel.Text = "Cannot reorder here";
+                reorderIndicatorPanel.Visible = false;
             }
         }
     }
@@ -220,7 +207,7 @@ internal sealed class CueReorder
                 int prospective = (!InsertAbove && !InsertBelow) ? targetCue.Id : targetCue.ParentId;
                 if (WouldCreateCycle(sc, prospective))
                 {
-                    _owner.EmitLog($"CueList:EndReorder - Cycle would be created; aborting reorder for {sc.Name}", (int)LogType.Warning);
+                    owner.EmitLog($"CueList:EndReorder - Cycle would be created; aborting reorder for {sc.Name}", (int)LogType.Warning);
                     Cancel();
                     return;
                 }
@@ -364,13 +351,13 @@ internal sealed class CueReorder
 
     private void Cleanup(bool keepChanges)
     {
-        foreach (var child in _reorderListContainer.GetChildren())
+        foreach (var child in reorderListContainer.GetChildren())
         {
             child.QueueFree();
         }
 
         IsActive = false;
-        _reorderCueControl.Visible = false;
+        reorderCueControl.Visible = false;
         MouseOverShellBar = null;
         ResetDropFlags();
         DraggedCueId = -1;
@@ -403,7 +390,7 @@ internal sealed class CueReorder
             label.Text = selectedCue.Name;
             label.AddThemeFontSizeOverride("font_size", 9);
             label.AddThemeColorOverride("font_color", new Color(0.7f, 0.7f, 0.7f, 0.5f));
-            _reorderListContainer.AddChild(label);
+            reorderListContainer.AddChild(label);
         }
     }
 
@@ -411,27 +398,27 @@ internal sealed class CueReorder
     {
         if (DropAtEndAsTopLevel)
         {
-            return (_cueContainer, _cueContainer.GetChildCount(), -1, false);
+            return (_cueContainer: cueContainer, cueContainer.GetChildCount(), -1, false);
         }
 
         var targetShell = MouseOverShellBar;
         if (targetShell == null)
-            return (_cueContainer, 0, -1, false);
+            return (_cueContainer: cueContainer, 0, -1, false);
 
-        VBoxContainer container = _cueContainer;
+        VBoxContainer container = cueContainer;
         int newPid = -1;
         bool makeChild = false;
 
         if (!InsertAbove && !InsertBelow)
         {
-            container = targetShell.ShellChildContainer ?? _cueContainer;
+            container = targetShell.ShellChildContainer ?? cueContainer;
             newPid = targetShell.CueId;
             makeChild = true;
         }
         else if (CueList.FetchCueFromId(targetShell.CueId)?.ParentId != -1)
         {
             var targetParent = CueList.FetchCueFromId(CueList.FetchCueFromId(targetShell.CueId).ParentId);
-            container = targetParent?.ShellBar?.ShellChildContainer ?? _cueContainer;
+            container = targetParent?.ShellBar?.ShellChildContainer ?? cueContainer;
             newPid = targetParent?.Id ?? -1;
         }
 

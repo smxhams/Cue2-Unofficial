@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://db8fxhod3yfo6"]
+[gd_scene format=3 uid="uid://db8fxhod3yfo6"]
 
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_2nc7k"]
 [ext_resource type="Texture2D" uid="uid://duxbn13mi4oiw" path="res://src/UI/Assets/icon32.png" id="1_bd8jg"]
@@ -34,7 +34,7 @@ border_width_right = 1
 border_width_bottom = 1
 border_color = Color(0.00392157, 0.231373, 0.25098, 1)
 
-[node name="MainTitleBar" type="Control"]
+[node name="MainTitleBar" type="Control" unique_id=745549436]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 3
 anchors_preset = 15
@@ -47,18 +47,19 @@ mouse_filter = 2
 theme = ExtResource("1_2nc7k")
 script = ExtResource("1_ijer2")
 
-[node name="Label" type="Label" parent="."]
+[node name="TitleLabel" type="Label" parent="." unique_id=1531342879]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
 offset_bottom = 23.0
 grow_horizontal = 2
 theme_override_font_sizes/font_size = 9
-text = "Cue 2"
+text = "Cue2"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="."]
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=831859912]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 1
 anchors_preset = 10
@@ -67,7 +68,7 @@ offset_bottom = 24.0
 grow_horizontal = 2
 mouse_filter = 2
 
-[node name="TitleCue2Menu" type="Button" parent="HBoxContainer"]
+[node name="TitleCue2Menu" type="Button" parent="HBoxContainer" unique_id=2031797913]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -80,7 +81,7 @@ theme_override_icons/icon = ExtResource("1_bd8jg")
 icon_alignment = 1
 expand_icon = true
 
-[node name="TitleMainMenu" type="Button" parent="HBoxContainer"]
+[node name="TitleMainMenu" type="Button" parent="HBoxContainer" unique_id=835904943]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -94,38 +95,38 @@ toggle_mode = true
 icon_alignment = 1
 expand_icon = true
 
-[node name="MainMenuContainer" type="HBoxContainer" parent="HBoxContainer"]
+[node name="MainMenuContainer" type="HBoxContainer" parent="HBoxContainer" unique_id=87305723]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="MainMenuFile" type="Button" parent="HBoxContainer/MainMenuContainer"]
+[node name="MainMenuFile" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1199056670]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 focus_mode = 0
 text = "File"
 
-[node name="MainMenuEdit" type="Button" parent="HBoxContainer/MainMenuContainer"]
+[node name="MainMenuEdit" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=197758606]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 focus_mode = 0
 text = "Edit"
 
-[node name="MainMenuView" type="Button" parent="HBoxContainer/MainMenuContainer"]
+[node name="MainMenuView" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1002245581]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 focus_mode = 0
 text = "View"
 
-[node name="SpacerContainer1" type="Container" parent="HBoxContainer"]
+[node name="SpacerContainer1" type="Container" parent="HBoxContainer" unique_id=471146666]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
-[node name="AboutButton" type="Button" parent="HBoxContainer"]
+[node name="AboutButton" type="Button" parent="HBoxContainer" unique_id=30696281]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -141,7 +142,7 @@ text = "
 icon_alignment = 1
 expand_icon = true
 
-[node name="SettingsButton" type="Button" parent="HBoxContainer"]
+[node name="SettingsButton" type="Button" parent="HBoxContainer" unique_id=1380699086]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -154,12 +155,12 @@ toggle_mode = true
 icon_alignment = 1
 expand_icon = true
 
-[node name="SpacerContainer2" type="Container" parent="HBoxContainer"]
+[node name="SpacerContainer2" type="Container" parent="HBoxContainer" unique_id=773727711]
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="WindowMinimizeButton" type="Button" parent="HBoxContainer"]
+[node name="WindowMinimizeButton" type="Button" parent="HBoxContainer" unique_id=914024673]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -172,7 +173,7 @@ theme_override_icons/icon = SubResource("AtlasTexture_ijer2")
 icon_alignment = 1
 expand_icon = true
 
-[node name="WindowExpandButton" type="Button" parent="HBoxContainer"]
+[node name="WindowExpandButton" type="Button" parent="HBoxContainer" unique_id=413291982]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -185,7 +186,7 @@ theme_override_icons/icon = SubResource("AtlasTexture_0baon")
 icon_alignment = 1
 expand_icon = true
 
-[node name="ExitButton" type="Button" parent="HBoxContainer"]
+[node name="ExitButton" type="Button" parent="HBoxContainer" unique_id=1450936800]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -198,28 +199,28 @@ theme_override_icons/icon = SubResource("AtlasTexture_w68qa")
 icon_alignment = 1
 expand_icon = true
 
-[node name="DropMenuFile" type="PanelContainer" parent="."]
+[node name="DropMenuFile" type="PanelContainer" parent="." unique_id=212532090]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(100, 78)
+custom_minimum_size = Vector2(140, 78)
 layout_mode = 0
 offset_left = 60.0
 offset_top = 30.0
-offset_right = 200.0
+offset_right = 240.0
 offset_bottom = 108.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
 
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuFile"]
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuFile" unique_id=1864912724]
 layout_mode = 2
 theme_override_constants/margin_left = 1
 theme_override_constants/margin_top = 1
 theme_override_constants/margin_right = 1
 theme_override_constants/margin_bottom = 1
 
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuFile/MarginContainer"]
+[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=1194183248]
 layout_mode = 2
 
-[node name="FileNew" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+[node name="FileNew" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=177293339]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -227,7 +228,7 @@ mouse_filter = 1
 text = "New Session"
 alignment = 0
 
-[node name="FileSave" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+[node name="FileSave" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=189414062]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -235,7 +236,7 @@ mouse_filter = 1
 text = "Save"
 alignment = 0
 
-[node name="FileSaveAs" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+[node name="FileSaveAs" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=2018752184]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -243,7 +244,7 @@ mouse_filter = 1
 text = "Save As"
 alignment = 0
 
-[node name="FileOpenSession" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+[node name="FileOpenSession" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=1267218861]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
@@ -251,11 +252,19 @@ mouse_filter = 1
 text = "Open"
 alignment = 0
 
-[node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer"]
+[node name="FileOpenRecent" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=1749316654]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Open Recent ▶"
+alignment = 0
+
+[node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=374009381]
 layout_mode = 2
 mouse_filter = 2
 
-[node name="FileNewHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
+[node name="FileNewHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1450554340]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -266,7 +275,7 @@ text = "Hotkey"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="FileSaveHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
+[node name="FileSaveHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1747158170]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -277,7 +286,7 @@ text = "Hotkey"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="FileSaveAsHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
+[node name="FileSaveAsHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1194011861]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -288,7 +297,7 @@ text = "Hotkey"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="FileOpenHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
+[node name="FileOpenHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1229360708]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -299,7 +308,7 @@ text = "Hotkey"
 horizontal_alignment = 2
 vertical_alignment = 1
 
-[node name="DropMenuEdit" type="PanelContainer" parent="."]
+[node name="DropMenuEdit" type="PanelContainer" parent="." unique_id=1141345260]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(100, 78)
@@ -310,17 +319,17 @@ offset_right = 208.0
 offset_bottom = 108.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
 
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuEdit"]
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuEdit" unique_id=416709885]
 layout_mode = 2
 theme_override_constants/margin_left = 2
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 2
 theme_override_constants/margin_bottom = 2
 
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuEdit/MarginContainer"]
+[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuEdit/MarginContainer" unique_id=110020484]
 layout_mode = 2
 
-[node name="DropMenuView" type="PanelContainer" parent="."]
+[node name="DropMenuView" type="PanelContainer" parent="." unique_id=2034320650]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(100, 78)
@@ -331,16 +340,34 @@ offset_right = 263.0
 offset_bottom = 108.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
 
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuView"]
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuView" unique_id=122413070]
 layout_mode = 2
 theme_override_constants/margin_left = 2
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 2
 theme_override_constants/margin_bottom = 2
 
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuView/MarginContainer"]
+[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuView/MarginContainer" unique_id=752392253]
 layout_mode = 2
 
-[connection signal="mouse_exited" from="DropMenuFile/MarginContainer" to="DropMenuFile" method="_onMarginContainerMouseExited"]
-[connection signal="mouse_exited" from="DropMenuEdit/MarginContainer" to="DropMenuEdit" method="_onMarginContainerMouseExited"]
-[connection signal="mouse_exited" from="DropMenuView/MarginContainer" to="DropMenuView" method="_onMarginContainerMouseExited"]
+[node name="DropMenuRecent" type="PanelContainer" parent="." unique_id=632060967]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(220, 60)
+layout_mode = 0
+offset_left = 195.0
+offset_top = 30.0
+offset_right = 430.0
+offset_bottom = 250.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
+
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuRecent" unique_id=1895878778]
+layout_mode = 2
+theme_override_constants/margin_left = 1
+theme_override_constants/margin_top = 1
+theme_override_constants/margin_right = 1
+theme_override_constants/margin_bottom = 1
+
+[node name="RecentContainer" type="VBoxContainer" parent="DropMenuRecent/MarginContainer" unique_id=733323381]
+unique_name_in_owner = true
+layout_mode = 2
