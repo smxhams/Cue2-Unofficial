@@ -80,7 +80,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private FFmpegAudioDecoder _audioDecoder;
     private float[] _audioChannelGains;
     private CancellationTokenSource _audioCts;
-    private Task _audioConsumerTask;
+    // _audioConsumerTask removed (was starting duplicate consumer; decoder's internal ConsumerLoop now owns pushing for embedded audio via if(_isEmbedded))
     private Dictionary<uint, string> _deviceNameCache = new();
 
     private Dictionary<Control, TextureRect> _targetLayers = new();
@@ -485,25 +485,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _videoDecoder.Resume();
         if (_audioDecoder != null)
         {
-            await _audioDecoder.PlayAsync();
+            // Fire-and-forget: decoder's internal PlayAsync() starts its Producer + ConsumerLoopAsync.
+            // For _isEmbedded=true, the consumer inside FFmpegAudioDecoder will call videoPlayback.PushPcm directly.
+            // Do NOT start a second consumer loop here (would double-consume PcmQueue and break audio).
+            // Previously this did `await _audioDecoder.PlayAsync()` (which waits until audio end -- wrong for concurrent video) + extra loop.
+            _audioDecoder.PlayAsync();  // starts background decode+push for embedded audio
             _audioCts = new CancellationTokenSource();
-            _audioConsumerTask = Task.Run(() => AudioConsumerLoopAsync(_audioCts.Token));
-        }
-    }
-
-    private async Task AudioConsumerLoopAsync(CancellationToken token)
-    {
-        if (_audioDecoder == null) return;
-        foreach (var pcmChunk in _audioDecoder.PcmQueue.GetConsumingEnumerable(token))
-        {
-            if (!token.IsCancellationRequested && !IsPaused)
-            {
-                PushPcm(pcmChunk);
-                // Pace: sleep(chunkDurationMs)
-                int produced = pcmChunk.Length / (_videoComponent.Metadata.AudioChannels * 4); // F32LE
-                long chunkMs = (long)(produced * 1000L / _videoComponent.Metadata.AudioSampleRate);
-                await Task.Delay((int)chunkMs, token);
-            }
+            // No separate _audioConsumerTask; rely on decoder's. (cleanup still cancels _audioCts if set, for safety)
         }
     }
 
@@ -713,8 +701,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         try
         {
-            //Decoder.PlayAsync(); // Start playback
-            if (_audioDecoder != null) await _audioDecoder.PlayAsync();
+            // Start decoder audio (if not already) without await: its internal consumer handles embedded push+pacing.
+            // (Avoiding await prevents blocking fade timer; main PlayAsync path also kicks it off.)
+            if (_audioDecoder != null) _audioDecoder.PlayAsync();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
@@ -957,7 +946,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (_isDisposed) return;
             _isExiting = true; // Prevent further operations
             _audioCts?.Cancel();
-            _audioConsumerTask?.Wait(TaskWaitTimeoutMs);
+            // (no _audioConsumerTask wait; decoder manages its consumer task internally)
             if (DeviceStreams != null)
             {
                 foreach (var stream in DeviceStreams.Values) SDL.DestroyAudioStream(stream);
@@ -984,7 +973,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (_isDisposed) return;
             _isExiting = true;
             _audioCts?.Cancel();
-            _audioConsumerTask?.Wait(TaskWaitTimeoutMs);
+            // (no separate audio consumer task)
             if (_audioDecoder != null)
             {
                 _audioDecoder.Stop();

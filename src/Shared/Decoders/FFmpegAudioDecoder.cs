@@ -10,12 +10,20 @@ using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Godot;
 
-namespace Cue2.Shared;
+namespace Cue2.Shared.Decoders;
 
 /// <summary>
 /// Decodes audio from FFmpeg to PCM buffers for SDL streaming.
 /// Manages packet/frame lifecycle, threading for low-latency, and controls (pause, stop, fade).
 /// Designed for cue playback: Preload packets, decode on-demand.
+/// 
+/// REVIEW NOTES (see plan.md for full):
+/// - Critical embedded audio fix moved consumer ownership to decoder (video no longer duplicates).
+/// - Added _isDisposed guards, centralized error via MediaEngine where possible.
+/// - Complex post-seek drain/trim uses gotos + PTS checks for sample accuracy on loops (fragile; consider refactor).
+/// - ArrayPool + BlockingCollection for perf (per AGENTS minimize allocs).
+/// - Dupe GetFFmpegError reduced; follows AV* lifecycle strictly in Dispose.
+/// - No globalSignals direct (callers log user-facing); all GD.Print prefixed.
 /// </summary>
 public class FFmpegAudioDecoder : IDisposable
 {
@@ -33,6 +41,7 @@ public class FFmpegAudioDecoder : IDisposable
     private AVChannelLayout _inChLayout, _outChLayout;
     private readonly object _lock = new object(); // Thread safety for state/controls
     
+    private bool _isDisposed = false; // Guard against use-after-dispose (aligns with video decoder + AGENTS resource rules)
 
     public volatile bool IsPlaying = false; // Volatile for thread visibility
     public volatile bool IsPaused = false;
@@ -49,7 +58,7 @@ public class FFmpegAudioDecoder : IDisposable
     private readonly ConcurrentQueue<byte[]> _preloadBuffer = new ConcurrentQueue<byte[]>(); // For preloading PCM chunks
     public const int PreloadMs = 1000; // Configurable preload time (ms) for low-latency start
     
-    public BlockingCollection<byte[]> PcmQueue;
+    private BlockingCollection<byte[]> PcmQueue; // Was public; now private (no external access post embedded consumer cleanup). Queue is internal to producer/consumer.
     private const int MaxBufferedChunks = 100; // Cap buffered chunks
     private long _queuedBytes = 0; // Track total bytes in PcmQueue for actual time estimation
     
@@ -79,10 +88,8 @@ public class FFmpegAudioDecoder : IDisposable
     /// </summary>
     public event EventHandler<long> LengthChanged;
 
-    /// <summary>Callback for PCM ready (set by ActiveVideoPlayback).</summary>
-    public Action<byte[]> PcmPushCallback { get; set; } = pcm => { };
+    // NOTE: PcmPushCallback was unused (dead code); pushes are done via direct calls to Active*Playback.PushPcm from the consumer loop (or _isEmbedded branch).
 
-    
     /// <summary>
     /// Initializes a new instance of the <see cref="FFmpegAudioDecoder"/> class.
     /// </summary>
@@ -133,6 +140,7 @@ public class FFmpegAudioDecoder : IDisposable
     /// <exception cref="Exception">Thrown on FFmpeg errors during initialization.</exception>
     public async Task InitAsync() 
     { 
+        if (_isDisposed) return;
         await Task.Run(() => 
         {
             unsafe
@@ -201,13 +209,13 @@ public class FFmpegAudioDecoder : IDisposable
                 }
                 
                 // Initial seek before preload
-                long startUs = (long)(_startTimeSec * 1_000_000); // Assume seconds; revert to *1000 if ms
+                long startUs = (long)(_startTimeSec * 1_000_000); // seconds (from component) to us
                 long seekTs = ffmpeg.av_rescale_q(startUs, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, _timeBase);
                 ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
                 if (ret < 0) 
                 {
-                    GD.PrintErr($"FFmpegAudioDecoder:InitAsync - Initial seek failed: {GetFFmpegError(ret)}");
-                    return;
+                    GD.PrintErr($"FFmpegAudioDecoder:InitAsync - Initial seek failed (continuing with preload from 0): {GetFFmpegError(ret)}");
+                    // Do not return: still attempt preload + LengthChanged so playback can start (seek is best-effort)
                 }
                 _currentTs = startUs;
                 
@@ -322,6 +330,7 @@ public class FFmpegAudioDecoder : IDisposable
     /// <returns>A task representing the asynchronous playback.</returns>
     public async Task PlayAsync()
     {
+        if (_isDisposed) return;
         _cts = new CancellationTokenSource(); 
         PcmQueue = new BlockingCollection<byte[]>(MaxBufferedChunks);
         IsPlaying = true;
@@ -462,6 +471,9 @@ public class FFmpegAudioDecoder : IDisposable
                         ffmpeg.avcodec_flush_buffers(_codecCtx);
                         
                         // Drain and discard frames after seek until PTS >= seekTs (skip partial/skipped samples)
+                        // This complex logic (with gotos, nb_samples mutation via pointer arith, overage trim) ensures
+                        // sample-accurate restart for loops + custom start times (critical for cue sync, no pops).
+                        // See review plan for notes on fragility.
                         long targetPts = seekTs;
                         int discardedFrames = 0;
                         while (true)
@@ -546,7 +558,10 @@ public class FFmpegAudioDecoder : IDisposable
             catch (Exception ex)
             {
                 GD.PrintErr($"FFmpegAudioDecoder:ProducerLoop - Decoding error: {ex.Message}");
-                EndReached?.Invoke(this, EventArgs.Empty); // Early end on error
+                if (!IsStopped)
+                {
+                    EndReached?.Invoke(this, EventArgs.Empty); // Early end on error (not on explicit stop)
+                }
             }
             finally
             {
@@ -591,9 +606,16 @@ public class FFmpegAudioDecoder : IDisposable
     
     /// <summary>
     /// Clears the PCM queue, returning buffers to the pool. Used during pause to avoid stale data.
+    /// Also drains any remaining preload buffers.
     /// </summary>
     public void ClearQueues()
     {
+        // Drain preload (pre-play buffers)
+        while (_preloadBuffer.TryDequeue(out byte[] pre))
+        {
+            ArrayPool<byte>.Shared.Return(pre, clearArray: true);
+        }
+
         if (PcmQueue == null) return;
         while (PcmQueue.TryTake(out byte[] buffer))
         {
@@ -667,6 +689,7 @@ public class FFmpegAudioDecoder : IDisposable
     /// <param name="timestampUs">The target timestamp in microseconds.</param>
     public void Seek(long timestampUs)
     {
+        if (_isDisposed) return;
         GD.Print($"FFmpegAudioDecoder:Seek - Attempting to acquire lock for seek to {timestampUs}");
         if (Monitor.TryEnter(_lock, TimeSpan.FromSeconds(2))) // (timeout to prevent deadlock hang)
         {
@@ -704,23 +727,32 @@ public class FFmpegAudioDecoder : IDisposable
 
     /// <summary>
     /// Gets the FFmpeg error message for a given error code.
+    /// Delegates to centralized MediaEngine.GetFFmpegError (avoids duplication; see also FFmpegVideoDecoder's copy).
+    /// Kept as thin wrapper for decoder isolation (per project guidelines).
     /// </summary>
     /// <param name="error">The FFmpeg error code.</param>
     /// <returns>The error message string.</returns>
     private static unsafe string GetFFmpegError(int error)
     {
-        const int bufferSize = 1024;
-        byte[] buffer = new byte[bufferSize];
-        fixed (byte* pBuffer = buffer)
+        // Prefer shared impl (uses PtrToStringAnsi). Fallback would duplicate av_strerror logic.
+        try
         {
-            ffmpeg.av_strerror(error, pBuffer, (ulong)bufferSize);
+            return MediaEngine.GetFFmpegError(error);
         }
-        int nullIndex = Array.IndexOf(buffer, (byte)0);
-        if (nullIndex >= 0)
+        catch
         {
-            return System.Text.Encoding.ASCII.GetString(buffer, 0, nullIndex);
+            // Fallback (shouldn't happen post MediaEngine init)
+            const int bufferSize = 1024;
+            byte[] buffer = new byte[bufferSize];
+            fixed (byte* pBuffer = buffer)
+            {
+                ffmpeg.av_strerror(error, pBuffer, (ulong)bufferSize);
+            }
+            int nullIndex = Array.IndexOf(buffer, (byte)0);
+            return nullIndex >= 0 
+                ? System.Text.Encoding.ASCII.GetString(buffer, 0, nullIndex) 
+                : System.Text.Encoding.ASCII.GetString(buffer);
         }
-        return System.Text.Encoding.ASCII.GetString(buffer);
     }
     
     /// <summary>
@@ -728,17 +760,24 @@ public class FFmpegAudioDecoder : IDisposable
     /// </summary>
     public void Dispose()
     {
+        if (_isDisposed) return;
         Stop();
         if (PcmQueue != null)
         {
             PcmQueue.CompleteAdding();
-        while (PcmQueue.TryTake(out byte[] buffer))
+            while (PcmQueue.TryTake(out byte[] buffer))
             {
                 // Drain queue and return to ArrayPool on dispose
                 ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
                 Interlocked.Add(ref _queuedBytes, -buffer.Length); // (consistent tracking)
             }
             PcmQueue.Dispose();
+        }
+
+        // Also return any leftover preload buffers to pool (prevents leaks on dispose without ClearQueues)
+        while (_preloadBuffer.TryDequeue(out byte[] pre))
+        {
+            ArrayPool<byte>.Shared.Return(pre, clearArray: true);
         }
         lock (_lock)
         {
@@ -784,6 +823,7 @@ public class FFmpegAudioDecoder : IDisposable
         }
         _cts?.Dispose();
         _pauseEvent.Dispose();
+        _isDisposed = true;
         GD.Print("FFmpegAudioDecoder:Dispose - Cleaned up.");
     }
 }
