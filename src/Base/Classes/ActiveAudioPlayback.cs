@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -7,59 +6,72 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
+using Cue2.Shared.Audio;
+using Cue2.Shared.Decoders;
+// MediaMemory used on Clean for LOH reclaim after large PCM stores
 using Godot;
 using SDL3;
 
 namespace Cue2.Base.Classes;
 
 /// <summary>
-/// Encapsulates an active audio playback session for control (volume, pause, stop, fade).
-/// Thread-safe for multi-threaded access (e.g., UI updates).
+/// Software control layer for an active audio cue.
+/// Owns transport (play/pause/seek/loop/playcount), volume/fades, and matrix mixing.
+/// Pulls PCM from <see cref="AudioSourceDecoder"/> and tops up SDL streams by queue watermark.
 /// </summary>
 public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 {
-    public FFmpegAudioDecoder Decoder { get; private set; }
+    private const int TargetBufferMs = 80;
+    private const int LowWaterMs = 40;
+    private const int FillLoopSleepMs = 4;
+    private const int PrefetchMs = 800;
+
+    /// <summary>Pull-based audio source decoder.</summary>
+    public AudioSourceDecoder Decoder { get; private set; }
+
     public AudioOutputPatch Patch { get; set; }
     public CuePatch Routing { get; set; }
     public string DirectOutput { get; set; }
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
+    public Dictionary<uint, int> DeviceStreamChannels { get; set; }
     public int SourceChannels { get; set; }
     public int SourceSampleRate { get; set; }
     public int SourceBytesPerFrame { get; set; }
-    public SDL.AudioFormat SourceFormat { get; set; }
-    
+    public SDL.AudioFormat SourceFormat { get; set; } = SDL.AudioFormat.AudioF32LE;
+
     private readonly AudioComponent _audioComponent;
-    private AudioDevices _audioDevices;
-        
-    
-    private readonly object _lock = new object(); // For thread safety
-    private float _volume = 1.0f; // Normalized [0-1], global multiplier
-    private float[] _channelGains; // Per-channel volume multipliers
-    private bool _isFadingOut = false;
-    private bool _isFadingIn = false;
-    public bool IsStopped = false;
-    public bool IsPaused = false;
-    public bool IsSeeking = false;
+    private readonly AudioDevices _audioDevices;
+    private readonly object _lock = new object();
+
+    private float _volume = 1.0f;
+    private bool _isFadingOut;
+    private bool _isFadingIn;
+    public bool IsStopped;
+    public bool IsPaused;
+    public bool IsSeeking;
+
     private CancellationTokenSource _fadeCts;
-    
-    private long _startTimeMs;
-    private long _endTimeMs;
+    private CancellationTokenSource _fillCts;
+    private Task _fillTask;
+
+    private long _startTimeUs;
+    private long _endTimeUs;
     private bool _useCustomEnd;
     private int _currentPlayCount = 1;
     public int EffectivePlayCount;
-    private bool _hasStarted = false;
-    private bool _reachedEnd = false;
+    private bool _hasStarted;
+    private long _pausedAtUs;
+    private long _framesDelivered; // sample-frames delivered to mix since last seek/start
 
-    private readonly Stopwatch _playTimer = new Stopwatch();
-    private long _pausedAtUs = 0; // Stored pause position in us for resume seek
+    private float[] _srcBuffer;
+    private float[] _mixBuffer;
 
     [Signal] public delegate void CompletedEventHandler();
-    
+
     public ActiveAudioPlayback()
     {
-        // Blank constructor for Godot
     }
-    
+
     public ActiveAudioPlayback(AudioComponent audioComponent, AudioDevices audioDevices)
     {
         _audioComponent = audioComponent ?? throw new ArgumentNullException(nameof(audioComponent));
@@ -67,196 +79,340 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         Patch = _audioComponent.Patch;
         Routing = _audioComponent.Routing;
         DirectOutput = _audioComponent.DirectOutput;
-        Decoder = new FFmpegAudioDecoder(audioComponent, this);
+        DeviceStreams = new Dictionary<uint, IntPtr>();
+        DeviceStreamChannels = new Dictionary<uint, int>();
 
-        // Validate and set start time
-        if (_audioComponent.StartTime < 0)
-        {
-            GD.Print($"ActiveAudioPlayback:Constructor - Invalid start time: {_audioComponent.StartTime}");
-        }
-        else
-        {
-            _startTimeMs = (long)(_audioComponent.StartTime * 1000);
-        }
+        Decoder = new AudioSourceDecoder();
+
+        _startTimeUs = (long)(Math.Max(0, _audioComponent.StartTime) * 1_000_000.0);
         _useCustomEnd = _audioComponent.EndTime >= 0;
-        _endTimeMs = _useCustomEnd ? (long)(_audioComponent.EndTime * 1000) : (long)(_audioComponent.Metadata.Duration * 1000);
-        EffectivePlayCount = _audioComponent.Loop ? int.MaxValue : _audioComponent.PlayCount;
+        if (_useCustomEnd)
+            _endTimeUs = (long)(_audioComponent.EndTime * 1_000_000.0);
+        else if (_audioComponent.Metadata != null && _audioComponent.Metadata.Duration > 0)
+            _endTimeUs = (long)(_audioComponent.Metadata.Duration * 1_000_000.0);
+        else
+            _endTimeUs = long.MaxValue;
 
-        // Validate start time against file duration if available
-        if (_audioComponent.Metadata.Duration > 0 && _startTimeMs > (long)(_audioComponent.Metadata.Duration * 1000))
-        {
-            _startTimeMs = 0;
-        }
-
-        Decoder.EndReached += OnEndReached;
-        Decoder.LengthChanged += OnLengthChanged;
+        EffectivePlayCount = _audioComponent.Loop ? int.MaxValue : Math.Max(1, _audioComponent.PlayCount);
     }
 
+    /// <summary>
+    /// Opens the decoder, seeks to start, and prefetches PCM for low-latency GO.
+    /// </summary>
     public async Task InitAsync()
     {
-        await Decoder.InitAsync();
-        SourceChannels = _audioComponent.Metadata.Channels;
-        SourceSampleRate = Decoder.OutputSampleRate;
-        SourceFormat = Decoder.TargetFormat;
-        SourceBytesPerFrame = SourceChannels * (AudioDevices.GetBitDepth(SourceFormat) / 8);
-        _channelGains = new float[SourceChannels]; // Initialize channel gains
-        UpdateChannelGains(); // Set initial volumes
-        GD.Print("ActiveAudioPlayback:InitAsync - Initialized FFmpeg decoder with sample rate " + SourceSampleRate);
+        // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
+        // subject to decoder size/duration caps. Short looping cues stay exact.
+        await Decoder.OpenAsync(_audioComponent.AudioFile, preferSampleAccurateStore: true);
+        SourceChannels = Decoder.Info.Channels;
+        SourceSampleRate = Decoder.Info.SampleRate;
+        SourceFormat = SDL.AudioFormat.AudioF32LE;
+        SourceBytesPerFrame = SourceChannels * sizeof(float);
+
+        if (!_useCustomEnd && Decoder.Info.DurationUs > 0)
+            _endTimeUs = Decoder.Info.DurationUs;
+
+        if (_startTimeUs > 0)
+            Decoder.Seek(_startTimeUs);
+        else
+            Decoder.Prefetch(PrefetchMs);
+
+        // Prefetch after seek as well
+        Decoder.Prefetch(PrefetchMs);
+
+        int maxFrames = Math.Max(SourceSampleRate / 10, 1024); // ~100 ms chunk
+        _srcBuffer = new float[maxFrames * SourceChannels];
+        _mixBuffer = new float[maxFrames * 16]; // up to 16 out channels
+
+        GD.Print($"ActiveAudioPlayback:InitAsync - rate={SourceSampleRate} ch={SourceChannels} codec={Decoder.Info.CodecName}");
     }
-    
-    /// <summary>
-    /// Updates channel gains based on AudioComponent and Routing (if present).
-    /// </summary>
-    private void UpdateChannelGains()
-    {
-        lock (_lock)
-        {
-            if (Routing != null) // (apply Routing for both direct and patched output)
-            {
-                // Apply AudioComponent.Volume * _volume * Routing matrix
-                for (int i = 0; i < SourceChannels; i++)
-                {
-                    float gain = (float)_audioComponent.Volume * _volume;
-                    float cuePatchGain = 0f;
-                    for (int j = 0; j < Routing.OutputChannels; j++)
-                    {
-                        cuePatchGain += Routing.GetVolume(i, j); // Sum contributions to patch channels
-                    }
-                    _channelGains[i] = gain * cuePatchGain;
-                }
-            }
-            else // (fallback if no Routing)
-            {
-                // Apply AudioComponent.Volume * _volume only
-                for (int i = 0; i < SourceChannels; i++)
-                {
-                    _channelGains[i] = (float)_audioComponent.Volume * _volume;
-                }
-            }
-        }
-    }
-    
-    
-    /// <summary>
-    /// Thread safe get of current fade out to stop state
-    /// </summary>
+
     public bool IsFadingOut
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _isFadingOut;
-            }
-        }
+        get { lock (_lock) return _isFadingOut; }
     }
-    
-    /// <summary>
-    /// Thread safe get of current fade in state
-    /// </summary>
+
     public bool IsFadingIn
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _isFadingIn;
-            }
-        }
+        get { lock (_lock) return _isFadingIn; }
     }
 
-    /// <summary>
-    /// Thread safe get of current volume level
-    /// </summary>
     public float CurrentVolume
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _volume;
-            }
-        }
+        get { lock (_lock) return _volume; }
+    }
+
+    public int CurrentPlayCount
+    {
+        get { lock (_lock) return _currentPlayCount; }
+        set { lock (_lock) _currentPlayCount = value; }
     }
 
     /// <summary>
-    /// Thread safe get of current play count
+    /// Starts the demand-driven fill loop (optionally with fade-in).
     /// </summary>
-    public int CurrentPlayCount
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _currentPlayCount;
-            }
-        }
-        set
-        {
-            lock (_lock)
-            {
-                _currentPlayCount = value;
-            }
-        }
-    }
-    
-
     public async void Play()
     {
         lock (_lock)
         {
-            if (_hasStarted) return;
+            if (_hasStarted || IsStopped) return;
             _hasStarted = true;
         }
 
-        if (_audioComponent.FadeInDuration > 0) // start with fade-in if specified
+        if (_audioComponent.FadeInDuration > 0)
         {
             await FadeInAsync(_audioComponent.FadeInDuration);
         }
         else
         {
-            Decoder.PlayAsync();
-            _playTimer.Start();
-            GD.Print($"ActiveAudioPlayback:Play - Playback started without fade-in");
+            StartFillLoop();
+            GD.Print("ActiveAudioPlayback:Play - Fill loop started");
         }
     }
-    
+
+    private void StartFillLoop()
+    {
+        _fillCts?.Cancel();
+        _fillCts = new CancellationTokenSource();
+        var token = _fillCts.Token;
+        _fillTask = Task.Run(() => FillLoop(token), token);
+    }
+
+    private void StopFillLoop()
+    {
+        try
+        {
+            _fillCts?.Cancel();
+            if (_fillTask != null)
+            {
+                try { _fillTask.Wait(500); } catch { /* ignore */ }
+            }
+        }
+        catch { /* ignore */ }
+        finally
+        {
+            _fillCts?.Dispose();
+            _fillCts = null;
+            _fillTask = null;
+        }
+    }
+
+    /// <summary>
+    /// Demand-driven fill: tops up each SDL stream when queued data is below the low-water mark.
+    /// </summary>
+    private void FillLoop(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                bool paused;
+                lock (_lock) paused = IsPaused || IsStopped;
+                if (paused)
+                {
+                    Thread.Sleep(FillLoopSleepMs);
+                    continue;
+                }
+
+                if (DeviceStreams == null || DeviceStreams.Count == 0)
+                {
+                    Thread.Sleep(FillLoopSleepMs);
+                    continue;
+                }
+
+                bool anyNeed = false;
+                int maxNeedFrames = 0;
+
+                foreach (var kv in DeviceStreams)
+                {
+                    long queued = SDL.GetAudioStreamQueued(kv.Value);
+                    int outCh = GetStreamChannels(kv.Key);
+                    int bytesPerOutFrame = outCh * sizeof(float);
+                    if (bytesPerOutFrame <= 0) continue;
+
+                    long lowWater = SourceSampleRate * LowWaterMs / 1000L * bytesPerOutFrame;
+                    long target = SourceSampleRate * TargetBufferMs / 1000L * bytesPerOutFrame;
+
+                    if (queued < lowWater)
+                    {
+                        anyNeed = true;
+                        int need = (int)Math.Max(1, (target - queued) / bytesPerOutFrame);
+                        if (need > maxNeedFrames) maxNeedFrames = need;
+                    }
+                }
+
+                if (!anyNeed)
+                {
+                    Thread.Sleep(FillLoopSleepMs);
+                    continue;
+                }
+
+                // Cap read size to buffer capacity
+                int maxFrames = _srcBuffer.Length / SourceChannels;
+                int framesToRead = Math.Min(maxNeedFrames, maxFrames);
+
+                // Respect custom end time
+                long posUs = Decoder.PositionUs;
+                if (posUs >= _endTimeUs)
+                {
+                    HandleSegmentEnd();
+                    continue;
+                }
+
+                // Limit frames so we don't read past end
+                if (_endTimeUs < long.MaxValue && SourceSampleRate > 0)
+                {
+                    long remainingUs = _endTimeUs - posUs;
+                    int remainingFrames = (int)Math.Max(0, remainingUs * SourceSampleRate / 1_000_000L);
+                    framesToRead = Math.Min(framesToRead, Math.Max(1, remainingFrames));
+                }
+
+                lock (_lock)
+                {
+                    if (IsPaused || IsStopped) continue;
+                }
+
+                // Decode outside playback lock to avoid blocking Pause/Seek
+                int frames = Decoder.Read(_srcBuffer.AsSpan(), framesToRead, token);
+
+                if (frames <= 0)
+                {
+                    if (Decoder.EndOfStream || Decoder.PositionUs >= _endTimeUs)
+                    {
+                        HandleSegmentEnd();
+                    }
+                    else
+                    {
+                        Thread.Sleep(FillLoopSleepMs);
+                    }
+                    continue;
+                }
+
+                _framesDelivered += frames;
+                PushMixedFrames(frames);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // normal stop
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveAudioPlayback:FillLoop - {ex.Message}");
+        }
+    }
+
+    private int GetStreamChannels(uint deviceLogicalId)
+    {
+        if (DeviceStreamChannels != null &&
+            DeviceStreamChannels.TryGetValue(deviceLogicalId, out int ch) &&
+            ch > 0)
+        {
+            return ch;
+        }
+        return SourceChannels;
+    }
+
+    private unsafe void PushMixedFrames(int frames)
+    {
+        if (DeviceStreams == null) return;
+
+        float masterVol;
+        lock (_lock) masterVol = _volume;
+        float componentVol = (float)_audioComponent.Volume;
+        bool isDirect = !string.IsNullOrEmpty(DirectOutput);
+
+        foreach (var kv in DeviceStreams)
+        {
+            int outCh = GetStreamChannels(kv.Key);
+            int outSamples = frames * outCh;
+            if (outSamples > _mixBuffer.Length)
+                _mixBuffer = new float[outSamples];
+
+            string deviceName = _audioDevices.GetAudioDeviceByLogicalId(kv.Key)?.Name;
+
+            AudioMixMatrix.Mix(
+                _srcBuffer.AsSpan(0, frames * SourceChannels),
+                frames,
+                SourceChannels,
+                _mixBuffer.AsSpan(0, outSamples),
+                outCh,
+                masterVol,
+                componentVol,
+                Routing,
+                Patch,
+                deviceName,
+                isDirect);
+
+            int byteCount = outSamples * sizeof(float);
+            fixed (float* p = _mixBuffer)
+            {
+                SDL.PutAudioStreamData(kv.Value, (IntPtr)p, byteCount);
+            }
+        }
+    }
+
+    private void HandleSegmentEnd()
+    {
+        lock (_lock)
+        {
+            if (IsStopped) return;
+
+            if (_audioComponent.Loop || _currentPlayCount < EffectivePlayCount)
+            {
+                _currentPlayCount++;
+                GD.Print($"ActiveAudioPlayback:HandleSegmentEnd - Loop/play {_currentPlayCount}/{EffectivePlayCount}");
+                Decoder.Seek(_startTimeUs);
+                Decoder.Prefetch(PrefetchMs);
+                _framesDelivered = 0;
+                return;
+            }
+        }
+
+        // Finished all plays
+        GD.Print("ActiveAudioPlayback:HandleSegmentEnd - Playback completed");
+        CallDeferred(nameof(CompleteFromEnd));
+    }
+
+    private void CompleteFromEnd()
+    {
+        _ = Stop(0);
+    }
+
     public void Pause()
     {
         lock (_lock)
         {
-            Decoder.Pause();
-            _pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
+            if (IsPaused || IsStopped) return;
             IsPaused = true;
-            foreach (var stream in DeviceStreams.Values)
-            {
-                SDL.ClearAudioStream(stream); // Stop sound immediately
-            }
-            Decoder.ClearQueues(); // Clear PCM queue to avoid stale data on resume
-            _playTimer.Stop();
-            GD.Print($"ActiveAudioPlayback:Pause - Playback paused at estimated {_pausedAtUs / 1000} ms");
+            _pausedAtUs = GetPlaybackPositionUs();
         }
+
+        if (DeviceStreams != null)
+        {
+            foreach (var stream in DeviceStreams.Values)
+                SDL.ClearAudioStream(stream);
+        }
+        Decoder?.FlushBuffers();
+        GD.Print($"ActiveAudioPlayback:Pause - Paused at {_pausedAtUs / 1000} ms");
     }
-    
+
     public void Resume()
     {
         lock (_lock)
         {
+            if (!IsPaused || IsStopped) return;
             if (_pausedAtUs > 0)
             {
-                Decoder.Seek(_pausedAtUs); // Seek back to paused position
+                Decoder.Seek(_pausedAtUs);
+                Decoder.Prefetch(PrefetchMs / 2);
                 _pausedAtUs = 0;
             }
-            Decoder.Resume();
             IsPaused = false;
-            _playTimer.Start();
-            GD.Print($"ActiveAudioPlayback:Resume - Playback resumed");
         }
+        GD.Print("ActiveAudioPlayback:Resume - Resumed");
     }
-    
-    /// <summary>
-    /// Stops and cleans up the playback resources.
-    /// </summary>
+
     public async Task Stop(double fadeTime = 0.0)
     {
         bool needFade;
@@ -273,29 +429,41 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
         if (wasFadingOut)
         {
-            // If already fading out, immediately stop and clean
-            foreach (var stream in DeviceStreams.Values)
-            {
-                SDL.ClearAudioStream(stream);
-            }
-            Decoder.Stop();
-            Clean();
+            HardStop();
             return;
         }
 
-        if (needFade) // Use component duration if set
+        if (needFade)
         {
             await FadeOutAsync(fadeDuration);
             return;
         }
-        foreach (var stream in DeviceStreams.Values) // clear any pending SDL data
+
+        HardStop();
+    }
+
+    private void HardStop()
+    {
+        lock (_lock)
         {
-            SDL.ClearAudioStream(stream);
+            if (IsStopped) return;
+            IsStopped = true;
+            IsPaused = false;
         }
-        Decoder.Stop();
+
+        StopFillLoop();
+
+        if (DeviceStreams != null)
+        {
+            foreach (var stream in DeviceStreams.Values)
+            {
+                try { SDL.ClearAudioStream(stream); } catch { /* ignore */ }
+            }
+        }
+
         Clean();
     }
-    
+
     public async Task FadeInAsync(double duration)
     {
         lock (_lock)
@@ -308,31 +476,24 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         float startVol = 0f;
         float endVol = 1.0f;
         Stopwatch timer = Stopwatch.StartNew();
+        SetVolume(0f);
+        StartFillLoop();
 
         try
         {
-            Decoder.PlayAsync(); // Start playback
-            _playTimer.Start();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, endVol, t));
-                await Task.Delay(16, _fadeCts.Token); // ~60fps
+                await Task.Delay(16, _fadeCts.Token);
             }
-
             if (!_fadeCts.Token.IsCancellationRequested)
-            {
                 SetVolume(endVol);
-                GD.Print($"ActiveAudioPlayback:FadeInAsync - Fade-in completed to {endVol} over {duration} seconds");
-            }
         }
-        catch (OperationCanceledException)
-        {
-            GD.Print($"ActiveAudioPlayback:FadeInAsync - Fade-in cancelled");
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            GD.PrintErr($"ActiveAudioPlayback:FadeInAsync - Error: {ex.Message}");
+            GD.PrintErr($"ActiveAudioPlayback:FadeInAsync - {ex.Message}");
         }
         finally
         {
@@ -344,12 +505,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             }
         }
     }
-    
+
     public async Task FadeOutAsync(double duration)
     {
         lock (_lock)
         {
-            if (_isFadingOut || _isFadingIn) return; // Prevent concurrent fades
+            if (_isFadingOut || _isFadingIn) return;
             _isFadingOut = true;
             _fadeCts = new CancellationTokenSource();
         }
@@ -363,28 +524,18 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, 0f, t));
-                await Task.Delay(16, _fadeCts.Token); // ~60fps
+                await Task.Delay(16, _fadeCts.Token);
             }
-
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(0f);
-                foreach (var stream in DeviceStreams.Values) // Clear streams
-                {
-                    SDL.ClearAudioStream(stream);
-                }
-                Decoder.Stop();
-                Clean();
-                GD.Print($"ActiveAudioPlayback:FadeOutAsync - Fade-out completed over {duration} seconds");
+                HardStop();
             }
         }
-        catch (OperationCanceledException)
-        {
-            GD.Print($"ActiveAudioPlayback:FadeOutAsync - Fade-out cancelled");
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            GD.PrintErr($"ActiveAudioPlayback:FadeOutAsync - Error: {ex.Message}");
+            GD.PrintErr($"ActiveAudioPlayback:FadeOutAsync - {ex.Message}");
         }
         finally
         {
@@ -396,324 +547,158 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             }
         }
     }
-    
 
     public void SetVolume(float volume)
     {
         lock (_lock)
         {
             _volume = Mathf.Clamp(volume, 0f, 1f);
-            UpdateChannelGains(); // Recompute volume with new levels
         }
     }
-    
+
     public double GetRemainingTime()
     {
         lock (_lock)
         {
             if (_audioComponent.Loop) return -1.0;
-
-            double segmentDuration = _useCustomEnd ? (_endTimeMs - _startTimeMs) / 1000.0 : _audioComponent.Metadata.Duration - _audioComponent.StartTime;
-            double remainingInSegment = segmentDuration - (GetPlaybackTimeMs() / 1000.0);
-            int remainingCounts = EffectivePlayCount - _currentPlayCount;
-
+            double segmentDuration = (_endTimeUs - _startTimeUs) / 1_000_000.0;
+            double posSec = GetPlaybackPositionUs() / 1_000_000.0;
+            double startSec = _startTimeUs / 1_000_000.0;
+            double remainingInSegment = Math.Max(0, segmentDuration - (posSec - startSec));
+            int remainingCounts = Math.Max(0, EffectivePlayCount - _currentPlayCount);
             return remainingInSegment + remainingCounts * segmentDuration;
         }
     }
-    
+
     public long GetPlaybackTimeMs()
     {
-        if (DeviceStreams == null || Decoder == null) return 0;
-        long queuedPcmUs = Decoder.QueuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
-        long queuedSdlUs = 0;
-        foreach (var stream in DeviceStreams.Values)
-        {
-            long queuedBytes = (long)SDL.GetAudioStreamQueued(stream);
-            queuedSdlUs += queuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
-        }
-        if (DeviceStreams.Count > 0) queuedSdlUs /= DeviceStreams.Count; // Average for multi-device
-
-        long totalQueuedUs = queuedPcmUs + queuedSdlUs;
-        return (Decoder.CurrentTime - totalQueuedUs) / 1000;
-    }
-    
-    private long GetQueuedUs()
-    {
-        long queuedPcmUs = Decoder.QueuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
-        long queuedSdlUs = 0;
-        foreach (var stream in DeviceStreams.Values)
-        {
-            long queuedBytes = (long)SDL.GetAudioStreamQueued(stream);
-            queuedSdlUs += queuedBytes * 1_000_000L / (SourceSampleRate * SourceBytesPerFrame);
-        }
-        if (DeviceStreams.Count > 0) queuedSdlUs /= DeviceStreams.Count;
-        return queuedPcmUs + queuedSdlUs;
-    }
-    
-    private void OnLengthChanged(object sender, long length)
-    {
-        lock (_lock)
-        {
-            if (!_useCustomEnd)
-            {
-                _endTimeMs = length;
-                GD.Print($"ActiveAudioPlayback:OnLengthChanged - Length set to {_endTimeMs} ms");
-            }
-        }
-    }
-    
-    private void OnEndReached(object sender, EventArgs e)
-    {
-        lock (_lock)
-        {
-            _reachedEnd = true;
-        }
-        CallDeferred(nameof(HandleEndReached));
+        return GetPlaybackPositionUs() / 1000;
     }
 
-    private void HandleEndReached()
-    {
-        lock (_lock)
-        {
-            if (_reachedEnd && _currentPlayCount < EffectivePlayCount)
-            {
-                _currentPlayCount++;
-                ResetForLoop();
-                GD.Print($"ActiveAudioPlayback:HandleEndReached - Looping to play count {_currentPlayCount}");
-            }
-            else
-            {
-                GD.Print($"ActiveAudioPlayback:HandleEndReached - Playback completed");
-                CallDeferred(nameof(Clean));
-            }
-        }
-    }
-
-
-    public void ResetForLoop()
-    {
-        Decoder.Seek(_startTimeMs * 1000);
-        _playTimer.Reset();
-        _playTimer.Start();
-        _reachedEnd = false;
-        foreach (var stream in DeviceStreams.Values)
-        {
-            SDL.ClearAudioStream(stream);
-        }
-        if (_audioComponent.FadeInDuration > 0)
-        {
-            _ = FadeInAsync(_audioComponent.FadeInDuration);
-        }
-        GD.Print($"ActiveAudioPlayback:ResetForLoop - Reset for loop and cleared SDL streams");
-    }
-    
     /// <summary>
-    /// Seeks to the specified timestamp in microseconds, clearing queues and SDL streams to avoid stale data.
-    /// Works while playing or paused; playback state is preserved.
+    /// Estimated audible position: decoder position minus average SDL queue latency.
     /// </summary>
-    /// <param name="timestampUs">Target timestamp in us.</param>
+    private long GetPlaybackPositionUs()
+    {
+        if (Decoder == null) return _startTimeUs;
+        long decUs = Decoder.PositionUs;
+        long queuedUs = 0;
+        int count = 0;
+        if (DeviceStreams != null)
+        {
+            foreach (var kv in DeviceStreams)
+            {
+                long queuedBytes = SDL.GetAudioStreamQueued(kv.Value);
+                int outCh = GetStreamChannels(kv.Key);
+                if (outCh <= 0 || SourceSampleRate <= 0) continue;
+                queuedUs += queuedBytes * 1_000_000L / (SourceSampleRate * outCh * sizeof(float));
+                count++;
+            }
+        }
+        if (count > 0) queuedUs /= count;
+        long pos = decUs - queuedUs;
+        return pos < _startTimeUs ? _startTimeUs : pos;
+    }
+
     public void Seek(long timestampUs)
     {
         try
         {
-            bool wasPlaying = Decoder.IsPlaying && !Decoder.IsPaused; // (preserve state)
-            Pause(); // (pause to safely seek)
-            foreach (var stream in DeviceStreams.Values)
+            bool wasPaused;
+            lock (_lock)
             {
-                SDL.ClearAudioStream(stream); //(clear SDL queues)
+                wasPaused = IsPaused;
+                IsSeeking = true;
+                IsPaused = true;
             }
-            Decoder.ClearQueues(); // (clear PCM queue)
-            Decoder.Seek(timestampUs);
-            _pausedAtUs = timestampUs; // Set paused position to the seek target
-            if (wasPlaying) Resume(); // (resume if was playing)
-            GD.Print($"ActiveAudioPlayback:Seek - Sought to {timestampUs} us");
+
+            if (DeviceStreams != null)
+            {
+                foreach (var stream in DeviceStreams.Values)
+                    SDL.ClearAudioStream(stream);
+            }
+
+            long clamped = Math.Max(_startTimeUs, timestampUs);
+            if (_endTimeUs < long.MaxValue)
+                clamped = Math.Min(clamped, _endTimeUs);
+
+            Decoder.Seek(clamped);
+            Decoder.Prefetch(PrefetchMs / 2);
+            _framesDelivered = 0;
+            _pausedAtUs = clamped;
+
+            lock (_lock)
+            {
+                IsSeeking = false;
+                if (!wasPaused && !IsStopped)
+                {
+                    IsPaused = false;
+                    _pausedAtUs = 0;
+                }
+            }
+
+            GD.Print($"ActiveAudioPlayback:Seek - Sought to {clamped} us");
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"ActiveAudioPlayback:Seek - Seek error: {ex.Message}");
+            GD.PrintErr($"ActiveAudioPlayback:Seek - {ex.Message}");
+            lock (_lock) IsSeeking = false;
         }
     }
-    
-    /// <summary>
-    /// Applies per-channel volumes and routes PCM data to SDL streams, handling direct or patched output.
-    /// </summary>
-    private unsafe void ApplyChannelVolumes(byte[] pcm, uint deviceId, byte[] outputBuffer)
-    {
-        int samples = pcm.Length / (SourceChannels * sizeof(float));
-        Span<float> pcmSpan = MemoryMarshal.Cast<byte, float>(pcm.AsSpan());
-        Span<float> outputSpan = MemoryMarshal.Cast<byte, float>(outputBuffer.AsSpan());
-        outputSpan.Clear();
 
-        string deviceName = GetDeviceName(deviceId);
-        if (!string.IsNullOrEmpty(_audioComponent.DirectOutput))
-        {
-            // Direct output: Apply channel gains (including Routing if present)
-            var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
-            if (device == null)
-            {
-                GD.PrintErr($"ActiveAudioPlayback:ApplyChannelVolumes - Device {deviceId} not found for direct output");
-                return;
-            }
-            int deviceChannels = device.Channels;
-            int outputChannels = Routing != null ? Routing.OutputChannels : SourceChannels;
-
-            if (Routing != null)
-            {
-                // Route using CuePatch : Note, loops through devices channels and disregards extra outputs in Routing if there's a hotswap from Patch -> direct output
-                for (int s = 0; s < samples; s++)
-                {
-                    for (int outCh = 0; outCh < deviceChannels; outCh++)
-                    {
-                        float sample = 0f;
-                        for (int inCh = 0; inCh < SourceChannels; inCh++)
-                        {
-                            sample += pcmSpan[s * SourceChannels + inCh] * _channelGains[inCh] * Routing.GetVolume(inCh, outCh);
-                        }
-                        outputSpan[s * deviceChannels + outCh] = sample;
-                    }
-                }
-            }
-            else
-            {
-                // No routing, direct
-                for (int s = 0; s < samples; s++)
-                {
-                    for (int ch = 0; ch < SourceChannels; ch++)
-                    {
-                        outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
-                    }
-                }
-            }
-        }
-        else if (deviceName != null && Patch != null && Patch.OutputDevices.TryGetValue(deviceName, out var outputChannels)) // (patched output, no Routing check here)
-        {
-            // Patched output: Route via AudioOutputPatch, using _channelGains (includes Routing if present)
-            for (int s = 0; s < samples; s++)
-            {
-                for (int outCh = 0; outCh < outputChannels.Count; outCh++)
-                {
-                    float sample = 0f;
-                    foreach (int patchCh in outputChannels[outCh].RoutedChannels)
-                    {
-                        for (int inCh = 0; inCh < SourceChannels; inCh++)
-                        {
-                            float gain = _channelGains[inCh]; // (_channelGains includes Routing)
-                            if (Routing != null) // (apply Routing matrix if present)
-                            {
-                                gain *= Routing.GetVolume(inCh, patchCh);
-                            }
-                            sample += pcmSpan[s * SourceChannels + inCh] * gain;
-                        }
-                    }
-                    outputSpan[s * outputChannels.Count + outCh] = sample;
-                }
-            }
-        }
-        else
-        {
-            // Fallback: Apply _channelGains directly
-            for (int s = 0; s < samples; s++)
-            {
-                for (int ch = 0; ch < SourceChannels; ch++)
-                {
-                    outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
-                }
-            }
-        }
-    }
-    
-    
-    private string GetDeviceName(uint deviceId)
-    {
-        var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
-        return device?.Name;
-    }
-
-
-
-    public unsafe void PushPcm(byte[] pcm)
-    {
-        foreach (var kv in DeviceStreams)
-        {
-            byte[] outputBuffer = ArrayPool<byte>.Shared.Rent(pcm.Length); // Rent buffer for output
-            try
-            {
-                ApplyChannelVolumes(pcm, kv.Key, outputBuffer); // Apply volumes and routing
-                fixed (byte* p = outputBuffer)
-                {
-                    SDL.PutAudioStreamData(kv.Value, (IntPtr)p, outputBuffer.Length);
-                }
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(outputBuffer, clearArray: true); // Return to pool
-            }
-        }
-    }
-    
-    
     public void Clean()
     {
         lock (_lock)
         {
-            GD.Print($"ActiveAudioPlayback:Clean - Clean Start");
-            if (IsStopped)
+            if (IsStopped && Decoder == null)
             {
-                GD.Print("ActiveAudioPlayback:Clean - Already cleaned");
                 return;
             }
-
             IsStopped = true;
-            _playTimer.Stop(); // Stop timer first
+        }
 
-            // Stop and dispose decoder
-            if (Decoder != null)
+        StopFillLoop();
+        _fadeCts?.Cancel();
+
+        if (Decoder != null)
+        {
+            try
             {
-                try
-                {
-                    Decoder.Stop();
-                    GD.Print($"ActiveAudioPlayback:Clean - Decoder stopped");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveAudioPlayback:Clean - Exception stopping Decoder: {ex.Message}");
-                    GD.PrintErr($"ActiveAudioPlayback:Clean - Decoder stop failed: {ex.Message}");
-                }
-
-                try
-                {
-                    Decoder.EndReached -= OnEndReached;
-                    //Decoder.LengthChanged -= OnLengthChanged;
-                    Decoder.Dispose();
-                    GD.Print($"ActiveAudioPlayback:Clean - Decoder disposed");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveAudioPlayback:Clean - Exception disposing Decoder: {ex.Message}");
-                    GD.PrintErr($"ActiveAudioPlayback:Clean - Decoder dispose failed: {ex.Message}");
-                }
-                Decoder = null; // Prevent accidental reuse
+                Decoder.Dispose();
             }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveAudioPlayback:Clean - Decoder dispose: {ex.Message}");
+            }
+            Decoder = null;
+        }
 
-            // Clean up SDL audio streams
+        // Drop mix buffers
+        if (_srcBuffer != null)
+        {
+            MediaMemory.NoteReleased(MediaMemory.FloatBufferBytes(_srcBuffer));
+            _srcBuffer = null;
+        }
+        if (_mixBuffer != null)
+        {
+            MediaMemory.NoteReleased(MediaMemory.FloatBufferBytes(_mixBuffer));
+            _mixBuffer = null;
+        }
+
+        if (DeviceStreams != null)
+        {
+            _audioDevices?.NotifyPlaybackCompleted(this);
             foreach (var stream in DeviceStreams.Values)
             {
-                try
-                {
-                    SDL.DestroyAudioStream(stream);
-                    GD.Print($"ActiveAudioPlayback:Clean - Destroyed SDL stream");
-                }
-                catch (Exception ex)
-                {
-                    GD.Print($"ActiveAudioPlayback:Clean - Exception destroying SDL stream: {ex.Message}");
-                    GD.PrintErr($"ActiveAudioPlayback:Clean - SDL stream destroy failed: {ex.Message}");
-                }
+                try { SDL.DestroyAudioStream(stream); } catch { /* ignore */ }
             }
             DeviceStreams.Clear();
-            GD.Print($"ActiveAudioPlayback:Clean - DeviceStreams cleared");
         }
-    
-        EmitSignal(SignalName.Completed); // Emit signal immediately before freeing
+        DeviceStreamChannels?.Clear();
+
+        MediaMemory.ReclaimIfNeeded();
+
+        EmitSignal(SignalName.Completed);
         CallDeferred("free");
     }
 }

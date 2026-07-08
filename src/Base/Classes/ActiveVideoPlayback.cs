@@ -1,13 +1,13 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
+using Cue2.Shared.Audio;
+using Cue2.Shared.Decoders;
 using Godot;
 using SDL3;
 using Image = Godot.Image;
@@ -15,126 +15,91 @@ using Image = Godot.Image;
 namespace Cue2.Base.Classes;
 
 /// <summary>
-/// Encapsulates an active video playback session for control (volume, pause, stop, fade).
-/// Supports embedded audio playback with routing and patching capabilities.
-/// Thread-safe for multi-threaded access (e.g., UI updates).
+/// Software control layer for an active video cue with optional embedded audio.
+/// <para>
+/// Video: pull-based <see cref="VideoSourceDecoder"/>; presentation is driven on the main
+/// thread by a master clock (audio position when available, else wall clock).
+/// Audio: same pull-based path as pure audio cues (<see cref="AudioSourceDecoder"/> + SDL fill).
+/// </para>
+/// A/V sync strategy: audio is the master clock when present; video presents or drops frames
+/// to stay within a tolerance of that clock. On seek/pause/loop both streams are reset to
+/// the same media timestamp.
 /// </summary>
 public partial class ActiveVideoPlayback : Node, IAudioPlayback
 {
     private const int FadeUpdateIntervalMs = 16;
-    private const int TaskWaitTimeoutMs = 5000;
     private const long MicrosecondsPerSecond = 1_000_000;
+    private const int AudioTargetBufferMs = 80;
+    private const int AudioLowWaterMs = 40;
+    private const int AudioFillSleepMs = 4;
+    private const int VideoPrefetchTarget = 6;
+    private const int VideoPrefetchLowWater = 3;
+    /// <summary>Drop frames if more than this late vs master clock.</summary>
+    private const long MaxVideoLatenessUs = 80_000; // 80 ms
+    /// <summary>Present frame if within this early of master (half-frame-ish).</summary>
+    private const long PresentEarlyToleranceUs = 8_000;
 
-    private FFmpegVideoDecoder _videoDecoder;
+    private VideoSourceDecoder _videoDecoder;
     private ImageTexture _godotTexture;
     private Image _godotImage;
-    
-    
-    // For embedded audio playback
-    /// <summary>
-    /// Gets or sets the audio output patch for routing audio to devices.
-    /// </summary>
-    /// <value>The audio output patch configuration.</value>
+    private byte[] _displayRgba;
+
     public AudioOutputPatch Patch { get; set; }
-    /// <summary>
-    /// Gets or sets the cue patch for audio routing and volume adjustments.
-    /// </summary>
-    /// <value>The cue patch configuration.</value>
     public CuePatch Routing { get; set; }
-    /// <summary>
-    /// Gets or sets the direct output device name for audio playback.
-    /// </summary>
-    /// <value>The name of the direct output device.</value>
     public string DirectOutput { get; set; }
-    /// <summary>
-    /// Gets or sets the dictionary of audio device streams keyed by device ID.
-    /// </summary>
-    /// <value>The device streams for audio output.</value>
     public Dictionary<uint, IntPtr> DeviceStreams { get; set; }
-    /// <summary>
-    /// Gets or sets the number of audio source channels.
-    /// </summary>
-    /// <value>The number of source channels.</value>
+    public Dictionary<uint, int> DeviceStreamChannels { get; set; }
     public int SourceChannels { get; set; }
-    /// <summary>
-    /// Gets or sets the audio source sample rate in Hz.
-    /// </summary>
-    /// <value>The source sample rate.</value>
     public int SourceSampleRate { get; set; }
-    /// <summary>
-    /// Gets or sets the number of bytes per audio frame.
-    /// </summary>
-    /// <value>The bytes per frame.</value>
     public int SourceBytesPerFrame { get; set; }
-    /// <summary>
-    /// Gets or sets the audio source format.
-    /// </summary>
-    /// <value>The source audio format.</value>
     public SDL.AudioFormat SourceFormat { get; set; }
-    
+
     private readonly VideoComponent _videoComponent;
-    private AudioDevices _audioDevices;
+    private readonly AudioDevices _audioDevices;
     private VideoTargetLayer _targetLayer;
 
-    // Embedded audio handling
-    private FFmpegAudioDecoder _audioDecoder;
-    private float[] _audioChannelGains;
-    private CancellationTokenSource _audioCts;
-    // _audioConsumerTask removed (was starting duplicate consumer; decoder's internal ConsumerLoop now owns pushing for embedded audio via if(_isEmbedded))
-    private Dictionary<uint, string> _deviceNameCache = new();
+    private AudioSourceDecoder _audioDecoder;
+    private CancellationTokenSource _audioFillCts;
+    private Task _audioFillTask;
+    private float[] _audioSrcBuffer;
+    private float[] _audioMixBuffer;
+
+    private CancellationTokenSource _videoPrefetchCts;
+    private Task _videoPrefetchTask;
 
     private Dictionary<Control, TextureRect> _targetLayers = new();
 
-    
-    private readonly object _lock = new object(); // For thread safety
-    private float _volume = 1.0f; // Normalized [0-1], global multiplier
-    private float[] _channelGains; // Per-channel volume multipliers
-    private bool _isFadingOut = false;
-    private bool _isFadingIn = false;
-    /// <summary>
-    /// Gets or sets a value indicating whether the playback is stopped.
-    /// </summary>
-    /// <value>true if stopped; otherwise, false.</value>
-    public bool IsStopped = false;
-    /// <summary>
-    /// Gets or sets a value indicating whether the playback is paused.
-    /// </summary>
-    /// <value>true if paused; otherwise, false.</value>
-    public bool IsPaused = false;
-    /// <summary>
-    /// Gets or sets a value indicating whether the playback is currently seeking.
-    /// </summary>
-    /// <value>true if seeking; otherwise, false.</value>
-    public bool IsSeeking = false;
-    /// <summary>
-    /// Gets or sets a value indicating whether the playback is exiting.
-    /// </summary>
-    /// <value>true if exiting; otherwise, false.</value>
-    public bool IsExiting = false;
-    private float _startAlpha = 1.0f;
+    private readonly object _lock = new object();
+    private float _volume = 1.0f;
+    private bool _isFadingOut;
+    private bool _isFadingIn;
+    public bool IsStopped;
+    public bool IsPaused;
+    public bool IsSeeking;
+    public bool IsExiting;
     private float _fadeAlpha = 1.0f;
     private CancellationTokenSource _fadeCts;
-    
-    private long _startTimeMs = 0;
-    private long _endTimeMs;
+
+    private long _startTimeUs;
+    private long _endTimeUs;
     private bool _useCustomEnd;
-    private int _currentPlayCount = 1;
     public int EffectivePlayCount;
-    private bool _hasStarted = false;
-    private bool _reachedEnd = false;
-    
-    private long _pausedAtUs = 0; // Stored pause position in us for resume seek
-    private bool _isExiting = false;
-    private bool _completedEmitted = false;
-    private bool _isDisposed = false;
-    private int _playCountRemaining = 0;
-    
+    private int _currentPlayCount = 1;
+    private long _pausedAtUs;
+    private bool _isExiting;
+    private bool _completedEmitted;
+    private bool _isDisposed;
+    private bool _isPlaying;
+
+    // Master clock (wall path when no audio)
+    private readonly Stopwatch _wallClock = new Stopwatch();
+    private long _wallMediaOriginUs; // media time corresponding to wall start
+
     [Signal] public delegate void CompletedEventHandler();
     [Signal] public delegate void TimeUpdatedEventHandler(double time);
 
     public ActiveVideoPlayback()
     {
-        // Blank constructor for Godot
     }
 
     public bool UseAudio => _videoComponent.UseAudio && _videoComponent.Metadata.AudioChannels > 0;
@@ -144,94 +109,66 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _videoComponent = videoComponent ?? throw new ArgumentNullException(nameof(videoComponent));
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
 
-        LoadVideoDecoder();
+        _videoDecoder = new VideoSourceDecoder();
         if (UseAudio)
         {
-            LoadAudioDecoder();
-        }
-        
-        // Load needed parameters from component
-        if (UseAudio)
-        {
+            _audioDecoder = new AudioSourceDecoder();
+            DeviceStreams = new Dictionary<uint, IntPtr>();
+            DeviceStreamChannels = new Dictionary<uint, int>();
             Patch = videoComponent.Patch;
             Routing = videoComponent.Routing;
             DirectOutput = videoComponent.DirectOutput;
         }
 
-        // Find target layer
         _targetLayer = DisplaysManager.Layers.Find(l => l.LayerId == _videoComponent.TargetLayerId);
         if (_targetLayer == null)
         {
             GD.PrintErr($"ActiveVideoPlayback:Constructor - Target layer {_videoComponent.TargetLayerId} not found.");
             return;
         }
-        
+
         _godotImage = Image.CreateEmpty(1, 1, false, Image.Format.Rgba8);
         _godotTexture = ImageTexture.CreateFromImage(_godotImage);
 
-        // Validate and set start time
-        if (_videoComponent.StartTime < 0)
-        {
-            GD.Print($"ActiveVideoPlayback:Constructor - Invalid start time: {_videoComponent.StartTime}, defaulting to 0");
-        }
-        else
-        {
-           _startTimeMs = (long)(_videoComponent.StartTime * 1000); // Seconds to ms
-        }
-
+        _startTimeUs = (long)(Math.Max(0, _videoComponent.StartTime) * MicrosecondsPerSecond);
         _useCustomEnd = _videoComponent.EndTime >= 0;
-        _endTimeMs = _useCustomEnd ? (long)(_videoComponent.EndTime * 1000) : (long)(_videoComponent.Metadata.Duration * 1000);
-        EffectivePlayCount = _videoComponent.Loop ? int.MaxValue : _videoComponent.PlayCount;
+        if (_useCustomEnd)
+            _endTimeUs = (long)(_videoComponent.EndTime * MicrosecondsPerSecond);
+        else if (_videoComponent.Metadata != null && _videoComponent.Metadata.Duration > 0)
+            _endTimeUs = (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond);
+        else
+            _endTimeUs = long.MaxValue;
 
-        // Check start time is not later than file duration
-        if (_videoComponent.Metadata.Duration > 0 && _startTimeMs > (long)(_videoComponent.Metadata.Duration * 1000))
+        EffectivePlayCount = _videoComponent.Loop ? int.MaxValue : Math.Max(1, _videoComponent.PlayCount);
+
+        if (_videoComponent.Metadata?.Duration > 0 &&
+            _startTimeUs > (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond))
         {
-            _startTimeMs = 0;
+            _startTimeUs = 0;
         }
     }
 
-    private void LoadVideoDecoder()
+    /// <summary>
+    /// Opens video (and audio) decoders, seeks to start, prefetches.
+    /// </summary>
+    public async Task InitAsync()
     {
-        if (_videoDecoder != null)
-        {
-            ClearVideoDecoder();
-        }
+        GD.Print("ActiveVideoPlayback:InitAsync - Initializing...");
+        _currentPlayCount = 1;
 
-        _videoDecoder = new FFmpegVideoDecoder(this);
-        _videoDecoder.FrameReady += OnFrameReady;
-        _videoDecoder.TimeUpdated += OnTimeUpdated;
-        _videoDecoder.EndReached += OnEndReached;
-    }
+        await _videoDecoder.OpenAsync(_videoComponent.VideoFile);
+        if (!_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
+            _endTimeUs = _videoDecoder.Info.DurationUs;
 
-    private void LoadAudioDecoder()
-    {
-        if (_audioDecoder != null)
-        {
-            ClearAudioDecoder();
-        }
-        
-        _audioDecoder = new FFmpegAudioDecoder(_videoComponent, this);
+        if (_startTimeUs > 0)
+            _videoDecoder.Seek(_startTimeUs);
+        _videoDecoder.Prefetch(VideoPrefetchTarget);
 
-    }
-
-    private async Task InitVideoAsync()
-    {
-        if (_videoDecoder == null)
-        {
-            LoadVideoDecoder();
-        }
-
-        await _videoDecoder.StartDecodingAsync(_videoComponent.VideoFile);
-
-        _videoDecoder.TimeUpdated += OnVideoTimeUpdated;
-
-        if (_videoComponent.StartTime > 0)
-        {
-            _videoDecoder.Seek(_videoComponent.StartTime);
-        }
-
-        _godotImage = Image.CreateEmpty(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8);
+        int w = _videoDecoder.Info.Width;
+        int h = _videoDecoder.Info.Height;
+        _godotImage = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
         _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+        _displayRgba = new byte[_videoDecoder.Info.FrameByteSize];
 
         foreach (var display in DisplaysManager.Outputs)
         {
@@ -239,7 +176,6 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             var layerTextRect = layerControl.GetNode<TextureRect>("%LayerOutput");
             layerTextRect.Texture = _godotTexture;
             _targetLayers.Add(layerControl, layerTextRect);
-            // Connect to TreeExited to remove reference when layer is destroyed
             layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
         }
 
@@ -250,71 +186,130 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             Clean();
             return;
         }
-    }
 
-    private async Task InitAudioAsync()
-    {
-        // Init embedded audio if present
         if (_audioDecoder != null)
         {
-            await _audioDecoder.InitAsync();
-            SourceChannels = _videoComponent.Metadata.AudioChannels;
-            SourceSampleRate = _audioDecoder.OutputSampleRate;
-            SourceFormat = _audioDecoder.TargetFormat;
-            SourceBytesPerFrame = SourceChannels * (AudioDevices.GetBitDepth(SourceFormat) / 8);
-            _channelGains = new float[SourceChannels];
-            UpdateChannelGains();
+            // Stream embedded audio (no full PCM expand) — long video soundtracks would
+            // otherwise pin tens/hundreds of MB on the LOH for the whole cue lifetime.
+            await _audioDecoder.OpenAsync(
+                _videoComponent.VideoFile,
+                preferSampleAccurateStore: false);
+            SourceChannels = _audioDecoder.Info.Channels;
+            SourceSampleRate = _audioDecoder.Info.SampleRate;
+            SourceFormat = SDL.AudioFormat.AudioF32LE;
+            SourceBytesPerFrame = SourceChannels * sizeof(float);
 
-            if (_videoComponent.StartTime > 0)
+            if (_startTimeUs > 0)
+                _audioDecoder.Seek(_startTimeUs);
+            _audioDecoder.Prefetch(AudioSourceDecoder.DefaultPrefetchMs);
+
+            int maxFrames = Math.Max(SourceSampleRate / 10, 1024);
+            _audioSrcBuffer = new float[maxFrames * SourceChannels];
+            _audioMixBuffer = new float[maxFrames * 16];
+        }
+
+        SetProcess(false); // enabled on Play
+        GD.Print($"ActiveVideoPlayback:InitAsync - complete video={w}x{h} audio={_audioDecoder != null}");
+    }
+
+    /// <summary>
+    /// Main-thread presentation: compare master clock to next frame PTS.
+    /// Requires this node to be inside the scene tree (see ActiveCue.SetupVideoComponent).
+    /// </summary>
+    public override void _Process(double delta)
+    {
+        PresentCatchUpFrames();
+    }
+
+    private void PresentFrame(VideoFrame frame)
+    {
+        if (frame?.Rgba == null || _isExiting) return;
+        if (!IsInstanceValid(_godotImage) || !IsInstanceValid(_godotTexture)) return;
+
+        int needed = frame.Width * frame.Height * 4;
+        if (_displayRgba == null || _displayRgba.Length < needed)
+            _displayRgba = new byte[needed];
+        Buffer.BlockCopy(frame.Rgba, 0, _displayRgba, 0, needed);
+
+        // Optional fade via alpha
+        if (_fadeAlpha < 1.0f)
+        {
+            for (int i = 3; i < needed; i += 4)
+                _displayRgba[i] = (byte)(_displayRgba[i] * _fadeAlpha);
+        }
+
+        if (_godotImage.GetWidth() != frame.Width || _godotImage.GetHeight() != frame.Height)
+        {
+            _godotImage = Image.CreateEmpty(frame.Width, frame.Height, false, Image.Format.Rgba8);
+            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+        }
+
+        _godotImage.SetData(frame.Width, frame.Height, false, Image.Format.Rgba8, _displayRgba);
+        _godotTexture.Update(_godotImage);
+
+        foreach (var layer in _targetLayers)
+            layer.Value.Texture = _godotTexture;
+    }
+
+    /// <summary>
+    /// Master media clock in microseconds.
+    /// With audio: audio decode position minus average SDL stream latency (audio leads presentation).
+    /// Without audio: wall clock offset from play start.
+    /// </summary>
+    private long GetMasterClockUs()
+    {
+        if (_audioDecoder != null && UseAudio)
+        {
+            long audioUs = _audioDecoder.PositionUs;
+            long queuedUs = 0;
+            int count = 0;
+            if (DeviceStreams != null)
             {
-                _audioDecoder.Seek((long)(_videoComponent.StartTime * MicrosecondsPerSecond));
+                foreach (var kv in DeviceStreams)
+                {
+                    long qb = SDL.GetAudioStreamQueued(kv.Value);
+                    int outCh = GetStreamChannels(kv.Key);
+                    if (outCh <= 0 || SourceSampleRate <= 0) continue;
+                    queuedUs += qb * MicrosecondsPerSecond / (SourceSampleRate * outCh * sizeof(float));
+                    count++;
+                }
+            }
+            if (count > 0) queuedUs /= count;
+            long master = audioUs - queuedUs;
+            return master < _startTimeUs ? _startTimeUs : master;
+        }
+
+        if (!_wallClock.IsRunning)
+            return _wallMediaOriginUs;
+        return _wallMediaOriginUs + _wallClock.ElapsedMilliseconds * 1000;
+    }
+
+    private void HandleSegmentEnd()
+    {
+        lock (_lock)
+        {
+            if (IsStopped || _isExiting) return;
+
+            if (_videoComponent.Loop || _currentPlayCount < EffectivePlayCount)
+            {
+                _currentPlayCount++;
+                GD.Print($"ActiveVideoPlayback:HandleSegmentEnd - Loop/play {_currentPlayCount}/{EffectivePlayCount}");
+                SeekInternal(_startTimeUs, restartClock: true);
+                return;
             }
         }
+
+        GD.Print("ActiveVideoPlayback:HandleSegmentEnd - Completed");
+        CallDeferred(nameof(CompleteFromEnd));
     }
 
-    /// <summary>
-    /// Initializes the playback asynchronously.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task InitAsync()
+    private void CompleteFromEnd()
     {
-        GD.Print($"ActiveVideoPlayback:InitAsync - Initializing...");
-        _playCountRemaining = _videoComponent.PlayCount;
-        await InitVideoAsync();
-        if (_isExiting) return; // If video init failed
-        await InitAudioAsync();
-        GD.Print($"ActiveVideoPlayback:InitAsync - Initializing complete");
-    }
-
-    /// <summary>
-    /// Invokes the frame ready event on the main thread.
-    /// </summary>
-    /// <param name="data">The frame data.</param>
-    public void InvokeFrameReady(byte[] data)
-    {
-        OnFrameReady(data);
-    }
-
-    /// <summary>
-    /// Invokes the time updated event.
-    /// </summary>
-    /// <param name="time">The current time.</param>
-    public void InvokeTimeUpdated(double time)
-    {
-        OnTimeUpdated(time);
-    }
-
-    /// <summary>
-    /// Invokes the end reached event.
-    /// </summary>
-    public void InvokeEndReached()
-    {
-        OnEndReached();
+        _ = Stop(0);
     }
 
     private void OnLayerExited(TextureRect layer)
     {
-        // Remove the layer from _targetLayers to prevent invalid references
         lock (_lock)
         {
             foreach (var kv in _targetLayers)
@@ -322,330 +317,368 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 if (kv.Value == layer)
                 {
                     _targetLayers.Remove(kv.Key);
-                    GD.Print($"ActiveVideoPlayback:OnLayerExited - Removed reference to destroyed layer");
                     break;
                 }
             }
-            // Layer removed, no action needed as cleanup is handled by end-reached
         }
     }
 
-    private void OnFrameReady(byte[] data)
+    public async Task PlayAsync()
     {
-        // Pushs data back onto the main thread in Godot sync
-        CallDeferred(nameof(PushFrame), data);
-    }
-
-    private void OnTimeUpdated(double time)
-    {
-        EmitSignal(SignalName.TimeUpdated, time);
-        //DriftCheck(time);
-    }
-
-    private void DriftCheck(double videoPtsSec)
-    {
-        // This code is currently unused, will need to implements a better version of drift checking / aligning that doesnt wreck everything.
-        // Uncomment DriftCheck in OnTimeUpdated to use. 
-        if (_audioDecoder != null && Math.Abs(videoPtsSec - _audioDecoder.CurrentTime / (double)MicrosecondsPerSecond) > 0.1)
-        {
-            _audioDecoder.Seek((long)(videoPtsSec * MicrosecondsPerSecond));
-            _audioDecoder.ClearQueues();
-            GD.Print($"ActiveVideoPlayback:DriftCheck - Video audio resync to {videoPtsSec:F2}s");
-        }
-    }
-
-    private void OnVideoTimeUpdated(double time)
-    {
-        if (_videoComponent.EndTime > 0 && time >= _videoComponent.EndTime)
-        {
-            if (_videoComponent.Loop && (_playCountRemaining > 1 || _playCountRemaining == 0))
-            {
-                if (_playCountRemaining > 0)
-                {
-                    _playCountRemaining--;
-                }
-                _videoDecoder.Seek(_videoComponent.StartTime);
-                if (_audioDecoder != null)
-                {
-                    _audioDecoder.Seek((long)(_videoComponent.StartTime * MicrosecondsPerSecond));
-                }
-            }
-            else
-            {
-                Clean();
-            }
-        }
-    }
-
-    private void OnEndReached()
-    {
-        GD.Print($"ActiveVideoPlayback:OnEndReached");
-        Clean();
-    }
-    
-    /// <summary>
-    /// Pushes a decoded RGB frame to the video output.
-    /// </summary>
-    /// <param name="rgbaData">The frame data.</param>
-    public void PushFrame(byte[] rgbaData)
-    {
+        await Task.Yield();
         lock (_lock)
         {
-            if (_isExiting || !IsInstanceValid(_godotImage) || !IsInstanceValid(_godotTexture)) return;
-        
-            // Resize image if dimensions changed
-            if (_godotImage.GetWidth() != _videoDecoder?.Width || _godotImage.GetHeight() != _videoDecoder?.Height)
-            {
-                _godotImage = Image.CreateEmpty(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8);
-                _godotTexture = ImageTexture.CreateFromImage(_godotImage);
-            }
-            
-            // This is where video modifications / filters can take place.
-            if (_fadeAlpha < 1.0f)
-            {
-                // Apply fade by modifying alpha channel on a copy to avoid altering original data
-                byte[] fadedData = new byte[rgbaData.Length];
-                Array.Copy(rgbaData, fadedData, rgbaData.Length);
-                for (int i = 3; i < fadedData.Length; i += 4)
-                {
-                    fadedData[i] = (byte)(fadedData[i] * _fadeAlpha);
-                }
-                rgbaData = fadedData;
-            }
-
-            _godotImage.SetData(_videoDecoder.Width, _videoDecoder.Height, false, Image.Format.Rgba8, rgbaData);
-            _godotTexture.Update(_godotImage);
-            
-            
-            if (_targetLayers.Count == 0 && !_isExiting)
-            {
-                GD.Print($"ActiveVideoPlayback:PushFrame - No target layers present, calling completed");
-                EmitSignalCompleted();
-                Clean();
-            }
-            
-            //Push to all layers on various outputs
-            foreach (var layer in _targetLayers)
-            {
-                layer.Value.Texture = _godotTexture;
-            }
+            if (IsStopped || _isExiting) return;
+            _isPlaying = true;
+            IsPaused = false;
+            // Wall-clock origin = current media position (used when no audio master)
+            _wallMediaOriginUs = _videoDecoder?.PositionUs ?? _startTimeUs;
+            _wallClock.Restart();
         }
+
+        if (!IsInsideTree())
+        {
+            GD.PrintErr("ActiveVideoPlayback:PlayAsync - Node is not in the scene tree; _Process will not run and video will not display. Parent must AddChild(this) before Play.");
+        }
+
+        SetProcess(true);
+        StartVideoPrefetchLoop();
+        if (_audioDecoder != null)
+            StartAudioFillLoop();
+
+        // Present first frame immediately so output isn't blank for a tick
+        PresentCatchUpFrames();
+
+        GD.Print($"ActiveVideoPlayback:PlayAsync - Playing (audio-master={_audioDecoder != null}, inTree={IsInsideTree()})");
     }
 
     /// <summary>
-    /// Pauses the playback.
+    /// Shared present logic used by _Process and the first Play tick.
     /// </summary>
+    private void PresentCatchUpFrames()
+    {
+        if (!_isPlaying || IsPaused || IsStopped || _isExiting || _videoDecoder == null)
+            return;
+
+        long masterUs = GetMasterClockUs();
+        EmitSignal(SignalName.TimeUpdated, masterUs / (double)MicrosecondsPerSecond);
+
+        if (masterUs >= _endTimeUs)
+        {
+            HandleSegmentEnd();
+            return;
+        }
+
+        int presented = 0;
+        const int maxPresentPerTick = 4;
+        while (presented < maxPresentPerTick)
+        {
+            if (!_videoDecoder.TryPeekPts(out long nextPts))
+            {
+                if (_videoDecoder.EndOfStream)
+                    HandleSegmentEnd();
+                break;
+            }
+
+            long lateness = masterUs - nextPts;
+            if (lateness < -PresentEarlyToleranceUs)
+                break;
+
+            if (!_videoDecoder.ReadFrame(out VideoFrame frame))
+                break;
+
+            if (lateness > MaxVideoLatenessUs && _videoDecoder.TryPeekPts(out long peek2) && peek2 <= masterUs)
+            {
+                _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
+                presented++;
+                continue;
+            }
+
+            PresentFrame(frame);
+            _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
+            presented++;
+        }
+    }
+
     public void Pause()
     {
         lock (_lock)
         {
-            _videoDecoder.Pause();
-            if (_audioDecoder != null)
-            {
-                _audioDecoder.Pause();
-                if (DeviceStreams != null)
-                {
-                    foreach (var stream in DeviceStreams.Values) SDL.ClearAudioStream(stream);
-                }
-                _audioDecoder.ClearQueues();
-            }
-            //_pausedAtUs = Decoder.CurrentTime - GetQueuedUs(); // Estimate actual position at pause
+            if (IsPaused || IsStopped) return;
             IsPaused = true;
-            //Decoder.ClearQueues(); // Clear frame queue to avoid stale data on resume
-            GD.Print($"ActiveVideoPlayback:Pause - Playback paused at estimated {_pausedAtUs / 1000} ms");
+            _pausedAtUs = GetMasterClockUs();
+            _wallClock.Stop();
         }
+
+        if (DeviceStreams != null)
+        {
+            foreach (var stream in DeviceStreams.Values)
+                SDL.ClearAudioStream(stream);
+        }
+        _audioDecoder?.FlushBuffers();
+        GD.Print($"ActiveVideoPlayback:Pause - at {_pausedAtUs / 1000} ms");
     }
 
-    /// <summary>
-    /// Resumes the playback.
-    /// </summary>
     public void Resume()
     {
         lock (_lock)
         {
+            if (!IsPaused || IsStopped) return;
             if (_pausedAtUs > 0)
             {
-                _videoDecoder.Seek(_pausedAtUs / (double)MicrosecondsPerSecond); // Seek back to paused position
-                if (_audioDecoder != null) _audioDecoder.Seek(_pausedAtUs);
+                SeekInternal(_pausedAtUs, restartClock: true);
                 _pausedAtUs = 0;
             }
-            _videoDecoder.Resume();
-            if (_audioDecoder != null) _audioDecoder.Resume();
             IsPaused = false;
-            GD.Print($"ActiveVideoPlayback:Resume - Playback resumed");
+            _wallClock.Restart();
+        }
+        GD.Print("ActiveVideoPlayback:Resume");
+    }
+
+    /// <summary>Seeks both video and audio to the same media time (seconds).</summary>
+    public void Seek(double timeSeconds)
+    {
+        long us = (long)(timeSeconds * MicrosecondsPerSecond);
+        us = Math.Max(_startTimeUs, us);
+        if (_endTimeUs < long.MaxValue)
+            us = Math.Min(us, _endTimeUs);
+
+        lock (_lock)
+        {
+            IsSeeking = true;
+        }
+        SeekInternal(us, restartClock: !IsPaused && _isPlaying);
+        lock (_lock)
+        {
+            IsSeeking = false;
+            if (IsPaused)
+                _pausedAtUs = us;
         }
     }
 
-    /// <summary>
-    /// Starts the playback asynchronously.
-    /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task PlayAsync()
+    private void SeekInternal(long timestampUs, bool restartClock)
     {
-        _videoDecoder.Resume();
+        if (DeviceStreams != null)
+        {
+            foreach (var stream in DeviceStreams.Values)
+                SDL.ClearAudioStream(stream);
+        }
+
+        _videoDecoder?.Seek(timestampUs);
+        _videoDecoder?.Prefetch(VideoPrefetchTarget);
+
         if (_audioDecoder != null)
         {
-            // Fire-and-forget: decoder's internal PlayAsync() starts its Producer + ConsumerLoopAsync.
-            // For _isEmbedded=true, the consumer inside FFmpegAudioDecoder will call videoPlayback.PushPcm directly.
-            // Do NOT start a second consumer loop here (would double-consume PcmQueue and break audio).
-            // Previously this did `await _audioDecoder.PlayAsync()` (which waits until audio end -- wrong for concurrent video) + extra loop.
-            _audioDecoder.PlayAsync();  // starts background decode+push for embedded audio
-            _audioCts = new CancellationTokenSource();
-            // No separate _audioConsumerTask; rely on decoder's. (cleanup still cancels _audioCts if set, for safety)
+            _audioDecoder.FlushBuffers();
+            _audioDecoder.Seek(timestampUs);
+            _audioDecoder.Prefetch(400);
+        }
+
+        if (restartClock)
+        {
+            _wallMediaOriginUs = timestampUs;
+            if (_isPlaying && !IsPaused)
+                _wallClock.Restart();
         }
     }
 
-    /// <summary>
-    /// Pushes PCM audio data to the device streams.
-    /// </summary>
-    /// <param name="pcm">The PCM audio data.</param>
-    public unsafe void PushPcm(byte[] pcm)
+    private void StartVideoPrefetchLoop()
     {
-        lock (_lock)
+        StopVideoPrefetchLoop();
+        _videoPrefetchCts = new CancellationTokenSource();
+        var token = _videoPrefetchCts.Token;
+        _videoPrefetchTask = Task.Run(() =>
         {
-            if (_isExiting) return;
-            if (DeviceStreams == null) return;
-            foreach (var kv in DeviceStreams)
-        {
-            byte[] outputBuffer = ArrayPool<byte>.Shared.Rent(pcm.Length); // Rent buffer for output
             try
             {
-                ApplyChannelVolumes(pcm, kv.Key, outputBuffer); // Apply volumes and routing
-                fixed (byte* p = outputBuffer)
+                while (!token.IsCancellationRequested)
                 {
-                    SDL.PutAudioStreamData(kv.Value, (IntPtr)p, outputBuffer.Length);
+                    bool paused;
+                    lock (_lock) paused = IsPaused || IsStopped || _isExiting || !_isPlaying;
+                    if (paused)
+                    {
+                        Thread.Sleep(10);
+                        continue;
+                    }
+
+                    if (_videoDecoder != null &&
+                        _videoDecoder.BufferedFrames < VideoPrefetchLowWater &&
+                        !_videoDecoder.EndOfStream)
+                    {
+                        _videoDecoder.Prefetch(VideoPrefetchTarget);
+                    }
+                    Thread.Sleep(4);
                 }
             }
-            finally
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
             {
-                ArrayPool<byte>.Shared.Return(outputBuffer, clearArray: true); // Return to pool
+                GD.PrintErr($"ActiveVideoPlayback:VideoPrefetch - {ex.Message}");
             }
+        }, token);
+    }
+
+    private void StopVideoPrefetchLoop()
+    {
+        try
+        {
+            _videoPrefetchCts?.Cancel();
+            _videoPrefetchTask?.Wait(500);
         }
+        catch { /* ignore */ }
+        finally
+        {
+            _videoPrefetchCts?.Dispose();
+            _videoPrefetchCts = null;
+            _videoPrefetchTask = null;
         }
     }
 
-    /// <summary>
-    /// Applies per-channel volumes and routes PCM data to SDL streams, handling direct or patched output.
-    /// </summary>
-    /// <param name="pcm">The input PCM audio data as bytes.</param>
-    /// <param name="deviceId">The ID of the audio device.</param>
-    /// <param name="outputBuffer">The output buffer to write processed audio data to.</param>
-    private unsafe void ApplyChannelVolumes(byte[] pcm, uint deviceId, byte[] outputBuffer)
+    private void StartAudioFillLoop()
     {
-        int samples = pcm.Length / (SourceChannels * sizeof(float));
-        Span<float> pcmSpan = MemoryMarshal.Cast<byte, float>(pcm.AsSpan());
-        Span<float> outputSpan = MemoryMarshal.Cast<byte, float>(outputBuffer.AsSpan());
-        outputSpan.Clear();
+        StopAudioFillLoop();
+        _audioFillCts = new CancellationTokenSource();
+        var token = _audioFillCts.Token;
+        _audioFillTask = Task.Run(() => AudioFillLoop(token), token);
+    }
 
-        string deviceName = GetDeviceName(deviceId);
-        if (!string.IsNullOrEmpty(_videoComponent.DirectOutput))
+    private void StopAudioFillLoop()
+    {
+        try
         {
-            // Direct output: Apply channel gains (including Routing if present)
-            var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
-            if (device == null)
+            _audioFillCts?.Cancel();
+            _audioFillTask?.Wait(500);
+        }
+        catch { /* ignore */ }
+        finally
+        {
+            _audioFillCts?.Dispose();
+            _audioFillCts = null;
+            _audioFillTask = null;
+        }
+    }
+
+    private void AudioFillLoop(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
             {
-                GD.PrintErr($"ActiveVideoPlayback:ApplyChannelVolumes - Device {deviceId} not found for direct output");
-                return;
-            }
-            int deviceChannels = device.Channels;
-            int outputChannels = Routing != null ? Routing.OutputChannels : SourceChannels;
-            
-            if (Routing != null)
-            {
-                // Route using CuePatch : Note, loops through devices channels and disregards extra outputs in Routing if there's a hotswap from Patch -> direct output
-                for (int s = 0; s < samples; s++)
+                bool paused;
+                lock (_lock) paused = IsPaused || IsStopped || _isExiting;
+                if (paused)
                 {
-                    for (int outCh = 0; outCh < deviceChannels; outCh++)
+                    Thread.Sleep(AudioFillSleepMs);
+                    continue;
+                }
+
+                if (DeviceStreams == null || DeviceStreams.Count == 0 || _audioDecoder == null)
+                {
+                    Thread.Sleep(AudioFillSleepMs);
+                    continue;
+                }
+
+                bool anyNeed = false;
+                int maxNeedFrames = 0;
+                foreach (var kv in DeviceStreams)
+                {
+                    long queued = SDL.GetAudioStreamQueued(kv.Value);
+                    int outCh = GetStreamChannels(kv.Key);
+                    int bpf = outCh * sizeof(float);
+                    if (bpf <= 0) continue;
+                    long lowWater = SourceSampleRate * AudioLowWaterMs / 1000L * bpf;
+                    long target = SourceSampleRate * AudioTargetBufferMs / 1000L * bpf;
+                    if (queued < lowWater)
                     {
-                        float sample = 0f;
-                        for (int inCh = 0; inCh < SourceChannels; inCh++)
-                        {
-                            sample += pcmSpan[s * SourceChannels + inCh] * _channelGains[inCh] * Routing.GetVolume(inCh, outCh);
-                        }
-                        outputSpan[s * deviceChannels + outCh] = sample;
+                        anyNeed = true;
+                        int need = (int)Math.Max(1, (target - queued) / bpf);
+                        if (need > maxNeedFrames) maxNeedFrames = need;
                     }
                 }
-            }
-            else
-            {
-                // No routing, direct
-                for (int s = 0; s < samples; s++)
+
+                if (!anyNeed)
                 {
-                    for (int ch = 0; ch < SourceChannels; ch++)
-                    {
-                        outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
-                    }
+                    Thread.Sleep(AudioFillSleepMs);
+                    continue;
                 }
+
+                int maxFrames = _audioSrcBuffer.Length / SourceChannels;
+                int framesToRead = Math.Min(maxNeedFrames, maxFrames);
+
+                // Don't fill audio past video end region
+                long pos = _audioDecoder.PositionUs;
+                if (pos >= _endTimeUs)
+                {
+                    Thread.Sleep(AudioFillSleepMs);
+                    continue;
+                }
+
+                int frames = _audioDecoder.Read(_audioSrcBuffer.AsSpan(), framesToRead, token);
+                if (frames <= 0)
+                {
+                    Thread.Sleep(AudioFillSleepMs);
+                    continue;
+                }
+
+                PushMixedAudioFrames(frames);
             }
         }
-        else if (deviceName != null && Patch != null && Patch.OutputDevices.TryGetValue(deviceName, out var outputChannels)) // (patched output, no Routing check here)
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
         {
-            // Patched output: Route via AudioOutputPatch, using _channelGains (includes Routing if present)
-            for (int s = 0; s < samples; s++)
-            {
-                for (int outCh = 0; outCh < outputChannels.Count; outCh++)
-                {
-                    float sample = 0f;
-                    foreach (int patchCh in outputChannels[outCh].RoutedChannels)
-                    {
-                        for (int inCh = 0; inCh < SourceChannels; inCh++)
-                        {
-                            float gain = _channelGains[inCh]; // (_channelGains includes Routing)
-                            if (Routing != null) // (apply Routing matrix if present)
-                            {
-                                gain *= Routing.GetVolume(inCh, patchCh);
-                            }
-                            sample += pcmSpan[s * SourceChannels + inCh] * gain;
-                        }
-                    }
-                    outputSpan[s * outputChannels.Count + outCh] = sample;
-                }
-            }
-        }
-        else
-        {
-            // Fallback: Apply _channelGains directly
-            for (int s = 0; s < samples; s++)
-            {
-                for (int ch = 0; ch < SourceChannels; ch++)
-                {
-                    outputSpan[s * SourceChannels + ch] = pcmSpan[s * SourceChannels + ch] * _channelGains[ch];
-                }
-            }
+            GD.PrintErr($"ActiveVideoPlayback:AudioFillLoop - {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// Retrieves the name of the audio device corresponding to the given device ID.
-    /// </summary>
-    /// <param name="deviceId">The device ID to look up.</param>
-    /// <returns>The device name if found; otherwise, null.</returns>
-    private string GetDeviceName(uint deviceId)
+    private int GetStreamChannels(uint deviceLogicalId)
     {
-        var device = _audioDevices.GetAudioDeviceByLogicalId(deviceId);
-        return device?.Name;
+        if (DeviceStreamChannels != null &&
+            DeviceStreamChannels.TryGetValue(deviceLogicalId, out int ch) &&
+            ch > 0)
+        {
+            return ch;
+        }
+        return SourceChannels;
     }
 
-    /// <summary>
-    /// Updates channel gains based on VideoComponent volume.
-    /// </summary>
-    private void UpdateChannelGains()
+    private unsafe void PushMixedAudioFrames(int frames)
     {
-        if (_isExiting) return;
-        lock (_lock)
+        if (DeviceStreams == null || _isExiting) return;
+
+        float masterVol;
+        lock (_lock) masterVol = _volume;
+        float componentVol = (float)_videoComponent.Volume;
+        bool isDirect = !string.IsNullOrEmpty(DirectOutput);
+
+        foreach (var kv in DeviceStreams)
         {
-            for (int i = 0; i < SourceChannels; i++)
+            int outCh = GetStreamChannels(kv.Key);
+            int outSamples = frames * outCh;
+            if (outSamples > _audioMixBuffer.Length)
+                _audioMixBuffer = new float[outSamples];
+
+            string deviceName = _audioDevices.GetAudioDeviceByLogicalId(kv.Key)?.Name;
+            AudioMixMatrix.Mix(
+                _audioSrcBuffer.AsSpan(0, frames * SourceChannels),
+                frames,
+                SourceChannels,
+                _audioMixBuffer.AsSpan(0, outSamples),
+                outCh,
+                masterVol,
+                componentVol,
+                Routing,
+                Patch,
+                deviceName,
+                isDirect);
+
+            int byteCount = outSamples * sizeof(float);
+            fixed (float* p = _audioMixBuffer)
             {
-                _channelGains[i] = (float)_videoComponent.Volume * _volume;
+                SDL.PutAudioStreamData(kv.Value, (IntPtr)p, byteCount);
             }
         }
     }
 
-    /// <summary>
-    /// Stops and cleans up the playback resources.
-    /// </summary>
-    /// <param name="fadeTime">The fade time in seconds; if greater than 0, fades out before stopping.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task Stop(double fadeTime = 0.0)
     {
         bool needFade;
@@ -662,28 +695,35 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         if (wasFadingOut)
         {
-            // If already fading out, immediately stop and clean
-            //Decoder.Stop();
-            if (_audioDecoder != null) _audioDecoder.Stop();
-            Clean();
+            HardStop();
             return;
         }
 
-        if (needFade) // Use component duration if set
+        if (needFade)
         {
             await FadeOutAsync(fadeDuration);
             return;
         }
-        _videoDecoder.Stop();
-        if (_audioDecoder != null) _audioDecoder.Stop();
+
+        HardStop();
+    }
+
+    private void HardStop()
+    {
+        lock (_lock)
+        {
+            if (IsStopped) return;
+            IsStopped = true;
+            IsPaused = false;
+            _isPlaying = false;
+        }
+        SetProcess(false);
+        StopVideoPrefetchLoop();
+        StopAudioFillLoop();
+        _wallClock.Stop();
         Clean();
     }
 
-    /// <summary>
-    /// Fades in the playback over the specified duration.
-    /// </summary>
-    /// <param name="duration">The fade duration in seconds.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task FadeInAsync(double duration)
     {
         lock (_lock)
@@ -696,36 +736,29 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         float startVol = 0f;
         float endVol = 1.0f;
         float startAlpha = _fadeAlpha;
-        float endAlpha = 1.0f;
         Stopwatch timer = Stopwatch.StartNew();
+        SetVolume(0f);
+        await PlayAsync();
 
         try
         {
-            // Start decoder audio (if not already) without await: its internal consumer handles embedded push+pacing.
-            // (Avoiding await prevents blocking fade timer; main PlayAsync path also kicks it off.)
-            if (_audioDecoder != null) _audioDecoder.PlayAsync();
             while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, endVol, t));
-                _fadeAlpha = Mathf.Lerp(startAlpha, endAlpha, t);
-                await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token); // ~60fps
+                _fadeAlpha = Mathf.Lerp(startAlpha, 1.0f, t);
+                await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token);
             }
-
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(endVol);
-                _fadeAlpha = endAlpha;
-                GD.Print($"ActiveVideoPlayback:FadeInAsync - Fade-in completed to {endVol} over {duration} seconds");
+                _fadeAlpha = 1.0f;
             }
         }
-        catch (OperationCanceledException)
-        {
-            GD.Print($"ActiveVideoPlayback:FadeInAsync - Fade-in cancelled");
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            GD.PrintErr($"ActiveVideoPlayback:FadeInAsync - Error: {ex.Message}");
+            GD.PrintErr($"ActiveVideoPlayback:FadeInAsync - {ex.Message}");
         }
         finally
         {
@@ -738,23 +771,17 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
     }
 
-    /// <summary>
-    /// Fades out the playback over the specified duration.
-    /// </summary>
-    /// <param name="duration">The fade duration in seconds.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
     public async Task FadeOutAsync(double duration)
     {
         lock (_lock)
         {
-            if (_isFadingOut || _isFadingIn) return; // Prevent concurrent fades
+            if (_isFadingOut || _isFadingIn) return;
             _isFadingOut = true;
             _fadeCts = new CancellationTokenSource();
         }
 
         float startVol = _volume;
         float startAlpha = _fadeAlpha;
-        float endAlpha = 0.0f;
         Stopwatch timer = Stopwatch.StartNew();
 
         try
@@ -763,26 +790,20 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, 0f, t));
-                _fadeAlpha = Mathf.Lerp(startAlpha, endAlpha, t);
-                await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token); // ~60fps
+                _fadeAlpha = Mathf.Lerp(startAlpha, 0f, t);
+                await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token);
             }
-
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(0f);
-                _fadeAlpha = endAlpha;
-                //Decoder.Stop();
-                Clean();
-                GD.Print($"ActiveVideoPlayback:FadeOutAsync - Fade-out completed over {duration} seconds");
+                _fadeAlpha = 0f;
+                HardStop();
             }
         }
-        catch (OperationCanceledException)
-        {
-            GD.Print($"ActiveVideoPlayback:FadeOutAsync - Fade-out cancelled");
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            GD.PrintErr($"ActiveVideoPlayback:FadeOutAsync - Error: {ex.Message}");
+            GD.PrintErr($"ActiveVideoPlayback:FadeOutAsync - {ex.Message}");
         }
         finally
         {
@@ -795,201 +816,157 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
     }
 
-    /// <summary>
-    /// Sets the global volume level for the playback.
-    /// </summary>
-    /// <param name="volume">The volume level, clamped between 0.0 and 1.0.</param>
     public void SetVolume(float volume)
     {
-        lock (_lock)
-        {
-            _volume = Mathf.Clamp(volume, 0f, 1f);
-            UpdateChannelGains(); // Recompute volume with new levels
-        }
-    }
-    
-
-    /// <summary>
-    /// Seeks to the specified timestamp in seconds, clearing queues to avoid stale data.
-    /// Works while playing or paused; playback state is preserved.
-    /// </summary>
-    /// <param name="time">Target timestamp in seconds.</param>
-    public void Seek(double time)
-    {
-        lock (_lock)
-        {
-            _videoDecoder.Seek(time);
-            if (_audioDecoder != null)
-            {
-                bool wasPlaying = _audioDecoder.IsPlaying && !_audioDecoder.IsPaused;
-                _audioDecoder.Pause();
-                if (DeviceStreams != null)
-                {
-                    foreach (var stream in DeviceStreams.Values) SDL.ClearAudioStream(stream);
-                }
-                _audioDecoder.ClearQueues();
-                _audioDecoder.Seek((long)(time * MicrosecondsPerSecond));
-                if (wasPlaying) _audioDecoder.Resume();
-            }
-        }
+        lock (_lock) _volume = Mathf.Clamp(volume, 0f, 1f);
     }
 
-    
-
-    /// <summary>
-    /// Gets a value indicating whether the playback is currently fading out.
-    /// </summary>
-    /// <value>true if fading out; otherwise, false.</value>
     public bool IsFadingOut
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _isFadingOut;
-            }
-        }
+        get { lock (_lock) return _isFadingOut; }
     }
 
-    /// <summary>
-    /// Gets a value indicating whether the playback is currently fading in.
-    /// </summary>
-    /// <value>true if fading in; otherwise, false.</value>
     public bool IsFadingIn
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _isFadingIn;
-            }
-        }
+        get { lock (_lock) return _isFadingIn; }
     }
 
-    /// <summary>
-    /// Gets the current volume level.
-    /// </summary>
-    /// <value>The current volume level between 0.0 and 1.0.</value>
     public float CurrentVolume
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _volume;
-            }
-        }
+        get { lock (_lock) return _volume; }
     }
 
-    /// <summary>
-    /// Gets the current play count.
-    /// </summary>
-    /// <value>The current play count.</value>
     public int CurrentPlayCount
     {
-        get
-        {
-            lock (_lock)
-            {
-                return _playCountRemaining;
-            }
-        }
+        get { lock (_lock) return _currentPlayCount; }
     }
 
-    /// <summary>
-    /// Gets the duration of the video in seconds.
-    /// </summary>
-    /// <returns>The duration in seconds.</returns>
     public double GetDuration()
     {
-        return _videoDecoder.Duration;
-    }
-    
-    private void ClearVideoDecoder()
-    {
-        if (_videoDecoder != null)
-        {
-            _videoDecoder.FrameReady -= OnFrameReady;
-            _videoDecoder.TimeUpdated -= OnTimeUpdated;
-            _videoDecoder.EndReached -= OnEndReached;
-            _videoDecoder.StopDecodingAsync().Wait();
-            _videoDecoder.Dispose();
-            _videoDecoder = null;
-        }
+        if (_videoDecoder?.Info != null && _videoDecoder.Info.DurationUs > 0)
+            return _videoDecoder.Info.DurationUs / (double)MicrosecondsPerSecond;
+        return _videoComponent.Metadata?.Duration ?? 0;
     }
 
-    private void ClearAudioDecoder()
-    {
-        if (_audioDecoder != null)
-        {
-            _audioDecoder.Stop();
-            _audioDecoder.Dispose();
-            _audioDecoder = null;
-        }
-        
-    }
-
-    private void ClearTargetLayers()
-    {
-        // Clear all generated target layers
-        foreach (var layerControl in _targetLayers.Keys)
-        {
-            layerControl.QueueFree();
-        }
-        _targetLayers.Clear();
-    }
-    
     public void Clean()
     {
         lock (_lock)
         {
             if (_isDisposed) return;
-            _isExiting = true; // Prevent further operations
-            _audioCts?.Cancel();
-            // (no _audioConsumerTask wait; decoder manages its consumer task internally)
-            if (DeviceStreams != null)
+            _isExiting = true;
+            IsStopped = true;
+            _isPlaying = false;
+        }
+
+        SetProcess(false);
+        StopVideoPrefetchLoop();
+        StopAudioFillLoop();
+        _wallClock.Stop();
+
+        if (DeviceStreams != null)
+        {
+            _audioDevices?.NotifyPlaybackCompleted(this);
+            foreach (var stream in DeviceStreams.Values)
             {
-                foreach (var stream in DeviceStreams.Values) SDL.DestroyAudioStream(stream);
-                DeviceStreams.Clear();
+                try { SDL.DestroyAudioStream(stream); } catch { /* ignore */ }
             }
-            _audioDecoder?.Stop();
-            _audioDecoder?.Dispose();
-            ClearVideoDecoder();
-            ClearTargetLayers();
+            DeviceStreams.Clear();
+        }
+        DeviceStreamChannels?.Clear();
+
+        ReleaseMediaBuffers();
+
+        lock (_lock)
+        {
             if (!_completedEmitted)
             {
                 EmitSignal(SignalName.Completed);
                 _completedEmitted = true;
-            } // Emit signal immediately before freeing
+            }
             _isDisposed = true;
-            CallDeferred("free");
         }
+
+        // Return LOH memory after large frame/PCM releases
+        MediaMemory.ReclaimIfNeeded();
+
+        // Free from the scene tree (we are added as a child of the active cue bar)
+        if (IsInsideTree())
+            CallDeferred(Node.MethodName.QueueFree);
+        else
+            CallDeferred(GodotObject.MethodName.Free);
+    }
+
+    /// <summary>
+    /// Drops decoder, display, and mix buffers so large arrays become collectible.
+    /// </summary>
+    private void ReleaseMediaBuffers()
+    {
+        try { _audioDecoder?.Dispose(); } catch { /* ignore */ }
+        _audioDecoder = null;
+        try { _videoDecoder?.Dispose(); } catch { /* ignore */ }
+        _videoDecoder = null;
+
+        if (_displayRgba != null)
+        {
+            MediaMemory.NoteReleased(MediaMemory.ByteBufferBytes(_displayRgba));
+            _displayRgba = null;
+        }
+        if (_audioSrcBuffer != null)
+        {
+            MediaMemory.NoteReleased(MediaMemory.FloatBufferBytes(_audioSrcBuffer));
+            _audioSrcBuffer = null;
+        }
+        if (_audioMixBuffer != null)
+        {
+            MediaMemory.NoteReleased(MediaMemory.FloatBufferBytes(_audioMixBuffer));
+            _audioMixBuffer = null;
+        }
+
+        // Detach textures from output layers so Godot can free GPU resources
+        foreach (var kv in _targetLayers)
+        {
+            try
+            {
+                if (IsInstanceValid(kv.Value))
+                    kv.Value.Texture = null;
+                if (IsInstanceValid(kv.Key))
+                    kv.Key.QueueFree();
+            }
+            catch { /* ignore */ }
+        }
+        _targetLayers.Clear();
+
+        if (_godotTexture != null && IsInstanceValid(_godotTexture))
+        {
+            try { _godotTexture.Dispose(); } catch { /* ignore */ }
+        }
+        _godotTexture = null;
+        if (_godotImage != null && IsInstanceValid(_godotImage))
+        {
+            try { _godotImage.Dispose(); } catch { /* ignore */ }
+        }
+        _godotImage = null;
     }
 
     public override void _ExitTree()
     {
-        lock (_lock)
+        if (_isDisposed) return;
+        _isExiting = true;
+        IsStopped = true;
+        _isPlaying = false;
+        SetProcess(false);
+        StopVideoPrefetchLoop();
+        StopAudioFillLoop();
+        if (DeviceStreams != null)
         {
-            if (_isDisposed) return;
-            _isExiting = true;
-            _audioCts?.Cancel();
-            // (no separate audio consumer task)
-            if (_audioDecoder != null)
+            foreach (var stream in DeviceStreams.Values)
             {
-                _audioDecoder.Stop();
-                _audioDecoder.Dispose();
-                _audioDecoder = null;
+                try { SDL.DestroyAudioStream(stream); } catch { /* ignore */ }
             }
-            if (DeviceStreams != null)
-            {
-                foreach (var stream in DeviceStreams.Values) SDL.DestroyAudioStream(stream);
-                DeviceStreams.Clear();
-            }
-            ClearVideoDecoder();
-            ClearTargetLayers();
-            _isDisposed = true;
+            DeviceStreams.Clear();
         }
+        ReleaseMediaBuffers();
+        MediaMemory.ReclaimIfNeeded();
+        _isDisposed = true;
     }
-
-
 }

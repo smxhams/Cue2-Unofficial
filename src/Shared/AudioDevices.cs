@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Base.Classes.Devices;
+using Cue2.Shared.Audio;
 using Godot;
 using SDL3;
 
@@ -358,95 +359,103 @@ public partial class AudioDevices : Node
     
     public async Task StartAudioPlayback(IAudioPlayback playback)
     {
-	    if (playback == null) 
+	    if (playback == null)
 	    {
 		    GD.PrintErr("AudioDevices:StartAudioPlayback - Playback is null.");
 		    return;
 	    }
-	    
-	    // Ensure DeviceStreams is initialized
+
+	    await Task.Yield(); // keep async signature for call sites
+
 	    if (playback.DeviceStreams == null)
-	    {
 		    playback.DeviceStreams = new Dictionary<uint, IntPtr>();
-		    GD.Print("AudioDevices:StartAudioPlayback - Initialized DeviceStreams dictionary.");
-	    }
-	    
-	    
-	    // Define source spec from FFmpeg decoder
-	    var sourceSpec = new SDL.AudioSpec
-	    {
-		    Freq = playback.SourceSampleRate,
-		    Format = playback.SourceFormat,
-		    Channels = (byte)playback.SourceChannels
-	    };
-	    
-	    // Open required devices based on routing
-	    //var devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDevice(d, playback)).ToList();
+	    if (playback.DeviceStreamChannels == null)
+		    playback.DeviceStreamChannels = new Dictionary<uint, int>();
+
+	    bool isDirect = !string.IsNullOrEmpty(playback.DirectOutput);
 	    List<AudioDevice> devicesToOpen;
-	    
-	    if (!string.IsNullOrEmpty(playback.DirectOutput)) // Handle direct output
+
+	    if (isDirect)
 	    {
 		    var device = OpenAudioDevice(playback.DirectOutput, out string error);
 		    if (device == null)
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to open direct output device {playback.DirectOutput}: {error}", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				    $"AudioDevices:StartAudioPlayback - Failed to open direct output device {playback.DirectOutput}: {error}", 2);
 			    return;
 		    }
-		    devicesToOpen = new List<AudioDevice> { device }; // Single device for direct output
-		    int expectedChannels = playback.Routing != null ? playback.Routing.OutputChannels : playback.SourceChannels;
-		    if (device.Channels != expectedChannels) // Validate channel count
-		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Channel mismatch: {playback.DirectOutput} has {device.Channels} channels, expected {expectedChannels}", 2);
-			    return;
-		    }
+		    devicesToOpen = new List<AudioDevice> { device };
 	    }
-	    else if (playback.Patch != null) // Fallback to patch routing
+	    else if (playback.Patch != null)
 	    {
+		    // Ensure patch devices are open
+		    foreach (var deviceName in playback.Patch.OutputDevices.Keys)
+		    {
+			    if (GetAudioDeviceIdFromName(deviceName) == null)
+				    OpenAudioDevice(deviceName, out _);
+		    }
 		    devicesToOpen = _openDevices.Values.Where(d => ShouldRouteToDeviceAudio(d, playback)).ToList();
 		    if (devicesToOpen.Count == 0)
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No valid devices found for patch.", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				    "AudioDevices:StartAudioPlayback - No valid devices found for patch.", 2);
 			    return;
 		    }
 	    }
 	    else
 	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioDevices:StartAudioPlayback - No patch or direct output assigned.", 2); //!!!
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			    "AudioDevices:StartAudioPlayback - No patch or direct output assigned.", 2);
 		    return;
 	    }
-	    
+
 	    foreach (var device in devicesToOpen)
 	    {
-		    if (!_openDevices.ContainsKey((int)device.LogicalId))
+		    if (device.LogicalId == 0)
 		    {
-			    OpenAudioDevice(device.Name, out _);
+			    GD.PrintErr($"AudioDevices:StartAudioPlayback - Invalid LogicalId for device {device.Name}.");
+			    continue;
 		    }
+
+		    // Output channel count must match what the mixer writes into this stream
+		    int outChannels = AudioMixMatrix.ResolveOutputChannelCount(
+			    playback.SourceChannels,
+			    isDirect,
+			    device,
+			    playback.Routing,
+			    playback.Patch,
+			    device.Name);
+
+		    if (outChannels <= 0)
+			    outChannels = Math.Max(1, playback.SourceChannels);
+
+		    var sourceSpec = new SDL.AudioSpec
+		    {
+			    Freq = playback.SourceSampleRate,
+			    Format = playback.SourceFormat,
+			    Channels = (byte)outChannels
+		    };
+
 		    SDL.GetAudioDeviceFormat(device.LogicalId, out var deviceSpec, out var _);
 
-		    // Create and bind audio stream with conversion
 		    var stream = SDL.CreateAudioStream(sourceSpec, deviceSpec);
 		    if (stream == IntPtr.Zero)
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to create stream for {device.Name}: {SDL.GetError()}", 2);
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				    $"AudioDevices:StartAudioPlayback - Failed to create stream for {device.Name}: {SDL.GetError()}", 2);
 			    continue;
 		    }
 
 		    if (!SDL.BindAudioStream(device.LogicalId, stream))
 		    {
-			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:StartAudioPlayback - Failed to bind stream for {device.Name}: {SDL.GetError()}", 2);
-			    SDL.DestroyAudioStream(stream);
-			    continue;
-		    }
-		    
-		    // Use LogicalId as key
-		    if (device.LogicalId == 0)
-		    {
-			    GD.PrintErr($"AudioDevices:StartAudioPlayback - Invalid LogicalId for device {device.Name}.");
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				    $"AudioDevices:StartAudioPlayback - Failed to bind stream for {device.Name}: {SDL.GetError()}", 2);
 			    SDL.DestroyAudioStream(stream);
 			    continue;
 		    }
 
 		    playback.DeviceStreams[device.LogicalId] = stream;
+		    playback.DeviceStreamChannels[device.LogicalId] = outChannels;
 
 		    lock (_activeAudioPlaybacks)
 		    {
@@ -460,9 +469,11 @@ public partial class AudioDevices : Node
 			    SDL.ResumeAudioDevice(device.LogicalId);
 			    GD.Print($"AudioDevices:StartAudioPlayback - Resumed device {device.Name}");
 		    }
+
+		    GD.Print($"AudioDevices:StartAudioPlayback - Stream for {device.Name}: srcCh={outChannels} rate={playback.SourceSampleRate} → devCh={deviceSpec.Channels} rate={deviceSpec.Freq}");
 	    }
-	    
-	    GD.Print("AudioDevices:StartAudioPlayback - Audio playback started with FFmpeg.");
+
+	    GD.Print("AudioDevices:StartAudioPlayback - Audio playback streams ready.");
     }
     
     
@@ -484,24 +495,35 @@ public partial class AudioDevices : Node
     /// Ensures resources are freed and devices are paused to save CPU when idle.
     /// Logs cleanup actions via GD.Print for debugging.
     /// </remarks>
-    private void OnPlaybackCompleted(IAudioPlayback playback) 
+    /// <summary>
+    /// Removes a finished playback from tracking and pauses idle devices.
+    /// Call before destroying streams.
+    /// </summary>
+    public void NotifyPlaybackCompleted(IAudioPlayback playback)
     {
-	    foreach (var physicalId in playback.DeviceStreams.Keys.ToList())
+	    if (playback?.DeviceStreams == null) return;
+
+	    foreach (var logicalId in playback.DeviceStreams.Keys.ToList())
 	    {
-		    if (_activeAudioPlaybacks.TryGetValue(physicalId, out var list))
+		    lock (_activeAudioPlaybacks)
 		    {
-			    GD.Print($"AudioDevices:OnPlaybackCompleted - Cleaning up for device {physicalId}");
-			    list.Remove(playback);
-			    if (list.Count == 0)
+			    if (_activeAudioPlaybacks.TryGetValue(logicalId, out var list))
 			    {
-				    var deviceId = _physicalIdToDeviceId[physicalId];
-				    var device = _openDevices[deviceId];
-				    SDL.PauseAudioDevice(device.LogicalId);
-				    GD.Print($"AudioDevices:OnPlaybackCompleted - Paused device {device.Name} as no active playbacks.");
+				    list.Remove(playback);
+				    GD.Print($"AudioDevices:NotifyPlaybackCompleted - Removed playback from device {logicalId}");
+				    if (list.Count == 0)
+				    {
+					    var device = GetAudioDeviceByLogicalId(logicalId);
+					    if (device != null)
+					    {
+						    SDL.PauseAudioDevice(device.LogicalId);
+						    GD.Print($"AudioDevices:NotifyPlaybackCompleted - Paused idle device {device.Name}");
+					    }
+					    _activeAudioPlaybacks.Remove(logicalId);
+				    }
 			    }
 		    }
 	    }
-	    playback.DeviceStreams.Clear(); // Ensure cleared even if not in _activePlaybacks
     }
     
     

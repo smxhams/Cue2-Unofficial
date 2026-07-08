@@ -557,6 +557,9 @@ public partial class ActiveCue : GodotObject
             }
             
             var playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
+            // Must be in the scene tree so _Process can present video frames.
+            // ActiveCue is a GodotObject (not a Node); parent under the active cue bar.
+            _activeCueBar.AddChild(playback);
             await playback.InitAsync();
             
             // UI
