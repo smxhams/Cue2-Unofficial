@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using Godot.Collections;
 
@@ -10,6 +11,12 @@ public class AudioComponent : ICueComponent
     public int PatchId { get; set; } = -1; // This value is used to link patch whence loaded
     public string DirectOutput { get; set; }
     public string AudioFile { get; set; }
+
+    /// <summary>
+    /// Returns true when a patch or direct output device has been assigned for playback.
+    /// </summary>
+    public bool HasOutputAssigned =>
+        Patch != null || !string.IsNullOrEmpty(DirectOutput);
     
     /// <summary>
     /// Start time, double in seconds. 
@@ -82,8 +89,20 @@ public class AudioComponent : ICueComponent
 
     public double RecalculateDuration()
     {
-        Duration = EndTime < 0 ? Metadata.Duration - StartTime 
-            : EndTime - StartTime;
+        // Metadata is filled asynchronously after file drop — do not NRE before it arrives
+        if (Metadata == null)
+        {
+            Duration = 0.0;
+            TotalDuration = Loop ? -1.0 : 0.0;
+            return Duration;
+        }
+
+        double fileDuration = Metadata.Duration;
+        if (fileDuration < 0) fileDuration = 0;
+
+        Duration = EndTime < 0
+            ? Math.Max(0, fileDuration - StartTime)
+            : Math.Max(0, EndTime - StartTime);
         TotalDuration = Loop ? -1.0 : Duration * PlayCount;
         return Duration;
     }

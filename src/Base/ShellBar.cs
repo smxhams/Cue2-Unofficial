@@ -72,7 +72,36 @@ public partial class ShellBar : PanelContainer
 		_dragButton.Icon = GetThemeIcon("Rearrange", "AtlasIcons");
 		_collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
 
+		// Optional global refresh targeting this cue id
+		_globalSignals.UpdateShellBar += OnUpdateShellBar;
+	}
 
+	public override void _ExitTree()
+	{
+		if (_globalSignals != null)
+			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
+		if (_cue != null)
+		{
+			_cue.NameChanged -= UpdateName;
+			_cue.CueNumChanged -= UpdateCueNum;
+			_cue.ColorChanged -= UpdateColor;
+			_cue.DurationChanged -= UpdateDuration;
+			_cue.TotalDurationChanged -= UpdateTotalDuration;
+			_cue.PreWaitChanged -= UpdatePreWait;
+			_cue.PostWaitChanged -= UpdatePostWait;
+			_cue = null;
+		}
+		// Drop duplicated theme StyleBox so it is not retained after node free
+		if (_colorPanel != null && IsInstanceValid(_colorPanel))
+			_colorPanel.RemoveThemeStyleboxOverride("panel");
+		_colorBarStyle = null;
+		base._ExitTree();
+	}
+
+	private void OnUpdateShellBar(int cueId)
+	{
+		if (_cue != null && _cue.Id == cueId)
+			RefreshTimesFromCue();
 	}
 
 	private void DefineUi()
@@ -101,16 +130,23 @@ public partial class ShellBar : PanelContainer
 		{
 			_cue.NameChanged -= UpdateName;
 			_cue.CueNumChanged -= UpdateCueNum;
+			_cue.ColorChanged -= UpdateColor;
+			_cue.DurationChanged -= UpdateDuration;
+			_cue.TotalDurationChanged -= UpdateTotalDuration;
+			_cue.PreWaitChanged -= UpdatePreWait;
+			_cue.PostWaitChanged -= UpdatePostWait;
 		}
 		_cue = cue;
 		_cue.NameChanged += UpdateName;
 		_cue.CueNumChanged += UpdateCueNum;
 		_cue.ColorChanged += UpdateColor;
+		_cue.DurationChanged += UpdateDuration;
+		_cue.TotalDurationChanged += UpdateTotalDuration;
+		_cue.PreWaitChanged += UpdatePreWait;
+		_cue.PostWaitChanged += UpdatePostWait;
 		_cueNumLineEdit.Text = cue.CueNum;
 		_cueNameLineEdit.Text = cue.Name;
-		_preWaitLineEdit.Text = UiUtilities.FormatTime(cue.PreWait);
-		_durationLineEdit.Text = UiUtilities.FormatTime(cue.Duration);
-		_postWaitLineEdit.Text = UiUtilities.FormatTime(cue.PostWait);
+		RefreshTimesFromCue();
 		_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
 		_colorBarStyle.BgColor = _cue.Color;
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
@@ -123,6 +159,51 @@ public partial class ShellBar : PanelContainer
 		_cueNameLineEdit.Editable = false;
 		_isEditingCueNum = false;
 		_isEditingName = false;
+	}
+
+	/// <summary>
+	/// Refreshes pre-wait, duration, and post-wait fields from the bound cue.
+	/// </summary>
+	public void RefreshTimesFromCue()
+	{
+		if (_cue == null) return;
+		if (!_isEditingPreWait)
+			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+		// Shell shows content duration (TotalDuration when not looping includes pre/post in inspector only)
+		_durationLineEdit.Text = FormatDurationField(_cue.Duration);
+		if (!_isEditingPostWait)
+			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+	}
+
+	private static string FormatDurationField(double seconds)
+	{
+		if (seconds < 0)
+			return "∞";
+		return UiUtilities.FormatTime(seconds);
+	}
+
+	private void UpdateDuration(double duration) =>
+		_durationLineEdit.Text = FormatDurationField(duration);
+
+	private void UpdateTotalDuration(double totalDuration)
+	{
+		// Content duration field already updated via DurationChanged; keep tooltip with total
+		if (_durationLineEdit != null && _cue != null)
+			_durationLineEdit.TooltipText = _cue.TotalDuration < 0
+				? "Looping"
+				: $"Total (with waits): {UiUtilities.FormatTime(_cue.TotalDuration)}";
+	}
+
+	private void UpdatePreWait(double preWait)
+	{
+		if (!_isEditingPreWait)
+			_preWaitLineEdit.Text = FormatDurationField(preWait);
+	}
+
+	private void UpdatePostWait(double postWait)
+	{
+		if (!_isEditingPostWait)
+			_postWaitLineEdit.Text = FormatDurationField(postWait);
 	}
 	
 	private void OnCueNumGuiInput(InputEvent @event)
@@ -193,12 +274,14 @@ public partial class ShellBar : PanelContainer
 			var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
 			if (string.IsNullOrEmpty(ret) || !isValid)
 			{
-				_preWaitLineEdit.Text = UiUtilities.FormatTime(_cue.PreWait);
+				_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
 			}
 			else
 			{
 				_cue.PreWait = time;
+				_cue.CalculateTotalDuration();
 				_preWaitLineEdit.Text = ret;
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 			}
 			_preWaitLineEdit.ReleaseFocus();
 			_isEditingPreWait = false;
@@ -213,12 +296,14 @@ public partial class ShellBar : PanelContainer
 			var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
 			if (string.IsNullOrEmpty(ret) || !isValid)
 			{
-				_postWaitLineEdit.Text = UiUtilities.FormatTime(_cue.PreWait);
+				_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
 			}
 			else
 			{
-				_cue.PreWait = time;
+				_cue.PostWait = time;
+				_cue.CalculateTotalDuration();
 				_postWaitLineEdit.Text = ret;
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 			}
 			_postWaitLineEdit.ReleaseFocus();
 			_isEditingPostWait = false;

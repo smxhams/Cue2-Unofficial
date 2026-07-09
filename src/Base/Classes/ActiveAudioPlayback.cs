@@ -202,6 +202,11 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     /// </summary>
     private void FillLoop(CancellationToken token)
     {
+        // If streams never appear after start, abort rather than spinning forever.
+        // (~2s at FillLoopSleepMs) — setup should already prevent this path.
+        int emptyStreamIterations = 0;
+        const int maxEmptyStreamIterations = 500;
+
         try
         {
             while (!token.IsCancellationRequested)
@@ -216,9 +221,18 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
                 if (DeviceStreams == null || DeviceStreams.Count == 0)
                 {
+                    emptyStreamIterations++;
+                    if (emptyStreamIterations >= maxEmptyStreamIterations)
+                    {
+                        GD.PrintErr("ActiveAudioPlayback:FillLoop - No device streams after start; aborting playback.");
+                        CallDeferred(nameof(CompleteFromEnd));
+                        return;
+                    }
                     Thread.Sleep(FillLoopSleepMs);
                     continue;
                 }
+
+                emptyStreamIterations = 0;
 
                 bool anyNeed = false;
                 int maxNeedFrames = 0;
@@ -299,6 +313,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         catch (Exception ex)
         {
             GD.PrintErr($"ActiveAudioPlayback:FillLoop - {ex.Message}");
+            // Ensure ActiveCue can tear down the UI if the fill loop dies unexpectedly.
+            try { CallDeferred(nameof(CompleteFromEnd)); } catch { /* object may be freeing */ }
         }
     }
 
@@ -354,9 +370,11 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
     private void HandleSegmentEnd()
     {
+        bool scheduleComplete = false;
         lock (_lock)
         {
-            if (IsStopped) return;
+            // _completedEmitted also covers "already finishing"
+            if (IsStopped || _completedEmitted) return;
 
             if (_audioComponent.Loop || _currentPlayCount < EffectivePlayCount)
             {
@@ -367,16 +385,37 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 _framesDelivered = 0;
                 return;
             }
+
+            // Mark finishing so fill loop stops re-entering (IsStopped set in Clean)
+            _completedEmitted = true;
+            scheduleComplete = true;
         }
 
-        // Finished all plays
+        if (!scheduleComplete) return;
+
+        try { _fillCts?.Cancel(); } catch { /* ignore */ }
+
         GD.Print("ActiveAudioPlayback:HandleSegmentEnd - Playback completed");
-        CallDeferred(nameof(CompleteFromEnd));
+        try
+        {
+            CallDeferred(nameof(CompleteFromEnd));
+        }
+        catch
+        {
+            CompleteFromEnd();
+        }
     }
 
     private void CompleteFromEnd()
     {
-        _ = Stop(0);
+        if (!IsInstanceValid(this)) return;
+        // Natural end: always Clean (do not use Stop — it treats IsStopped/fade paths)
+        // Reset flag so Clean emits Completed once and frees
+        lock (_lock)
+        {
+            _completedEmitted = false;
+        }
+        Clean();
     }
 
     public void Pause()
@@ -646,15 +685,24 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         }
     }
 
+    private bool _completedEmitted;
+
+    /// <summary>
+    /// Tears down decoder, streams, and fill loop, then signals <see cref="Completed"/>.
+    /// Safe to call multiple times; only the first call emits Completed.
+    /// </summary>
     public void Clean()
     {
+        bool alreadyDone;
         lock (_lock)
         {
-            if (IsStopped && Decoder == null)
+            alreadyDone = _completedEmitted;
+            if (IsStopped && Decoder == null && _completedEmitted)
             {
                 return;
             }
             IsStopped = true;
+            _completedEmitted = true;
         }
 
         StopFillLoop();
@@ -698,7 +746,29 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
         MediaMemory.ReclaimIfNeeded();
 
-        EmitSignal(SignalName.Completed);
-        CallDeferred("free");
+        if (!alreadyDone)
+        {
+            try
+            {
+                if (IsInstanceValid(this))
+                    EmitSignal(SignalName.Completed);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveAudioPlayback:Clean - Completed signal: {ex.Message}");
+            }
+
+            // Free immediately when possible so ObjectDB does not retain us until process exit.
+            // CallDeferred as fallback if Free throws (e.g. re-entrancy during signal).
+            try
+            {
+                if (IsInstanceValid(this))
+                    Free();
+            }
+            catch
+            {
+                try { CallDeferred(MethodName.Free); } catch { /* ignore */ }
+            }
+        }
     }
 }

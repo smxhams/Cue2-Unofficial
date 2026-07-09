@@ -357,12 +357,20 @@ public partial class AudioDevices : Node
 	    return _openDevices.Values.FirstOrDefault(d => d.LogicalId == logicalId);
     }
     
-    public async Task StartAudioPlayback(IAudioPlayback playback)
+    /// <summary>
+    /// Binds SDL audio streams for an active playback to its patch or direct output device(s).
+    /// </summary>
+    /// <param name="playback">The playback session to bind streams for.</param>
+    /// <returns>
+    /// True if at least one stream was created and bound; false if no output is assigned,
+    /// devices could not be opened, or stream creation failed for all devices.
+    /// </returns>
+    public async Task<bool> StartAudioPlayback(IAudioPlayback playback)
     {
 	    if (playback == null)
 	    {
 		    GD.PrintErr("AudioDevices:StartAudioPlayback - Playback is null.");
-		    return;
+		    return false;
 	    }
 
 	    await Task.Yield(); // keep async signature for call sites
@@ -382,7 +390,7 @@ public partial class AudioDevices : Node
 		    {
 			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 				    $"AudioDevices:StartAudioPlayback - Failed to open direct output device {playback.DirectOutput}: {error}", 2);
-			    return;
+			    return false;
 		    }
 		    devicesToOpen = new List<AudioDevice> { device };
 	    }
@@ -399,14 +407,14 @@ public partial class AudioDevices : Node
 		    {
 			    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 				    "AudioDevices:StartAudioPlayback - No valid devices found for patch.", 2);
-			    return;
+			    return false;
 		    }
 	    }
 	    else
 	    {
 		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 			    "AudioDevices:StartAudioPlayback - No patch or direct output assigned.", 2);
-		    return;
+		    return false;
 	    }
 
 	    foreach (var device in devicesToOpen)
@@ -473,7 +481,15 @@ public partial class AudioDevices : Node
 		    GD.Print($"AudioDevices:StartAudioPlayback - Stream for {device.Name}: srcCh={outChannels} rate={playback.SourceSampleRate} → devCh={deviceSpec.Channels} rate={deviceSpec.Freq}");
 	    }
 
+	    if (playback.DeviceStreams.Count == 0)
+	    {
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			    "AudioDevices:StartAudioPlayback - No streams were created for playback.", 2);
+		    return false;
+	    }
+
 	    GD.Print("AudioDevices:StartAudioPlayback - Audio playback streams ready.");
+	    return true;
     }
     
     

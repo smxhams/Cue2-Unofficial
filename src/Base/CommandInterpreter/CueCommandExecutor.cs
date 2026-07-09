@@ -56,43 +56,78 @@ public partial class CueCommandExectutor : Node
 
     public async void ActivateCue(Cue cue)
     {
+        if (cue == null)
+        {
+            GD.PrintErr("CueCommandExecutor:ActivateCue - Cue is null");
+            return;
+        }
+
         GD.Print($"CueCommandExecutor:ActivateCue - Activating: {cue.Name}");
+        ActiveCue activeCue = null;
         
         try
         {
-            var activeCue = new ActiveCue(cue, _activeCueList, _mediaEngine, _audioDevices, _globalSignals);
+            activeCue = new ActiveCue(cue, _activeCueList, _mediaEngine, _audioDevices, _globalSignals);
             _activeCues.Add(activeCue);
             activeCue.Completed += () =>
             {
                 _activeCues.Remove(activeCue);
             };
             await activeCue.StartAsync();
-            
-            
         }
         catch (Exception ex)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to execute cue {cue.Name}: {ex.Message}", 2);
             GD.PrintErr($"CueCommandExecutor:ActivateCue - {ex.Message}");
+            if (activeCue != null)
+            {
+                try
+                {
+                    activeCue.Cleanup();
+                }
+                catch (Exception cleanupEx)
+                {
+                    GD.PrintErr($"CueCommandExecutor:ActivateCue - Cleanup after failure: {cleanupEx.Message}");
+                }
+                _activeCues.Remove(activeCue);
+            }
         }
-        
     }
     
     
     private void StopAllCommand()
     {
-        return;
+        // ActiveCue instances also subscribe to StopAll and stop themselves.
+        // Keep this as a safety net for any cues still tracked by the executor.
+        foreach (var activeCue in _activeCues.ToList())
+        {
+            try
+            {
+                activeCue.StopAll(false);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"CueCommandExecutor:StopAllCommand - {ex.Message}");
+            }
+        }
     }
 
     private void CleanUp()
     {
-        foreach (var activeCue in _activeCues)
+        foreach (var activeCue in _activeCues.ToList())
         {
-            activeCue.Cleanup();
-            activeCue.Dispose();
+            try
+            {
+                // Cleanup() frees the ActiveCue GodotObject when done
+                if (GodotObject.IsInstanceValid(activeCue))
+                    activeCue.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"CueCommandExecutor:CleanUp - {ex.Message}");
+            }
         }
         _activeCues.Clear();
-        
     }
     
 }

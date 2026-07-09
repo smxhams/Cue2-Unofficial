@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Linq;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot.Collections;
@@ -306,34 +307,76 @@ public partial class VideoOutputDevice : Window, IDisposable
         OutputTransparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
     }
     
+    private bool _disposed;
+
     public override void _ExitTree()
     {
-        Dispose();
+        // Only clean children here — do not QueueFree self (already exiting tree)
+        DisposeContents();
         base._ExitTree();
     }
 
     public new void Dispose()
     {
-        // Hide the window
-        Hide();
+        if (_disposed) return;
+        _disposed = true;
 
-        // Remove test patterns
-        if (_testPattern != null)
-        {
-            RemoveChild(_testPattern);
-            _testPattern.QueueFree();
-            _testPattern = null;
-        }
-        foreach (var kvp in _layerTestPatterns)
-        {
-            RemoveChild(kvp.Value);
-            kvp.Value.QueueFree();
-        }
-        _layerTestPatterns.Clear();
-        
-        QueueFree();
+        DisposeContents();
+
+        if (IsInsideTree())
+            QueueFree();
+        else if (IsInstanceValid(this))
+            Free();
 
         GD.Print($"VideoOutputDevice:Dispose - Disposed output device '{OutputName}'.");
+    }
+
+    private void DisposeContents()
+    {
+        try { Hide(); } catch { /* ignore */ }
+
+        if (_testPattern != null && IsInstanceValid(_testPattern))
+        {
+            try
+            {
+                if (_testPattern.GetParent() == this)
+                    RemoveChild(_testPattern);
+                _testPattern.QueueFree();
+            }
+            catch { /* ignore */ }
+            _testPattern = null;
+        }
+
+        foreach (var kvp in _layerTestPatterns.ToList())
+        {
+            var tp = kvp.Value;
+            if (tp != null && IsInstanceValid(tp))
+            {
+                try
+                {
+                    if (tp.GetParent() == this)
+                        RemoveChild(tp);
+                    tp.QueueFree();
+                }
+                catch { /* ignore */ }
+            }
+        }
+        _layerTestPatterns.Clear();
+
+        foreach (var layer in _activeLayers.Keys.ToList())
+        {
+            if (layer != null && IsInstanceValid(layer))
+            {
+                try
+                {
+                    if (layer.GetParent() != null)
+                        layer.GetParent().RemoveChild(layer);
+                    layer.QueueFree();
+                }
+                catch { /* ignore */ }
+            }
+        }
+        _activeLayers.Clear();
     }
 
 }

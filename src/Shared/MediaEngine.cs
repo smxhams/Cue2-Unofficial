@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cue2.Base.Classes;
+using Cue2.Shared.Audio;
 using Godot;
 using FFmpeg.AutoGen;
 
@@ -17,10 +18,12 @@ namespace Cue2.Shared;
 public partial class MediaEngine : Node
 {
     private GlobalSignals _globalSignals;
+    private GlobalData _globalData;
     
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         try
         {
             GD.Print("MediaEngine:_Ready - Loading FFmpeg libs.");
@@ -44,78 +47,132 @@ public partial class MediaEngine : Node
     
     /// <summary>
     /// Dynamically links FFmpeg native libraries manually for cross-platform compatibility in Godot Mono.
-    /// Ensures core DLLs (avcodec, avformat, etc.) are resolved before any FFmpeg calls.
+    /// Ensures core shared libraries (avcodec, avformat, etc.) are resolved before any FFmpeg calls.
+    /// Layout under <c>res://bin/</c>:
+    /// <list type="bullet">
+    /// <item><description>win64 / winarm64 — avutil-60.dll, …</description></item>
+    /// <item><description>macos — libavutil.60.dylib, …</description></item>
+    /// <item><description>linux64 / linuxarm64 — libavutil.so.60, …</description></item>
+    /// </list>
     /// </summary>
-    private void LinkFFmpegLibraries() 
+    private void LinkFFmpegLibraries()
     {
-        try 
+        try
         {
-            string basePath = "res://bin/";
-            string platformDir;
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            string platformDir = GetFFmpegPlatformDir(out string platformLabel);
+            string libPath = ProjectSettings.GlobalizePath($"res://bin/{platformDir}/");
+
+            GD.Print($"MediaEngine:LoadFFmpegLibraries - Using {platformLabel} libs from: {libPath}");
+
+            // FFmpeg.AutoGen resolves further loads from RootPath
+            ffmpeg.RootPath = libPath;
+
+            // Load order: avutil first (dependency of the rest). Major versions = FFmpeg 8.x.
+            // name stem without platform prefix/suffix: "avutil", major "60"
+            (string name, string major)[] libs =
             {
-                var arch = RuntimeInformation.ProcessArchitecture;
-                if (arch == Architecture.Arm64)
-                {
-                    platformDir = "winarm64";
-                    GD.Print("MediaEngine:LoadFFmpegLibraries - Using ARM64 Windows DLLs.");
-                }
-                else if (arch == Architecture.X64)
-                {
-                    platformDir = "win64";
-                    GD.Print("MediaEngine:LoadFFmpegLibraries - Using x64 Windows DLLs.");
-                }
-                else
-                {
-                    platformDir = "win64"; // Fallback
-                    GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Unsupported Windows architecture {arch}; defaulting to win64.");
-                }
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                ("avutil", "60"),
+                ("avcodec", "62"),
+                ("avformat", "62"),
+                ("swresample", "6"),
+                ("swscale", "9"),
+            };
+
+            foreach (var (name, major) in libs)
             {
-                platformDir = "macos";
+                string fileName = GetFFmpegLibraryFileName(name, major);
+                string fullPath = Path.Combine(libPath, fileName);
+
+                if (!File.Exists(fullPath))
+                {
+                    throw new DllNotFoundException($"FFmpeg library not found: {fullPath}");
+                }
+
+                nint handle = NativeLibrary.Load(fullPath);
+                GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {fileName} (handle: {handle})");
             }
-            else
-            {
-                platformDir = "linux";
-            }
-            string libPath = ProjectSettings.GlobalizePath($"{basePath}{platformDir}/"); // Absolute path
-
-            GD.Print($"MediaEngine:LoadFFmpegLibraries - Loading from: {libPath}"); // Prefixed debug path (minimal)
-
-            // Set RootPath for dynamic fallback 
-            ffmpeg.RootPath = libPath; 
-
-            // Base library names without prefix/extension (major versions from FFmpeg 8.0)
-            string[] baseLibs = { "avutil.60", "avcodec.62", "avformat.62", "swresample.6", "swscale.9" };
-
-            foreach (string baseLib in baseLibs) 
-            { 
-                // Platform-specific naming 
-                string libName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                    ? baseLib.Replace(".", "-")  // Windows: avutil-59 (replace . with -)
-                    : $"lib{baseLib}";           // macOS/Linux: libavutil.59 (major symlink)
-
-                string ext = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".dll" : 
-                    RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? ".dylib" : ".so"; 
-            
-                string fullPath = $"{libPath}{libName}{ext}"; 
-
-                nint handle = NativeLibrary.Load(fullPath); // Explicit Load (throws on fail for early error)
-                
-                GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {libName}{ext} (handle: {handle})");
-            } 
 
             GD.Print("MediaEngine:LoadFFmpegLibraries - All FFmpeg libs loaded successfully.");
-        } 
-        catch (DllNotFoundException ex) 
-        { 
-            GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - DLL not found: {ex.Message}");
-        } 
-        catch (Exception ex) 
-        { 
+        }
+        catch (DllNotFoundException ex)
+        {
+            GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Library not found: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
             GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Load error: {ex.Message}");
-        } 
+        }
+    }
+
+    /// <summary>
+    /// Resolves the <c>bin/</c> subdirectory for the current OS and process architecture.
+    /// </summary>
+    private static string GetFFmpegPlatformDir(out string label)
+    {
+        Architecture arch = RuntimeInformation.ProcessArchitecture;
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            if (arch == Architecture.Arm64)
+            {
+                label = "Windows ARM64";
+                return "winarm64";
+            }
+            if (arch == Architecture.X64)
+            {
+                label = "Windows x64";
+                return "win64";
+            }
+            label = $"Windows x64 (fallback for {arch})";
+            GD.PrintErr($"MediaEngine:GetFFmpegPlatformDir - Unsupported Windows arch {arch}; defaulting to win64.");
+            return "win64";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            // Single universal / platform folder currently ships both arches as needed
+            label = arch == Architecture.Arm64 ? "macOS ARM64" : "macOS x64";
+            return "macos";
+        }
+
+        // Linux (and other Unix-like)
+        if (arch == Architecture.Arm64)
+        {
+            label = "Linux ARM64";
+            return "linuxarm64";
+        }
+        if (arch == Architecture.X64)
+        {
+            label = "Linux x64";
+            return "linux64";
+        }
+
+        label = $"Linux x64 (fallback for {arch})";
+        GD.PrintErr($"MediaEngine:GetFFmpegPlatformDir - Unsupported Linux arch {arch}; defaulting to linux64.");
+        return "linux64";
+    }
+
+    /// <summary>
+    /// Builds the on-disk shared library file name for the current platform.
+    /// </summary>
+    /// <param name="name">Base name (e.g. avutil, avcodec).</param>
+    /// <param name="major">Soname / ABI major version (e.g. 60, 62).</param>
+    private static string GetFFmpegLibraryFileName(string name, string major)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // win64 / winarm64: avutil-60.dll
+            return $"{name}-{major}.dll";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            // macos: libavutil.60.dylib
+            return $"lib{name}.{major}.dylib";
+        }
+
+        // linux64 / linuxarm64: libavutil.so.60 (ELF soname style from BtbN etc.)
+        return $"lib{name}.so.{major}";
     } 
     
     
@@ -225,12 +282,13 @@ public partial class MediaEngine : Node
     
     
     /// <summary>
-    /// Generates a waveform byte array for an audio file using FFmpeg.
-    /// Computes min/max amplitude per bin from mono-resampled PCM samples.
-    /// Returns empty array on failure.
+    /// Generates a waveform peak envelope for an audio (or video) file using FFmpeg.
+    /// Audacity-style: decode once, stream min/max into fixed bins (no full-sample buffer).
+    /// Uses <see cref="Settings.WaveformResolution"/> when available; optional disk cache under
+    /// <see cref="GlobalData.SessionWaveformsPath"/>.
     /// </summary>
-    /// <param name="path">Audio file path.</param>
-    /// <returns>Byte array of min/max floats per bin.</returns>
+    /// <param name="path">Media file path with an audio stream.</param>
+    /// <returns>Serialized <see cref="WaveformPeaks"/> bytes, or empty on failure.</returns>
     public async Task<byte[]> GenerateWaveformAsync(string path)
     {
         if (!File.Exists(path))
@@ -239,174 +297,281 @@ public partial class MediaEngine : Node
             return Array.Empty<byte>();
         }
 
-        GD.Print("MediaEngine:GenerateWaveformAsync - Generating waveform for file.");
-
-        return await Task.Run(() =>
+        // Disk cache (session Waveforms/ folder when a show is open)
+        string cachePath = TryGetWaveformCachePath(path);
+        if (cachePath != null && File.Exists(cachePath))
         {
-            unsafe
+            try
             {
-                AVFormatContext* formatCtx = null;
-                AVCodecContext* codecCtx = null;
-                AVPacket* packet = ffmpeg.av_packet_alloc();
-                AVFrame* frame = ffmpeg.av_frame_alloc();
-                SwrContext* swrCtx = null; // Explicit null init for double-pointer alloc
-                AVChannelLayout inChLayout = default;
-                AVChannelLayout outChLayout = default;
-
-                int ret = 0; // Declare outside for safety
-                double totalSamples = 0; // For global binning
-                List<float> allMonoSamples = new List<float>(); // Accumulate for accurate binning
-
-                try
+                byte[] cached = await File.ReadAllBytesAsync(cachePath);
+                if (WaveformPeaks.FromBytes(cached) != null)
                 {
-                    // Open input
-                    ret = ffmpeg.avformat_open_input(&formatCtx, path, null, null);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to open file: {GetFFmpegError(ret)}");
-
-                    ret = ffmpeg.avformat_find_stream_info(formatCtx, null);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to find stream info: {GetFFmpegError(ret)}");
-
-                    int audioStreamIndex = -1;
-                    for (uint i = 0; i < formatCtx->nb_streams; i++)
-                    {
-                        if (formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
-                        {
-                            audioStreamIndex = (int)i;
-                            break;
-                        }
-                    }
-                    if (audioStreamIndex == -1) throw new Exception("MediaEngine:GenerateWaveformAsync - No audio stream found.");
-
-                    AVCodecParameters* codecPar = formatCtx->streams[(uint)audioStreamIndex]->codecpar;
-                    AVCodec* codec = ffmpeg.avcodec_find_decoder(codecPar->codec_id);
-                    if (codec == null) throw new Exception("MediaEngine:GenerateWaveformAsync - Unsupported codec.");
-
-                    codecCtx = ffmpeg.avcodec_alloc_context3(codec);
-                    ret = ffmpeg.avcodec_parameters_to_context(codecCtx, codecPar);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to copy codec params: {GetFFmpegError(ret)}");
-
-                    ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to open codec: {GetFFmpegError(ret)}");
-
-                    // Setup input channel layout (modern API)
-                    ffmpeg.av_channel_layout_default(&inChLayout, (int)codecCtx->ch_layout.nb_channels);
-
-                    // Setup output: Mono
-                    ffmpeg.av_channel_layout_default(&outChLayout, 1);
-
-                    // Resample to mono float (44.1kHz)
-                    ret = ffmpeg.swr_alloc_set_opts2(
-                        &swrCtx,
-                        &outChLayout, AVSampleFormat.AV_SAMPLE_FMT_FLT, 44100,
-                        &inChLayout, codecCtx->sample_fmt, codecCtx->sample_rate,
-                        0, null);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to allocate SwrContext: {GetFFmpegError(ret)}");
-                    if (swrCtx == null) throw new Exception("MediaEngine:GenerateWaveformAsync - SwrContext allocation returned null.");
-
-                    ret = ffmpeg.swr_init(swrCtx);
-                    if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Failed to init SwrContext: {GetFFmpegError(ret)}");
-
-                    const int binCount = 1000; // From original
-                    float[] minMaxPerBin = new float[binCount * 2];
-                    for (int i = 0; i < binCount; i++)
-                    {
-                        minMaxPerBin[i * 2] = float.MaxValue;
-                        minMaxPerBin[i * 2 + 1] = float.MinValue; // Use MinValue for max init
-                    }
-
-                    while (ffmpeg.av_read_frame(formatCtx, packet) >= 0)
-                    {
-                        if (packet->stream_index != audioStreamIndex)
-                        {
-                            ffmpeg.av_packet_unref(packet);
-                            continue;
-                        }
-
-                        ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
-                        if (ret < 0 && ret != -11) // Use numeric -11 for EAGAIN
-                            throw new Exception($"MediaEngine:GenerateWaveformAsync - Send packet error: {GetFFmpegError(ret)}");
-
-                        while (ffmpeg.avcodec_receive_frame(codecCtx, frame) >= 0)
-                        {
-                            // Resample frame to mono float
-                            int maxOutSamples = (int)(ffmpeg.av_rescale_rnd(frame->nb_samples, 44100, codecCtx->sample_rate, AVRounding.AV_ROUND_UP) * 2 + 256); // Estimate output samples
-                            byte* outBuffer = null; // Simplified for mono: Single buffer instead of array
-                            int linesize = 0; // Single linesize for mono
-                            ret = ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, maxOutSamples, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0); // Use av_samples_alloc
-                            if (ret < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Sample alloc error: {GetFFmpegError(ret)}");
-
-                            int outSamples = ffmpeg.swr_convert(
-                                swrCtx,
-                                &outBuffer, maxOutSamples,
-                                frame->extended_data, frame->nb_samples);
-                            if (outSamples < 0) throw new Exception($"MediaEngine:GenerateWaveformAsync - Resample error: {GetFFmpegError(outSamples)}");
-
-                            // Accumulate mono samples (interleaved for mono)
-                            float* monoPtr = (float*)outBuffer; // Direct cast from single buffer
-                            for (int j = 0; j < outSamples; j++)
-                            {
-                                allMonoSamples.Add(monoPtr[j]); // Collect all for global binning
-                            }
-                            totalSamples += outSamples;
-
-                            // Free output buffer per frame
-                            ffmpeg.av_freep(&outBuffer); // Simplified: Free single buffer for mono
-                        }
-
-                        ffmpeg.av_packet_unref(packet);
-                    }
-
-                    // Global binning from all samples
-                    if (totalSamples > 0)
-                    {
-                        for (int j = 0; j < allMonoSamples.Count; j++)
-                        {
-                            float sample = allMonoSamples[j];
-                            int binIdx = (int)((j / totalSamples) * binCount); // Proportional global binning
-                            if (binIdx < binCount)
-                            {
-                                if (sample < minMaxPerBin[binIdx * 2]) minMaxPerBin[binIdx * 2] = sample;
-                                if (sample > minMaxPerBin[binIdx * 2 + 1]) minMaxPerBin[binIdx * 2 + 1] = sample;
-                            }
-                        }
-                    }
-
-                    // Fill unfilled bins
-                    for (int i = 0; i < binCount; i++)
-                    {
-                        if (minMaxPerBin[i * 2] == float.MaxValue)
-                        {
-                            minMaxPerBin[i * 2] = 0f;
-                            minMaxPerBin[i * 2 + 1] = 0f;
-                        }
-                    }
-
-                    // Serialize to byte[]
-                    byte[] byteArray = new byte[minMaxPerBin.Length * sizeof(float)];
-                    Buffer.BlockCopy(minMaxPerBin, 0, byteArray, 0, byteArray.Length);
-
-                    GD.Print("MediaEngine:GenerateWaveformAsync - Waveform generated successfully.");
-
-                    return byteArray;
-                }
-                catch (Exception ex)
-                {
-                    GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Error: {ex.Message}");
-                    return Array.Empty<byte>();
-                }
-                finally
-                {
-                    // Cleanup
-                    if (packet != null) ffmpeg.av_packet_free(&packet);
-                    if (frame != null) ffmpeg.av_frame_free(&frame);
-                    if (swrCtx != null) ffmpeg.swr_free(&swrCtx);
-                    if (codecCtx != null) ffmpeg.avcodec_free_context(&codecCtx);
-                    if (formatCtx != null) ffmpeg.avformat_close_input(&formatCtx);
-                    ffmpeg.av_channel_layout_uninit(&inChLayout);
-                    ffmpeg.av_channel_layout_uninit(&outChLayout);
+                    GD.Print($"MediaEngine:GenerateWaveformAsync - Cache hit: {Path.GetFileName(cachePath)}");
+                    return cached;
                 }
             }
-        });
+            catch (Exception ex)
+            {
+                GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Cache read failed: {ex.Message}");
+            }
+        }
+
+        int binCount = WaveformPeaks.DefaultBinCount;
+        try
+        {
+            if (_globalData?.Settings != null)
+                binCount = WaveformPeaks.ClampBinCount(_globalData.Settings.WaveformResolution);
+        }
+        catch { /* Settings may not be ready */ }
+
+        GD.Print($"MediaEngine:GenerateWaveformAsync - Generating {binCount} bins for file.");
+
+        byte[] result = await Task.Run(() => GenerateWaveformCore(path, binCount));
+
+        if (result.Length > 0 && cachePath != null)
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                await File.WriteAllBytesAsync(cachePath, result);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Cache write failed: {ex.Message}");
+            }
+        }
+
+        return result;
+    }
+
+    private string TryGetWaveformCachePath(string mediaPath)
+    {
+        try
+        {
+            string root = _globalData?.SessionWaveformsPath;
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+                return null;
+            return Path.Combine(root, WaveformPeaks.CacheFileName(mediaPath));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Streaming peak extraction: bin samples as they decode (O(1) memory in sample count).
+    /// </summary>
+    private unsafe byte[] GenerateWaveformCore(string path, int binCount)
+    {
+        AVFormatContext* formatCtx = null;
+        AVCodecContext* codecCtx = null;
+        AVPacket* packet = ffmpeg.av_packet_alloc();
+        AVFrame* frame = ffmpeg.av_frame_alloc();
+        SwrContext* swrCtx = null;
+        AVChannelLayout inChLayout = default;
+        AVChannelLayout outChLayout = default;
+
+        try
+        {
+            int ret = ffmpeg.avformat_open_input(&formatCtx, path, null, null);
+            if (ret < 0) throw new Exception($"Open failed: {GetFFmpegError(ret)}");
+
+            ret = ffmpeg.avformat_find_stream_info(formatCtx, null);
+            if (ret < 0) throw new Exception($"Stream info failed: {GetFFmpegError(ret)}");
+
+            int audioStreamIndex = -1;
+            for (uint i = 0; i < formatCtx->nb_streams; i++)
+            {
+                if (formatCtx->streams[i]->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO)
+                {
+                    audioStreamIndex = (int)i;
+                    break;
+                }
+            }
+            if (audioStreamIndex == -1) throw new Exception("No audio stream found.");
+
+            AVStream* stream = formatCtx->streams[(uint)audioStreamIndex];
+            AVCodecParameters* codecPar = stream->codecpar;
+            AVCodec* codec = ffmpeg.avcodec_find_decoder(codecPar->codec_id);
+            if (codec == null) throw new Exception("Unsupported codec.");
+
+            codecCtx = ffmpeg.avcodec_alloc_context3(codec);
+            ret = ffmpeg.avcodec_parameters_to_context(codecCtx, codecPar);
+            if (ret < 0) throw new Exception($"Params failed: {GetFFmpegError(ret)}");
+
+            ret = ffmpeg.avcodec_open2(codecCtx, codec, null);
+            if (ret < 0) throw new Exception($"Codec open failed: {GetFFmpegError(ret)}");
+
+            // Prefer actual channel layout from the codec
+            ret = ffmpeg.av_channel_layout_copy(&inChLayout, &codecCtx->ch_layout);
+            if (ret < 0)
+                ffmpeg.av_channel_layout_default(&inChLayout, Math.Max(1, codecCtx->ch_layout.nb_channels));
+
+            ffmpeg.av_channel_layout_default(&outChLayout, 1);
+
+            const int outRate = 44100;
+            ret = ffmpeg.swr_alloc_set_opts2(
+                &swrCtx,
+                &outChLayout, AVSampleFormat.AV_SAMPLE_FMT_FLT, outRate,
+                &inChLayout, codecCtx->sample_fmt, codecCtx->sample_rate,
+                0, null);
+            if (ret < 0 || swrCtx == null) throw new Exception($"Swr alloc failed: {GetFFmpegError(ret)}");
+            ret = ffmpeg.swr_init(swrCtx);
+            if (ret < 0) throw new Exception($"Swr init failed: {GetFFmpegError(ret)}");
+
+            // Audacity-style: summarize into fixed-size sample chunks while decoding,
+            // then reduce chunks → display bins. Memory is O(duration / chunk), not O(samples).
+            const int samplesPerChunk = 256;
+            var chunks = new List<(float min, float max)>(4096);
+            float chunkMin = float.MaxValue;
+            float chunkMax = float.MinValue;
+            int chunkCount = 0;
+            long sampleIndex = 0;
+
+            void FlushChunk()
+            {
+                if (chunkCount <= 0) return;
+                chunks.Add((chunkMin, chunkMax));
+                chunkMin = float.MaxValue;
+                chunkMax = float.MinValue;
+                chunkCount = 0;
+            }
+
+            void Accumulate(float* mono, int count)
+            {
+                for (int j = 0; j < count; j++)
+                {
+                    float s = mono[j];
+                    if (s < chunkMin) chunkMin = s;
+                    if (s > chunkMax) chunkMax = s;
+                    chunkCount++;
+                    sampleIndex++;
+                    if (chunkCount >= samplesPerChunk)
+                        FlushChunk();
+                }
+            }
+
+            while (ffmpeg.av_read_frame(formatCtx, packet) >= 0)
+            {
+                if (packet->stream_index != audioStreamIndex)
+                {
+                    ffmpeg.av_packet_unref(packet);
+                    continue;
+                }
+
+                ret = ffmpeg.avcodec_send_packet(codecCtx, packet);
+                ffmpeg.av_packet_unref(packet);
+                if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                    continue;
+
+                while (ffmpeg.avcodec_receive_frame(codecCtx, frame) >= 0)
+                {
+                    int maxOut = (int)ffmpeg.av_rescale_rnd(
+                        ffmpeg.swr_get_delay(swrCtx, codecCtx->sample_rate) + frame->nb_samples,
+                        outRate, codecCtx->sample_rate, AVRounding.AV_ROUND_UP) + 256;
+
+                    byte* outBuffer = null;
+                    int linesize = 0;
+                    ret = ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0);
+                    if (ret < 0)
+                    {
+                        ffmpeg.av_frame_unref(frame);
+                        continue;
+                    }
+
+                    int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, maxOut, frame->extended_data, frame->nb_samples);
+                    if (outSamples > 0)
+                        Accumulate((float*)outBuffer, outSamples);
+
+                    ffmpeg.av_freep(&outBuffer);
+                    ffmpeg.av_frame_unref(frame);
+                }
+            }
+
+            // Flush decoder + resampler
+            ffmpeg.avcodec_send_packet(codecCtx, null);
+            while (ffmpeg.avcodec_receive_frame(codecCtx, frame) >= 0)
+            {
+                int maxOut = (int)ffmpeg.av_rescale_rnd(
+                    ffmpeg.swr_get_delay(swrCtx, codecCtx->sample_rate) + frame->nb_samples,
+                    outRate, codecCtx->sample_rate, AVRounding.AV_ROUND_UP) + 256;
+                byte* outBuffer = null;
+                int linesize = 0;
+                if (ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0)
+                {
+                    int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, maxOut, frame->extended_data, frame->nb_samples);
+                    if (outSamples > 0)
+                        Accumulate((float*)outBuffer, outSamples);
+                    ffmpeg.av_freep(&outBuffer);
+                }
+                ffmpeg.av_frame_unref(frame);
+            }
+            {
+                byte* outBuffer = null;
+                int linesize = 0;
+                if (ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, 4096, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0)
+                {
+                    int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, 4096, null, 0);
+                    if (outSamples > 0)
+                        Accumulate((float*)outBuffer, outSamples);
+                    ffmpeg.av_freep(&outBuffer);
+                }
+            }
+
+            FlushChunk();
+
+            if (sampleIndex == 0 || chunks.Count == 0)
+                throw new Exception("No samples decoded.");
+
+            // Reduce chunk peaks → fixed display resolution
+            float[] minMax = new float[binCount * 2];
+            for (int i = 0; i < binCount; i++)
+            {
+                minMax[i * 2] = float.MaxValue;
+                minMax[i * 2 + 1] = float.MinValue;
+            }
+
+            int chunkN = chunks.Count;
+            for (int c = 0; c < chunkN; c++)
+            {
+                int binIdx = (int)((long)c * binCount / chunkN);
+                if (binIdx >= binCount) binIdx = binCount - 1;
+                var (mn, mx) = chunks[c];
+                if (mn < minMax[binIdx * 2]) minMax[binIdx * 2] = mn;
+                if (mx > minMax[binIdx * 2 + 1]) minMax[binIdx * 2 + 1] = mx;
+            }
+
+            for (int i = 0; i < binCount; i++)
+            {
+                if (minMax[i * 2] == float.MaxValue)
+                {
+                    minMax[i * 2] = 0f;
+                    minMax[i * 2 + 1] = 0f;
+                }
+            }
+
+            var peaks = new WaveformPeaks(binCount, minMax);
+            GD.Print($"MediaEngine:GenerateWaveformAsync - OK bins={binCount} samples={sampleIndex} chunks={chunkN}");
+            return peaks.ToBytes();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Error: {ex.Message}");
+            return Array.Empty<byte>();
+        }
+        finally
+        {
+            if (packet != null) ffmpeg.av_packet_free(&packet);
+            if (frame != null) ffmpeg.av_frame_free(&frame);
+            if (swrCtx != null) ffmpeg.swr_free(&swrCtx);
+            if (codecCtx != null) ffmpeg.avcodec_free_context(&codecCtx);
+            if (formatCtx != null) ffmpeg.avformat_close_input(&formatCtx);
+            ffmpeg.av_channel_layout_uninit(&inChLayout);
+            ffmpeg.av_channel_layout_uninit(&outChLayout);
+        }
     }
     
     /// <summary>

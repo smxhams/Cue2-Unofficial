@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using Godot;
+// GodotObject used for IsInstanceValid on CueOscConnection
 using Godot.Collections;
 using Rug.Osc;
 
@@ -25,10 +26,20 @@ public partial class OscConnections : Node
 
     public override void _ExitTree()
     {
-        foreach (var connection in Connections)
+        foreach (var connection in Connections.ToList())
         {
-            connection.CloseConnection();
+            try
+            {
+                connection.CloseConnection();
+                if (GodotObject.IsInstanceValid(connection))
+                    connection.Free();
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"OscConnections:_ExitTree - {ex.Message}");
+            }
         }
+        Connections.Clear();
     }
 
     public static CueOscConnection CreateConnection(string name = "Osc", IPAddress address = null, int port = 7002, string networkInterface = "")
@@ -54,6 +65,8 @@ public partial class OscConnections : Node
         {
             Connections.Remove(connection);
             connection.CloseConnection();
+            if (GodotObject.IsInstanceValid(connection))
+                connection.Free();
             GD.Print($"OscConnections: Deleted connection '{connection.Name}' (ID: {id})");
             return true;
         }

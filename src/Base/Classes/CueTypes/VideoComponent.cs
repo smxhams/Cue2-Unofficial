@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using Godot.Collections;
 
@@ -44,6 +45,13 @@ public class VideoComponent : ICueComponent
     public int PatchId { get; set; } = -1;
     /// <summary>Direct audio output device name</summary>
     public string DirectOutput { get; set; } = null;
+
+    /// <summary>
+    /// Returns true when a patch or direct output device has been assigned for embedded audio.
+    /// </summary>
+    public bool HasAudioOutputAssigned =>
+        Patch != null || !string.IsNullOrEmpty(DirectOutput);
+
     /// <summary>Audio routing matrix with volumes</summary>
     public CuePatch Routing { get; set; } = null;
     /// <summary>Volume multiplier for embedded audio (0-1).</summary>
@@ -171,8 +179,19 @@ public class VideoComponent : ICueComponent
 
     public double RecalculateDuration()
     {
-        Duration = EndTime < 0 ? Metadata.Duration - StartTime
-            : EndTime - StartTime;
+        if (Metadata == null)
+        {
+            Duration = 0.0;
+            TotalDuration = Loop ? -1.0 : 0.0;
+            return Duration;
+        }
+
+        double fileDuration = Metadata.Duration;
+        if (fileDuration < 0) fileDuration = 0;
+
+        Duration = EndTime < 0
+            ? Math.Max(0, fileDuration - StartTime)
+            : Math.Max(0, EndTime - StartTime);
         TotalDuration = Loop ? -1.0 : Duration * PlayCount;
         return Duration;
     }

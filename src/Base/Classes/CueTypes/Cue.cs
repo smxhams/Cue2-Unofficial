@@ -52,10 +52,55 @@ public class Cue : ICue
 
     public List<int> ChildCues = new List<int>(); // list of child cue ID's
     
-    public double PreWait { get; set; } = 0.0;
-    public double Duration { get; set; } = 0.0; // Duration of cue's contents excluding pre/post wait. This includes any child cues.
-    public double TotalDuration { get; set; } = 0.0;
-    public double PostWait { get; set; } = 0.0;
+    private double _preWait;
+    private double _duration;
+    private double _totalDuration;
+    private double _postWait;
+
+    public double PreWait
+    {
+        get => _preWait;
+        set
+        {
+            if (Math.Abs(_preWait - value) < 1e-9) return;
+            _preWait = value;
+            PreWaitChanged?.Invoke(_preWait);
+        }
+    }
+
+    /// <summary>Duration of cue contents excluding pre/post wait (includes child cues).</summary>
+    public double Duration
+    {
+        get => _duration;
+        set
+        {
+            if (Math.Abs(_duration - value) < 1e-9) return;
+            _duration = value;
+            DurationChanged?.Invoke(_duration);
+        }
+    }
+
+    public double TotalDuration
+    {
+        get => _totalDuration;
+        set
+        {
+            if (Math.Abs(_totalDuration - value) < 1e-9) return;
+            _totalDuration = value;
+            TotalDurationChanged?.Invoke(_totalDuration);
+        }
+    }
+
+    public double PostWait
+    {
+        get => _postWait;
+        set
+        {
+            if (Math.Abs(_postWait - value) < 1e-9) return;
+            _postWait = value;
+            PostWaitChanged?.Invoke(_postWait);
+        }
+    }
 
     private Color _color;
     public Color Color
@@ -257,13 +302,22 @@ public class Cue : ICue
             }
             else if (component.Type == "Video")
             {
-                //contentsDuration = ((VideoComponent)comp).Duration;
+                var video = (VideoComponent)component;
+                if (video.Loop)
+                {
+                    contentsDuration = -1;
+                    break;
+                }
+                video.RecalculateDuration();
+                var componentDuration = video.TotalDuration;
+                if (contentsDuration < componentDuration) contentsDuration = componentDuration;
             }
         }
 
         // If loop
         if (contentsDuration == -1)
         {
+            Duration = -1;
             TotalDuration = -1;
             return TotalDuration;
         }
@@ -271,6 +325,7 @@ public class Cue : ICue
         var childDuration = DurationOfChildren();
         if (childDuration == -1)
         {
+            Duration = -1;
             TotalDuration = -1;
             return TotalDuration;
         }

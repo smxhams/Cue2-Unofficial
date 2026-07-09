@@ -418,9 +418,12 @@ public sealed class AudioSourceDecoder : IDisposable
         int bytesPerSample = ffmpeg.av_get_bytes_per_sample(_codecCtx->sample_fmt);
         string codecName = ffmpeg.avcodec_get_name(codec->id) ?? "unknown";
 
-        bool preferStore = _preferSampleAccurateStore && NeedsSampleAccurateStore(_codecId);
+        // Sample-accurate float store for any short cue (including WAV/PCM). Streaming
+        // demuxer seek is unreliable on some PCM/WAV files and causes "seek to UI time,
+        // play last second then end". Lossy codecs need the store for loop/seek accuracy too.
+        bool preferStore = _preferSampleAccurateStore && CanAffordPcmStore(durationUs, sampleRate, channels);
         bool builtStore = false;
-        if (preferStore && CanAffordPcmStore(durationUs, sampleRate, channels))
+        if (preferStore)
         {
             builtStore = TryBuildPcmStoreUnlocked(sampleRate, channels, durationUs);
         }
@@ -449,43 +452,6 @@ public sealed class AudioSourceDecoder : IDisposable
 
         GD.Print($"AudioSourceDecoder:Open - {path} rate={sampleRate} ch={channels} codec={codecName} " +
                  $"durationUs={durationUs} pcmStore={builtStore} frames={_pcmFrameCount}");
-    }
-
-    /// <summary>
-    /// Frame-based / lossy codecs where demuxer seek is not sample-accurate.
-    /// </summary>
-    private static bool NeedsSampleAccurateStore(AVCodecID id)
-    {
-        // PCM and most lossless codecs seek well; frame-based lossy do not.
-        switch (id)
-        {
-            case AVCodecID.AV_CODEC_ID_PCM_S16LE:
-            case AVCodecID.AV_CODEC_ID_PCM_S16BE:
-            case AVCodecID.AV_CODEC_ID_PCM_U8:
-            case AVCodecID.AV_CODEC_ID_PCM_S24LE:
-            case AVCodecID.AV_CODEC_ID_PCM_S24BE:
-            case AVCodecID.AV_CODEC_ID_PCM_S32LE:
-            case AVCodecID.AV_CODEC_ID_PCM_S32BE:
-            case AVCodecID.AV_CODEC_ID_PCM_F32LE:
-            case AVCodecID.AV_CODEC_ID_PCM_F32BE:
-            case AVCodecID.AV_CODEC_ID_PCM_F64LE:
-            case AVCodecID.AV_CODEC_ID_PCM_F64BE:
-            case AVCodecID.AV_CODEC_ID_PCM_S8:
-            case AVCodecID.AV_CODEC_ID_PCM_U16LE:
-            case AVCodecID.AV_CODEC_ID_PCM_U16BE:
-            case AVCodecID.AV_CODEC_ID_PCM_U24LE:
-            case AVCodecID.AV_CODEC_ID_PCM_U24BE:
-            case AVCodecID.AV_CODEC_ID_PCM_U32LE:
-            case AVCodecID.AV_CODEC_ID_PCM_U32BE:
-            case AVCodecID.AV_CODEC_ID_FLAC:
-            case AVCodecID.AV_CODEC_ID_ALAC:
-            case AVCodecID.AV_CODEC_ID_WAVPACK:
-            case AVCodecID.AV_CODEC_ID_APE:
-            case AVCodecID.AV_CODEC_ID_TTA:
-                return false;
-            default:
-                return true;
-        }
     }
 
     private static bool CanAffordPcmStore(long durationUs, int sampleRate, int channels)
@@ -766,18 +732,24 @@ public sealed class AudioSourceDecoder : IDisposable
         if (_startTimeStream != 0 && _startTimeStream != ffmpeg.AV_NOPTS_VALUE)
             seekTs += _startTimeStream;
 
-        // Prefer seek_file with a window so we land at or before target
-        int ret = ffmpeg.avformat_seek_file(
-            _formatCtx,
-            _audioStreamIndex,
-            long.MinValue,
-            seekTs,
-            seekTs,
-            0);
+        // BACKWARD seek_frame is the most reliable for audio (esp. WAV/PCM).
+        // avformat_seek_file with max_ts == target is too strict and mis-seeks some WAVs.
+        int ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+        if (ret < 0)
+        {
+            ret = ffmpeg.avformat_seek_file(
+                _formatCtx,
+                _audioStreamIndex,
+                long.MinValue,
+                seekTs,
+                long.MaxValue,
+                0);
+        }
 
         if (ret < 0)
         {
-            ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_BACKWARD);
+            // Last resort: any-frame seek
+            ret = ffmpeg.av_seek_frame(_formatCtx, _audioStreamIndex, seekTs, ffmpeg.AVSEEK_FLAG_ANY);
         }
 
         if (ret < 0)
@@ -829,15 +801,17 @@ public sealed class AudioSourceDecoder : IDisposable
     }
 
     /// <summary>
-    /// After demuxer seek, decode and discard until output reaches <paramref name="targetSamples"/>.
-    /// Uses PTS when valid; falls back to accumulating decoded sample counts from the first post-seek frame.
+    /// After demuxer seek, decode and optionally discard until output reaches <paramref name="targetSamples"/>.
+    /// Uses absolute PTS only when timestamps look consistent with the demuxer landing near the target.
+    /// If PTS is missing or restarts at 0 after seek, trusts the demuxer position (no double-discard to EOF).
     /// </summary>
     private unsafe void RunSeekTrimUnlocked(long targetSamples)
     {
         int safety = 0;
         const int maxIterations = 50_000;
-        bool haveAnchor = false;
-        long decodedSamplesCursor = 0; // sample index of next output when PTS missing
+        // -1 = undecided, 0 = trust demuxer (no absolute discard), 1 = absolute PTS discard
+        int ptsMode = -1;
+        long decodedSamplesCursor = 0;
 
         while (safety++ < maxIterations && !_endOfStream)
         {
@@ -845,10 +819,12 @@ public sealed class AudioSourceDecoder : IDisposable
             if (ret == ffmpeg.AVERROR_EOF)
             {
                 ffmpeg.avcodec_send_packet(_codecCtx, null);
-                if (!DrainFramesForSeekUnlocked(targetSamples, ref haveAnchor, ref decodedSamplesCursor, out bool reached) || !reached)
+                if (!DrainFramesForSeekUnlocked(targetSamples, ref ptsMode, ref decodedSamplesCursor, out bool reached) || !reached)
                 {
                     FlushSwrDiscardUnlocked();
-                    _endOfStream = true;
+                    // Only mark EOS if we never queued anything — seek past end
+                    if (_ring.Available == 0)
+                        _endOfStream = true;
                 }
                 return;
             }
@@ -870,7 +846,7 @@ public sealed class AudioSourceDecoder : IDisposable
             if (ret < 0 && ret != ffmpeg.AVERROR(ffmpeg.EAGAIN))
                 continue;
 
-            if (DrainFramesForSeekUnlocked(targetSamples, ref haveAnchor, ref decodedSamplesCursor, out bool reachedTarget)
+            if (DrainFramesForSeekUnlocked(targetSamples, ref ptsMode, ref decodedSamplesCursor, out bool reachedTarget)
                 && reachedTarget)
             {
                 return;
@@ -880,12 +856,14 @@ public sealed class AudioSourceDecoder : IDisposable
 
     private unsafe bool DrainFramesForSeekUnlocked(
         long targetSamples,
-        ref bool haveAnchor,
+        ref int ptsMode,
         ref long decodedSamplesCursor,
         out bool reachedTarget)
     {
         reachedTarget = false;
         bool any = false;
+        // Allow absolute discard only if first frame PTS is not far past target and not "near zero while target is large"
+        long nearZeroThreshold = Info.SampleRate; // 1 second of samples
 
         while (true)
         {
@@ -897,20 +875,55 @@ public sealed class AudioSourceDecoder : IDisposable
 
             any = true;
             int skipEncoder = GetFrameSkipSamplesUnlocked(_frame);
-            long frameStart = FrameStartSamplesUnlocked(_frame, ref haveAnchor, ref decodedSamplesCursor);
+            long? absoluteStart = TryGetAbsoluteFrameStartSamplesUnlocked(_frame);
             int nb = _frame->nb_samples;
-            // Apply encoder skip to logical start
             if (skipEncoder > 0)
-            {
-                frameStart += skipEncoder;
                 nb = Math.Max(0, nb - skipEncoder);
+
+            if (ptsMode < 0)
+            {
+                if (absoluteStart.HasValue)
+                {
+                    long fs = absoluteStart.Value + skipEncoder;
+                    // PTS restarted / unusable: near zero while seeking deep into the file
+                    if (fs < nearZeroThreshold && targetSamples > nearZeroThreshold * 2)
+                    {
+                        ptsMode = 0; // trust demuxer
+                    }
+                    // Seek overshot: first frame already past target — keep without discard
+                    else if (fs > targetSamples + Info.SampleRate / 10)
+                    {
+                        ptsMode = 0;
+                    }
+                    else
+                    {
+                        ptsMode = 1; // absolute trim
+                        decodedSamplesCursor = fs;
+                    }
+                }
+                else
+                {
+                    // No PTS: demuxer BACKWARD seek is best-effort position; do not count from 0 to target
+                    ptsMode = 0;
+                }
             }
 
+            if (ptsMode == 0)
+            {
+                // Trust demuxer landing; only apply encoder delay skip
+                ConvertFrameToRingUnlocked(_frame, skipEncoder);
+                ffmpeg.av_frame_unref(_frame);
+                reachedTarget = true;
+                return true;
+            }
+
+            // Absolute PTS mode
+            long frameStart = absoluteStart ?? decodedSamplesCursor;
+            frameStart += skipEncoder;
             long frameEnd = frameStart + nb;
 
             if (frameEnd <= targetSamples)
             {
-                // Convert through swr to keep resampler state consistent, but discard output
                 DiscardFrameThroughSwrUnlocked(_frame);
                 decodedSamplesCursor = frameEnd;
                 ffmpeg.av_frame_unref(_frame);
@@ -920,49 +933,36 @@ public sealed class AudioSourceDecoder : IDisposable
             int skipInFrame = 0;
             if (frameStart < targetSamples)
                 skipInFrame = (int)(targetSamples - frameStart);
-
             skipInFrame += skipEncoder;
+
             ConvertFrameToRingUnlocked(_frame, skipInFrame);
-            decodedSamplesCursor = frameStart + Math.Max(nb, skipInFrame);
+            decodedSamplesCursor = Math.Max(frameEnd, targetSamples);
             ffmpeg.av_frame_unref(_frame);
             reachedTarget = true;
             return true;
         }
     }
 
-    private unsafe long FrameStartSamplesUnlocked(AVFrame* frame, ref bool haveAnchor, ref long decodedSamplesCursor)
+    /// <summary>
+    /// Absolute sample index of frame start from PTS, or null if timestamps are unusable.
+    /// </summary>
+    private unsafe long? TryGetAbsoluteFrameStartSamplesUnlocked(AVFrame* frame)
     {
         long pts = frame->best_effort_timestamp;
         if (pts == ffmpeg.AV_NOPTS_VALUE)
             pts = frame->pts;
+        if (pts == ffmpeg.AV_NOPTS_VALUE)
+            pts = frame->pkt_dts;
+        if (pts == ffmpeg.AV_NOPTS_VALUE)
+            return null;
 
-        if (pts != ffmpeg.AV_NOPTS_VALUE)
-        {
-            // Subtract stream start_time so sample 0 is the start of media
-            long adj = pts;
-            if (_startTimeStream != 0 && _startTimeStream != ffmpeg.AV_NOPTS_VALUE)
-                adj = pts - _startTimeStream;
+        long adj = pts;
+        if (_startTimeStream != 0 && _startTimeStream != ffmpeg.AV_NOPTS_VALUE)
+            adj = pts - _startTimeStream;
 
-            long samples = ffmpeg.av_rescale_q(adj, _timeBase, new AVRational { num = 1, den = Info.SampleRate });
-            if (samples < 0) samples = 0;
-            haveAnchor = true;
-            decodedSamplesCursor = samples;
-            return samples;
-        }
-
-        // No PTS: continue sample cursor from previous frame
-        if (!haveAnchor)
-        {
-            // First post-seek frame without PTS — assume demuxer landed at/before target;
-            // treat as sample 0 of the post-seek stream and rely on discard count from target.
-            // Use _nextPtsSamples only if we somehow have better info; otherwise start at 0
-            // relative to post-seek and set discard via targetSamples comparison carefully.
-            haveAnchor = true;
-            decodedSamplesCursor = 0;
-            return 0;
-        }
-
-        return decodedSamplesCursor;
+        long samples = ffmpeg.av_rescale_q(adj, _timeBase, new AVRational { num = 1, den = Info.SampleRate });
+        if (samples < 0) samples = 0;
+        return samples;
     }
 
     private unsafe void DiscardFrameThroughSwrUnlocked(AVFrame* frame)

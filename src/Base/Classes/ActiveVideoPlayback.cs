@@ -889,11 +889,18 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         // Return LOH memory after large frame/PCM releases
         MediaMemory.ReclaimIfNeeded();
 
-        // Free from the scene tree (we are added as a child of the active cue bar)
-        if (IsInsideTree())
-            CallDeferred(Node.MethodName.QueueFree);
-        else
-            CallDeferred(GodotObject.MethodName.Free);
+        // Free promptly to avoid ObjectDB leaks at process exit
+        try
+        {
+            if (IsInsideTree())
+                QueueFree();
+            else if (IsInstanceValid(this))
+                Free();
+        }
+        catch
+        {
+            try { CallDeferred(Node.MethodName.QueueFree); } catch { /* ignore */ }
+        }
     }
 
     /// <summary>

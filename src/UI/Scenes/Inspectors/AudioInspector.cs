@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
+using Cue2.Shared.Audio;
 using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Scenes.Inspectors;
@@ -53,14 +54,17 @@ public partial class AudioInspector : Control
     
     // Waveform
     private PanelContainer _waveformPanel;
-    private Line2D _waveformLineLeftGrey;
-    private Line2D _waveformLineMiddle;
-    private Line2D _waveformLineRightGrey;
+    private WaveformDisplay _waveformDisplay;
+    private WaveformPeaks _cachedPeaks;
+    private byte[] _cachedPeaksSource;
     private Button _startDragHandle;
     private Button _endDragHandle;
+    private HSlider _zoomSlider;
+    private HScrollBar _waveformScroll;
     private bool _isDraggingStart;
     private bool _isDraggingEnd;
-    private float _dragStartX;
+    private float _viewStartNorm;
+    private float _viewSpanNorm = 1f;
     
     private FileDialog _fileDialog;
     
@@ -103,20 +107,42 @@ public partial class AudioInspector : Control
         _volumeInput = GetNode<LineEdit>("%VolumeInput");
         _outputOptionButton = GetNode<OptionButton>("%OutputOptionButton");
         
-        // Waveform UI setup
+        // Waveform UI setup — peak bars + zoom/scroll
         _waveformPanel = GetNode<PanelContainer>("%WaveformPanel");
-        _waveformLineLeftGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
-        _waveformLineMiddle = new Line2D { DefaultColor = GlobalStyles.HighColor1, Width = 1.0f };
-        _waveformLineRightGrey = new Line2D { DefaultColor = GlobalStyles.LowColor3, Width = 1.0f };
-        _waveformPanel.AddChild(_waveformLineLeftGrey);
-        _waveformPanel.AddChild(_waveformLineMiddle);
-        _waveformPanel.AddChild(_waveformLineRightGrey);
-        
-        // Draggable handles (assume as children of a Control under %WaveformPanel
+        _waveformDisplay = new WaveformDisplay();
+        _waveformPanel.AddChild(_waveformDisplay);
+        _waveformPanel.MoveChild(_waveformDisplay, 0); // behind handles
+        _waveformPanel.Resized += () => { if (_waveformAccordian.Visible) _ = DrawWaveform(); };
+        _waveformPanel.GuiInput += OnWaveformPanelGuiInput;
+
         _startDragHandle = GetNode<Button>("%StartDragHandle");
         _endDragHandle = GetNode<Button>("%EndDragHandle");
-        _startDragHandle.GuiInput += OnStartHandleInput; 
-        _endDragHandle.GuiInput += OnEndHandleInput; 
+        StyleWaveformHandles();
+        _startDragHandle.GuiInput += OnStartHandleInput;
+        _endDragHandle.GuiInput += OnEndHandleInput;
+
+        _zoomSlider = GetNodeOrNull<HSlider>("%ZoomSlider");
+        if (_zoomSlider != null)
+        {
+            _zoomSlider.MinValue = 1;
+            _zoomSlider.MaxValue = 20;
+            _zoomSlider.Step = 0.1;
+            _zoomSlider.Value = 1;
+            _zoomSlider.TooltipText = "Zoom waveform (1× = full file)";
+            _zoomSlider.ValueChanged += OnZoomChanged;
+        }
+
+        // Scroll bar under zoom (created in code so both inspectors get it)
+        _waveformScroll = new HScrollBar
+        {
+            Name = "WaveformScroll",
+            CustomMinimumSize = new Vector2(0, 14),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Visible = false,
+            TooltipText = "Scroll zoomed waveform"
+        };
+        _waveformAccordian.AddChild(_waveformScroll);
+        _waveformScroll.ValueChanged += OnWaveformScrollChanged; 
         
         
         
@@ -594,10 +620,16 @@ public partial class AudioInspector : Control
         PopulateOutputOptions();
         BuildRoutingMatrix();
         
-        // Generate waveform data if not cached
-        if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0) // Check cache
+        // Generate waveform data if not cached on the component
+        _cachedPeaks = null;
+        _cachedPeaksSource = null;
+        _viewStartNorm = 0f;
+        _viewSpanNorm = 1f;
+        if (_zoomSlider != null) _zoomSlider.SetValueNoSignal(1);
+        SyncWaveformScrollBar();
+        if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
         {
-            GD.Print($"AudioInspector:ShellSelected - No waveform found");
+            GD.Print("AudioInspector:ShellSelected - No waveform found");
             try
             {
                 _focusedAudioComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
@@ -649,177 +681,216 @@ public partial class AudioInspector : Control
         _volumeInput.Text = $"{volumeDb}dB";
     }
 
+    private void StyleWaveformHandles()
+    {
+        // Wider hit targets; colors match markers (cyan start / orange end)
+        _startDragHandle.CustomMinimumSize = new Vector2(10, 0);
+        _endDragHandle.CustomMinimumSize = new Vector2(10, 0);
+        _startDragHandle.Modulate = GlobalStyles.LowColor1;
+        _endDragHandle.Modulate = GlobalStyles.HighColor1;
+        _startDragHandle.TooltipText = "Start time (drag)";
+        _endDragHandle.TooltipText = "End time (drag)";
+    }
+
+    private void OnZoomChanged(double value)
+    {
+        float zoom = Mathf.Max(1f, (float)value);
+        float oldSpan = _viewSpanNorm;
+        float center = _viewStartNorm + oldSpan * 0.5f;
+        _viewSpanNorm = 1f / zoom;
+        _viewStartNorm = Mathf.Clamp(center - _viewSpanNorm * 0.5f, 0f, 1f - _viewSpanNorm);
+        SyncWaveformScrollBar();
+        _ = DrawWaveform();
+    }
+
+    private void OnWaveformScrollChanged(double value)
+    {
+        float maxStart = Math.Max(0f, 1f - _viewSpanNorm);
+        _viewStartNorm = maxStart <= 0 ? 0 : Mathf.Clamp((float)value, 0f, maxStart);
+        _ = DrawWaveform();
+    }
+
+    private void SyncWaveformScrollBar()
+    {
+        if (_waveformScroll == null) return;
+        bool zoomed = _viewSpanNorm < 0.999f;
+        _waveformScroll.Visible = zoomed;
+        if (!zoomed)
+        {
+            _viewStartNorm = 0f;
+            return;
+        }
+        float maxStart = Math.Max(0.0001f, 1f - _viewSpanNorm);
+        _waveformScroll.MinValue = 0;
+        _waveformScroll.MaxValue = maxStart;
+        _waveformScroll.Page = _viewSpanNorm * maxStart; // thumb size hint
+        if (_waveformScroll.Page < 0.01)
+            _waveformScroll.Page = 0.01;
+        _waveformScroll.Step = maxStart / 200.0;
+        _waveformScroll.SetValueNoSignal(Mathf.Clamp(_viewStartNorm, 0f, maxStart));
+    }
+
+    private void OnWaveformPanelGuiInput(InputEvent @event)
+    {
+        // Ctrl+wheel zoom, plain wheel scroll when zoomed
+        if (@event is InputEventMouseButton mb && mb.Pressed &&
+            (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown))
+        {
+            if (mb.CtrlPressed && _zoomSlider != null)
+            {
+                double z = _zoomSlider.Value;
+                z += mb.ButtonIndex == MouseButton.WheelUp ? 0.5 : -0.5;
+                _zoomSlider.Value = Mathf.Clamp((float)z, (float)_zoomSlider.MinValue, (float)_zoomSlider.MaxValue);
+                AcceptEvent();
+            }
+            else if (_viewSpanNorm < 0.999f)
+            {
+                float delta = _viewSpanNorm * 0.15f * (mb.ButtonIndex == MouseButton.WheelUp ? -1f : 1f);
+                float maxStart = 1f - _viewSpanNorm;
+                _viewStartNorm = Mathf.Clamp(_viewStartNorm + delta, 0f, maxStart);
+                SyncWaveformScrollBar();
+                _ = DrawWaveform();
+                AcceptEvent();
+            }
+        }
+    }
+
     /// <summary>
-    /// Updates the waveform display based on current zoom and start/end times.
+    /// Updates the waveform display from cached peaks and start/end selection.
     /// </summary>
     private async Task DrawWaveform()
     {
-        if (_waveformAccordian.Visible == false) return; // Don't bother drawing if not open.
-        if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
+        if (_waveformAccordian.Visible == false) return;
+        if (_focusedAudioComponent?.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:DrawWaveform - No waveform data available", 1);
             return;
         }
-        
-        // Check UI has corrected it's size once made visible.
+
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
         float width = _waveformPanel.Size.X;
-
-        await Task.Delay(50); // This for the most part corrects for width being wrong
-        
-        // If width isn't correct, wait a bit before drawing.
         if (width < 50)
-        {
-            width = _inspectorContent.Size.X-48; // Remove width of margin containers
-            GD.Print($"Width too small, checking it's parents width - Inspector Content width: {width}px");
-        }
-
+            width = Math.Max(0, _inspectorContent.Size.X - 48);
         if (width < 50)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:DrawWaveform - Waveform panel too small to draw", 1);
             return;
         }
-        
-        // Deserialize
 
-        float[] minMax = new float[_focusedAudioComponent.WaveformData.Length / sizeof(float)];
-        Buffer.BlockCopy(_focusedAudioComponent.WaveformData, 0, minMax, 0, _focusedAudioComponent.WaveformData.Length);
-        
-        int binCount = minMax.Length / 2;
-        var pointsLeft = new List<Vector2>();
-        var pointsMiddle = new List<Vector2>(); 
-        var pointsRight = new List<Vector2>();
-        
-        float height = _waveformPanel.Size.Y / 2f;
-        float binWidth = width / binCount;
-
-        float startNorm = (float)(_focusedAudioComponent.StartTime / _focusedAudioComponent.Metadata.Duration);
-        float endTime = _focusedAudioComponent.EndTime < 0 ? (float)_focusedAudioComponent.Metadata.Duration : (float)_focusedAudioComponent.EndTime;
-        float endNorm = (float)(endTime / _focusedAudioComponent.Metadata.Duration);
-        int startBin = (int)(startNorm * binCount);
-        int endBin = (int)(endNorm * binCount);
-        
-        
-        for (int i = 0; i < binCount; i++)
+        if (_cachedPeaks == null || !ReferenceEquals(_cachedPeaksSource, _focusedAudioComponent.WaveformData))
         {
-            float x = i * binWidth;
-            float minVal = minMax[i * 2];
-            float maxVal = minMax[i * 2 + 1];
-
-            float yMin = height - (minVal * height); // Normalize [-1,1]
-            float yMax = height - (maxVal * height);
-
-            var pointMin = new Vector2(x, yMin);
-            var pointMax = new Vector2(x, yMax);
-            
-            // Split sections based on bins
-            if (i < startBin)
-            {
-                pointsLeft.Add(pointMin);
-                pointsLeft.Add(pointMax);
-            } 
-            else if (i >= endBin)
-            {
-                pointsRight.Add(pointMin); 
-                pointsRight.Add(pointMax); 
-            } 
-            else 
-            {
-                pointsMiddle.Add(pointMin); 
-                pointsMiddle.Add(pointMax); 
-            } 
+            _cachedPeaks = WaveformPeaks.FromBytes(_focusedAudioComponent.WaveformData);
+            _cachedPeaksSource = _focusedAudioComponent.WaveformData;
+        }
+        if (_cachedPeaks == null)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:DrawWaveform - Invalid waveform payload", 1);
+            return;
         }
 
-        _waveformLineLeftGrey.Points = pointsLeft.ToArray();
-        _waveformLineMiddle.Points = pointsMiddle.ToArray();
-        _waveformLineRightGrey.Points = pointsRight.ToArray();
-        
-        // Position handles
-        float startX = startNorm * width;
-        float endX = endNorm * width;
-        if (endX >= width - 2) endX -= 1;
-        _startDragHandle.Position = new Vector2(startX - 2 , 0); // Center on line
-        _endDragHandle.Position = new Vector2(endX - 2, 0);
+        double duration = _focusedAudioComponent.Metadata?.Duration ?? 0;
+        if (duration <= 0) duration = 1;
+        float startNorm = (float)(_focusedAudioComponent.StartTime / duration);
+        float endTime = _focusedAudioComponent.EndTime < 0
+            ? (float)duration
+            : (float)_focusedAudioComponent.EndTime;
+        float endNorm = (float)(endTime / duration);
+
+        _viewSpanNorm = Mathf.Clamp(_viewSpanNorm, 0.01f, 1f);
+        _viewStartNorm = Mathf.Clamp(_viewStartNorm, 0f, 1f - _viewSpanNorm);
+
+        _waveformDisplay.SetData(_cachedPeaks, startNorm, endNorm, _viewStartNorm, _viewSpanNorm, duration);
+
+        // Position handles in view coordinates; hide when off-screen
+        PositionWaveformHandle(_startDragHandle, startNorm, width);
+        PositionWaveformHandle(_endDragHandle, endNorm, width);
+        SyncWaveformScrollBar();
     }
 
-    
+    private void PositionWaveformHandle(Button handle, float fileNorm, float width)
+    {
+        float x = _waveformDisplay.FileNormToX(fileNorm);
+        bool visible = x >= -4 && x <= width + 4;
+        handle.Visible = visible;
+        if (!visible) return;
+        float handleW = handle.CustomMinimumSize.X > 0 ? handle.CustomMinimumSize.X : 10f;
+        handle.Position = new Vector2(x - handleW * 0.5f, 0);
+        handle.Size = new Vector2(handleW, _waveformPanel.Size.Y);
+    }
+
     private void OnStartHandleInput(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mouseButton)
+        if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
-            if (mouseButton.ButtonIndex == MouseButton.Left)
+            if (mouseButton.Pressed)
+                _isDraggingStart = true;
+            else if (_isDraggingStart)
             {
-                if (mouseButton.Pressed)
-                {
-                    _isDraggingStart = true;
-                }
-                else // Released
-                {
-                    if (_isDraggingStart)
-                    {
-                        //Recaluclate duration only on release
-                        SyncDuration();
-                        _isDraggingStart = false;
-                    }
-                }
+                SyncDuration();
+                _isDraggingStart = false;
             }
         }
-        else if (@event is InputEventMouseMotion mouseMotion && _isDraggingStart)
+        else if (@event is InputEventMouseMotion && _isDraggingStart)
         {
-            var width = _waveformPanel.Size.X;
-            var mouseX = mouseMotion.Position.X;
-            var barPos = _startDragHandle.Position.X; 
-            float newX = barPos + mouseX;
-            newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
-            float normX = newX / width;
-            _focusedAudioComponent.StartTime = normX * _focusedAudioComponent.Metadata.Duration;
-            _startTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.StartTime); // Update input
-            DrawWaveform(); // Refresh
+            float localX = _waveformPanel.GetLocalMousePosition().X;
+            float norm = _waveformDisplay.XToFileNorm(localX);
+            double duration = _focusedAudioComponent.Metadata?.Duration ?? 0;
+            if (duration <= 0) return;
+            // Keep start before end
+            float endN = _focusedAudioComponent.EndTime < 0
+                ? 1f
+                : (float)(_focusedAudioComponent.EndTime / duration);
+            norm = Mathf.Min(norm, endN - 0.001f);
+            norm = Mathf.Max(0f, norm);
+            _focusedAudioComponent.StartTime = norm * duration;
+            _startTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.StartTime);
+            _ = DrawWaveform();
         }
     }
-    
+
     private void OnEndHandleInput(InputEvent @event)
     {
-        if (@event is InputEventMouseButton mouseButton)
+        if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
-            if (mouseButton.ButtonIndex == MouseButton.Left)
+            if (mouseButton.Pressed)
+                _isDraggingEnd = true;
+            else if (_isDraggingEnd)
             {
-                if (mouseButton.Pressed)
-                {
-                    _isDraggingEnd = true;
-                }
-                else // Released
-                {
-                    if (_isDraggingEnd)
-                    {
-                        SyncDuration();
-                        _isDraggingEnd = false;
-                    }
-                }
+                SyncDuration();
+                _isDraggingEnd = false;
             }
         }
-        else if (@event is InputEventMouseMotion mouseMotion && _isDraggingEnd)
+        else if (@event is InputEventMouseMotion && _isDraggingEnd)
         {
-            var width = _waveformPanel.Size.X;
-            var mouseX = mouseMotion.Position.X;
-            var barPos = _endDragHandle.Position.X; 
-            float newX = barPos + mouseX;
-            newX = Mathf.Clamp(newX, 0, _waveformPanel.Size.X); // Bound
-            float normX = newX / width;
-            _focusedAudioComponent.EndTime = normX * _focusedAudioComponent.Metadata.Duration;
-            _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime); // Update input
-            DrawWaveform(); // Refresh
+            float localX = _waveformPanel.GetLocalMousePosition().X;
+            float norm = _waveformDisplay.XToFileNorm(localX);
+            double duration = _focusedAudioComponent.Metadata?.Duration ?? 0;
+            if (duration <= 0) return;
+            float startN = (float)(_focusedAudioComponent.StartTime / duration);
+            norm = Mathf.Max(norm, startN + 0.001f);
+            norm = Mathf.Min(1f, norm);
+            _focusedAudioComponent.EndTime = norm * duration;
+            _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
+            _ = DrawWaveform();
         }
     }
 
     
     private void SyncDuration()
     {
-        _focusedCue.CalculateTotalDuration();
-        var durationSecs = _focusedAudioComponent.Duration;
+        if (_focusedCue == null || _focusedAudioComponent == null) return;
+
+        _focusedAudioComponent.RecalculateDuration();
+        var durationSecs = _focusedCue.CalculateTotalDuration();
         _durationValue.Text =
-            UiUtilities.ParseAndFormatTime(durationSecs.ToString(), out var _, out string durLabeledTime);
+            UiUtilities.ParseAndFormatTime(
+                _focusedAudioComponent.Duration.ToString(), out var _, out string durLabeledTime);
         _durationValue.TooltipText = durLabeledTime;
+
+        // Shell list + shell inspector
         _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+        _globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
     }
     
     
