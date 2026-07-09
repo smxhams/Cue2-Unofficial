@@ -914,7 +914,7 @@ public partial class AudioInspector : Control
     
 
     /// <summary>
-    /// Handles file selection from dialog. Adds AudioComponent, fetches metadata asynchronously if possible.
+    /// Handles file selection from dialog. Adds/replaces AudioComponent and loads metadata + waveform.
     /// </summary>
     /// <param name="path">The selected file path.</param>
     private void FileSelected(string path)
@@ -926,7 +926,8 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:No cue selected", 2);
             return;
         }
-        SetAudioFile(path, createNewComponent: true);
+        // File picker always treats selection as a fresh media assignment (reset in/out).
+        SetAudioFile(path, resetInOutPoints: true);
     }
 
     /// <summary>
@@ -941,92 +942,139 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:No cue selected for audio file drop", 2);
             return;
         }
-        SetAudioFile(filePath, createNewComponent: false);
+        // Drop onto URL bar: replace media, clamp existing in/out if still valid.
+        SetAudioFile(filePath, resetInOutPoints: false);
     }
 
     /// <summary>
-    /// Sets the audio file for the focused cue. Handles component creation or update, metadata refresh, and time validation.
+    /// Sets the audio file for the focused cue: create or replace component, load metadata, generate waveform, refresh UI.
     /// </summary>
     /// <param name="filePath">The audio file path.</param>
-    /// <param name="createNewComponent">If true, always creates a new AudioComponent. If false, updates existing or creates new.</param>
-    private async void SetAudioFile(string filePath, bool createNewComponent)
+    /// <param name="resetInOutPoints">If true, start/end are reset to full file; otherwise clamp to new duration.</param>
+    private async void SetAudioFile(string filePath, bool resetInOutPoints)
     {
-        if (!File.Exists(filePath))
+        if (_focusedCue == null) return;
+
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             GD.Print($"AudioInspector:SetAudioFile - File not found: {filePath}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:File not found: {filePath}", 2);
             return;
         }
 
-        _fileUrl.Text = filePath;
-
+        // Resolve or create component; always assign the path (AddAudioComponent alone does not update existing).
         var existingAudio = _focusedCue.Components.OfType<AudioComponent>().FirstOrDefault();
-        if (existingAudio != null && !createNewComponent)
+        bool isNewComponent = existingAudio == null;
+        if (existingAudio != null)
         {
             _focusedAudioComponent = existingAudio;
-            _focusedAudioComponent.AudioFile = filePath;
-            
-            try
+            bool pathChanged = !string.Equals(existingAudio.AudioFile, filePath, StringComparison.OrdinalIgnoreCase);
+            existingAudio.AudioFile = filePath;
+            if (pathChanged)
             {
-                _focusedAudioComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
-                if (_focusedAudioComponent.WaveformData.Length == 0)
-                {
-                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:SetAudioFile - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
-                }
-            }
-            catch (Exception ex)
-            {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:SetAudioFile - Error generating waveform: {ex.Message}", 2);
+                // Stale peaks/metadata from previous file must not stick
+                existingAudio.WaveformData = null;
+                existingAudio.Metadata = null;
             }
         }
         else
         {
             _focusedAudioComponent = _focusedCue.AddAudioComponent(filePath);
-            _inspectorContent.Visible = true;
         }
 
-        var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(filePath);
-        _focusedAudioComponent.Metadata = fileMetadata;
-        
-        var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
-        
-        if (createNewComponent)
+        _fileUrl.Text = filePath;
+        _inspectorContent.Visible = true;
+        _selectFileContainer.Visible = true;
+        _infoLabel.Text = "";
+
+        // Invalidate display cache while loading
+        _cachedPeaks = null;
+        _cachedPeaksSource = null;
+
+        try
         {
-            _focusedAudioComponent.StartTime = 0.0;
-            _focusedAudioComponent.EndTime = -1.0; // Undefined = play to end
-            GD.Print($"AudioInspector:SetAudioFile - Metadata loaded: Duration {fileDuration}s, Channels {fileMetadata.Channels}");
-        }
-        else
-        {
-            if (_focusedAudioComponent.StartTime >= fileDuration)
+            var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(filePath);
+            if (fileMetadata == null)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"AudioInspector:SetAudioFile - Failed to read metadata for {Path.GetFileName(filePath)}", 2);
+                return;
+            }
+
+            _focusedAudioComponent.Metadata = fileMetadata;
+            var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
+
+            if (resetInOutPoints || isNewComponent)
             {
                 _focusedAudioComponent.StartTime = 0.0;
-                GD.Print($"AudioInspector:SetAudioFile - Reset start time (exceeded file duration)");
+                _focusedAudioComponent.EndTime = -1.0; // full file
+                GD.Print($"AudioInspector:SetAudioFile - Metadata loaded: Duration {fileDuration}s, Channels {fileMetadata.Channels}");
             }
-            
-            if (_focusedAudioComponent.EndTime >= 0 && _focusedAudioComponent.EndTime > fileDuration)
+            else
             {
-                _focusedAudioComponent.EndTime = -1.0; // Reset to undefined
-                GD.Print($"AudioInspector:SetAudioFile - Reset end time to undefined (exceeded file duration)");
+                if (_focusedAudioComponent.StartTime >= fileDuration)
+                {
+                    _focusedAudioComponent.StartTime = 0.0;
+                    GD.Print("AudioInspector:SetAudioFile - Reset start time (exceeded file duration)");
+                }
+
+                if (_focusedAudioComponent.EndTime >= 0 && _focusedAudioComponent.EndTime > fileDuration)
+                {
+                    _focusedAudioComponent.EndTime = -1.0;
+                    GD.Print("AudioInspector:SetAudioFile - Reset end time to undefined (exceeded file duration)");
+                }
+                else if (_focusedAudioComponent.EndTime >= 0 &&
+                         _focusedAudioComponent.EndTime <= _focusedAudioComponent.StartTime)
+                {
+                    _focusedAudioComponent.EndTime = -1.0;
+                    GD.Print("AudioInspector:SetAudioFile - Reset end time to undefined (was <= start time)");
+                }
             }
-            else if (_focusedAudioComponent.EndTime >= 0 && _focusedAudioComponent.EndTime <= _focusedAudioComponent.StartTime)
+
+            // Duration fields need RecalculateDuration after Metadata is set
+            _focusedAudioComponent.RecalculateDuration();
+            _focusedCue.CalculateTotalDuration();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"AudioInspector:SetAudioFile - Metadata error: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"AudioInspector:SetAudioFile - Metadata error: {ex.Message}", 2);
+            return;
+        }
+
+        // Always (re)generate waveform for the assigned file
+        try
+        {
+            _focusedAudioComponent.WaveformData =
+                await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+            if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
             {
-                _focusedAudioComponent.EndTime = -1.0; // Reset to undefined
-                GD.Print($"AudioInspector:SetAudioFile - Reset end time to undefined (was <= start time)");
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"AudioInspector:SetAudioFile - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
             }
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"AudioInspector:SetAudioFile - Error generating waveform: {ex.Message}", 2);
         }
 
         UpdateAudioUiFields(filePath);
         PopulateOutputOptions();
         BuildRoutingMatrix();
-        
-        if (_waveformAccordian.Visible)
-        {
-            await DrawWaveform();
-        }
-        
+        SyncDuration();
+
+        // Reset zoom/view for new media, then draw if accordion is open
+        _viewStartNorm = 0f;
+        _viewSpanNorm = 1f;
+        if (_zoomSlider != null) _zoomSlider.SetValueNoSignal(1);
+        SyncWaveformScrollBar();
+        await DrawWaveform();
+
         GD.Print($"AudioInspector:SetAudioFile - Set audio file: {filePath}");
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:Set audio file to: {Path.GetFileName(filePath)}", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"AudioInspector:Set audio file to: {Path.GetFileName(filePath)}", 0);
     }
 
     /// <summary>

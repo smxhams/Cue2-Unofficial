@@ -42,7 +42,7 @@ vertical_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
-tooltip_text = "Scales whole UI,.
+tooltip_text = "Scales whole UI.
 Caution: Will apply immediately"
 focus_mode = 0
 text = "100%"
@@ -55,13 +55,23 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 size_flags_stretch_ratio = 3.0
-tooltip_text = "Scales whole UI,.
+tooltip_text = "Scales whole UI.
 Caution: Will apply on mouse release."
 focus_mode = 0
 min_value = 50.0
 max_value = 200.0
 value = 100.0
 rounded = true
+
+[node name="UiScaleResetButton" type="Button" parent="VBoxContainer/Row2"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
 
 [node name="Row3" type="HBoxContainer" parent="VBoxContainer" unique_id=812974213]
 layout_mode = 2
@@ -81,31 +91,42 @@ focus_mode = 0
 selected = 1
 item_count = 6
 popup/item_0/text = "Half Go"
-popup/item_0/id = 1
+popup/item_0/id = 0
 popup/item_1/text = "Base Scale Go"
-popup/item_1/id = 2
+popup/item_1/id = 1
 popup/item_2/text = "Big Go"
-popup/item_2/id = 3
+popup/item_2/id = 2
 popup/item_3/text = "Very Big Go"
-popup/item_3/id = 4
+popup/item_3/id = 3
 popup/item_4/text = "Wow, that's a big go"
-popup/item_4/id = 5
+popup/item_4/id = 4
 popup/item_5/text = "Nothing but Go"
-popup/item_5/id = 6
+popup/item_5/id = 5
+
+[node name="GoScaleResetButton" type="Button" parent="VBoxContainer/Row3"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
 
 [node name="Row4" type="HBoxContainer" parent="VBoxContainer" unique_id=1493069629]
 layout_mode = 2
 
-[node name="Go Button Scale" type="Label" parent="VBoxContainer/Row4" unique_id=2029973817]
+[node name="CueListScaleLabel" type="Label" parent="VBoxContainer/Row4" unique_id=2029973817]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 text = "CueListScale"
 vertical_alignment = 1
 
-[node name="GoScaleOptionButton" type="OptionButton" parent="VBoxContainer/Row4" unique_id=1328610964]
+[node name="CueListScaleOptionButton" type="OptionButton" parent="VBoxContainer/Row4" unique_id=1328610964]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
-tooltip_text = "Go button size."
+tooltip_text = "Cue list display scale (not yet applied)."
 focus_mode = 0
 selected = 1
 item_count = 3
@@ -115,3 +136,56 @@ popup/item_1/text = "Medium"
 popup/item_1/id = 1
 popup/item_2/text = "Large"
 popup/item_2/id = 2
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PlaybackHeader" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PlaybackLabel" type="Label" parent="VBoxContainer/PlaybackHeader"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Playback"
+
+[node name="StopFadeRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="StopFadeLabel" type="Label" parent="VBoxContainer/StopFadeRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Stop Fade Out"
+vertical_alignment = 1
+
+[node name="StopFadeSpinBox" type="SpinBox" parent="VBoxContainer/StopFadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+tooltip_text = "Fade-out duration when Stop is pressed (seconds).
+First Stop fades out; second Stop while fading hard-stops.
+Set to 0 for immediate stop."
+focus_mode = 0
+min_value = 0.0
+max_value = 30.0
+step = 0.1
+value = 2.5
+suffix = "s"
+alignment = 1
+
+[node name="StopFadeResetButton" type="Button" parent="VBoxContainer/StopFadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="StopFadeHint" type="Label" parent="VBoxContainer/StopFadeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "0 = instant. Second Stop cuts immediately."
+vertical_alignment = 1

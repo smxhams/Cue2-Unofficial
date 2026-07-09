@@ -381,7 +381,7 @@ public partial class VideoInspector : Control
 	
 	
 	/// <summary>
-	/// Handles file selection from dialog. Adds VideoComponent, fetches metadata asynchronously if possible.
+	/// Handles file selection from dialog. Adds/replaces VideoComponent and loads metadata + waveform.
 	/// </summary>
 	/// <param name="path">The selected file path.</param>
 	private void FileSelected(string path)
@@ -393,7 +393,7 @@ public partial class VideoInspector : Control
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:No cue selected", 2);
 			return;
 		}
-		SetVideoFile(path, createNewComponent: true);
+		SetVideoFile(path, resetInOutPoints: true);
 	}
 	
 	/// <summary>
@@ -408,78 +408,146 @@ public partial class VideoInspector : Control
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:No cue selected for video file drop", 2);
 			return;
 		}
-		SetVideoFile(filePath, createNewComponent: false);
+		SetVideoFile(filePath, resetInOutPoints: false);
 	}
 	
 	/// <summary>
-	/// Sets the video file for the focused cue. Handles component creation or update, metadata refresh, and time validation.
+	/// Sets the video file for the focused cue: create or replace component, load metadata, generate waveform, refresh UI.
 	/// </summary>
 	/// <param name="filePath">The video file path.</param>
-	/// <param name="createNewComponent">If true, always creates a new VideoComponent. If false, updates existing or creates new.</param>
-	private async void SetVideoFile(string filePath, bool createNewComponent)
+	/// <param name="resetInOutPoints">If true, start/end are reset to full file; otherwise clamp to new duration.</param>
+	private async void SetVideoFile(string filePath, bool resetInOutPoints)
 	{
-		if (!File.Exists(filePath))
+		if (_focusedCue == null) return;
+
+		if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
 		{
 			GD.Print($"VideoInspector:SetVideoFile - File not found: {filePath}");
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:File not found: {filePath}", 2);
 			return;
 		}
 
-		_fileUrl.Text = filePath;
-
+		// Resolve or create component; always assign the path (AddVideoComponent alone does not update existing).
 		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
-		if (existingVideo != null && !createNewComponent)
+		bool isNewComponent = existingVideo == null;
+		if (existingVideo != null)
 		{
 			_focusedVideoComponent = existingVideo;
-			_focusedVideoComponent.VideoFile = filePath;
+			bool pathChanged = !string.Equals(existingVideo.VideoFile, filePath, StringComparison.OrdinalIgnoreCase);
+			existingVideo.VideoFile = filePath;
+			if (pathChanged)
+			{
+				// Force re-fetch of metadata/waveform for the new file
+				existingVideo.WaveformData = null;
+				existingVideo.Metadata = null;
+			}
 		}
 		else
 		{
 			_focusedVideoComponent = _focusedCue.AddVideoComponent(filePath);
-			_inspectorContent.Visible = true;
 		}
 
-		var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(filePath);
-		_focusedVideoComponent.Metadata = fileMetadata;
-		_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0;
-		_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
-		_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
-		_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
-		
-		var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
-		
-		if (createNewComponent)
+		_fileUrl.Text = filePath;
+		_inspectorContent.Visible = true;
+		_selectFileContainer.Visible = true;
+		_infoLabel.Text = "";
+
+		_cachedPeaks = null;
+		_cachedPeaksSource = null;
+
+		try
 		{
-			_focusedVideoComponent.StartTime = 0.0;
-			_focusedVideoComponent.EndTime = -1.0; // Undefined = play to end
-			GD.Print($"VideoInspector:SetVideoFile - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
-		}
-		else
-		{
-			if (_focusedVideoComponent.StartTime >= fileDuration)
+			var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(filePath);
+			if (fileMetadata == null)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"VideoInspector:SetVideoFile - Failed to read metadata for {Path.GetFileName(filePath)}", 2);
+				return;
+			}
+
+			_focusedVideoComponent.Metadata = fileMetadata;
+			_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0;
+			_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
+			_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
+			_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
+
+			var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
+
+			if (resetInOutPoints || isNewComponent)
 			{
 				_focusedVideoComponent.StartTime = 0.0;
-				GD.Print($"VideoInspector:SetVideoFile - Reset start time (exceeded file duration)");
+				_focusedVideoComponent.EndTime = -1.0;
+				GD.Print($"VideoInspector:SetVideoFile - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
 			}
-			
-			if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
+			else
 			{
-				_focusedVideoComponent.EndTime = -1.0; // Reset to undefined
-				GD.Print($"VideoInspector:SetVideoFile - Reset end time to undefined (exceeded file duration)");
+				if (_focusedVideoComponent.StartTime >= fileDuration)
+				{
+					_focusedVideoComponent.StartTime = 0.0;
+					GD.Print("VideoInspector:SetVideoFile - Reset start time (exceeded file duration)");
+				}
+
+				if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
+				{
+					_focusedVideoComponent.EndTime = -1.0;
+					GD.Print("VideoInspector:SetVideoFile - Reset end time to undefined (exceeded file duration)");
+				}
+				else if (_focusedVideoComponent.EndTime >= 0 &&
+				         _focusedVideoComponent.EndTime <= _focusedVideoComponent.StartTime)
+				{
+					_focusedVideoComponent.EndTime = -1.0;
+					GD.Print("VideoInspector:SetVideoFile - Reset end time to undefined (was <= start time)");
+				}
 			}
-			else if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime <= _focusedVideoComponent.StartTime)
-			{
-				_focusedVideoComponent.EndTime = -1.0; // Reset to undefined
-				GD.Print($"VideoInspector:SetVideoFile - Reset end time to undefined (was <= start time)");
-			}
+
+			_focusedVideoComponent.RecalculateDuration();
+			_focusedCue.CalculateTotalDuration();
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"VideoInspector:SetVideoFile - Metadata error: {ex.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"VideoInspector:SetVideoFile - Metadata error: {ex.Message}", 2);
+			return;
 		}
 
 		UpdateVideoUiFields(filePath);
-		
+
+		// Always regenerate waveform when audio is present (RefreshAudioUiState skips if old data remains)
+		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
+		{
+			try
+			{
+				_focusedVideoComponent.WaveformData =
+					await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
+				if (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"VideoInspector:SetVideoFile - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
+				}
+			}
+			catch (Exception ex)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"VideoInspector:SetVideoFile - Error generating waveform: {ex.Message}", 2);
+			}
+		}
+
 		await RefreshAudioUiState();
-		
+
+		// Preview decoder for new path
+		if (_previewContainer != null && _previewContainer.Visible && _videoPreviewer != null)
+		{
+			_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+			_videoPreviewer.LoadDecoder(filePath);
+		}
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+		_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
+
 		GD.Print($"VideoInspector:SetVideoFile - Set video file: {filePath}");
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:Set video file to: {Path.GetFileName(filePath)}", 0);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"VideoInspector:Set video file to: {Path.GetFileName(filePath)}", 0);
 	}
 	
 	/// <summary>

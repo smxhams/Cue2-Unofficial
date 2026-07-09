@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="PlayerMac" type="RunExe" factoryName=".NET Executable">
     <option name="EXE_PATH" value="$USER_HOME$/Documents/MyFiles/Cue2_Home/Ext/Godot6.1/Godot_mono.app/Contents/MacOS/Godot" />
-    <option name="PROGRAM_PARAMETERS" value="--file &quot;$USER_HOME$/Documents/MyFiles/Cue2_Home/TestSaves/Mac1/Mac1.c2&quot;" />
+    <option name="PROGRAM_PARAMETERS" value="" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="PASS_PARENT_ENVS" value="1" />
     <option name="USE_EXTERNAL_CONSOLE" value="0" />

@@ -18,10 +18,27 @@ public partial class Settings : Node
     private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
     private DisplaysManager _displaysManager;
 
-    public float UiScale = 1.0f;
-    public float GoScale = 1.0f;
-    public int WaveformResolution = 4096;
-    public float StopFadeDuration = 2.0f;
+    /// <summary>System default UI scale (1.0 = 100%).</summary>
+    public const float DefaultUiScale = 1.0f;
+
+    /// <summary>System default Go button scale (1.0 = base).</summary>
+    public const float DefaultGoScale = 1.0f;
+
+    /// <summary>System default waveform peak bin count.</summary>
+    public const int DefaultWaveformResolution = 4096;
+
+    /// <summary>System default stop fade-out duration in seconds.</summary>
+    public const float DefaultStopFadeDuration = 2.5f;
+
+    public float UiScale = DefaultUiScale;
+    public float GoScale = DefaultGoScale;
+    public int WaveformResolution = DefaultWaveformResolution;
+
+    /// <summary>
+    /// Global stop fade-out duration in seconds (first Stop fades; second Stop hard-cuts).
+    /// 0 = immediate stop. Persisted with the session.
+    /// </summary>
+    public float StopFadeDuration = DefaultStopFadeDuration;
     public bool VerbosePrint = true;
     
     
@@ -120,10 +137,10 @@ public partial class Settings : Node
         }
         _audioOutputPatches.Clear();
         
-        UiScale = 1.0f;
-        GoScale = 1.0f;
-        WaveformResolution = 4096;
-        StopFadeDuration = 2.0f;
+        UiScale = DefaultUiScale;
+        GoScale = DefaultGoScale;
+        WaveformResolution = DefaultWaveformResolution;
+        StopFadeDuration = DefaultStopFadeDuration;
         CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
         CueLightGoColour = new Color(0f, 1f, 0f, 1f);
         CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);

@@ -35,7 +35,9 @@ public partial class CueCommandExectutor : Node
         GD.Print("Cue Command Executor Successfully added");
         
         _globalSignals.Go += GoCommand;
-        _globalSignals.StopAll += StopAllCommand;
+        // Do not handle StopAll here: ActiveCue already subscribes and runs fade-out.
+        // A second StopAll call hard-stops immediately (by design for double-press),
+        // so dual handlers would cancel every fade.
 
         TreeExiting += CleanUp;
     }
@@ -95,23 +97,6 @@ public partial class CueCommandExectutor : Node
     }
     
     
-    private void StopAllCommand()
-    {
-        // ActiveCue instances also subscribe to StopAll and stop themselves.
-        // Keep this as a safety net for any cues still tracked by the executor.
-        foreach (var activeCue in _activeCues.ToList())
-        {
-            try
-            {
-                activeCue.StopAll(false);
-            }
-            catch (Exception ex)
-            {
-                GD.PrintErr($"CueCommandExecutor:StopAllCommand - {ex.Message}");
-            }
-        }
-    }
-
     private void CleanUp()
     {
         foreach (var activeCue in _activeCues.ToList())

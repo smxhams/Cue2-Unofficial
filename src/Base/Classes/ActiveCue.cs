@@ -76,6 +76,8 @@ public partial class ActiveCue : GodotObject
     private bool _isPaused = false;
     private bool _isCleaned = false;
     private bool _isFinished = false;
+    /// <summary>True after the first Stop while a stop-fade is in progress (second Stop = hard stop).</summary>
+    private bool _isStopFading = false;
 
     private readonly List<ActiveCue> _childActiveCues = new List<ActiveCue>(); 
     
@@ -1000,11 +1002,14 @@ public partial class ActiveCue : GodotObject
     
 
     /// <summary>
-    /// Stops all playback for this cue with optional fade-out based on settings.
+    /// Stops all playback for this cue.
+    /// First call: fade-out using <see cref="Settings.StopFadeDuration"/> (0 = immediate).
+    /// Second call while still fading: hard-stop immediately.
     /// </summary>
     /// <param name="propagateToChildren">Whether to stop child cues as well.</param>
     public async void StopAll(bool propagateToChildren = true)
     {
+        bool hardStop;
         lock (_lock)
         {
             if (_isCleaned) return;
@@ -1015,6 +1020,10 @@ public partial class ActiveCue : GodotObject
                 Cleanup();
                 return;
             }
+
+            // Second Stop while a fade is in progress → hard stop.
+            hardStop = _isStopFading;
+            _isStopFading = true;
         }
 
         // Stop child cues if propagating
@@ -1026,8 +1035,10 @@ public partial class ActiveCue : GodotObject
             }
         }
 
+        // Settings fade; second press or zero duration forces immediate stop.
+        double fadeDuration = hardStop ? 0.0 : Math.Max(0.0, _settings.StopFadeDuration);
+
         var tasks = new List<Task>();
-        var fadeDuration = _settings.StopFadeDuration;
         foreach (var audioComp in _activeAudioComponents.Values.ToList())
         {
             tasks.Add(audioComp.Stop(fadeDuration));
@@ -1165,7 +1176,9 @@ public partial class ActiveCue : GodotObject
             _isFinished = true;
             if (_childActiveCues.Count == 0)
             {
-                Cleanup();
+                // Defer so we leave Godot's call lock (component completed handlers)
+                // before Cleanup / Free run.
+                ScheduleCleanup();
             }
         }
     }
@@ -1175,10 +1188,30 @@ public partial class ActiveCue : GodotObject
         _childActiveCues.Remove(child);
         if (_childActiveCues.Count == 0 && _isFinished)
         {
-            Cleanup();
+            ScheduleCleanup();
         }
     }
 
+    /// <summary>
+    /// Queues <see cref="Cleanup"/> for the next idle frame so Free is never attempted
+    /// while this object is still locked by a Godot method/signal dispatch.
+    /// </summary>
+    private void ScheduleCleanup()
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+        Callable.From(Cleanup).CallDeferred();
+    }
+
+    /// <summary>
+    /// Frees this <see cref="GodotObject"/> after the call stack has unwound.
+    /// Prefer this over <c>CallDeferred(MethodName.Free)</c>: C# Object subclasses often
+    /// report "Nonexistent function 'free'" for the engine free via CallDeferred.
+    /// </summary>
+    private void FreeDeferred()
+    {
+        if (IsInstanceValid(this))
+            Free();
+    }
 
     /// <summary>
     /// Cleans up resources and removes the cue from the UI.
@@ -1259,15 +1292,9 @@ public partial class ActiveCue : GodotObject
 
         GD.Print($"ActiveCue:Cleanup - Cleaned up active cue: {_cue?.Name}");
 
-        // Free GodotObject promptly (not deferred) to avoid ObjectDB leaks on quit
-        try
-        {
-            if (IsInstanceValid(this))
-                Free();
-        }
-        catch
-        {
-            try { CallDeferred(MethodName.Free); } catch { /* ignore */ }
-        }
+        // Free must not run while this GodotObject is locked (signal/method dispatch).
+        // Callable.From invokes the C# Free() after the idle frame — reliable for GodotObject.
+        if (IsInstanceValid(this))
+            Callable.From(FreeDeferred).CallDeferred();
     }
 }

@@ -679,18 +679,29 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
     }
 
+    /// <summary>
+    /// Stops playback. First call with <paramref name="fadeTime"/> &gt; 0 (or cue FadeOutDuration)
+    /// starts a fade-out; a second call while fading hard-stops immediately.
+    /// </summary>
+    /// <param name="fadeTime">Stop-fade seconds from settings; 0 forces immediate stop on first press if the cue has no own fade.</param>
     public async Task Stop(double fadeTime = 0.0)
     {
-        bool needFade;
-        double fadeDuration;
+        bool needFade = false;
+        double fadeDuration = 0;
         bool wasFadingOut;
         lock (_lock)
         {
             if (IsStopped) return;
             wasFadingOut = _isFadingOut;
             _fadeCts?.Cancel();
-            needFade = fadeTime > 0 || _videoComponent.FadeOutDuration > 0;
-            fadeDuration = fadeTime > 0 ? fadeTime : _videoComponent.FadeOutDuration;
+            if (!wasFadingOut)
+            {
+                needFade = fadeTime > 0 || (_videoComponent != null && _videoComponent.FadeOutDuration > 0);
+                fadeDuration = fadeTime > 0
+                    ? fadeTime
+                    : (_videoComponent?.FadeOutDuration ?? 0);
+                _isFadingIn = false;
+            }
         }
 
         if (wasFadingOut)
@@ -773,27 +784,37 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     public async Task FadeOutAsync(double duration)
     {
+        if (duration <= 0)
+        {
+            HardStop();
+            return;
+        }
+
         lock (_lock)
         {
-            if (_isFadingOut || _isFadingIn) return;
+            if (IsStopped) return;
+            if (_isFadingOut) return;
+            _isFadingIn = false;
             _isFadingOut = true;
+            _fadeCts?.Dispose();
             _fadeCts = new CancellationTokenSource();
         }
 
         float startVol = _volume;
         float startAlpha = _fadeAlpha;
+        var token = _fadeCts.Token;
         Stopwatch timer = Stopwatch.StartNew();
 
         try
         {
-            while (timer.Elapsed.TotalSeconds < duration && !_fadeCts.Token.IsCancellationRequested)
+            while (timer.Elapsed.TotalSeconds < duration && !token.IsCancellationRequested)
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, 0f, t));
                 _fadeAlpha = Mathf.Lerp(startAlpha, 0f, t);
-                await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token);
+                await Task.Delay(FadeUpdateIntervalMs, token);
             }
-            if (!_fadeCts.Token.IsCancellationRequested)
+            if (!token.IsCancellationRequested)
             {
                 SetVolume(0f);
                 _fadeAlpha = 0f;
@@ -810,8 +831,11 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             lock (_lock)
             {
                 _isFadingOut = false;
-                _fadeCts?.Dispose();
-                _fadeCts = null;
+                if (_fadeCts != null)
+                {
+                    try { _fadeCts.Dispose(); } catch { /* ignore */ }
+                    _fadeCts = null;
+                }
             }
         }
     }
@@ -889,18 +913,24 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         // Return LOH memory after large frame/PCM releases
         MediaMemory.ReclaimIfNeeded();
 
-        // Free promptly to avoid ObjectDB leaks at process exit
-        try
+        // Defer free — Clean often runs inside signal/method dispatch (object locked).
+        // QueueFree is safe for Nodes in the tree; otherwise use C# Free via Callable.
+        if (IsInstanceValid(this))
         {
             if (IsInsideTree())
-                QueueFree();
-            else if (IsInstanceValid(this))
-                Free();
+                CallDeferred(Node.MethodName.QueueFree);
+            else
+                Callable.From(FreeDeferred).CallDeferred();
         }
-        catch
-        {
-            try { CallDeferred(Node.MethodName.QueueFree); } catch { /* ignore */ }
-        }
+    }
+
+    /// <summary>
+    /// Invokes <see cref="GodotObject.Free"/> if this instance is still valid (not in tree).
+    /// </summary>
+    private void FreeDeferred()
+    {
+        if (IsInstanceValid(this))
+            Free();
     }
 
     /// <summary>

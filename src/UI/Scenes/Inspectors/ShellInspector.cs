@@ -16,7 +16,8 @@ public partial class ShellInspector : Control
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
 	
-	private int _focusedCueId;
+	/// <summary>Last focused cue id. -1 = none (must not default to 0 — cue ids are 0-based).</summary>
+	private int _focusedCueId = -1;
 
 	private Cue _focusedCue;
 
@@ -73,13 +74,22 @@ public partial class ShellInspector : Control
 	private void ShellSelected(int cueId)
 	{
 		Visible = true;
-		if (_focusedCueId == cueId) return;
+		// Require both id match and a loaded cue — default _focusedCueId was 0, so
+		// first selection of cue id 0 skipped load and left _focusedCue null.
+		if (_focusedCueId == cueId && _focusedCue != null) return;
 		if (_focusedCue != null)
 		{
 			_focusedCue.NameChanged -= OnNameChanged;
 		}
 		
 		_focusedCue = CueList.FetchCueFromId(cueId);
+		if (_focusedCue == null)
+		{
+			_focusedCueId = -1;
+			GD.PrintErr($"ShellInspector:ShellSelected - Cue id {cueId} not found");
+			return;
+		}
+
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
 		_cueNum.Text = _focusedCue.CueNum;
@@ -90,7 +100,8 @@ public partial class ShellInspector : Control
 		_cueId.Text = $"ID: {_focusedCue.Id.ToString()}";
 		if (_focusedCue.ParentId != -1)
 		{
-			_parentCueLabel.Text = ("Parent: " + CueList.FetchCueFromId(_focusedCue.ParentId).Name);
+			var parent = CueList.FetchCueFromId(_focusedCue.ParentId);
+			_parentCueLabel.Text = parent != null ? ("Parent: " + parent.Name) : "";
 		}
 		else _parentCueLabel.Text = "";
 		
@@ -114,8 +125,15 @@ public partial class ShellInspector : Control
 
 	}
 
+	/// <summary>
+	/// Refreshes pre/post wait and duration fields after media duration changes.
+	/// Safe no-op if no shell is focused yet.
+	/// </summary>
 	public void UpdateFields()
 	{
+		if (_focusedCue == null || _preWaitInput == null || _postWaitInput == null || _durationValue == null)
+			return;
+
 		_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
 		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
 		var duration = _focusedCue.TotalDuration;
