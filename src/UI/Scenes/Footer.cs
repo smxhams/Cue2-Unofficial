@@ -1,12 +1,16 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Cue2.Shared;
 
 namespace Cue2.UI.Scenes;
 
 
+/// <summary>
+/// Main application footer bar: device status, connections, log readout, and process resource usage.
+/// </summary>
 public partial class Footer : Control
 {
     private GlobalSignals _globalSignals;
@@ -15,12 +19,18 @@ public partial class Footer : Control
     private Node _logWindow;
 
     // Ui
-    private Label _processTimeLabel;
+    private Label _cpuUsageLabel;
+    private Label _memoryUsageLabel;
     private Button _logCountButton;
     private string _logPrintoutBaseTooltip = "Log";
     
     private Timer _updateTimer;
-    private double _lastDelta;
+
+    // Process resource tracking (CPU / memory)
+    private Process _currentProcess;
+    private TimeSpan _lastCpuTime;
+    private DateTime _lastCpuSampleUtc;
+    private bool _hasCpuBaseline;
 
     // Devices status
     private GlobalData _globalData;
@@ -53,21 +63,30 @@ public partial class Footer : Control
 
         _syncHotkeys();
         
-        _processTimeLabel = GetNode<Label>("%ProcessTimeLabel");
+        _cpuUsageLabel = GetNode<Label>("%CpuUsageLabel");
+        _memoryUsageLabel = GetNode<Label>("%MemoryUsageLabel");
+
+        try
+        {
+            _currentProcess = Process.GetCurrentProcess();
+            _lastCpuTime = _currentProcess.TotalProcessorTime;
+            _lastCpuSampleUtc = DateTime.UtcNow;
+            _hasCpuBaseline = true;
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"Footer:_Ready - Failed to open current process for resource tracking: {ex.Message}");
+            _hasCpuBaseline = false;
+        }
         
         _updateTimer = new Timer();
         AddChild(_updateTimer);
-        _updateTimer.WaitTime = 0.1;
+        _updateTimer.WaitTime = 1.0; // Match OBS-style ~1s resource refresh
         _updateTimer.Start();
-        _updateTimer.Timeout += UpdateProcessTime;
+        _updateTimer.Timeout += UpdateResourceUsage;
 
         UpdateDevicesFooterTooltip(); // initial status
-    }
-
-
-    public override void _Process(double delta)
-    {
-        _lastDelta = delta;
+        UpdateResourceUsage(); // initial CPU/MEM read
     }
 
     private void _updateLog(String @printout, int @type)
@@ -94,14 +113,78 @@ public partial class Footer : Control
         }
     }
 
-    private void UpdateProcessTime()
+    /// <summary>
+    /// Updates footer CPU and memory readouts for the Cue2 process (OBS-style status).
+    /// CPU is process usage as a percent of total machine capacity (all logical processors).
+    /// Memory is the process working set.
+    /// </summary>
+    private void UpdateResourceUsage()
     {
-        int ms = (int)(_lastDelta * 1000);
-        _processTimeLabel.Text = $"{ms:0000}ms";
+        if (_cpuUsageLabel == null || _memoryUsageLabel == null)
+            return;
 
-        double fps = 1.0 / _lastDelta;
-        int microseconds = (int)(_lastDelta * 1000000);
-        _processTimeLabel.TooltipText = $"{ms}ms\nFPS: {fps:F2}\nPrecise: {microseconds}μs";
+        if (_currentProcess == null)
+        {
+            _cpuUsageLabel.Text = "CPU --.-%";
+            _memoryUsageLabel.Text = "MEM -- MB";
+            return;
+        }
+
+        try
+        {
+            _currentProcess.Refresh();
+
+            // Memory: working set (physical RAM used by this process)
+            double memMb = _currentProcess.WorkingSet64 / (1024.0 * 1024.0);
+            double memPrivateMb = _currentProcess.PrivateMemorySize64 / (1024.0 * 1024.0);
+            _memoryUsageLabel.Text = $"MEM {memMb:F0} MB";
+            _memoryUsageLabel.TooltipText =
+                $"Memory usage (this process)\n" +
+                $"Working set: {memMb:F1} MB\n" +
+                $"Private: {memPrivateMb:F1} MB";
+
+            // CPU: delta of TotalProcessorTime over wall-clock interval, normalized by core count
+            TimeSpan currentCpu = _currentProcess.TotalProcessorTime;
+            DateTime nowUtc = DateTime.UtcNow;
+
+            if (!_hasCpuBaseline)
+            {
+                _lastCpuTime = currentCpu;
+                _lastCpuSampleUtc = nowUtc;
+                _hasCpuBaseline = true;
+                _cpuUsageLabel.Text = "CPU --.-%";
+                _cpuUsageLabel.TooltipText = "CPU usage (this process)\nSampling…";
+                return;
+            }
+
+            double cpuDeltaMs = (currentCpu - _lastCpuTime).TotalMilliseconds;
+            double wallDeltaMs = (nowUtc - _lastCpuSampleUtc).TotalMilliseconds;
+
+            _lastCpuTime = currentCpu;
+            _lastCpuSampleUtc = nowUtc;
+
+            if (wallDeltaMs <= 0.0)
+            {
+                _cpuUsageLabel.Text = "CPU --.-%";
+                return;
+            }
+
+            // Normalize by logical processor count so 100% ≈ full machine (Task Manager / OBS style)
+            int coreCount = Math.Max(1, System.Environment.ProcessorCount);
+            double cpuPercent = Math.Clamp((cpuDeltaMs / wallDeltaMs) * 100.0 / coreCount, 0.0, 100.0);
+
+            _cpuUsageLabel.Text = $"CPU {cpuPercent:F1}%";
+            _cpuUsageLabel.TooltipText =
+                $"CPU usage (this process)\n" +
+                $"{cpuPercent:F1}% of total system capacity\n" +
+                $"Logical processors: {coreCount}";
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"Footer:UpdateResourceUsage - {ex.Message}");
+            _cpuUsageLabel.Text = "CPU --.-%";
+            _memoryUsageLabel.Text = "MEM -- MB";
+        }
     }
     
     

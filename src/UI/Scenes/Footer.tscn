@@ -79,11 +79,22 @@ show_percentage = false
 [node name="VSeparator5" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=1068444882]
 layout_mode = 2
 
-[node name="ProcessTimeLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578692]
+[node name="CpuUsageLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578692]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Process tick latency"
+tooltip_text = "CPU usage"
 mouse_filter = 1
+text = "CPU --.-%"
+
+[node name="VSeparator6" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=367578693]
+layout_mode = 2
+
+[node name="MemoryUsageLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578694]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Memory usage"
+mouse_filter = 1
+text = "MEM -- MB"
 
 [node name="VSeparator4" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=760459398]
 layout_mode = 2
