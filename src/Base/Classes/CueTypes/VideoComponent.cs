@@ -88,14 +88,8 @@ public class VideoComponent : ICueComponent
         data.Add("OffsetY", OffsetY);
         data.Add("HasAudio", HasAudio);
         data.Add("UseAudio", UseAudio);
-        if (Patch != null)
-        {
-            data.Add("PatchId", PatchId);
-        }
-        if (DirectOutput != null)
-        {
-            data.Add("DirectOutput", DirectOutput);
-        }
+        data.Add("PatchId", Patch?.Id ?? PatchId); // Reference patch by ID; fall back to stored PatchId
+        data.Add("DirectOutput", DirectOutput);
         if (Routing != null)
         {
             data.Add("Routing", Routing.GetData());
@@ -146,6 +140,7 @@ public class VideoComponent : ICueComponent
         HasAudio = data.ContainsKey("HasAudio") ? (bool)data["HasAudio"] : false;
         UseAudio = data.ContainsKey("UseAudio") ? (bool)data["UseAudio"] : true;
         PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
+        DirectOutput = data.ContainsKey("DirectOutput") ? (string)data["DirectOutput"] : null;
 
         WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
         if (data.ContainsKey("Routing"))

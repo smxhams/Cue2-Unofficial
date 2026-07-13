@@ -26,6 +26,12 @@ public partial class UserDataManager : Node
 	private bool _wasMaximized = false;
 	private Vector2I _lastWindowPosition = Vector2I.Zero;
 
+	private Vector2I _lastSettingsWindowSize = Vector2I.Zero;
+	private Vector2I _lastSettingsWindowPosition = Vector2I.Zero;
+	private bool _settingsWasMaximized = false;
+	/// <summary>Tree item label of the last Settings sub-menu (e.g. "Canvas Editor").</summary>
+	private string _lastSettingsMenu = "General";
+
 	private int _autosaveInterval = 5; // minutes, 0 = disabled
 	private int _backupDepth = DefaultBackupDepth;
 
@@ -76,6 +82,26 @@ public partial class UserDataManager : Node
 	/// The last recorded position of the window (relative to the top-left of the display it was on when last saved).
 	/// </summary>
 	public Vector2I LastWindowPosition => _lastWindowPosition;
+
+	/// <summary>
+	/// The last recorded size of the Settings window (when not maximized).
+	/// </summary>
+	public Vector2I LastSettingsWindowSize => _lastSettingsWindowSize;
+
+	/// <summary>
+	/// The last recorded position of the Settings window (relative to the top-left of the display it was on when last saved).
+	/// </summary>
+	public Vector2I LastSettingsWindowPosition => _lastSettingsWindowPosition;
+
+	/// <summary>
+	/// Whether the Settings window was maximized when last closed.
+	/// </summary>
+	public bool SettingsWasMaximized => _settingsWasMaximized;
+
+	/// <summary>
+	/// Tree item label of the last open Settings sub-menu (e.g. "Canvas Editor", "General").
+	/// </summary>
+	public string LastSettingsMenu => _lastSettingsMenu;
 
 	/// <summary>
 	/// The configured startup behavior.
@@ -238,6 +264,9 @@ public partial class UserDataManager : Node
 	/// Updates the stored main window size, position (relative to its display), and maximized state.
 	/// Position and size are only updated when not maximized. Persists immediately if changed.
 	/// </summary>
+	/// <param name="size">Window size in pixels.</param>
+	/// <param name="position">Position relative to the display's top-left.</param>
+	/// <param name="maximized">Whether the window is currently maximized.</param>
 	public void SetWindowState(Vector2I size, Vector2I position, bool maximized)
 	{
 		bool changed = false;
@@ -265,6 +294,56 @@ public partial class UserDataManager : Node
 		if (changed)
 		{
 			SaveUserData();
+		}
+	}
+
+	/// <summary>
+	/// Updates the in-memory Settings window size, position (relative to its display), and maximized state.
+	/// Position and size are only updated when not maximized.
+	/// </summary>
+	/// <remarks>
+	/// Does not write to disk immediately — geometry is held in memory for the session and written
+	/// with the rest of user data on app exit (or the next explicit <see cref="SaveUserData"/>).
+	/// Load from file happens once at startup via <see cref="LoadUserData"/>.
+	/// </remarks>
+	/// <param name="size">Window size in pixels.</param>
+	/// <param name="position">Position relative to the display's top-left.</param>
+	/// <param name="maximized">Whether the window is currently maximized.</param>
+	public void SetSettingsWindowState(Vector2I size, Vector2I position, bool maximized)
+	{
+		if (maximized != _settingsWasMaximized)
+		{
+			_settingsWasMaximized = maximized;
+		}
+
+		if (!maximized)
+		{
+			if (size.X > 0 && size.Y > 0 && size != _lastSettingsWindowSize)
+			{
+				_lastSettingsWindowSize = size;
+			}
+			if (position != _lastSettingsWindowPosition)
+			{
+				_lastSettingsWindowPosition = position;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Updates the in-memory last Settings sub-menu (tree item label).
+	/// Disk is written with the rest of user data on app exit.
+	/// </summary>
+	/// <param name="menuKey">Settings tree item text, e.g. "Canvas Editor".</param>
+	public void SetSettingsMenu(string menuKey)
+	{
+		if (string.IsNullOrWhiteSpace(menuKey))
+		{
+			return;
+		}
+
+		if (_lastSettingsMenu != menuKey)
+		{
+			_lastSettingsMenu = menuKey;
 		}
 	}
 
@@ -379,6 +458,43 @@ public partial class UserDataManager : Node
 				_wasMaximized = maxVal.AsBool();
 			}
 
+			// Settings window state
+			if (data.TryGetValue("LastSettingsWindowSize", out var settingsSizeVal))
+			{
+				var sd = settingsSizeVal.AsGodotDictionary();
+				if (sd != null)
+				{
+					int w = sd.TryGetValue("width", out var wv) ? wv.AsInt32() : 0;
+					int h = sd.TryGetValue("height", out var hv) ? hv.AsInt32() : 0;
+					if (w > 0 && h > 0)
+					{
+						_lastSettingsWindowSize = new Vector2I(w, h);
+					}
+				}
+			}
+			if (data.TryGetValue("LastSettingsWindowPosition", out var settingsPosVal))
+			{
+				var pd = settingsPosVal.AsGodotDictionary();
+				if (pd != null)
+				{
+					int x = pd.TryGetValue("x", out var xv) ? xv.AsInt32() : 0;
+					int y = pd.TryGetValue("y", out var yv) ? yv.AsInt32() : 0;
+					_lastSettingsWindowPosition = new Vector2I(x, y);
+				}
+			}
+			if (data.TryGetValue("SettingsWasMaximized", out var settingsMaxVal))
+			{
+				_settingsWasMaximized = settingsMaxVal.AsBool();
+			}
+			if (data.TryGetValue("LastSettingsMenu", out var settingsMenuVal))
+			{
+				string menu = settingsMenuVal.AsString();
+				if (!string.IsNullOrWhiteSpace(menu))
+				{
+					_lastSettingsMenu = menu;
+				}
+			}
+
 			if (data.TryGetValue("StartupBehavior", out var startupVal))
 			{
 				int val = startupVal.AsInt32();
@@ -395,7 +511,7 @@ public partial class UserDataManager : Node
 			}
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth}");
 		}
 		catch (Exception ex)
 		{
@@ -435,6 +551,20 @@ public partial class UserDataManager : Node
 			data["LastWindowPosition"] = winPos;
 
 			data["WasMaximized"] = _wasMaximized;
+
+			// Settings window state
+			var settingsWinSize = new Dictionary();
+			settingsWinSize["width"] = _lastSettingsWindowSize.X;
+			settingsWinSize["height"] = _lastSettingsWindowSize.Y;
+			data["LastSettingsWindowSize"] = settingsWinSize;
+
+			var settingsWinPos = new Dictionary();
+			settingsWinPos["x"] = _lastSettingsWindowPosition.X;
+			settingsWinPos["y"] = _lastSettingsWindowPosition.Y;
+			data["LastSettingsWindowPosition"] = settingsWinPos;
+
+			data["SettingsWasMaximized"] = _settingsWasMaximized;
+			data["LastSettingsMenu"] = _lastSettingsMenu ?? "General";
 
 			data["StartupBehavior"] = (int)_startupBehavior;
 

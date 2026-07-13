@@ -41,6 +41,11 @@ public class VideoTargetLayer
     /// Whether the test pattern is enabled for this layer.
     /// </summary>
     public bool TestPatternEnabled { get; set; } = false;
+
+    /// <summary>
+    /// When true, changing one size dimension updates the other to preserve aspect ratio.
+    /// </summary>
+    public bool KeepAspect { get; set; } = false;
     
 
     public VideoTargetLayer()
@@ -70,6 +75,7 @@ public class VideoTargetLayer
         data.Add("SizeX", Size.X);
         data.Add("SizeY", Size.Y);
         data.Add("Transparent", Transparent);
+        data.Add("KeepAspect", KeepAspect);
         //GD.Print($"VideoTargetLayer:GetData - SAVING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
         return data;
     }
@@ -94,6 +100,7 @@ public class VideoTargetLayer
         CanvasPosition = new Vector2I(canvPosX, canvPosY);
 
         Transparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
+        KeepAspect = data.ContainsKey("KeepAspect") && (bool)data["KeepAspect"];
         //GD.Print($"VideoTargetLayer:LoadFromData - LOADING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
 
     }

@@ -39,6 +39,7 @@ oversampling_override = 1.0
 title = "Cue2 Settings"
 initial_position = 4
 size = Vector2i(800, 500)
+visible = false
 borderless = true
 theme = ExtResource("1_gxjl5")
 script = ExtResource("2_d8xqf")

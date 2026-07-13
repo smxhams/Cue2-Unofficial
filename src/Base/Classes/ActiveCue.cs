@@ -359,22 +359,21 @@ public partial class ActiveCue : GodotObject
             }
             var playback = _activeVideoComponents[panel];
 
-            if (videoComp.UseAudio)
+            if (videoComp.UseAudio && videoComp.HasAudio && videoComp.HasAudioOutputAssigned)
             {
-                if (!videoComp.HasAudioOutputAssigned)
+                bool started = await _audioDevices.StartAudioPlayback(playback);
+                if (!started || !playback.HasBoundAudioStreams)
                 {
                     _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                        $"Video in {_cue.Name} has no audio output assigned; playing video silently.", 1);
+                        $"Video audio in {_cue.Name} failed to bind; playing video silently.", 1);
+                    // Ensure presentation uses wall clock (no stuck audio master).
+                    playback.DisableEmbeddedAudio();
                 }
-                else
-                {
-                    bool started = await _audioDevices.StartAudioPlayback(playback);
-                    if (!started)
-                    {
-                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                            $"Video audio in {_cue.Name} failed to bind; playing video silently.", 1);
-                    }
-                }
+            }
+            else if (videoComp.UseAudio && videoComp.HasAudio && !videoComp.HasAudioOutputAssigned)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Video in {_cue.Name} has no audio output assigned; playing video silently.", 1);
             }
 
             await playback.PlayAsync();

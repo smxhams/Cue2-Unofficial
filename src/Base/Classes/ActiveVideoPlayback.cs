@@ -102,7 +102,20 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     {
     }
 
-    public bool UseAudio => _videoComponent.UseAudio && _videoComponent.Metadata.AudioChannels > 0;
+    /// <summary>
+    /// True when the component wants embedded audio and the file has an audio track.
+    /// Does not guarantee an output device is bound — see <see cref="HasBoundAudioStreams"/>.
+    /// </summary>
+    public bool UseAudio =>
+        _videoComponent.UseAudio &&
+        _videoComponent.Metadata != null &&
+        _videoComponent.Metadata.AudioChannels > 0;
+
+    /// <summary>
+    /// True when at least one SDL audio stream is bound and can drive the A/V master clock.
+    /// </summary>
+    public bool HasBoundAudioStreams =>
+        DeviceStreams != null && DeviceStreams.Count > 0;
 
     public ActiveVideoPlayback(VideoComponent videoComponent, AudioDevices audioDevices)
     {
@@ -110,7 +123,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
 
         _videoDecoder = new VideoSourceDecoder();
-        if (UseAudio)
+        // Only set up the embedded-audio path when an output is assigned. Without streams the
+        // audio decoder position never advances and must not be used as the master clock.
+        if (UseAudio && videoComponent.HasAudioOutputAssigned)
         {
             _audioDecoder = new AudioSourceDecoder();
             DeviceStreams = new Dictionary<uint, IntPtr>();
@@ -253,26 +268,27 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     /// <summary>
     /// Master media clock in microseconds.
-    /// With audio: audio decode position minus average SDL stream latency (audio leads presentation).
-    /// Without audio: wall clock offset from play start.
+    /// With bound audio streams: audio decode position minus average SDL stream latency.
+    /// Without audio output (silent video / failed bind): wall clock from play start.
     /// </summary>
+    /// <remarks>
+    /// Must not use the audio decoder as master when no streams are bound — the fill loop
+    /// never advances <see cref="AudioSourceDecoder.PositionUs"/>, so presentation freezes.
+    /// </remarks>
     private long GetMasterClockUs()
     {
-        if (_audioDecoder != null && UseAudio)
+        if (_audioDecoder != null && UseAudio && HasBoundAudioStreams)
         {
             long audioUs = _audioDecoder.PositionUs;
             long queuedUs = 0;
             int count = 0;
-            if (DeviceStreams != null)
+            foreach (var kv in DeviceStreams)
             {
-                foreach (var kv in DeviceStreams)
-                {
-                    long qb = SDL.GetAudioStreamQueued(kv.Value);
-                    int outCh = GetStreamChannels(kv.Key);
-                    if (outCh <= 0 || SourceSampleRate <= 0) continue;
-                    queuedUs += qb * MicrosecondsPerSecond / (SourceSampleRate * outCh * sizeof(float));
-                    count++;
-                }
+                long qb = SDL.GetAudioStreamQueued(kv.Value);
+                int outCh = GetStreamChannels(kv.Key);
+                if (outCh <= 0 || SourceSampleRate <= 0) continue;
+                queuedUs += qb * MicrosecondsPerSecond / (SourceSampleRate * outCh * sizeof(float));
+                count++;
             }
             if (count > 0) queuedUs /= count;
             long master = audioUs - queuedUs;
@@ -323,6 +339,31 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
     }
 
+    /// <summary>
+    /// Tears down the embedded-audio path so presentation can continue silently on the wall clock.
+    /// Call when audio output fails to bind after the decoder was opened.
+    /// </summary>
+    public void DisableEmbeddedAudio()
+    {
+        StopAudioFillLoop();
+
+        if (DeviceStreams != null)
+        {
+            try { _audioDevices?.NotifyPlaybackCompleted(this); } catch { /* ignore */ }
+            foreach (var stream in DeviceStreams.Values)
+            {
+                try { SDL.DestroyAudioStream(stream); } catch { /* ignore */ }
+            }
+            DeviceStreams.Clear();
+        }
+        DeviceStreamChannels?.Clear();
+
+        try { _audioDecoder?.Dispose(); } catch { /* ignore */ }
+        _audioDecoder = null;
+
+        GD.Print("ActiveVideoPlayback:DisableEmbeddedAudio - Audio path disabled; using wall-clock master.");
+    }
+
     public async Task PlayAsync()
     {
         await Task.Yield();
@@ -343,13 +384,15 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         SetProcess(true);
         StartVideoPrefetchLoop();
-        if (_audioDecoder != null)
+        // Only drive audio when streams were bound; otherwise wall-clock masters silent video.
+        if (_audioDecoder != null && HasBoundAudioStreams)
             StartAudioFillLoop();
 
         // Present first frame immediately so output isn't blank for a tick
         PresentCatchUpFrames();
 
-        GD.Print($"ActiveVideoPlayback:PlayAsync - Playing (audio-master={_audioDecoder != null}, inTree={IsInsideTree()})");
+        bool audioMaster = _audioDecoder != null && HasBoundAudioStreams;
+        GD.Print($"ActiveVideoPlayback:PlayAsync - Playing (audio-master={audioMaster}, silent={!audioMaster && UseAudio}, inTree={IsInsideTree()})");
     }
 
     /// <summary>

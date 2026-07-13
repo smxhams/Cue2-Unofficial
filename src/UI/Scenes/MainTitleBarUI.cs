@@ -446,22 +446,37 @@ public partial class MainTitleBarUI : Control
     private void OnSettingsButtonToggled(Boolean @toggle)
     {
         if (@toggle == true){
-            if (_settingsWindow == null)
+            if (_settingsWindow == null || !GodotObject.IsInstanceValid(_settingsWindow))
             {
                 GD.Print("Loading settings window scene");
                 _settingsWindow = _settingsWindowPackedScene.Instantiate<SettingsWindow>();
+                // Keep hidden until SettingsWindow._Ready applies cached size/position (avoids flicker).
+                _settingsWindow.Visible = false;
                 _settingsWindow.TreeExiting += OnSettingsWindowClose;
+                // Prefer hide-on-close so reopening does not re-instantiate every panel (main-thread stall).
+                _settingsWindow.CloseRequested += OnSettingsCloseRequested;
                 AddChild(_settingsWindow);
             }
             else
             {
-                _settingsWindow.GetWindow().Show();
+                _settingsWindow.Show();
+                _settingsWindow.GrabFocus();
             }
         }
         if (@toggle == false)
         {
-            _settingsWindow?.QueueFree();
+            // Hide instead of free — avoids re-running all settings panel _Ready and
+            // SubViewport setup while video is playing (presentation is main-thread).
+            if (_settingsWindow != null && GodotObject.IsInstanceValid(_settingsWindow))
+                _settingsWindow.Hide();
         }
+    }
+
+    private void OnSettingsCloseRequested()
+    {
+        if (_settingsWindow != null && GodotObject.IsInstanceValid(_settingsWindow))
+            _settingsWindow.Hide();
+        GetNode<Button>("%SettingsButton").ButtonPressed = false;
     }
 
     private void OnSettingsWindowClose()

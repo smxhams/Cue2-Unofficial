@@ -78,6 +78,18 @@ public partial class ShellBar : PanelContainer
 
 	public override void _ExitTree()
 	{
+		// ShellBars are frequently reparented (group, reorder, show load nesting).
+		// Godot calls _ExitTree on reparent as well as free — do not tear down UI/cue
+		// state here or ColorPanel styling, signal wiring, and cue binding are lost.
+		base._ExitTree();
+	}
+
+	public override void _Notification(int what)
+	{
+		// Permanent cleanup only when the node is actually being destroyed.
+		if (what != NotificationPredelete)
+			return;
+
 		if (_globalSignals != null)
 			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
 		if (_cue != null)
@@ -95,7 +107,6 @@ public partial class ShellBar : PanelContainer
 		if (_colorPanel != null && IsInstanceValid(_colorPanel))
 			_colorPanel.RemoveThemeStyleboxOverride("panel");
 		_colorBarStyle = null;
-		base._ExitTree();
 	}
 
 	private void OnUpdateShellBar(int cueId)

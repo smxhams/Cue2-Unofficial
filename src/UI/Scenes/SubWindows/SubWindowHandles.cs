@@ -3,12 +3,20 @@ using Godot;
 
 namespace Cue2.UI.Scenes.SubWindows;
 
+/// <summary>
+/// Shared title-bar drag and edge-resize handles for borderless sub-windows
+/// (Settings, Log, About, etc.).
+/// </summary>
+/// <remarks>
+/// Window IDs are resolved at interaction time. Sub-windows often start hidden
+/// (to apply size/position without flicker); capturing <see cref="Window.GetWindowId"/>
+/// in <c>_Ready</c> can yield an ID that DisplayServer does not yet track, which
+/// breaks <see cref="DisplayServer.WindowStartDrag"/> / resize.
+/// </remarks>
 public partial class SubWindowHandles : Control
 {
 	private GlobalData _globalData;
-	
-	private int _windowId;
-	
+
 	//Handles
 	private Control _headerHandle;
 	private Control _rightHandle;
@@ -19,14 +27,12 @@ public partial class SubWindowHandles : Control
 	private Control _topRightHandle;
 	private Control _topLeftHandle;
 
-
-
-	// Called when the node enters the scene tree for the first time.
+	/// <summary>
+	/// Wires handle input. Does not cache a DisplayServer window id — see class remarks.
+	/// </summary>
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		
-		_windowId = GetWindow().GetWindowId();
 
 		_headerHandle = GetNode<Control>("%HeaderHandle");
 		_rightHandle = GetNode<Control>("%RightHandle");
@@ -45,12 +51,33 @@ public partial class SubWindowHandles : Control
 		_bottomLeftHandle.GuiInput += OnBottomLeftHandleGuiInput;
 		_topLeftHandle.GuiInput += OnTopLeftHandleGuiInput;
 		_bottomRightHandle.GuiInput += OnBottomRightHandleGuiInput;
-		
+
 		GetNode<Button>("%ExitButton").Pressed += OnExitButtonPressed;
 	}
-	
-	
-	
+
+	/// <summary>
+	/// Returns the host <see cref="Window"/>'s DisplayServer id, or -1 if unavailable.
+	/// Prefers the parent Window (this control is always a direct child of the borderless window).
+	/// </summary>
+	private int ResolveWindowId()
+	{
+		// Prefer explicit parent Window — more reliable than GetWindow() while a sub-window
+		// is still finishing registration with DisplayServer after Show().
+		Window window = GetParent() as Window ?? GetWindow();
+		if (window == null || !IsInstanceValid(window))
+		{
+			return -1;
+		}
+
+		// Hidden windows may not be registered with DisplayServer yet.
+		if (!window.Visible)
+		{
+			return -1;
+		}
+
+		return window.GetWindowId();
+	}
+
 	private void OnExitButtonPressed()
 	{
 		GetParent().QueueFree();
@@ -64,6 +91,8 @@ public partial class SubWindowHandles : Control
 			{
 				// Toggle maximize on double click
 				var window = GetWindow();
+				if (window == null) return;
+
 				if (window.Mode == Window.ModeEnum.Maximized)
 				{
 					window.Mode = Window.ModeEnum.Windowed;
@@ -75,58 +104,77 @@ public partial class SubWindowHandles : Control
 			}
 			else if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
 			{
-				DisplayServer.WindowStartDrag(_windowId);
+				int windowId = ResolveWindowId();
+				if (windowId >= 0)
+				{
+					DisplayServer.WindowStartDrag(windowId);
+				}
 			}
 		}
 	}
 
-	private void OnRightHandleGuiInput(InputEvent @event){
+	private void OnRightHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Right, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.Right);
 		}
 	}
 
-	private void OnLeftHandleGuiInput(InputEvent @event){
+	private void OnLeftHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Left, _windowId);
-			
+			StartResize(DisplayServer.WindowResizeEdge.Left);
 		}
 	}
-	
-	private void OnBottomHandleGuiInput(InputEvent @event){
+
+	private void OnBottomHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.Bottom, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.Bottom);
 		}
 	}
-	
-	private void OnBottomRightHandleGuiInput(InputEvent @event){
+
+	private void OnBottomRightHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.BottomRight, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.BottomRight);
 		}
 	}
-	
-	private void OnBottomLeftHandleGuiInput(InputEvent @event){
+
+	private void OnBottomLeftHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.BottomLeft, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.BottomLeft);
 		}
 	}
-	
-	private void OnTopRightHandleGuiInput(InputEvent @event){
+
+	private void OnTopRightHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.TopRight, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.TopRight);
 		}
 	}
-	
-	private void OnTopLeftHandleGuiInput(InputEvent @event){
+
+	private void OnTopLeftHandleGuiInput(InputEvent @event)
+	{
 		if (@event is InputEventMouseButton { Pressed: true })
 		{
-			DisplayServer.WindowStartResize(DisplayServer.WindowResizeEdge.TopLeft, _windowId);
+			StartResize(DisplayServer.WindowResizeEdge.TopLeft);
+		}
+	}
+
+	private void StartResize(DisplayServer.WindowResizeEdge edge)
+	{
+		int windowId = ResolveWindowId();
+		if (windowId >= 0)
+		{
+			DisplayServer.WindowStartResize(edge, windowId);
 		}
 	}
 }

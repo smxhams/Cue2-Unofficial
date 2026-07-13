@@ -33,14 +33,35 @@ public partial class VideoOutputDevice : Window, IDisposable
     public Vector2I OutputSize { get; set; } = new Vector2I(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 
     /// <summary>
-    /// Target display monitor index (for multi-monitor setups).
+    /// Sentinel value for a virtual (non-physical) screen output.
     /// </summary>
-    public int TargetMonitor { get; set; } = 0;
+    public const int VirtualMonitorIndex = -1;
+
+    /// <summary>
+    /// Target display monitor index. Use <see cref="VirtualMonitorIndex"/> for Virtual Output.
+    /// </summary>
+    public int TargetMonitor { get; set; } = VirtualMonitorIndex;
+
+    /// <summary>
+    /// Whether this screen is assigned to Virtual Output (no physical display).
+    /// </summary>
+    public bool IsVirtual => TargetMonitor < 0;
 
     /// <summary>
     /// Whether the output window is transparent.
     /// </summary>
     public bool OutputTransparent { get; set; } = false;
+
+    /// <summary>
+    /// Pixel offset of the output window relative to the target display's origin (home position).
+    /// Applied after canvas clipping when placing the window on a physical monitor.
+    /// </summary>
+    public Vector2I DisplayOffset { get; set; } = Vector2I.Zero;
+
+    /// <summary>
+    /// When true, changing one size dimension updates the other to preserve aspect ratio.
+    /// </summary>
+    public bool KeepAspect { get; set; } = false;
     
     private static int _nextOutputId = 0;
 
@@ -63,10 +84,25 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// </summary>
     private Rect2 _lastClippedRect = new Rect2(-1, -1, 0, 0);
 
+    /// <summary>
+    /// Cached display offset used with <see cref="_lastClippedRect"/> so offset-only changes still refresh.
+    /// </summary>
+    private Vector2I _lastDisplayOffset = new Vector2I(int.MinValue, int.MinValue);
+
+    /// <summary>
+    /// Last applied global window position.
+    /// </summary>
+    private Vector2I _lastWindowPos = new Vector2I(int.MinValue, int.MinValue);
+
+    /// <summary>
+    /// Last applied window size.
+    /// </summary>
+    private Vector2I _lastWindowSize = new Vector2I(int.MinValue, int.MinValue);
+
     public VideoOutputDevice()
     {
         OutputId = _nextOutputId++;
-        Mode = ModeEnum.Windowed; // Windowed for proper sizing and positioning
+        Mode = ModeEnum.Windowed;
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
 
@@ -107,22 +143,99 @@ public partial class VideoOutputDevice : Window, IDisposable
     
 
     /// <summary>
+    /// Returns true when this Window has a native DisplayServer window id that can be resized/moved.
+    /// Virtual screens never create a usable native window until assigned to a physical output.
+    /// </summary>
+    private bool TryGetNativeWindowId(out int windowId)
+    {
+        windowId = -1;
+        if (!IsInsideTree() || !GodotObject.IsInstanceValid(this))
+            return false;
+
+        try
+        {
+            windowId = GetWindowId();
+            // DisplayServer.InvalidWindowId is -1; also reject ids that are not registered yet.
+            if (windowId == DisplayServer.InvalidWindowId || windowId < 0)
+                return false;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Hides a virtual / invalid screen window.
+    /// </summary>
+    private void HideScreenWindow()
+    {
+        try
+        {
+            if (Visible)
+                Hide();
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        InvalidateGeometryCache();
+    }
+
+    private void InvalidateGeometryCache()
+    {
+        _lastClippedRect = new Rect2(-1, -1, 0, 0);
+        _lastDisplayOffset = new Vector2I(int.MinValue, int.MinValue);
+        _lastWindowPos = new Vector2I(int.MinValue, int.MinValue);
+        _lastWindowSize = new Vector2I(int.MinValue, int.MinValue);
+    }
+
+    /// <summary>
+    /// Leaves exclusive/fullscreen once so the window can be freely placed on a target monitor.
+    /// Uses the proven Size.X-1 nudge only when already exclusive — not every frame.
+    /// </summary>
+    private void ExitExclusiveFullscreenIfNeeded()
+    {
+        if (Mode != ModeEnum.ExclusiveFullscreen && Mode != ModeEnum.Fullscreen)
+            return;
+
+        // Proven Godot/Windows path to leave exclusive mode without getting stuck.
+        Borderless = false;
+        Vector2I s = Size;
+        if (s.X > 1)
+            Size = new Vector2I(s.X - 1, s.Y);
+        Mode = ModeEnum.Windowed;
+        Borderless = true;
+        InvalidateGeometryCache();
+    }
+
+    /// <summary>
     /// Updates the output to show the correct region of the canvas.
+    /// Physical screens are borderless windows placed via DisplayServer on the target monitor.
     /// </summary>
     public void UpdateOutputRegion()
     {
-        GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updating output region '{OutputName}'.");
+        GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updating output region '{OutputName}' (monitor={TargetMonitor}).");
 
-        // Validation
         if (OutputSize.X <= 0 || OutputSize.Y <= 0)
         {
             GD.Print("VideoOutputDevice:UpdateOutputRegion - Invalid output size, must be positive.");
             return;
         }
 
-        if (TargetMonitor >= DisplayServer.GetScreenCount())
+        if (IsVirtual)
+        {
+            HideScreenWindow();
+            GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' is virtual; window hidden.");
+            return;
+        }
+
+        if (TargetMonitor < 0 || TargetMonitor >= DisplayServer.GetScreenCount())
         {
             GD.PrintErr($"VideoOutputDevice:UpdateOutputRegion - Target monitor {TargetMonitor} is out of bounds (screen_count = {DisplayServer.GetScreenCount()})");
+            HideScreenWindow();
             return;
         }
 
@@ -130,64 +243,116 @@ public partial class VideoOutputDevice : Window, IDisposable
         {
             var canvas = DisplaysManager.Canvas;
 
-            // Calculate clipped region within canvas bounds
             Rect2 canvasRect = new Rect2(0, 0, canvas.CanvasSize.X, canvas.CanvasSize.Y);
             Rect2 outputRect = new Rect2(CanvasPosition, OutputSize);
             Rect2 clippedRect = canvasRect.Intersection(outputRect);
 
-            // Cache check
-            if (_lastClippedRect == clippedRect)
-            {
-                return; // No change, skip update
-            }
-            _lastClippedRect = clippedRect;
-            
             if (clippedRect.Size.X <= 0 || clippedRect.Size.Y <= 0)
             {
-                // No valid region to display
-                DisplayServer.WindowSetSize(new Vector2I(0, 0), GetWindowId());
+                HideScreenWindow();
                 GD.Print($"VideoOutputDevice:UpdateOutputRegion - No valid region for output '{OutputName}' within canvas bounds.");
                 return;
             }
-            
-            // Position and size window based on clipped region
-            if (Mode == ModeEnum.ExclusiveFullscreen)
-            {
-                Borderless = false;
-                this.SetSize(new Vector2I(Size.X - 1, Size.Y));
-                SetMode(ModeEnum.Windowed);
-                this.SetSize(new Vector2I(Size.X - 1, Size.Y));
-            }
-            Transparent = OutputTransparent;
+
+            // Display home origin + DisplayOffset + canvas clip adjustment (global desktop coords)
             var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
-            var windowPos = monitorPos + (clippedRect.Position - CanvasPosition);
+            var windowPos = monitorPos + DisplayOffset + (Vector2I)(clippedRect.Position - (Vector2)CanvasPosition);
+            var windowSize = (Vector2I)clippedRect.Size;
 
-            if (clippedRect.Size.X > 0 && clippedRect.Size.Y > 0)
+            // Skip only when geometry is already applied and we are not stuck in exclusive mode
+            if (_lastClippedRect == clippedRect
+                && _lastDisplayOffset == DisplayOffset
+                && _lastWindowPos == windowPos
+                && _lastWindowSize == windowSize
+                && Visible
+                && Mode == ModeEnum.Windowed
+                && Borderless)
             {
+                return;
+            }
+
+            // Leave exclusive fullscreen before placing (only when currently exclusive)
+            ExitExclusiveFullscreenIfNeeded();
+
+            Transparent = OutputTransparent;
+            Borderless = true;
+            Mode = ModeEnum.Windowed;
+
+            // Pin to the correct screen before show/place
+            CurrentScreen = TargetMonitor;
+
+            if (!Visible)
+                Show();
+
+            ApplyNativeWindowGeometry(windowPos, windowSize);
+
+            // If the platform promoted us to exclusive after covering the whole monitor,
+            // exit once and re-apply. Cache prevents repeating every call.
+            if (Mode == ModeEnum.ExclusiveFullscreen || Mode == ModeEnum.Fullscreen)
+            {
+                ExitExclusiveFullscreenIfNeeded();
+                Mode = ModeEnum.Windowed;
                 Borderless = true;
-                DisplayServer.WindowSetPosition(new Vector2I((int)windowPos.X, (int)windowPos.Y), GetWindowId());
-                DisplayServer.WindowSetSize((Vector2I)clippedRect.Size, GetWindowId());
+                CurrentScreen = TargetMonitor;
+                ApplyNativeWindowGeometry(windowPos, windowSize);
             }
-            else
+
+            _lastClippedRect = clippedRect;
+            _lastDisplayOffset = DisplayOffset;
+
+            // In-place test pattern update (no destroy/recreate)
+            if (_testPattern != null)
             {
-                DisplayServer.WindowSetSize(new Vector2I(0, 0), GetWindowId());
+                _testPattern.PatternSize = OutputSize;
+                _testPattern.PatternPosition = Vector2I.Zero;
+                _testPattern.QueueRedraw();
             }
 
-            
-            GD.Print($"Mode after update: {Mode}, Borderless: {Borderless.ToString()}, Transparent: {Transparent}");
-
-            if (TestPatternStatus())
-            {
-                ToggleTestPattern(false);
-                ToggleTestPattern(true);
-            }
-
-            GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updated '{OutputName}' to clipped region {clippedRect.Position}-{clippedRect.Size} from canvas {CanvasPosition}-{OutputSize}.");
+            GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' Mode={Mode} Borderless={Borderless} " +
+                     $"monitor={TargetMonitor} pos={windowPos} size={windowSize} clipped={clippedRect}");
         }
         catch (Exception ex)
         {
             GD.Print($"VideoOutputDevice:UpdateOutputRegion - Error: {ex.Message}. Stack trace: {ex.StackTrace}");
         }
+    }
+
+    /// <summary>
+    /// Places the window using DisplayServer when a native id exists (correct multi-monitor),
+    /// falling back to Window properties. Skips no-op updates.
+    /// </summary>
+    private void ApplyNativeWindowGeometry(Vector2I windowPos, Vector2I windowSize)
+    {
+        if (windowSize.X <= 0 || windowSize.Y <= 0)
+            return;
+
+        if (_lastWindowPos == windowPos && _lastWindowSize == windowSize
+            && Position == windowPos && Size == windowSize)
+            return;
+
+        if (TryGetNativeWindowId(out int windowId))
+        {
+            // DisplayServer uses absolute desktop coordinates — required for multi-monitor.
+            if (_lastWindowPos != windowPos || Position != windowPos)
+                DisplayServer.WindowSetPosition(windowPos, windowId);
+
+            if (_lastWindowSize != windowSize || Size != windowSize)
+                DisplayServer.WindowSetSize(windowSize, windowId);
+        }
+        else
+        {
+            Position = windowPos;
+            Size = windowSize;
+        }
+
+        // Keep Godot Window state aligned (without re-applying if DisplayServer already did)
+        if (Position != windowPos)
+            Position = windowPos;
+        if (Size != windowSize)
+            Size = windowSize;
+
+        _lastWindowPos = windowPos;
+        _lastWindowSize = windowSize;
     }
 
     public void ToggleTestPattern(bool toggle)
@@ -283,6 +448,9 @@ public partial class VideoOutputDevice : Window, IDisposable
         data.Add("OutputSizeY", OutputSize.Y);
         data.Add("TargetMonitor", TargetMonitor);
         data.Add("Transparent", OutputTransparent);
+        data.Add("DisplayOffsetX", DisplayOffset.X);
+        data.Add("DisplayOffsetY", DisplayOffset.Y);
+        data.Add("KeepAspect", KeepAspect);
         return data;
     }
 
@@ -305,6 +473,12 @@ public partial class VideoOutputDevice : Window, IDisposable
         OutputSize = new Vector2I(outSizeX, outSizeY);
 
         OutputTransparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
+
+        var offX = data.ContainsKey("DisplayOffsetX") ? (int)data["DisplayOffsetX"] : 0;
+        var offY = data.ContainsKey("DisplayOffsetY") ? (int)data["DisplayOffsetY"] : 0;
+        DisplayOffset = new Vector2I(offX, offY);
+
+        KeepAspect = data.ContainsKey("KeepAspect") && (bool)data["KeepAspect"];
     }
     
     private bool _disposed;

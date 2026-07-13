@@ -33,9 +33,15 @@ public partial class DisplaysManager : Node
     private PackedScene _videoLayer;
 
     /// <summary>
-    /// List of active video output devices.
+    /// List of active screens (video output devices). Each screen maps a canvas region
+    /// to either a physical monitor or Virtual Output.
     /// </summary>
     public static List<VideoOutputDevice> Outputs { get; } = new List<VideoOutputDevice>();
+
+    /// <summary>
+    /// Alias for <see cref="Outputs"/> — screens in the canvas editor model.
+    /// </summary>
+    public static List<VideoOutputDevice> Screens => Outputs;
 
     /// <summary>
     /// List of video target layers.
@@ -47,38 +53,177 @@ public partial class DisplaysManager : Node
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         Canvas = new Canvas();
 
-        // Add default layer
+        // Add default layer and a virtual screen
         AddLayer("Default", 0);
+        EnsureDefaultScreen();
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
     }
 
     /// <summary>
-    /// Adds a new video output device for the specified monitor.
+    /// Ensures at least one screen exists. Creates "Screen 1" as Virtual Output when empty.
     /// </summary>
-    /// <param name="monitorIndex">The target monitor index.</param>
+    public void EnsureDefaultScreen()
+    {
+        if (Outputs.Count > 0)
+            return;
+
+        AddScreen("Screen 1", VideoOutputDevice.VirtualMonitorIndex);
+    }
+
+    /// <summary>
+    /// Adds a new screen with the given output assignment.
+    /// </summary>
+    /// <param name="name">Display name for the screen.</param>
+    /// <param name="monitorIndex">Physical monitor index, or <see cref="VideoOutputDevice.VirtualMonitorIndex"/> for Virtual Output.</param>
+    /// <param name="canvasPosition">Optional canvas position; defaults to origin.</param>
+    /// <param name="size">Optional size; defaults to canvas size.</param>
+    /// <returns>The created screen (VideoOutputDevice).</returns>
+    public VideoOutputDevice AddScreen(string name = null, int monitorIndex = VideoOutputDevice.VirtualMonitorIndex,
+        Vector2I? canvasPosition = null, Vector2I? size = null)
+    {
+        var screenSize = size ?? (Canvas != null ? Canvas.CanvasSize : new Vector2I(1920, 1080));
+        var screenPos = canvasPosition ?? Vector2I.Zero;
+        string screenName = name ?? $"Screen {Outputs.Count + 1}";
+        return AddOutput(monitorIndex, screenPos, screenSize, screenName);
+    }
+
+    /// <summary>
+    /// Adds a new video output device (screen) for the specified monitor.
+    /// </summary>
+    /// <param name="monitorIndex">The target monitor index, or <see cref="VideoOutputDevice.VirtualMonitorIndex"/> for virtual.</param>
     /// <param name="canvasPosition">Position on the canvas.</param>
     /// <param name="size">Size of the output region.</param>
-    /// <param name="name">Name of the output.</param>
+    /// <param name="name">Name of the screen.</param>
     /// <returns>The created VideoOutputDevice.</returns>
     public VideoOutputDevice AddOutput(int monitorIndex, Vector2I canvasPosition, Vector2I size, string name = null)
     {
         var output = new VideoOutputDevice();
-        output.OutputName = name ?? $"Output {monitorIndex}";
+        output.OutputName = name ?? (monitorIndex < 0 ? $"Screen {Outputs.Count + 1}" : $"Output {monitorIndex}");
         output.CanvasPosition = canvasPosition;
         output.OutputSize = size;
         output.TargetMonitor = monitorIndex;
         AddChild(output);
         
         Outputs.Add(output);
-        output.Show();
+        // Virtual screens stay hidden; physical screens show via UpdateOutputRegion.
+        if (!output.IsVirtual)
+            output.Show();
         output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
-        
 
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"DisplaysManager: Added video output '{output.OutputName}' for monitor {monitorIndex}.", 0);
+        string dest = output.IsVirtual ? "Virtual Output" : $"monitor {monitorIndex}";
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"DisplaysManager: Added screen '{output.OutputName}' ({dest}).", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         return output;
+    }
+
+    /// <summary>
+    /// Assigns a screen's output destination (physical monitor or Virtual Output).
+    /// </summary>
+    /// <param name="outputId">Screen output ID.</param>
+    /// <param name="monitorIndex">Monitor index or <see cref="VideoOutputDevice.VirtualMonitorIndex"/>.</param>
+    public void UpdateScreenTargetMonitor(int outputId, int monitorIndex)
+    {
+        var output = Outputs.Find(o => o.OutputId == outputId);
+        if (output == null)
+            return;
+
+        output.TargetMonitor = monitorIndex;
+        // Force a full region refresh when switching destinations
+        if (output.IsVirtual)
+        {
+            output.Hide();
+        }
+        else
+        {
+            output.CurrentScreen = monitorIndex;
+            if (!output.Visible)
+                output.Show();
+            output.UpdateOutputRegion();
+        }
+
+        UpdateAllLayerTestPatterns();
+
+        string dest = output.IsVirtual ? "Virtual Output" : $"monitor {monitorIndex}";
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"DisplaysManager: Screen '{output.OutputName}' assigned to {dest}.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+    }
+
+    /// <summary>
+    /// Renames a screen.
+    /// </summary>
+    public void UpdateScreenName(int outputId, string newName)
+    {
+        var output = Outputs.Find(o => o.OutputId == outputId);
+        if (output == null || string.IsNullOrWhiteSpace(newName))
+            return;
+
+        output.OutputName = newName.Trim();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"DisplaysManager: Renamed screen to '{output.OutputName}'.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+    }
+
+    /// <summary>
+    /// Sets the display offset for a screen (window position relative to the monitor origin).
+    /// </summary>
+    /// <param name="outputId">Screen output ID.</param>
+    /// <param name="displayOffset">Offset in pixels from the target display home position.</param>
+    public void UpdateScreenDisplayOffset(int outputId, Vector2I displayOffset)
+    {
+        var output = Outputs.Find(o => o.OutputId == outputId);
+        if (output == null)
+            return;
+
+        output.DisplayOffset = displayOffset;
+        output.UpdateOutputRegion();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"DisplaysManager: Screen '{output.OutputName}' display offset set to {displayOffset}.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+    }
+
+    /// <summary>
+    /// Sets whether a screen keeps aspect ratio when size is edited.
+    /// </summary>
+    public void UpdateScreenKeepAspect(int outputId, bool keepAspect)
+    {
+        var output = Outputs.Find(o => o.OutputId == outputId);
+        if (output == null)
+            return;
+
+        output.KeepAspect = keepAspect;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+    }
+
+    /// <summary>
+    /// Default canvas size for a screen: physical display resolution when assigned, otherwise canvas size.
+    /// </summary>
+    public Vector2I GetDefaultScreenSize(VideoOutputDevice screen)
+    {
+        if (screen == null)
+            return Canvas?.CanvasSize ?? new Vector2I(1920, 1080);
+
+        if (!screen.IsVirtual && screen.TargetMonitor >= 0 && screen.TargetMonitor < DisplayServer.GetScreenCount())
+        {
+            foreach (var d in GetAvailableDisplays())
+            {
+                if (d.Index == screen.TargetMonitor)
+                    return d.Size;
+            }
+            return DisplayServer.ScreenGetSize(screen.TargetMonitor);
+        }
+
+        return Canvas?.CanvasSize ?? new Vector2I(1920, 1080);
+    }
+
+    /// <summary>
+    /// Default layer size equals the canvas size.
+    /// </summary>
+    public Vector2I GetDefaultLayerSize()
+    {
+        return Canvas?.CanvasSize ?? new Vector2I(1920, 1080);
     }
 
     /// <summary>
@@ -276,6 +421,16 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Sets whether a layer keeps aspect ratio when size is edited.
+    /// </summary>
+    public void UpdateLayerKeepAspect(int layerId, bool keepAspect)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+            layer.KeepAspect = keepAspect;
+    }
+
+    /// <summary>
     /// Toggles the test pattern for a layer on intersecting outputs.
     /// </summary>
     /// <param name="layerId">The layer ID.</param>
@@ -350,11 +505,34 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Short-lived cache for <see cref="GetAvailableDisplays"/> — SDL enumeration is relatively
+    /// expensive and was being called repeatedly from the canvas editor on the main thread,
+    /// which can stall video presentation (also main-thread).
+    /// </summary>
+    private List<DisplayInfo> _cachedDisplays;
+    private ulong _cachedDisplaysMs;
+    private const ulong DisplayCacheTtlMs = 2000;
+
+    /// <summary>
+    /// Invalidates the display list cache (e.g. after a monitor change).
+    /// </summary>
+    public void InvalidateDisplayCache()
+    {
+        _cachedDisplays = null;
+        _cachedDisplaysMs = 0;
+    }
+
+    /// <summary>
     /// Gets a list of available displays with their information.
+    /// Results are cached briefly to avoid repeated SDL queries on the main thread.
     /// </summary>
     /// <returns>List of DisplayInfo for each detected display.</returns>
     public List<DisplayInfo> GetAvailableDisplays()
     {
+        ulong now = Time.GetTicksMsec();
+        if (_cachedDisplays != null && now - _cachedDisplaysMs < DisplayCacheTtlMs)
+            return _cachedDisplays;
+
         var displays = new List<DisplayInfo>();
         try
         {
@@ -362,7 +540,6 @@ public partial class DisplaysManager : Node
             var gPrimI = DisplayServer.GetPrimaryScreen();
             var gPrimPos = DisplayServer.ScreenGetPosition(gPrimI);
             var sPrimI = SDL.GetPrimaryDisplay();
-            GD.Print($"DisplaysManager:GetAvailableDisplays - Primary display: {sPrimI}");
             SDL.GetDisplayBounds(sPrimI, out SDL.Rect sPrimRect);
 
             var offsetX = gPrimPos.X - sPrimRect.X;
@@ -452,6 +629,9 @@ public partial class DisplaysManager : Node
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error getting available displays: {ex.Message}", 2);
         }
+
+        _cachedDisplays = displays;
+        _cachedDisplaysMs = now;
         return displays;
     }
 
@@ -471,11 +651,20 @@ public partial class DisplaysManager : Node
 
         foreach (var output in Outputs)
         {
-            // Connected if the target monitor index is currently valid.
-            // This mirrors the checks in VideoOutputDevice.UpdateOutputRegion and load logic.
-            bool isConnected = output.TargetMonitor >= 0 && output.TargetMonitor < screenCount;
+            bool isConnected;
+            string key;
+            if (output.IsVirtual)
+            {
+                isConnected = true;
+                key = $"{output.OutputName} (Virtual)";
+            }
+            else
+            {
+                // Connected if the target monitor index is currently valid.
+                isConnected = output.TargetMonitor >= 0 && output.TargetMonitor < screenCount;
+                key = $"{output.OutputName} (Monitor {output.TargetMonitor})";
+            }
 
-            string key = $"{output.OutputName} (Monitor {output.TargetMonitor})";
             result[key] = isConnected;
         }
 
@@ -554,16 +743,12 @@ public partial class DisplaysManager : Node
             {
                 var output = new VideoOutputDevice();
                 output.LoadFromData(outputData);
-                if (output.TargetMonitor >= DisplayServer.GetScreenCount())
-                {
-                    GD.Print($"DisplaysManager:LoadFromData - Skipping output '{output.OutputName}' because target monitor {output.TargetMonitor} is not available (screen_count = {DisplayServer.GetScreenCount()})");
-                    continue;
-                }
                 AddChild(output);
                 Outputs.Add(output);
+                // Virtual / missing monitors stay hidden; physical available monitors show.
+                if (!output.IsVirtual && output.TargetMonitor < DisplayServer.GetScreenCount())
+                    output.Show();
                 output.SetCanvasReference(Canvas);
-                output.Show();
-                DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
             }
             // Update _nextOutputId to avoid ID conflicts
             if (Outputs.Count > 0)
@@ -573,7 +758,11 @@ public partial class DisplaysManager : Node
             }
         }
 
+        // Always keep at least one screen after load
+        EnsureDefaultScreen();
+
         UpdateAllLayerTestPatterns();
+        DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
     }
 
     public override void _ExitTree()
