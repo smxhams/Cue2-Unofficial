@@ -4,6 +4,19 @@ using Godot.Collections;
 
 namespace Cue2.Base.Classes.CueTypes;
 
+/// <summary>
+/// Legacy simplified display presets (pre Expand/Stretch split). Kept for save migration only.
+/// </summary>
+public enum VideoDisplayMode
+{
+    /// <summary>Letterbox — maps to IgnoreSize + KeepAspectCentered.</summary>
+    Fit = 0,
+    /// <summary>Cover — maps to IgnoreSize + KeepAspectCovered.</summary>
+    Fill = 1,
+    /// <summary>Distort to fill — maps to IgnoreSize + Scale.</summary>
+    Stretch = 2,
+}
+
 public class VideoComponent : ICueComponent
 {
     public string Type => "Video";
@@ -12,7 +25,158 @@ public class VideoComponent : ICueComponent
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
     public int TargetLayerId { get; set; } = 0; // ID of the target layer to render on
+
+    /// <summary>
+    /// Godot <see cref="TextureRect.ExpandMode"/> for how the control size interacts with the texture.
+    /// Default matches previous Fit/Fill/Stretch behaviour (ignore size, fill host rect).
+    /// </summary>
+    public TextureRect.ExpandModeEnum TextureExpandMode { get; set; } =
+        TextureRect.ExpandModeEnum.IgnoreSize;
+
+    /// <summary>
+    /// Godot <see cref="TextureRect.StretchMode"/> for how the frame is drawn inside the control.
+    /// Default is Keep Aspect Centered (Fit).
+    /// </summary>
+    public TextureRect.StretchModeEnum TextureStretchMode { get; set; } =
+        TextureRect.StretchModeEnum.KeepAspectCentered;
+
+    /// <summary>
+    /// Visual opacity of the video on the target layer (0 = invisible, 1 = fully opaque).
+    /// Inspector edits this as a percentage.
+    /// </summary>
+    public float Opacity { get; set; } = 1f;
+
     public bool HasAudio { get; set; }
+
+    /// <summary>
+    /// Applies TextureRect expand + stretch modes for layer display.
+    /// Host should be the layer rectangle with <c>ClipContents = true</c> for covered modes.
+    /// </summary>
+    public static void ApplyTextureLayout(
+        TextureRect rect,
+        TextureRect.ExpandModeEnum expandMode,
+        TextureRect.StretchModeEnum stretchMode)
+    {
+        if (rect == null || !GodotObject.IsInstanceValid(rect))
+            return;
+
+        rect.ExpandMode = expandMode;
+        rect.StretchMode = stretchMode;
+
+        // When ignoring size, fill the layer host so stretch modes have a defined rect.
+        if (expandMode == TextureRect.ExpandModeEnum.IgnoreSize
+            && rect.GetParent() is Control parent
+            && parent.Size.X > 0 && parent.Size.Y > 0)
+        {
+            rect.Position = Vector2.Zero;
+            rect.Size = parent.Size;
+        }
+    }
+
+    /// <summary>
+    /// Convenience: apply this component's expand/stretch settings to a TextureRect.
+    /// </summary>
+    public void ApplyTextureLayout(TextureRect rect)
+    {
+        ApplyTextureLayout(rect, TextureExpandMode, TextureStretchMode);
+    }
+
+    /// <summary>
+    /// Maps legacy Fit/Fill/Stretch presets onto Expand + Stretch modes.
+    /// </summary>
+    public static void ApplyLegacyDisplayMode(
+        out TextureRect.ExpandModeEnum expand,
+        out TextureRect.StretchModeEnum stretch,
+        VideoDisplayMode legacy)
+    {
+        expand = TextureRect.ExpandModeEnum.IgnoreSize;
+        stretch = legacy switch
+        {
+            VideoDisplayMode.Fill => TextureRect.StretchModeEnum.KeepAspectCovered,
+            VideoDisplayMode.Stretch => TextureRect.StretchModeEnum.Scale,
+            _ => TextureRect.StretchModeEnum.KeepAspectCentered,
+        };
+    }
+
+    /// <summary>
+    /// Parses an int-like Variant to an enum value of type <typeparamref name="TEnum"/>.
+    /// </summary>
+    public static TEnum ParseEnumVariant<TEnum>(Variant value, TEnum fallback) where TEnum : struct, Enum
+    {
+        try
+        {
+            int modeVal = value.VariantType switch
+            {
+                Variant.Type.Int => (int)value,
+                Variant.Type.Float => (int)(double)value,
+                Variant.Type.String => int.TryParse((string)value, out int parsed) ? parsed : Convert.ToInt32(fallback),
+                _ => (int)value
+            };
+            return Enum.IsDefined(typeof(TEnum), modeVal) ? (TEnum)(object)modeVal : fallback;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    /// <summary>
+    /// Loads expand/stretch modes, migrating legacy DisplayMode when present.
+    /// </summary>
+    private void LoadTextureLayoutFromData(Dictionary data)
+    {
+        bool hasExpand = data.ContainsKey("TextureExpandMode");
+        bool hasStretch = data.ContainsKey("TextureStretchMode");
+
+        if (hasExpand || hasStretch)
+        {
+            TextureExpandMode = hasExpand
+                ? ParseEnumVariant(data["TextureExpandMode"], TextureRect.ExpandModeEnum.IgnoreSize)
+                : TextureRect.ExpandModeEnum.IgnoreSize;
+            TextureStretchMode = hasStretch
+                ? ParseEnumVariant(data["TextureStretchMode"], TextureRect.StretchModeEnum.KeepAspectCentered)
+                : TextureRect.StretchModeEnum.KeepAspectCentered;
+            return;
+        }
+
+        // Migrate pre-expand/stretch saves that only had DisplayMode (Fit/Fill/Stretch).
+        if (data.ContainsKey("DisplayMode"))
+        {
+            var legacy = ParseEnumVariant(data["DisplayMode"], VideoDisplayMode.Fit);
+            ApplyLegacyDisplayMode(out var expand, out var stretch, legacy);
+            TextureExpandMode = expand;
+            TextureStretchMode = stretch;
+            return;
+        }
+
+        TextureExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
+        TextureStretchMode = TextureRect.StretchModeEnum.KeepAspectCentered;
+    }
+
+    /// <summary>
+    /// Parses opacity from save data, clamped to 0–1.
+    /// </summary>
+    public static float ParseOpacity(Variant value)
+    {
+        try
+        {
+            float v = value.VariantType switch
+            {
+                Variant.Type.Float => (float)(double)value,
+                Variant.Type.Int => (int)value,
+                Variant.Type.String => float.TryParse((string)value, out float p) ? p : 1f,
+                _ => (float)(double)value
+            };
+            // Guard against accidental percentage storage (e.g. 50 meaning 50%)
+            if (v > 1f)
+                v /= 100f;
+            return Mathf.Clamp(v, 0f, 1f);
+        }
+        catch
+        {
+            return 1f;
+        }
+    }
 
     /// <summary>
     /// Duration is length of video between start and endtime
@@ -76,6 +240,9 @@ public class VideoComponent : ICueComponent
         data.Add("StartTime", StartTime);
         data.Add("EndTime", EndTime);
         data.Add("TargetLayerId", TargetLayerId);
+        data.Add("TextureExpandMode", (int)TextureExpandMode);
+        data.Add("TextureStretchMode", (int)TextureStretchMode);
+        data.Add("Opacity", Opacity);
         data.Add("Duration", Duration);
         data.Add("Loop", Loop);
         data.Add("Volume", Volume);
@@ -127,6 +294,8 @@ public class VideoComponent : ICueComponent
         StartTime = data.ContainsKey("StartTime") ? (double)data["StartTime"] : 0.0;
         EndTime = data.ContainsKey("EndTime") ? (double)data["EndTime"] : -1.0;
         TargetLayerId = data.ContainsKey("TargetLayerId") ? (int)data["TargetLayerId"] : 0;
+        LoadTextureLayoutFromData(data);
+        Opacity = data.ContainsKey("Opacity") ? ParseOpacity(data["Opacity"]) : 1f;
         Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
         Loop = data.ContainsKey("Loop") ? (bool)data["Loop"] : false;
         Volume = data.ContainsKey("Volume") ? (float)data["Volume"] : 1.0f;

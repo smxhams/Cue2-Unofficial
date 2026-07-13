@@ -21,6 +21,23 @@ public partial class CueCommandExectutor : Node
     private PackedScene _activeCueBarScene;
     
     private readonly List<ActiveCue> _activeCues = new List<ActiveCue>();
+
+    /// <summary>
+    /// Currently playing cues (for inspector live-update of visual properties).
+    /// </summary>
+    public IReadOnlyList<ActiveCue> ActiveCues => _activeCues;
+
+    /// <summary>
+    /// Pushes expand/stretch/opacity changes to any playing instance of a video component.
+    /// </summary>
+    public void RefreshPlayingVideoVisuals(VideoComponent component)
+    {
+        if (component == null)
+            return;
+
+        foreach (var active in _activeCues.ToList())
+            active?.RefreshVideoVisuals(component);
+    }
     
     public override void _Ready()
     {

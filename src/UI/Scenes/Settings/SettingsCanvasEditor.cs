@@ -46,6 +46,8 @@ public partial class SettingsCanvasEditor : Control
     private Button _canvasSelectButton;
     private Button _addScreenButton;
     private Button _newTargetLayerButton;
+    private Button _moveLayerUpButton;
+    private Button _moveLayerDownButton;
 
     // Canvas view
     private Panel _canvasOutlinePanel;
@@ -396,6 +398,8 @@ public partial class SettingsCanvasEditor : Control
         _canvasSelectButton = GetNode<Button>("%CanvasSelectButton");
         _addScreenButton = GetNode<Button>("%AddScreenButton");
         _newTargetLayerButton = GetNode<Button>("%AddTargetLayerButton");
+        _moveLayerUpButton = GetNode<Button>("%MoveLayerUpButton");
+        _moveLayerDownButton = GetNode<Button>("%MoveLayerDownButton");
 
         _canvasSizeXLineEdit = GetNode<LineEdit>("%CanvasSizeX");
         _canvasSizeYLineEdit = GetNode<LineEdit>("%CanvasSizeY");
@@ -513,6 +517,8 @@ public partial class SettingsCanvasEditor : Control
         _canvasSelectButton.Pressed += OnCanvasSelectPressed;
         _addScreenButton.Pressed += OnNewScreenPressed;
         _newTargetLayerButton.Pressed += OnNewTargetLayerPressed;
+        _moveLayerUpButton.Pressed += OnMoveLayerUpPressed;
+        _moveLayerDownButton.Pressed += OnMoveLayerDownPressed;
 
         _canvasSizeXLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
         _canvasSizeYLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
@@ -674,7 +680,7 @@ public partial class SettingsCanvasEditor : Control
         }
 
         // 2) Hit-test items (layers first — typically on top conceptually — then screens)
-        // Prefer smallest area under cursor so nested items are selectable.
+        // Prefer topmost layer (list order) then screens when picking on stage.
         if (TryHitTestItem(canvasMouse, out SelectionKind kind, out int id))
         {
             if (kind == SelectionKind.Screen)
@@ -702,21 +708,16 @@ public partial class SettingsCanvasEditor : Control
     {
         kind = SelectionKind.None;
         id = -1;
-        float bestArea = float.MaxValue;
 
-        // Layers — prefer smaller hit area
+        // Layers first, top-of-stack first (list order) so the top layer wins overlaps.
         foreach (var layer in DisplaysManager.Layers)
         {
             var r = new Rect2(layer.CanvasPosition, layer.Size);
             if (!r.HasPoint(canvasMouse))
                 continue;
-            float area = layer.Size.X * (float)layer.Size.Y;
-            if (area < bestArea)
-            {
-                bestArea = area;
-                kind = SelectionKind.Layer;
-                id = layer.LayerId;
-            }
+            kind = SelectionKind.Layer;
+            id = layer.LayerId;
+            return true;
         }
 
         foreach (var screen in DisplaysManager.Screens)
@@ -724,16 +725,12 @@ public partial class SettingsCanvasEditor : Control
             var r = new Rect2(screen.CanvasPosition, screen.OutputSize);
             if (!r.HasPoint(canvasMouse))
                 continue;
-            float area = screen.OutputSize.X * (float)screen.OutputSize.Y;
-            if (area < bestArea)
-            {
-                bestArea = area;
-                kind = SelectionKind.Screen;
-                id = screen.OutputId;
-            }
+            kind = SelectionKind.Screen;
+            id = screen.OutputId;
+            return true;
         }
 
-        return kind != SelectionKind.None;
+        return false;
     }
 
     private bool TryGetSelectedRect(out Vector2I pos, out Vector2I size)
@@ -962,7 +959,8 @@ public partial class SettingsCanvasEditor : Control
                 return;
             screen.CanvasPosition = pos;
             screen.OutputSize = size;
-            // Defer expensive window updates until drag ends
+            // Defer OS window resize until drag ends, but keep live video rects in screen space.
+            screen.UpdateAllLayerDisplayRects();
         }
         else if (_selectionKind == SelectionKind.Layer)
         {
@@ -971,6 +969,9 @@ public partial class SettingsCanvasEditor : Control
                 return;
             layer.CanvasPosition = pos;
             layer.Size = size;
+            // Push geometry to playing video TextureRects on every output (matches test patterns).
+            foreach (var output in DisplaysManager.Outputs)
+                output.UpdateLayerDisplayRect(_selectedLayerId);
         }
         else
         {
@@ -1135,13 +1136,63 @@ public partial class SettingsCanvasEditor : Control
         var root = _layersTree.CreateItem();
         root.SetText(0, "Layers");
 
-        foreach (var layer in DisplaysManager.Layers)
+        // List is top-first: first entry is drawn on top of later ones.
+        int count = DisplaysManager.Layers.Count;
+        for (int i = 0; i < count; i++)
         {
+            var layer = DisplaysManager.Layers[i];
             var item = _layersTree.CreateItem(root);
-            item.SetText(0, layer.LayerName);
+            string stackLabel = i == 0 ? "top" : (i == count - 1 ? "bottom" : $"#{i + 1}");
+            item.SetText(0, $"{layer.LayerName}  [{stackLabel}]");
             item.SetMetadata(0, layer.LayerId);
-            item.SetTooltipText(0, $"{layer.LayerName}\n{layer.Size.X}×{layer.Size.Y} @ {layer.CanvasPosition}");
+            item.SetTooltipText(0,
+                $"{layer.LayerName}\nStack: {stackLabel} (first = on top)\n{layer.Size.X}×{layer.Size.Y} @ {layer.CanvasPosition}");
             item.SetCustomColor(0, new Color(0.55f, 0.75f, 1f));
+        }
+
+        UpdateLayerOrderButtons();
+    }
+
+    /// <summary>
+    /// Enables ↑/↓ based on the selected layer's place in the top-first stack.
+    /// </summary>
+    private void UpdateLayerOrderButtons()
+    {
+        if (_moveLayerUpButton == null || _moveLayerDownButton == null)
+            return;
+
+        if (_selectionKind != SelectionKind.Layer || _selectedLayerId < 0)
+        {
+            _moveLayerUpButton.Disabled = true;
+            _moveLayerDownButton.Disabled = true;
+            return;
+        }
+
+        int index = _displaysManager.GetLayerStackIndex(_selectedLayerId);
+        int count = DisplaysManager.Layers.Count;
+        _moveLayerUpButton.Disabled = index <= 0;
+        _moveLayerDownButton.Disabled = index < 0 || index >= count - 1;
+    }
+
+    private void OnMoveLayerUpPressed()
+    {
+        if (_selectionKind != SelectionKind.Layer)
+            return;
+        if (_displaysManager.MoveLayerUp(_selectedLayerId))
+        {
+            RebuildTrees();
+            UpdateCanvasGizmos();
+        }
+    }
+
+    private void OnMoveLayerDownPressed()
+    {
+        if (_selectionKind != SelectionKind.Layer)
+            return;
+        if (_displaysManager.MoveLayerDown(_selectedLayerId))
+        {
+            RebuildTrees();
+            UpdateCanvasGizmos();
         }
     }
 
@@ -1244,6 +1295,7 @@ public partial class SettingsCanvasEditor : Control
         _selectedScreenId = screenId;
         _selectedLayerId = layerId;
         ShowPropertiesForSelection();
+        UpdateLayerOrderButtons();
         UpdateCanvasGizmos();
     }
 
@@ -2203,8 +2255,10 @@ public partial class SettingsCanvasEditor : Control
             _gizmos.Add(gizmo);
         }
 
-        foreach (var layer in DisplaysManager.Layers)
+        // Draw bottom-of-stack first so top layer gizmos appear above.
+        for (int i = DisplaysManager.Layers.Count - 1; i >= 0; i--)
         {
+            var layer = DisplaysManager.Layers[i];
             bool selected = _selectionKind == SelectionKind.Layer && layer.LayerId == _selectedLayerId;
             var gizmo = new CanvasItemGizmo
             {
@@ -2215,7 +2269,8 @@ public partial class SettingsCanvasEditor : Control
                 FillColor = new Color(0.2f, 0.45f, 1f, 0.1f),
                 OffsetDash = true,
                 Selected = selected,
-                MouseFilter = MouseFilterEnum.Ignore
+                MouseFilter = MouseFilterEnum.Ignore,
+                ZIndex = layer.ZIndex
             };
             gizmo.Position = new Vector2(layer.CanvasPosition.X * _zoom, layer.CanvasPosition.Y * _zoom);
             gizmo.Size = new Vector2(

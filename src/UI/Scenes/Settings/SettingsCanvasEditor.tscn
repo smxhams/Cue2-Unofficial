@@ -159,11 +159,34 @@ size_flags_vertical = 3
 hide_root = true
 select_mode = 1
 
-[node name="AddTargetLayerButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox" unique_id=1705467214]
+[node name="LayerButtonsHBox" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddTargetLayerButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 0
 text = "+ Layer"
+
+[node name="MoveLayerUpButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+tooltip_text = "Move selected layer up (toward top / drawn on top)"
+focus_mode = 0
+disabled = true
+text = "↑"
+
+[node name="MoveLayerDownButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+tooltip_text = "Move selected layer down (toward bottom / drawn behind)"
+focus_mode = 0
+disabled = true
+text = "↓"
 
 [node name="CenterRightSplit" type="HSplitContainer" parent="MarginContainer/MainVBox/BodyHSplit" unique_id=256912890]
 layout_mode = 2

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Cue2.Shared.Audio;
 using Cue2.Shared.Decoders;
@@ -101,10 +102,44 @@ public partial class VideoPreviewer : Control
         CallDeferred(nameof(SetAreas), layerId);
     }
 
+    /// <summary>
+    /// Applies TextureRect expand + stretch modes for the inspector preview.
+    /// </summary>
+    public void ApplyTextureLayout(TextureRect.ExpandModeEnum expand, TextureRect.StretchModeEnum stretch)
+    {
+        if (_previewTextRect == null || !IsInstanceValid(_previewTextRect))
+            return;
+        _previewTextRect.ClipContents = true;
+        VideoComponent.ApplyTextureLayout(_previewTextRect, expand, stretch);
+    }
+
+    /// <summary>
+    /// Applies this component's texture layout to the preview.
+    /// </summary>
+    public void ApplyTextureLayout(VideoComponent component)
+    {
+        if (component == null)
+            return;
+        ApplyTextureLayout(component.TextureExpandMode, component.TextureStretchMode);
+    }
+
+    /// <summary>
+    /// Applies opacity (0–1) to the inspector preview.
+    /// </summary>
+    public void ApplyOpacity(float opacity)
+    {
+        if (_previewTextRect == null || !IsInstanceValid(_previewTextRect))
+            return;
+        float a = Mathf.Clamp(opacity, 0f, 1f);
+        _previewTextRect.Modulate = new Color(1f, 1f, 1f, a);
+    }
+
     private void SetAreas(int layerId)
     {
         var canvas = DisplaysManager.Canvas;
         var layer = DisplaysManager.GetLayerById(layerId);
+        if (layer == null || canvas == null)
+            return;
 
         var viewArea = _viewArea.Size;
         var canvasSize = new Vector2(canvas.CanvasSize.X, canvas.CanvasSize.Y);

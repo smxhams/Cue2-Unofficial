@@ -301,6 +301,8 @@ public partial class DisplaysManager : Node
         {
             output.CanvasPosition = newCanvasPosition;
             output.UpdateOutputRegion();
+            // Screen moved on canvas — layer rects are relative to screen origin.
+            output.UpdateAllLayerDisplayRects();
             UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
@@ -334,9 +336,76 @@ public partial class DisplaysManager : Node
         var layer = new VideoTargetLayer(name, zIndex);
         layer.Size = Canvas.CanvasSize;
         layer.CanvasPosition = Vector2I.Zero;
-        Layers.Add(layer);
+        // New layers go on top of the stack (index 0).
+        Layers.Insert(0, layer);
+        NormalizeLayerOrder();
+        ApplyLayerDrawOrderToOutputs();
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added layer '{name}' to canvas.", 0);
         return layer;
+    }
+
+    /// <summary>
+    /// Syncs ZIndex from list order: first entry is topmost (highest ZIndex).
+    /// </summary>
+    public void NormalizeLayerOrder()
+    {
+        for (int i = 0; i < Layers.Count; i++)
+            Layers[i].ZIndex = Layers.Count - 1 - i;
+    }
+
+    /// <summary>
+    /// Moves a layer one step toward the top of the stack (earlier in the list).
+    /// </summary>
+    /// <returns>True if the layer moved.</returns>
+    public bool MoveLayerUp(int layerId)
+    {
+        int index = Layers.FindIndex(l => l.LayerId == layerId);
+        if (index <= 0)
+            return false;
+
+        (Layers[index - 1], Layers[index]) = (Layers[index], Layers[index - 1]);
+        NormalizeLayerOrder();
+        ApplyLayerDrawOrderToOutputs();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"Moved layer '{Layers[index - 1].LayerName}' up in stack.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+        return true;
+    }
+
+    /// <summary>
+    /// Moves a layer one step toward the bottom of the stack (later in the list).
+    /// </summary>
+    /// <returns>True if the layer moved.</returns>
+    public bool MoveLayerDown(int layerId)
+    {
+        int index = Layers.FindIndex(l => l.LayerId == layerId);
+        if (index < 0 || index >= Layers.Count - 1)
+            return false;
+
+        (Layers[index + 1], Layers[index]) = (Layers[index], Layers[index + 1]);
+        NormalizeLayerOrder();
+        ApplyLayerDrawOrderToOutputs();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"Moved layer '{Layers[index + 1].LayerName}' down in stack.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+        return true;
+    }
+
+    /// <summary>
+    /// Index of a layer in the top-first stack list, or -1 if missing.
+    /// </summary>
+    public int GetLayerStackIndex(int layerId)
+    {
+        return Layers.FindIndex(l => l.LayerId == layerId);
+    }
+
+    /// <summary>
+    /// Applies ZIndex / child order to all active display layer nodes on every output.
+    /// </summary>
+    public void ApplyLayerDrawOrderToOutputs()
+    {
+        foreach (var output in Outputs)
+            output.ApplyLayerDrawOrder();
     }
 
     /// <summary>
@@ -354,6 +423,8 @@ public partial class DisplaysManager : Node
                 output.RemoveLayerTestPattern(layer.LayerId);
             }
             Layers.Remove(layer);
+            NormalizeLayerOrder();
+            ApplyLayerDrawOrderToOutputs();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed layer '{layer.LayerName}'.", 0);
         }
     }
@@ -385,6 +456,8 @@ public partial class DisplaysManager : Node
         {
             layer.CanvasPosition = newPosition;
             UpdateLayerTestPatterns(layerId);
+            // Move live video TextureRects on every physical/virtual output (not only test patterns).
+            UpdateLayerDisplayRectsOnOutputs(layerId);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer position to {newPosition}.", 0);
         }
     }
@@ -401,8 +474,18 @@ public partial class DisplaysManager : Node
         {
             layer.Size = newSize;
             UpdateLayerTestPatterns(layerId);
+            UpdateLayerDisplayRectsOnOutputs(layerId);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer size to {newSize}.", 0);
         }
+    }
+
+    /// <summary>
+    /// Pushes layer geometry to active video (and other) display rects on all outputs.
+    /// </summary>
+    private void UpdateLayerDisplayRectsOnOutputs(int layerId)
+    {
+        foreach (var output in Outputs)
+            output.UpdateLayerDisplayRect(layerId);
     }
 
     /// <summary>
@@ -712,10 +795,15 @@ public partial class DisplaysManager : Node
         }
         
         Layers.Clear();
+        // Reset id allocator before reloading so LoadFromData can advance it cleanly.
+        VideoTargetLayer.SetNextLayerId(0);
         
         if (data.ContainsKey("Layers"))
         {
             var layersData = (Godot.Collections.Array) data["Layers"];
+            // Array order is authoritative (top-first). Do not re-sort by ZIndex — equal/stale
+            // Z values produced unstable multi-layer order and broke cue TargetLayerId mapping
+            // when combined with the old LayerId++ load bug.
             foreach (Godot.Collections.Dictionary layerData in layersData)
             {
                 var layer = new VideoTargetLayer();
@@ -727,6 +815,17 @@ public partial class DisplaysManager : Node
         if (Layers.Count == 0)
         {
             AddLayer("Default", 0);
+        }
+        else
+        {
+            NormalizeLayerOrder();
+            int maxLayerId = 0;
+            foreach (var layer in Layers)
+            {
+                if (layer.LayerId > maxLayerId)
+                    maxLayerId = layer.LayerId;
+            }
+            VideoTargetLayer.SetNextLayerId(maxLayerId + 1);
         }
 
         foreach (var output in Outputs)

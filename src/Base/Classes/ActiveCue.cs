@@ -45,6 +45,26 @@ public partial class ActiveCue : GodotObject
     private int _activeComponentCount = 0;
     
     /// <summary>
+    /// The cue this active instance is playing.
+    /// </summary>
+    public Cue Cue => _cue;
+
+    /// <summary>
+    /// Re-applies expand/stretch/opacity on live video TextureRects for a video component.
+    /// </summary>
+    public void RefreshVideoVisuals(VideoComponent component)
+    {
+        if (component == null || _isCleaned)
+            return;
+
+        foreach (var playback in _activeVideoComponents.Values)
+        {
+            if (playback != null && playback.UsesVideoComponent(component))
+                playback.RefreshVisualProperties();
+        }
+    }
+
+    /// <summary>
     /// Event raised when the cue playback is completed.
     /// </summary>
     [Signal]

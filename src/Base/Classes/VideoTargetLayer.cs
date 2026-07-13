@@ -18,7 +18,9 @@ public class VideoTargetLayer
     public string LayerName { get; set; } = "Unnamed Layer";
 
     /// <summary>
-    /// Z-index for ordering layers (lower values render first).
+    /// Draw-stack index. Higher values render on top.
+    /// List order in <see cref="Cue2.Shared.DisplaysManager.Layers"/> is top-first:
+    /// first layer in the list has the highest ZIndex.
     /// </summary>
     public int ZIndex { get; set; } = 0;
 
@@ -58,7 +60,15 @@ public class VideoTargetLayer
         LayerName = name;
         ZIndex = zIndex;
     }
-    
+
+    /// <summary>
+    /// Sets the next auto-assigned layer id (used after loading a session).
+    /// </summary>
+    /// <param name="id">Next id to allocate for new layers.</param>
+    public static void SetNextLayerId(int id)
+    {
+        _nextLayerId = Math.Max(0, id);
+    }
 
     /// <summary>
     /// Serializes the layer data.
@@ -76,7 +86,7 @@ public class VideoTargetLayer
         data.Add("SizeY", Size.Y);
         data.Add("Transparent", Transparent);
         data.Add("KeepAspect", KeepAspect);
-        //GD.Print($"VideoTargetLayer:GetData - SAVING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
+        data.Add("TestPatternEnabled", TestPatternEnabled);
         return data;
     }
 
@@ -84,12 +94,20 @@ public class VideoTargetLayer
     /// Loads the layer data from a dictionary.
     /// </summary>
     /// <param name="data">Dictionary containing layer data.</param>
+    /// <remarks>
+    /// Must not mutate <see cref="LayerId"/> after assignment. The previous
+    /// <c>_nextLayerId = LayerId++</c> post-increment rewrote loaded ids and broke
+    /// multi-layer sessions / cue TargetLayerId references.
+    /// </remarks>
     public void LoadFromData(Godot.Collections.Dictionary data)
     {
         LayerId = (int)data["LayerId"];
-        if (LayerId >= _nextLayerId) _nextLayerId = LayerId++;
+        // Advance allocator past this id without changing LayerId itself.
+        if (LayerId >= _nextLayerId)
+            _nextLayerId = LayerId + 1;
+
         LayerName = (string)data["LayerName"];
-        ZIndex = (int)data["ZIndex"];
+        ZIndex = data.ContainsKey("ZIndex") ? (int)data["ZIndex"] : 0;
         
         var outSizeX = data.ContainsKey("SizeX") ? (int)data["SizeX"] : 1920;
         var outSizeY = data.ContainsKey("SizeY") ? (int)data["SizeY"] : 1080;
@@ -99,10 +117,9 @@ public class VideoTargetLayer
         var canvPosY = data.ContainsKey("CanvasPositionY") ? (int)data["CanvasPositionY"] : 0;
         CanvasPosition = new Vector2I(canvPosX, canvPosY);
 
-        Transparent = data.ContainsKey("Transparent") ? (bool)data["Transparent"] : false;
+        Transparent = data.ContainsKey("Transparent") && (bool)data["Transparent"];
         KeepAspect = data.ContainsKey("KeepAspect") && (bool)data["KeepAspect"];
-        //GD.Print($"VideoTargetLayer:LoadFromData - LOADING LAYER DATA: NAME={LayerName}, SizeX={Size.X}, SizeY={Size.Y}, ZIndex={ZIndex}, CanvasPositionX={CanvasPosition.X}, CanvasPositionY={CanvasPosition.Y}");
-
+        TestPatternEnabled = data.ContainsKey("TestPatternEnabled") && (bool)data["TestPatternEnabled"];
     }
     
 }

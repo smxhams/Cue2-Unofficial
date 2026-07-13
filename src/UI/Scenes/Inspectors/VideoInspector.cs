@@ -39,6 +39,9 @@ public partial class VideoInspector : Control
 
 	private Label _fileMetadataLabel;
 	private OptionButton _targetLayerOptionButton;
+	private OptionButton _expandModeOptionButton;
+	private OptionButton _stretchModeOptionButton;
+	private LineEdit _opacityLineEdit;
 	private LineEdit _scaleWidthLineEdit;
 	private LineEdit _scaleHeightLineEdit;
 	private LineEdit _offsetXLineEdit;
@@ -105,6 +108,9 @@ public partial class VideoInspector : Control
 		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
 		_outputOptionButton.ItemSelected += OutputOptionSelected;
 		_targetLayerOptionButton.ItemSelected += TargetLayerSelected;
+		_expandModeOptionButton.ItemSelected += ExpandModeSelected;
+		_stretchModeOptionButton.ItemSelected += StretchModeSelected;
+		_opacityLineEdit.TextSubmitted += OnOpacitySubmitted;
 		
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
         
@@ -152,11 +158,15 @@ public partial class VideoInspector : Control
 		
 		_fileMetadataLabel = GetNode<Label>("%FileMetadataLabel");
 		_targetLayerOptionButton = GetNode<OptionButton>("%TargetLayerOptionButton");
+		_expandModeOptionButton = GetNode<OptionButton>("%ExpandModeOptionButton");
+		_stretchModeOptionButton = GetNode<OptionButton>("%StretchModeOptionButton");
+		_opacityLineEdit = GetNode<LineEdit>("%OpacityLineEdit");
 		_scaleWidthLineEdit  = GetNode<LineEdit>("%ScaleWidthLineEdit");
 		_scaleHeightLineEdit  = GetNode<LineEdit>("%ScaleHeightLineEdit");
 		_offsetXLineEdit  = GetNode<LineEdit>("%OffsetXLineEdit");
 		_offsetYLineEdit  = GetNode<LineEdit>("%OffsetYLineEdit");
 
+		PopulateTextureLayoutOptions();
 		
 		// Video Previewer
 		_previewCollapseButton = GetNode<Button>("%PreviewCollapseButton");
@@ -176,6 +186,51 @@ public partial class VideoInspector : Control
 		_waveformCollapseButton  = GetNode<Button>("%WaveformCollapseButton");
 		_waveformAccordian =   GetNode<VBoxContainer>("%WaveformAccordian");
 		_volumeInput = GetNode<LineEdit>("%VolumeInput");
+	}
+
+	/// <summary>
+	/// Fills Expand / Stretch option buttons with user-facing labels and tooltips.
+	/// </summary>
+	private void PopulateTextureLayoutOptions()
+	{
+		if (_expandModeOptionButton != null)
+		{
+			_expandModeOptionButton.Clear();
+			AddTextureOption(_expandModeOptionButton, "Keep Size", (int)TextureRect.ExpandModeEnum.KeepSize,
+				"Show the video at its original pixel size. It will not grow to fill the layer.");
+			AddTextureOption(_expandModeOptionButton, "Ignore Size", (int)TextureRect.ExpandModeEnum.IgnoreSize,
+				"Fill the full layer area. Use Stretch to control how the picture fits (recommended default).");
+			AddTextureOption(_expandModeOptionButton, "Fit Width Proportional", (int)TextureRect.ExpandModeEnum.FitWidthProportional,
+				"Match the layer width; height scales automatically to keep the video’s aspect ratio.");
+			AddTextureOption(_expandModeOptionButton, "Fit Height Proportional", (int)TextureRect.ExpandModeEnum.FitHeightProportional,
+				"Match the layer height; width scales automatically to keep the video’s aspect ratio.");
+		}
+
+		if (_stretchModeOptionButton != null)
+		{
+			_stretchModeOptionButton.Clear();
+			AddTextureOption(_stretchModeOptionButton, "Scale", (int)TextureRect.StretchModeEnum.Scale,
+				"Stretch the picture to fill the area. Aspect ratio may change (distort).");
+			AddTextureOption(_stretchModeOptionButton, "Tile", (int)TextureRect.StretchModeEnum.Tile,
+				"Repeat the picture like tiles to fill the area.");
+			AddTextureOption(_stretchModeOptionButton, "Keep", (int)TextureRect.StretchModeEnum.Keep,
+				"Show at original size, top-left aligned. May crop or leave empty space.");
+			AddTextureOption(_stretchModeOptionButton, "Keep Centered", (int)TextureRect.StretchModeEnum.KeepCentered,
+				"Show at original size, centered. May crop or leave empty space.");
+			AddTextureOption(_stretchModeOptionButton, "Keep Aspect", (int)TextureRect.StretchModeEnum.KeepAspect,
+				"Scale to fit inside without cropping; keeps aspect ratio. Top-left aligned.");
+			AddTextureOption(_stretchModeOptionButton, "Keep Aspect Centered", (int)TextureRect.StretchModeEnum.KeepAspectCentered,
+				"Scale to fit inside without cropping; keeps aspect ratio and centers the picture (letterbox / pillarbox).");
+			AddTextureOption(_stretchModeOptionButton, "Keep Aspect Covered", (int)TextureRect.StretchModeEnum.KeepAspectCovered,
+				"Scale to cover the whole area while keeping aspect ratio. Edges may be cropped.");
+		}
+	}
+
+	private static void AddTextureOption(OptionButton button, string label, int id, string tooltip)
+	{
+		int index = button.ItemCount;
+		button.AddItem(label, id);
+		button.SetItemTooltip(index, tooltip);
 	}
 
 	private void SetupWaveformUi()
@@ -658,11 +713,36 @@ public partial class VideoInspector : Control
 		_scaleHeightLineEdit.Text = _focusedVideoComponent.ScaledHeight.ToString();
 		_offsetXLineEdit.Text = _focusedVideoComponent.OffsetX.ToString();
 		_offsetYLineEdit.Text = _focusedVideoComponent.OffsetY.ToString();
+
+		// TextureRect expand + stretch + opacity
+		SelectOptionById(_expandModeOptionButton, (int)_focusedVideoComponent.TextureExpandMode);
+		SelectOptionById(_stretchModeOptionButton, (int)_focusedVideoComponent.TextureStretchMode);
+		_videoPreviewer?.ApplyTextureLayout(_focusedVideoComponent);
+		float opacityPct = Mathf.Clamp(_focusedVideoComponent.Opacity, 0f, 1f) * 100f;
+		_opacityLineEdit.Text = $"{opacityPct:0.#}";
+		_videoPreviewer?.ApplyOpacity(_focusedVideoComponent.Opacity);
 		
 		// Update volume
 		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
 		var volumeDb = UiUtilities.LinearToDb((float)volume);
 		_volumeInput.Text = $"{volumeDb}dB";
+	}
+
+	private static void SelectOptionById(OptionButton button, int id)
+	{
+		if (button == null)
+			return;
+
+		for (int i = 0; i < button.ItemCount; i++)
+		{
+			if (button.GetItemId(i) == id)
+			{
+				button.Select(i);
+				return;
+			}
+		}
+
+		button.Select(0);
 	}
 	
 	/// <summary>
@@ -941,6 +1021,77 @@ public partial class VideoInspector : Control
 		_focusedVideoComponent.TargetLayerId = layerId;
 		_videoPreviewer.SetAreasDeferred(layerId);
 		GD.Print($"VideoInspector:TargetLayerSelected - Target layer set to ID {layerId}");
+	}
+
+	private void ExpandModeSelected(long index)
+	{
+		if (_focusedVideoComponent == null || _expandModeOptionButton == null)
+			return;
+
+		int id = _expandModeOptionButton.GetItemId((int)index);
+		_focusedVideoComponent.TextureExpandMode = (TextureRect.ExpandModeEnum)id;
+		_videoPreviewer?.ApplyTextureLayout(_focusedVideoComponent);
+		ApplyVisualsToPlayingCues();
+		GD.Print($"VideoInspector:ExpandModeSelected - Expand={_focusedVideoComponent.TextureExpandMode}");
+	}
+
+	private void StretchModeSelected(long index)
+	{
+		if (_focusedVideoComponent == null || _stretchModeOptionButton == null)
+			return;
+
+		int id = _stretchModeOptionButton.GetItemId((int)index);
+		_focusedVideoComponent.TextureStretchMode = (TextureRect.StretchModeEnum)id;
+		_videoPreviewer?.ApplyTextureLayout(_focusedVideoComponent);
+		ApplyVisualsToPlayingCues();
+		GD.Print($"VideoInspector:StretchModeSelected - Stretch={_focusedVideoComponent.TextureStretchMode}");
+	}
+
+	/// <summary>
+	/// Parses opacity as a percentage (0–100) and stores 0–1 on the component.
+	/// </summary>
+	private void OnOpacitySubmitted(string text)
+	{
+		if (_focusedVideoComponent == null || _opacityLineEdit == null)
+			return;
+
+		try
+		{
+			string cleaned = (text ?? string.Empty).Replace("%", "").Trim();
+			if (!float.TryParse(cleaned, out float pct))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid opacity: {text}", 1);
+				_opacityLineEdit.Text = $"{_focusedVideoComponent.Opacity * 100f:0.#}";
+				_opacityLineEdit.ReleaseFocus();
+				return;
+			}
+
+			pct = Mathf.Clamp(pct, 0f, 100f);
+			_focusedVideoComponent.Opacity = pct / 100f;
+			_opacityLineEdit.Text = $"{pct:0.#}";
+			_videoPreviewer?.ApplyOpacity(_focusedVideoComponent.Opacity);
+			ApplyVisualsToPlayingCues();
+			_opacityLineEdit.ReleaseFocus();
+			GD.Print($"VideoInspector:OnOpacitySubmitted - Opacity set to {pct:0.#}%");
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing opacity: {ex.Message}", 2);
+			_opacityLineEdit.Text = $"{_focusedVideoComponent.Opacity * 100f:0.#}";
+			_opacityLineEdit.ReleaseFocus();
+		}
+	}
+
+	/// <summary>
+	/// Pushes expand/stretch/opacity to any currently playing instance of this video component.
+	/// </summary>
+	private void ApplyVisualsToPlayingCues()
+	{
+		if (_focusedVideoComponent == null)
+			return;
+
+		// CueCommandExectutor is owned by GlobalData (class name is historically misspelled).
+		_globalData?.CueCommandExectutor?.RefreshPlayingVideoVisuals(_focusedVideoComponent);
 	}
 
 	

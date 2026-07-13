@@ -203,6 +203,55 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 
+[node name="TextureLayoutRow" type="HBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ExpandModeLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+layout_mode = 2
+tooltip_text = "How the video sizes itself within the layer. Changes also apply to playing cues."
+mouse_filter = 1
+text = "Expand:"
+
+[node name="ExpandModeOptionButton" type="OptionButton" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+tooltip_text = "How the video sizes itself within the layer.
+Hover each option for details. Changes also apply to playing cues."
+
+[node name="StretchModeLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+layout_mode = 2
+tooltip_text = "How the picture is drawn within its area. Changes also apply to playing cues."
+mouse_filter = 1
+text = "Stretch:"
+
+[node name="StretchModeOptionButton" type="OptionButton" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+tooltip_text = "How the picture is drawn within its area.
+Hover each option for details. Changes also apply to playing cues."
+
+[node name="OpacityLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+layout_mode = 2
+tooltip_text = "How solid the video appears (0% = invisible, 100% = fully solid). Changes also apply to playing cues."
+mouse_filter = 1
+text = "Opacity:"
+
+[node name="OpacityLineEdit" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+tooltip_text = "Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues."
+text = "100"
+placeholder_text = "100"
+alignment = 1
+
+[node name="OpacityPercentLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/TextureLayoutRow"]
+layout_mode = 2
+text = "%"
+
 [node name="HBoxContainer5" type="HBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent"]
 visible = false
 layout_mode = 2

@@ -111,10 +111,15 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     private void InitSceneRoot()
     {
-        _sceneRoot = new Control();
+        // Full-rect root so layer content always fills the Window content viewport.
+        // SizeFlags alone do not layout against Window (not a container) — anchors are required.
+        _sceneRoot = new Control
+        {
+            Name = "OutputRoot",
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
         AddChild(_sceneRoot);
-        _sceneRoot.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _sceneRoot.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        _sceneRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
     }
 
     /// <summary>
@@ -131,13 +136,114 @@ public partial class VideoOutputDevice : Window, IDisposable
     {
         var layer = DisplaysManager.GetLayerById(LayerId);
         var displayLayer = _displayLayerPackedScene.Instantiate<Control>();
+        // Host = layer rectangle on this screen (not full output). Clip so Fill mode crops.
+        displayLayer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopLeft);
+        displayLayer.ClipContents = true;
         _sceneRoot.AddChild(displayLayer);
         var outputLayer = displayLayer.GetNode<TextureRect>("%LayerOutput");
-        outputLayer.Position = (Vector2)(layer.CanvasPosition - CanvasPosition);
-        outputLayer.Size = (Vector2)layer.Size;
-
+        ApplyLayerRectToHost(displayLayer, outputLayer, layer);
+        _activeLayers[displayLayer] = LayerId;
+        ApplyLayerDrawOrder();
 
         return displayLayer;
+    }
+
+    /// <summary>
+    /// Applies target-layer stack order so first/highest ZIndex draws on top.
+    /// </summary>
+    public void ApplyLayerDrawOrder()
+    {
+        // Assign Control.ZIndex from layer data (higher = on top).
+        foreach (var kvp in _activeLayers.ToList())
+        {
+            var host = kvp.Key;
+            if (host == null || !IsInstanceValid(host))
+            {
+                _activeLayers.Remove(host);
+                continue;
+            }
+
+            var layer = DisplaysManager.GetLayerById(kvp.Value);
+            host.ZIndex = layer?.ZIndex ?? 0;
+        }
+
+        // Also reorder children so draw order is deterministic even without z-index.
+        // Bottom of stack first, top last (later siblings paint above).
+        if (_sceneRoot == null || !IsInstanceValid(_sceneRoot))
+            return;
+
+        var ordered = _activeLayers
+            .Where(kv => kv.Key != null && IsInstanceValid(kv.Key))
+            .OrderBy(kv =>
+            {
+                var layer = DisplaysManager.GetLayerById(kv.Value);
+                return layer?.ZIndex ?? 0;
+            })
+            .Select(kv => kv.Key)
+            .ToList();
+
+        for (int i = 0; i < ordered.Count; i++)
+            _sceneRoot.MoveChild(ordered[i], i);
+    }
+
+    /// <summary>
+    /// Updates the on-screen TextureRect position/size for a target layer (e.g. after canvas editor edits).
+    /// Live video playback uses these same rects, so they must move with the layer data.
+    /// </summary>
+    /// <param name="layerId">Target layer id to refresh on this output.</param>
+    public void UpdateLayerDisplayRect(int layerId)
+    {
+        var layer = DisplaysManager.GetLayerById(layerId);
+        if (layer == null)
+            return;
+
+        foreach (var kvp in _activeLayers.ToList())
+        {
+            var host = kvp.Key;
+            if (kvp.Value != layerId)
+                continue;
+
+            if (host == null || !IsInstanceValid(host))
+            {
+                _activeLayers.Remove(host);
+                continue;
+            }
+
+            var outputLayer = host.GetNodeOrNull<TextureRect>("%LayerOutput");
+            if (outputLayer == null)
+                continue;
+
+            ApplyLayerRectToHost(host, outputLayer, layer);
+        }
+    }
+
+    /// <summary>
+    /// Refreshes display rects for every active layer on this output (after screen canvas position changes).
+    /// </summary>
+    public void UpdateAllLayerDisplayRects()
+    {
+        foreach (var layerId in _activeLayers.Values.Distinct().ToList())
+            UpdateLayerDisplayRect(layerId);
+    }
+
+    /// <summary>
+    /// Positions the layer host on this screen and makes LayerOutput fill it so Fit/Fill/Stretch work.
+    /// StretchMode is left alone if already set by <see cref="VideoComponent.ApplyTextureLayout"/>.
+    /// </summary>
+    private void ApplyLayerRectToHost(Control host, TextureRect outputLayer, VideoTargetLayer layer)
+    {
+        if (host == null || outputLayer == null || layer == null)
+            return;
+
+        // Layer rect in output-window space: canvas coords minus this screen's canvas origin.
+        host.Position = (Vector2)(layer.CanvasPosition - CanvasPosition);
+        host.Size = (Vector2)layer.Size;
+        host.ClipContents = true;
+
+        // Texture fills the host; VideoDisplayMode stretch mode maps the frame inside.
+        outputLayer.Position = Vector2.Zero;
+        outputLayer.Size = host.Size;
+        outputLayer.ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize;
     }
 
     
@@ -193,32 +299,88 @@ public partial class VideoOutputDevice : Window, IDisposable
     }
 
     /// <summary>
-    /// Leaves exclusive/fullscreen once so the window can be freely placed on a target monitor.
-    /// Uses the proven Size.X-1 nudge only when already exclusive — not every frame.
+    /// True when the intended window rect fully covers the target monitor (no offset / partial size).
+    /// Exact match is when Godot/Windows most often promotes borderless windows to ExclusiveFullscreen,
+    /// which causes black frame flashes — especially on multi-monitor setups with continuous video present.
     /// </summary>
-    private void ExitExclusiveFullscreenIfNeeded()
+    private bool IsFullMonitorCoverage(Vector2I windowPos, Vector2I windowSize)
     {
-        if (Mode != ModeEnum.ExclusiveFullscreen && Mode != ModeEnum.Fullscreen)
-            return;
+        if (TargetMonitor < 0 || TargetMonitor >= DisplayServer.GetScreenCount())
+            return false;
 
-        // Proven Godot/Windows path to leave exclusive mode without getting stuck.
-        Borderless = false;
-        Vector2I s = Size;
-        if (s.X > 1)
-            Size = new Vector2I(s.X - 1, s.Y);
+        var monPos = DisplayServer.ScreenGetPosition(TargetMonitor);
+        var monSize = DisplayServer.ScreenGetSize(TargetMonitor);
+        return windowPos == monPos && windowSize == monSize;
+    }
+
+    /// <summary>
+    /// Whether the window is currently in ExclusiveFullscreen (DXGI exclusive — black flashes).
+    /// </summary>
+    private bool IsExclusiveFullscreen() => Mode == ModeEnum.ExclusiveFullscreen;
+
+    /// <summary>
+    /// Whether the window is in any fullscreen-like mode we do not want for free placement.
+    /// </summary>
+    private bool IsFullscreenLike() =>
+        Mode == ModeEnum.ExclusiveFullscreen || Mode == ModeEnum.Fullscreen;
+
+    /// <summary>
+    /// Forces the window out of ExclusiveFullscreen / Fullscreen into borderless Windowed.
+    /// Exclusive mode must never stick on video outputs — it causes black flickering.
+    /// </summary>
+    /// <remarks>
+    /// On Windows, Godot can stick in exclusive unless we briefly leave borderless and nudge size
+    /// before setting Mode back to Windowed. Then we reinforce via DisplayServer.
+    /// </remarks>
+    private void ForceBorderlessWindowed()
+    {
+        bool wasExclusive = Mode == ModeEnum.ExclusiveFullscreen;
+
+        if (wasExclusive)
+        {
+            // Proven Godot/Windows path to leave exclusive mode without getting stuck.
+            Borderless = false;
+            Vector2I s = Size;
+            if (s.X > 1)
+                Size = new Vector2I(s.X - 1, Mathf.Max(1, s.Y));
+        }
+
         Mode = ModeEnum.Windowed;
         Borderless = true;
-        InvalidateGeometryCache();
+
+        if (TryGetNativeWindowId(out int windowId))
+        {
+            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, windowId);
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true, windowId);
+        }
+
+        if (wasExclusive)
+            InvalidateGeometryCache();
+    }
+
+    /// <summary>
+    /// When a window is sized/positioned exactly to a monitor, Windows/Godot often promotes it to
+    /// ExclusiveFullscreen. Expanding width by 1px (off the right edge) breaks the exact match
+    /// while still fully covering the display — no visible gap on the target screen.
+    /// </summary>
+    private static Vector2I AntiExclusivePlacementSize(Vector2I intendedSize, bool fullCoverage)
+    {
+        if (!fullCoverage || intendedSize.X <= 0)
+            return intendedSize;
+        return new Vector2I(intendedSize.X + 1, intendedSize.Y);
     }
 
     /// <summary>
     /// Updates the output to show the correct region of the canvas.
-    /// Physical screens are borderless windows placed via DisplayServer on the target monitor.
+    /// Physical screens are always borderless <b>windowed</b> windows placed via DisplayServer.
     /// </summary>
+    /// <remarks>
+    /// Never use ExclusiveFullscreen for outputs (black frame flashes). Exact full-monitor geometry
+    /// is placed 1px wider so the engine cannot promote the window to exclusive mode.
+    /// Partial sizes must stay true Windowed with Window.Size in sync, or the surface goes grey.
+    /// </remarks>
     public void UpdateOutputRegion()
     {
-        GD.Print($"VideoOutputDevice:UpdateOutputRegion - Updating output region '{OutputName}' (monitor={TargetMonitor}).");
-
         if (OutputSize.X <= 0 || OutputSize.Y <= 0)
         {
             GD.Print("VideoOutputDevice:UpdateOutputRegion - Invalid output size, must be positive.");
@@ -228,7 +390,6 @@ public partial class VideoOutputDevice : Window, IDisposable
         if (IsVirtual)
         {
             HideScreenWindow();
-            GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' is virtual; window hidden.");
             return;
         }
 
@@ -256,46 +417,82 @@ public partial class VideoOutputDevice : Window, IDisposable
 
             // Display home origin + DisplayOffset + canvas clip adjustment (global desktop coords)
             var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
-            var windowPos = monitorPos + DisplayOffset + (Vector2I)(clippedRect.Position - (Vector2)CanvasPosition);
-            var windowSize = (Vector2I)clippedRect.Size;
+            var intendedPos = monitorPos + DisplayOffset + (Vector2I)(clippedRect.Position - (Vector2)CanvasPosition);
+            var intendedSize = (Vector2I)clippedRect.Size;
+            bool fullCoverage = IsFullMonitorCoverage(intendedPos, intendedSize);
 
-            // Skip only when geometry is already applied and we are not stuck in exclusive mode
+            // Exact full-monitor match → +1px width so we never land in ExclusiveFullscreen.
+            var placePos = intendedPos;
+            var placeSize = AntiExclusivePlacementSize(intendedSize, fullCoverage);
+
+            bool modeOk = Mode == ModeEnum.Windowed && !IsExclusiveFullscreen();
+
+            // Skip only when geometry + safe windowed mode are already applied.
             if (_lastClippedRect == clippedRect
                 && _lastDisplayOffset == DisplayOffset
-                && _lastWindowPos == windowPos
-                && _lastWindowSize == windowSize
+                && _lastWindowPos == placePos
+                && _lastWindowSize == placeSize
                 && Visible
-                && Mode == ModeEnum.Windowed
-                && Borderless)
+                && Borderless
+                && modeOk
+                && Size == placeSize)
             {
                 return;
             }
 
-            // Leave exclusive fullscreen before placing (only when currently exclusive)
-            ExitExclusiveFullscreenIfNeeded();
+            bool wasFullscreenLike = IsFullscreenLike();
 
             Transparent = OutputTransparent;
-            Borderless = true;
-            Mode = ModeEnum.Windowed;
+            Unresizable = true;
 
-            // Pin to the correct screen before show/place
+            // Always demote exclusive/fullscreen before free placement (never leave exclusive active).
+            if (wasFullscreenLike || Mode != ModeEnum.Windowed)
+                ForceBorderlessWindowed();
+            else
+            {
+                Mode = ModeEnum.Windowed;
+                Borderless = true;
+            }
+
             CurrentScreen = TargetMonitor;
 
             if (!Visible)
                 Show();
 
-            ApplyNativeWindowGeometry(windowPos, windowSize);
-
-            // If the platform promoted us to exclusive after covering the whole monitor,
-            // exit once and re-apply. Cache prevents repeating every call.
-            if (Mode == ModeEnum.ExclusiveFullscreen || Mode == ModeEnum.Fullscreen)
+            // When leaving exclusive/fullscreen, bounce visibility so the content surface
+            // is recreated cleanly (prevents grey blank windows after mode exit).
+            if (wasFullscreenLike && Visible)
             {
-                ExitExclusiveFullscreenIfNeeded();
-                Mode = ModeEnum.Windowed;
-                Borderless = true;
-                CurrentScreen = TargetMonitor;
-                ApplyNativeWindowGeometry(windowPos, windowSize);
+                Hide();
+                Show();
+                ForceBorderlessWindowed();
             }
+
+            ApplyNativeWindowGeometry(placePos, placeSize);
+            EnsureContentLayout(intendedSize);
+            RefreshLayerHostSizes();
+
+            // Final safety: if engine still promoted to exclusive (race after Show/size), demote and re-place.
+            if (IsExclusiveFullscreen() || Mode != ModeEnum.Windowed)
+            {
+                GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' demoting Mode={Mode} (exclusive/fullscreen not allowed on outputs).");
+                ForceBorderlessWindowed();
+                CurrentScreen = TargetMonitor;
+                // Ensure anti-exclusive size even if fullCoverage detection raced
+                var safeSize = placeSize;
+                if (safeSize == DisplayServer.ScreenGetSize(TargetMonitor)
+                    && placePos == DisplayServer.ScreenGetPosition(TargetMonitor))
+                {
+                    safeSize = AntiExclusivePlacementSize(safeSize, true);
+                }
+
+                ApplyNativeWindowGeometry(placePos, safeSize);
+                EnsureContentLayout(intendedSize);
+                RefreshLayerHostSizes();
+            }
+
+            // Deferred re-check: promotion sometimes happens a frame later on Windows.
+            CallDeferred(nameof(DeferredDemoteExclusiveIfNeeded));
 
             _lastClippedRect = clippedRect;
             _lastDisplayOffset = DisplayOffset;
@@ -309,7 +506,8 @@ public partial class VideoOutputDevice : Window, IDisposable
             }
 
             GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' Mode={Mode} Borderless={Borderless} " +
-                     $"monitor={TargetMonitor} pos={windowPos} size={windowSize} clipped={clippedRect}");
+                     $"monitor={TargetMonitor} pos={placePos} size={placeSize} intended={intendedSize} " +
+                     $"full={fullCoverage} exclusivePrevent={fullCoverage} clipped={clippedRect}");
         }
         catch (Exception ex)
         {
@@ -318,38 +516,94 @@ public partial class VideoOutputDevice : Window, IDisposable
     }
 
     /// <summary>
-    /// Places the window using DisplayServer when a native id exists (correct multi-monitor),
-    /// falling back to Window properties. Skips no-op updates.
+    /// One-frame later guard: Windows/Godot may promote exact-size borderless windows to exclusive
+    /// after the initial placement call returns.
+    /// </summary>
+    private void DeferredDemoteExclusiveIfNeeded()
+    {
+        if (!GodotObject.IsInstanceValid(this) || IsVirtual)
+            return;
+
+        if (!IsExclusiveFullscreen() && Mode == ModeEnum.Windowed)
+            return;
+
+        GD.Print($"VideoOutputDevice:DeferredDemoteExclusiveIfNeeded - '{OutputName}' Mode={Mode}, forcing borderless windowed.");
+        ForceBorderlessWindowed();
+
+        if (_lastWindowPos.X != int.MinValue && _lastWindowSize.X > 0)
+        {
+            var pos = _lastWindowPos;
+            var size = _lastWindowSize;
+            // If cached size still exactly matches the monitor, widen by 1px.
+            if (TargetMonitor >= 0 && TargetMonitor < DisplayServer.GetScreenCount())
+            {
+                var monPos = DisplayServer.ScreenGetPosition(TargetMonitor);
+                var monSize = DisplayServer.ScreenGetSize(TargetMonitor);
+                if (pos == monPos && (size == monSize || size == new Vector2I(monSize.X, monSize.Y)))
+                    size = AntiExclusivePlacementSize(monSize, true);
+            }
+
+            CurrentScreen = TargetMonitor;
+            ApplyNativeWindowGeometry(pos, size);
+            EnsureContentLayout(size);
+            RefreshLayerHostSizes();
+        }
+    }
+
+    /// <summary>
+    /// Keeps the content root filling the window content viewport after size changes.
+    /// </summary>
+    private void EnsureContentLayout(Vector2I windowSize)
+    {
+        if (_sceneRoot == null || !IsInstanceValid(_sceneRoot))
+            return;
+
+        _sceneRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        // Explicit size backup if anchors have not resolved yet this frame
+        if (_sceneRoot.Size.X < 1 || _sceneRoot.Size.Y < 1)
+            _sceneRoot.Size = windowSize;
+    }
+
+    /// <summary>
+    /// Keeps per-layer host controls sized to the current output region after resizes.
+    /// </summary>
+    private void RefreshLayerHostSizes()
+    {
+        UpdateAllLayerDisplayRects();
+    }
+
+    /// <summary>
+    /// Places the window as borderless windowed. Window.Size is the content-viewport authority;
+    /// DisplayServer reinforces absolute multi-monitor desktop coordinates and windowed mode.
     /// </summary>
     private void ApplyNativeWindowGeometry(Vector2I windowPos, Vector2I windowSize)
     {
         if (windowSize.X <= 0 || windowSize.Y <= 0)
             return;
 
-        if (_lastWindowPos == windowPos && _lastWindowSize == windowSize
-            && Position == windowPos && Size == windowSize)
-            return;
+        // Never apply geometry while exclusive — exit first or content surface can go grey/black.
+        if (IsExclusiveFullscreen())
+            ForceBorderlessWindowed();
+
+        Mode = ModeEnum.Windowed;
+        Borderless = true;
+
+        // Always drive Godot Window.Size first — this is what the content viewport uses.
+        // DisplayServer-only size changes (without Size) are a common cause of grey blank windows.
+        if (Size != windowSize)
+            Size = windowSize;
+        if (Position != windowPos)
+            Position = windowPos;
 
         if (TryGetNativeWindowId(out int windowId))
         {
-            // DisplayServer uses absolute desktop coordinates — required for multi-monitor.
-            if (_lastWindowPos != windowPos || Position != windowPos)
-                DisplayServer.WindowSetPosition(windowPos, windowId);
-
-            if (_lastWindowSize != windowSize || Size != windowSize)
-                DisplayServer.WindowSetSize(windowSize, windowId);
+            // Force windowed + borderless at the OS level so exact full-screen rects do not
+            // stick as ExclusiveFullscreen (black flashes on mode entry / multi-monitor).
+            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, windowId);
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, true, windowId);
+            DisplayServer.WindowSetPosition(windowPos, windowId);
+            DisplayServer.WindowSetSize(windowSize, windowId);
         }
-        else
-        {
-            Position = windowPos;
-            Size = windowSize;
-        }
-
-        // Keep Godot Window state aligned (without re-applying if DisplayServer already did)
-        if (Position != windowPos)
-            Position = windowPos;
-        if (Size != windowSize)
-            Size = windowSize;
 
         _lastWindowPos = windowPos;
         _lastWindowSize = windowSize;

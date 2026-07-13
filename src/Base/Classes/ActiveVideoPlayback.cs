@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -194,6 +195,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
         }
 
+        RefreshVisualProperties();
+
         if (_targetLayers.Count == 0)
         {
             _isExiting = true;
@@ -246,13 +249,6 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             _displayRgba = new byte[needed];
         Buffer.BlockCopy(frame.Rgba, 0, _displayRgba, 0, needed);
 
-        // Optional fade via alpha
-        if (_fadeAlpha < 1.0f)
-        {
-            for (int i = 3; i < needed; i += 4)
-                _displayRgba[i] = (byte)(_displayRgba[i] * _fadeAlpha);
-        }
-
         if (_godotImage.GetWidth() != frame.Width || _godotImage.GetHeight() != frame.Height)
         {
             _godotImage = Image.CreateEmpty(frame.Width, frame.Height, false, Image.Format.Rgba8);
@@ -262,8 +258,52 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _godotImage.SetData(frame.Width, frame.Height, false, Image.Format.Rgba8, _displayRgba);
         _godotTexture.Update(_godotImage);
 
+        ApplyOpacityModulate();
         foreach (var layer in _targetLayers)
+        {
+            if (layer.Value == null || !IsInstanceValid(layer.Value))
+                continue;
             layer.Value.Texture = _godotTexture;
+        }
+    }
+
+    /// <summary>
+    /// Re-applies expand/stretch layout and opacity from the video component to live TextureRects.
+    /// Call when the inspector changes these while the cue is already playing.
+    /// </summary>
+    public void RefreshVisualProperties()
+    {
+        if (_videoComponent == null || _isExiting)
+            return;
+
+        foreach (var kv in _targetLayers.ToList())
+        {
+            var rect = kv.Value;
+            if (rect == null || !IsInstanceValid(rect))
+                continue;
+            _videoComponent.ApplyTextureLayout(rect);
+        }
+
+        ApplyOpacityModulate();
+    }
+
+    /// <summary>
+    /// Whether this playback is driven by the given video component instance.
+    /// </summary>
+    public bool UsesVideoComponent(VideoComponent component) =>
+        component != null && ReferenceEquals(_videoComponent, component);
+
+    private void ApplyOpacityModulate()
+    {
+        float opacity = Mathf.Clamp(_videoComponent?.Opacity ?? 1f, 0f, 1f);
+        var modulate = new Color(1f, 1f, 1f, opacity * _fadeAlpha);
+
+        foreach (var layer in _targetLayers)
+        {
+            if (layer.Value == null || !IsInstanceValid(layer.Value))
+                continue;
+            layer.Value.Modulate = modulate;
+        }
     }
 
     /// <summary>
