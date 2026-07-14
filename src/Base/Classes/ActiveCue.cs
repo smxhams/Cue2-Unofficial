@@ -584,6 +584,14 @@ public partial class ActiveCue : GodotObject
                 return;
             }
 
+            if (!MediaFileAvailable(audioComponent.AudioFile))
+            {
+                ReportMissingMedia(audioComponent.AudioFile);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Cannot play audio in {_cue.Name}: file missing ({audioComponent.AudioFile}).", 2);
+                return;
+            }
+
             // Preload metadata if not already (assuming done in inspector/load)
             if (audioComponent.Metadata == null)
             {
@@ -686,6 +694,8 @@ public partial class ActiveCue : GodotObject
         catch (Exception ex)
         {
             GD.Print($"ActiveCue:SetupAudioComponent - Exception: {ex.Message}");
+            if (IsMissingFileException(ex, audioComponent.AudioFile))
+                ReportMissingMedia(audioComponent.AudioFile);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
         }
@@ -699,6 +709,21 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
+            if (string.IsNullOrEmpty(videoComponent.VideoFile))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Cannot play video in {_cue.Name}: no video file set.", 2);
+                return;
+            }
+
+            if (!MediaFileAvailable(videoComponent.VideoFile))
+            {
+                ReportMissingMedia(videoComponent.VideoFile);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Cannot play video in {_cue.Name}: file missing ({videoComponent.VideoFile}).", 2);
+                return;
+            }
+
             // Preload metadata if not already (assuming done in inspector/load)
             if (videoComponent.Metadata == null)
             {
@@ -796,6 +821,8 @@ public partial class ActiveCue : GodotObject
         catch (Exception ex)
         {
             GD.Print($"ActiveCue:SetupVideoComponent - Exception: {ex.Message}, Stack: {ex.StackTrace}, Target: {ex.TargetSite}, {ex.InnerException}, {ex.Source}");
+            if (IsMissingFileException(ex, videoComponent.VideoFile))
+                ReportMissingMedia(videoComponent.VideoFile);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating video component for cue {_cue.Name}: {ex.Message}", 2);
         }
@@ -1315,5 +1342,74 @@ public partial class ActiveCue : GodotObject
         // Callable.From invokes the C# Free() after the idle frame — reliable for GodotObject.
         if (IsInstanceValid(this))
             Callable.From(FreeDeferred).CallDeferred();
+    }
+
+    /// <summary>
+    /// True when the stored media path resolves to an existing file on disk.
+    /// </summary>
+    private bool MediaFileAvailable(string storedPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(storedPath))
+                return false;
+            var globalData = Engine.GetMainLoop() is SceneTree tree
+                ? tree.Root.GetNodeOrNull<GlobalData>("/root/GlobalData")
+                : null;
+            return MediaPaths.Exists(storedPath, globalData?.SessionDir);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reports a missing media file for this cue via <see cref="MediaHealthService"/> (shell ✕ + inspector styling).
+    /// </summary>
+    private void ReportMissingMedia(string storedUrl)
+    {
+        try
+        {
+            var health = Engine.GetMainLoop() is SceneTree tree
+                ? tree.Root.GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")
+                : null;
+            health?.ReportFileMissing(_cue.Id, storedUrl);
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:ReportMissingMedia - {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Heuristic: decoder/open exceptions that indicate a missing or unreadable file.
+    /// </summary>
+    private static bool IsMissingFileException(Exception ex, string storedPath)
+    {
+        if (ex == null)
+            return false;
+        string msg = ex.Message ?? string.Empty;
+        if (msg.Contains("No such file", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("open_input failed", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("File not found", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Also treat as missing if path clearly does not exist
+        try
+        {
+            if (!string.IsNullOrEmpty(storedPath) &&
+                Engine.GetMainLoop() is SceneTree tree)
+            {
+                var globalData = tree.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
+                string resolved = globalData?.ResolveMediaPath(storedPath) ?? storedPath;
+                if (!File.Exists(resolved))
+                    return true;
+            }
+        }
+        catch { /* ignore */ }
+
+        return false;
     }
 }

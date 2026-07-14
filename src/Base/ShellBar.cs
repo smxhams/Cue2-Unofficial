@@ -25,6 +25,7 @@ public partial class ShellBar : PanelContainer
 	private Panel _shellPanel;
 	private Button _dragButton;
 	private Button _collapseButton;
+	private Button _issueIndicator;
 	
 	private LineEdit _cueNumLineEdit;
 	private LineEdit _cueNameLineEdit;
@@ -74,6 +75,7 @@ public partial class ShellBar : PanelContainer
 
 		// Optional global refresh targeting this cue id
 		_globalSignals.UpdateShellBar += OnUpdateShellBar;
+		_globalSignals.CueMediaHealthChanged += OnCueMediaHealthChanged;
 	}
 
 	public override void _ExitTree()
@@ -91,7 +93,10 @@ public partial class ShellBar : PanelContainer
 			return;
 
 		if (_globalSignals != null)
+		{
 			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
+			_globalSignals.CueMediaHealthChanged -= OnCueMediaHealthChanged;
+		}
 		if (_cue != null)
 		{
 			_cue.NameChanged -= UpdateName;
@@ -115,6 +120,46 @@ public partial class ShellBar : PanelContainer
 			RefreshTimesFromCue();
 	}
 
+	private void OnCueMediaHealthChanged(int cueId, bool hasIssue, string message)
+	{
+		if (_cue == null || _cue.Id != cueId)
+			return;
+		ApplyIssueIndicator(hasIssue, message);
+	}
+
+	/// <summary>
+	/// Shows or hides the red ✕ issue indicator (e.g. missing media file).
+	/// </summary>
+	private void ApplyIssueIndicator(bool hasIssue, string message)
+	{
+		if (_issueIndicator == null)
+			return;
+
+		_issueIndicator.Visible = hasIssue;
+		_issueIndicator.TooltipText = hasIssue
+			? (string.IsNullOrEmpty(message) ? "Issue" : message)
+			: string.Empty;
+	}
+
+	/// <summary>
+	/// Syncs issue indicator from <see cref="MediaHealthService"/> for the bound cue.
+	/// </summary>
+	private void RefreshIssueIndicatorFromService()
+	{
+		if (_cue == null || _issueIndicator == null)
+			return;
+
+		var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+		if (health == null)
+		{
+			ApplyIssueIndicator(false, string.Empty);
+			return;
+		}
+
+		bool has = health.TryGetIssue(_cue.Id, out var issue);
+		ApplyIssueIndicator(has, has ? issue.Message : string.Empty);
+	}
+
 	private void DefineUi()
 	{
 		// Define Ui
@@ -123,6 +168,15 @@ public partial class ShellBar : PanelContainer
 		_shellPanel = GetNode<Panel>("%ShellPanel");
 		_dragButton = GetNode<Button>("%DragBar");
 		_collapseButton = GetNode<Button>("%CollapseButton");
+		_issueIndicator = GetNodeOrNull<Button>("%IssueIndicator");
+		if (_issueIndicator != null)
+		{
+			_issueIndicator.Visible = false;
+			// QLab-style red X
+			_issueIndicator.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+			_issueIndicator.AddThemeColorOverride("font_hover_color", GlobalStyles.Danger);
+			_issueIndicator.AddThemeColorOverride("font_pressed_color", GlobalStyles.Danger);
+		}
 		
 		_cueNumLineEdit = GetNode<LineEdit>("%CueNumLineEdit");
 		_cueNameLineEdit = GetNode<LineEdit>("%CueNameLineEdit");
@@ -165,6 +219,7 @@ public partial class ShellBar : PanelContainer
 		else _followCheckBox.ButtonPressed = false;
 		// Initialize collapse/expand UI based on children (SetCue path)
 		UpdateCollapseUI();
+		RefreshIssueIndicatorFromService();
 
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;

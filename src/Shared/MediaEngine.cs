@@ -184,7 +184,8 @@ public partial class MediaEngine : Node
     /// <param name="path">Audio file path.</param>
     /// <returns>AudioFileMetadata with extracted values.</returns>
     public async Task<AudioFileMetadata> GetAudioFileMetadataAsync(string path)
-    { 
+    {
+        path = ResolveMediaPath(path);
         if (!File.Exists(path)) 
         { 
             GD.PrintErr("MediaEngine:GetAudioFileMetadataAsync - File not found.");
@@ -289,8 +290,15 @@ public partial class MediaEngine : Node
     /// </summary>
     /// <param name="path">Media file path with an audio stream.</param>
     /// <returns>Serialized <see cref="WaveformPeaks"/> bytes, or empty on failure.</returns>
+    /// <summary>
+    /// Resolves show-relative media paths against the current session directory.
+    /// </summary>
+    private string ResolveMediaPath(string path) =>
+        _globalData?.ResolveMediaPath(path) ?? path;
+
     public async Task<byte[]> GenerateWaveformAsync(string path)
     {
+        path = ResolveMediaPath(path);
         if (!File.Exists(path))
         {
             GD.PrintErr("MediaEngine:GenerateWaveformAsync - File not found.");
@@ -583,6 +591,7 @@ public partial class MediaEngine : Node
     /// <returns>VideoFileMetadata with extracted values.</returns>
     public async Task<VideoFileMetadata> GetVideoFileMetadataAsync(string path)
     {
+        path = ResolveMediaPath(path);
         if (!File.Exists(path))
         {
             GD.PrintErr("MediaEngine:GetVideoFileMetadataAsync - File not found.");

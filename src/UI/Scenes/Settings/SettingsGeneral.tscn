@@ -189,3 +189,50 @@ theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
 theme_override_font_sizes/font_size = 11
 text = "0 = instant. Second Stop cuts immediately."
 vertical_alignment = 1
+
+[node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="MediaHeader" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="MediaLabel" type="Label" parent="VBoxContainer/MediaHeader"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Media"
+
+[node name="MediaBackupRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="MediaBackupLabel" type="Label" parent="VBoxContainer/MediaBackupRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Backup media"
+vertical_alignment = 1
+tooltip_text = "When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile."
+
+[node name="MediaBackupCheckBox" type="CheckBox" parent="VBoxContainer/MediaBackupRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Enabled"
+tooltip_text = "When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile."
+
+[node name="MediaBackupResetButton" type="Button" parent="VBoxContainer/MediaBackupRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="MediaBackupHint" type="Label" parent="VBoxContainer/MediaBackupRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "Copy media into show folder (Audio/Video/Images)."
+vertical_alignment = 1

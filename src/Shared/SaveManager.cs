@@ -17,6 +17,7 @@ public partial class SaveManager : Node
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
 	private AudioDevices _audioDevices;
+	private MediaBackupManager _mediaBackupManager;
 
 	private PackedScene _saveDialogScene;
 	private PackedScene _openDialogScene;
@@ -34,6 +35,7 @@ public partial class SaveManager : Node
 		_globalData = GetNode<Cue2.Shared.GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
+		_mediaBackupManager = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
 		
 		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
 		// TODO: _openDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
@@ -151,16 +153,41 @@ public partial class SaveManager : Node
 	
 	
 	/// <summary>
+	/// Re-saves the current session after media paths were rewritten to show-relative URLs.
+	/// Skips media-backup enqueue to avoid a recursive copy loop.
+	/// </summary>
+	public void ResaveSessionAfterMediaPathUpdate()
+	{
+		if (string.IsNullOrEmpty(_globalData.SessionPath))
+		{
+			GD.Print("SaveManager:ResaveSessionAfterMediaPathUpdate - No SessionPath; skip.");
+			return;
+		}
+
+		SaveSession(_globalData.SessionPath, skipMediaBackup: true);
+	}
+
+	/// <summary>
 	/// Saves the current session data to the specified path and name.
 	/// Creates necessary folders, serializes data to JSON, encrypts it, and writes to file.
 	/// </summary>
 	/// <param name="selectedPath">The full path where the session file will be saved.</param>
-	/// <param name="sessionName">The name of the session (used for logging).</param>
-	private void SaveSession(string selectedPath)
+	/// <param name="skipMediaBackup">When true, does not enqueue media copies (used after path rewrite re-save).</param>
+	private void SaveSession(string selectedPath, bool skipMediaBackup = false)
 	{
-		// Verify save folder structure
-		var sessionPath = DirectoryUtils.PrepareSessionDirectory(selectedPath, out var mediaPath, out var waveFormPath);
-		GD.Print($"SaveManager:SaveSession - Session path: {sessionPath}");
+		// Verify save folder structure (type-based: Audio, Video, Images, Waveforms)
+		var sessionPath = DirectoryUtils.PrepareSessionDirectory(selectedPath, out var folderPaths);
+		GD.Print($"SaveManager:SaveSession - Session path: {sessionPath} skipMediaBackup={skipMediaBackup}");
+
+		if (string.IsNullOrEmpty(sessionPath))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to prepare session directory for: {selectedPath}", 2);
+			GD.PrintErr($"SaveManager:SaveSession - PrepareSessionDirectory failed for: {selectedPath}");
+			return;
+		}
+
+		// Session paths must be known before serializing so relative media URLs resolve correctly
+		ApplySessionPaths(sessionPath, folderPaths);
 		
 		
 		// SAVE DATA
@@ -188,21 +215,57 @@ public partial class SaveManager : Node
 		file.StoreString(jsonString);
 		file.Close(); // Explicit close, though using handles it
 
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session saved successfully to {selectedPath}", 0);
-        
-		// Update session info
-		_globalData.SessionPath = sessionPath;
-		_globalData.SessionName = Path.GetFileNameWithoutExtension(sessionPath);
-		_globalData.SessionMediaPath = mediaPath;
-		_globalData.SessionWaveformsPath = waveFormPath;
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			skipMediaBackup
+				? $"Session re-saved with relative media paths to {sessionPath}"
+				: $"Session saved successfully to {sessionPath}",
+			0);
 
 		// Also track newly saved shows in recents
 		_globalData.UserDataManager?.AddRecentShowFile(sessionPath);
+
+		// Background-copy used media into Audio/Video/Images (respects MediaBackupEnabled)
+		if (!skipMediaBackup)
+		{
+			try
+			{
+				_mediaBackupManager ??= GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
+				_mediaBackupManager?.EnqueueShowMediaBackup();
+			}
+			catch (Exception ex)
+			{
+				GD.PrintErr($"SaveManager:SaveSession - Media backup enqueue failed: {ex.Message}");
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Media backup enqueue failed: {ex.Message}", 2);
+			}
+		}
 
 		ConfigureAutosave();
 
 		// Update title (in case signal timing)
 		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
+	}
+
+	/// <summary>
+	/// Applies session file path, name, and type-based media folder paths to <see cref="GlobalData"/>.
+	/// </summary>
+	/// <param name="sessionFilePath">Absolute path to the .c2 file.</param>
+	/// <param name="folderPaths">Optional precomputed folder layout; derived from the session path when null.</param>
+	private void ApplySessionPaths(string sessionFilePath, SessionFolderPaths folderPaths = null)
+	{
+		if (string.IsNullOrEmpty(sessionFilePath))
+			return;
+
+		folderPaths ??= DirectoryUtils.GetSessionFolderPaths(sessionFilePath);
+
+		_globalData.SessionPath = sessionFilePath;
+		_globalData.SessionName = Path.GetFileNameWithoutExtension(sessionFilePath);
+		_globalData.SessionDir = folderPaths.SessionDir;
+		_globalData.SessionAudioPath = folderPaths.AudioDir;
+		_globalData.SessionVideoPath = folderPaths.VideoDir;
+		_globalData.SessionImagesPath = folderPaths.ImagesDir;
+		_globalData.SessionWaveformsPath = folderPaths.WaveformsDir;
+
+		GD.Print($"SaveManager:ApplySessionPaths - SessionDir={_globalData.SessionDir}, Audio={_globalData.SessionAudioPath}, Video={_globalData.SessionVideoPath}, Images={_globalData.SessionImagesPath}, Waveforms={_globalData.SessionWaveformsPath}");
 	}
 	
 	/// <summary>
@@ -227,9 +290,8 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Set name early so title updates see it (signal handlers run in connection order)
-		_globalData.SessionPath = selectedPath;
-		_globalData.SessionName = Path.GetFileNameWithoutExtension(selectedPath);
+		// Set name/path early so title updates see it (signal handlers run in connection order)
+		ApplySessionPaths(selectedPath);
 		
 		ResetSession();
 		
@@ -250,6 +312,7 @@ public partial class SaveManager : Node
 		_globalData.Cuelist.ResetCuelist();
 		_globalData.Devices.ResetAudioDevices();
 		_globalData.Settings.ResetSettings();
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
 	}
 	
 	

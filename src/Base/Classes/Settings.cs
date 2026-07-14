@@ -30,6 +30,9 @@ public partial class Settings : Node
     /// <summary>System default stop fade-out duration in seconds.</summary>
     public const float DefaultStopFadeDuration = 2.5f;
 
+    /// <summary>Default for copying used media into the show folder (Audio/Video/Images).</summary>
+    public const bool DefaultMediaBackupEnabled = true;
+
     public float UiScale = DefaultUiScale;
     public float GoScale = DefaultGoScale;
     public int WaveformResolution = DefaultWaveformResolution;
@@ -39,6 +42,14 @@ public partial class Settings : Node
     /// 0 = immediate stop. Persisted with the session.
     /// </summary>
     public float StopFadeDuration = DefaultStopFadeDuration;
+
+    /// <summary>
+    /// When true, used media files are copied into the show folder (Audio/Video/Images)
+    /// so the show can be moved between machines with relative media paths.
+    /// Persisted with the showfile.
+    /// </summary>
+    public bool MediaBackupEnabled = DefaultMediaBackupEnabled;
+
     public bool VerbosePrint = true;
     
     
@@ -141,6 +152,7 @@ public partial class Settings : Node
         GoScale = DefaultGoScale;
         WaveformResolution = DefaultWaveformResolution;
         StopFadeDuration = DefaultStopFadeDuration;
+        MediaBackupEnabled = DefaultMediaBackupEnabled;
         CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
         CueLightGoColour = new Color(0f, 1f, 0f, 1f);
         CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
@@ -171,6 +183,7 @@ public partial class Settings : Node
         saveTable.Add("GoScale", GoScale);
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
+        saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
         
         // Cuelights
         saveTable.Add("CueLightIdleColour", CueLightIdleColour.ToHtml());
@@ -239,6 +252,10 @@ public partial class Settings : Node
         _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
         WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
         StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
+        // Default true for older shows that predate this setting
+        MediaBackupEnabled = settingsData.TryGetValue("MediaBackupEnabled", out value)
+            ? value.AsBool()
+            : DefaultMediaBackupEnabled;
         
         CueLightIdleColour = settingsData.TryGetValue("CueLightIdleColour", out value) ? Color.FromString(value.AsString(), CueLightIdleColour) : CueLightIdleColour;
         CueLightGoColour = settingsData.TryGetValue("CueLightGoColour", out value) ? Color.FromString(value.AsString(), CueLightGoColour) : CueLightGoColour;

@@ -92,9 +92,27 @@ public partial class VideoInspector : Control
 		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
 
 		_globalSignals.ShellFocused += ShellSelected;
+		// Media backup rewrites paths while a cue stays selected — refresh URL without re-select
+		_globalSignals.SyncShellInspector += RefreshMediaPathDisplay;
+		_globalSignals.CueMediaHealthChanged += OnCueMediaHealthChanged;
 
 		AssignUiNodeParameters();
 		SetupWaveformUi();
+		_fileUrlMissingStyle = InspectorMediaUrlStyle.CreateMissingStyle();
+
+		_deleteVideoComponentButton = GetNodeOrNull<Button>("%DeleteVideoComponentButton");
+		if (_deleteVideoComponentButton != null)
+		{
+			_deleteVideoComponentButton.Pressed += OnDeleteVideoComponentPressed;
+			_deleteVideoComponentButton.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+			try
+			{
+				_deleteVideoComponentButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+				_deleteVideoComponentButton.ExpandIcon = true;
+			}
+			catch { /* optional */ }
+			_deleteVideoComponentButton.Visible = false;
+		}
 
 		_startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
 		_endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
@@ -340,13 +358,85 @@ public partial class VideoInspector : Control
 	/// Called when a cue shell is selected. Updates UI based on presence of AudioComponent.
 	/// </summary>
 	/// <param name="cueId">The ID of the selected cue.</param>
+	private StyleBoxFlat _fileUrlMissingStyle;
+	private Button _deleteVideoComponentButton;
+
+	/// <summary>
+	/// Refreshes the file URL field when media paths are rewritten (e.g. after show-local backup).
+	/// </summary>
+	private void RefreshMediaPathDisplay()
+	{
+		if (_fileUrl == null || _focusedVideoComponent == null)
+			return;
+
+		string path = _focusedVideoComponent.VideoFile ?? string.Empty;
+		if (!string.Equals(_fileUrl.Text, path, StringComparison.Ordinal))
+			_fileUrl.Text = path;
+
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue?.Id ?? -1);
+		ApplyFileUrlMissingStyleFromHealth();
+	}
+
+	private void OnCueMediaHealthChanged(int cueId, bool hasIssue, string message)
+	{
+		if (_focusedCue == null || _focusedCue.Id != cueId)
+			return;
+		// Only style this inspector's URL if *video* is among the missing paths
+		ApplyFileUrlMissingStyleFromHealth();
+	}
+
+	/// <summary>
+	/// Styles the video URL field only when this cue's video path is reported missing
+	/// (not when only audio/other media is missing).
+	/// </summary>
+	private void ApplyFileUrlMissingStyleFromHealth()
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null ||
+		    string.IsNullOrWhiteSpace(_focusedVideoComponent.VideoFile))
+		{
+			ApplyFileUrlMissingStyle(false, null);
+			return;
+		}
+
+		var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+		bool missing = health != null && health.IsPathMissing(_focusedCue.Id, _focusedVideoComponent.VideoFile);
+		ApplyFileUrlMissingStyle(missing, missing ? "File Missing" : null);
+	}
+
+	/// <summary>
+	/// Applies or clears italic + red border styling on the URL field for missing media.
+	/// </summary>
+	private void ApplyFileUrlMissingStyle(bool missing, string tooltip)
+	{
+		_fileUrlMissingStyle ??= InspectorMediaUrlStyle.CreateMissingStyle();
+		InspectorMediaUrlStyle.Apply(_fileUrl, _fileUrlMissingStyle, missing, tooltip);
+	}
+
 	private async void ShellSelected(int cueId)
 	{
+		if (cueId < 0)
+		{
+			_focusedCue = null;
+			_focusedVideoComponent = null;
+			_fileUrl.Text = "";
+			ApplyFileUrlMissingStyle(false, null);
+			if (_deleteVideoComponentButton != null)
+				_deleteVideoComponentButton.Visible = false;
+			_inspectorContent.Visible = false;
+			_selectFileContainer.Visible = false;
+			_previewContainer.Visible = false;
+			try { _videoPreviewer?.ClearDecoder(); } catch { /* optional */ }
+			return;
+		}
+
 		_focusedCue = CueList.FetchCueFromId(cueId);
 
 		if (_focusedCue == null)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:ShellSelected - Cue with ID {cueId} not found.", 2);
+			_focusedVideoComponent = null;
+			ApplyFileUrlMissingStyle(false, null);
+			if (_deleteVideoComponentButton != null)
+				_deleteVideoComponentButton.Visible = false;
 			return;
 		}
 		
@@ -358,11 +448,16 @@ public partial class VideoInspector : Control
 			_inspectorContent.Visible = false;
 			_focusedVideoComponent = null;
 			_fileUrl.Text = "";
+			ApplyFileUrlMissingStyle(false, null);
+			if (_deleteVideoComponentButton != null)
+				_deleteVideoComponentButton.Visible = false;
 			return;
 		}
 		
 		// Video Component Found
 		_focusedVideoComponent = _focusedCue.Components.OfType<VideoComponent>().First();
+		if (_deleteVideoComponentButton != null)
+			_deleteVideoComponentButton.Visible = true;
 		var file = _focusedVideoComponent.VideoFile;
 		
 		if (_focusedVideoComponent.Metadata == null)
@@ -411,6 +506,41 @@ public partial class VideoInspector : Control
 
 		await RefreshAudioUiState();
 
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+		ApplyFileUrlMissingStyleFromHealth();
+		if (_deleteVideoComponentButton != null)
+			_deleteVideoComponentButton.Visible = _focusedVideoComponent != null;
+	}
+
+	/// <summary>
+	/// Removes the video component from the focused cue and resets the inspector UI.
+	/// </summary>
+	private void OnDeleteVideoComponentPressed()
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null)
+			return;
+
+		_focusedCue.RemoveICueComponent(_focusedVideoComponent);
+		_focusedVideoComponent = null;
+		_focusedCue.CalculateTotalDuration();
+
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+
+		_infoLabel.Text = "No Video File";
+		_inspectorContent.Visible = false;
+		_previewContainer.Visible = false;
+		_fileUrl.Text = "";
+		ApplyFileUrlMissingStyle(false, null);
+		if (_deleteVideoComponentButton != null)
+			_deleteVideoComponentButton.Visible = false;
+
+		try { _videoPreviewer?.ClearDecoder(); } catch { /* optional */ }
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+		_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"Removed video component from cue {_focusedCue.Name}", 0);
+		GD.Print($"VideoInspector:OnDeleteVideoComponentPressed - Removed video from cue {_focusedCue.Id}");
 	}
 
 	/// <summary>
@@ -475,11 +605,29 @@ public partial class VideoInspector : Control
 	{
 		if (_focusedCue == null) return;
 
-		if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+		string resolvedPath = _globalData?.ResolveMediaPath(filePath) ?? filePath;
+		if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(resolvedPath))
 		{
 			GD.Print($"VideoInspector:SetVideoFile - File not found: {filePath}");
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:File not found: {filePath}", 2);
 			return;
+		}
+
+		// Prefer show-relative path when media backup is enabled (copy runs in background)
+		string pathToStore = filePath;
+		try
+		{
+			var backup = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
+			var kind = MediaBackupManager.DetectKindFromPath(resolvedPath);
+			if (kind != MediaBackupKind.Image)
+				kind = MediaBackupKind.Video;
+			string relative = backup?.EnsureMediaBackedUp(resolvedPath, kind);
+			if (!string.IsNullOrEmpty(relative))
+				pathToStore = relative;
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"VideoInspector:SetVideoFile - Media backup: {ex.Message}");
 		}
 
 		// Resolve or create component; always assign the path (AddVideoComponent alone does not update existing).
@@ -488,8 +636,8 @@ public partial class VideoInspector : Control
 		if (existingVideo != null)
 		{
 			_focusedVideoComponent = existingVideo;
-			bool pathChanged = !string.Equals(existingVideo.VideoFile, filePath, StringComparison.OrdinalIgnoreCase);
-			existingVideo.VideoFile = filePath;
+			bool pathChanged = !string.Equals(existingVideo.VideoFile, pathToStore, StringComparison.OrdinalIgnoreCase);
+			existingVideo.VideoFile = pathToStore;
 			if (pathChanged)
 			{
 				// Force re-fetch of metadata/waveform for the new file
@@ -499,10 +647,10 @@ public partial class VideoInspector : Control
 		}
 		else
 		{
-			_focusedVideoComponent = _focusedCue.AddVideoComponent(filePath);
+			_focusedVideoComponent = _focusedCue.AddVideoComponent(pathToStore);
 		}
 
-		_fileUrl.Text = filePath;
+		_fileUrl.Text = pathToStore;
 		_inspectorContent.Visible = true;
 		_selectFileContainer.Visible = true;
 		_infoLabel.Text = "";
@@ -512,7 +660,7 @@ public partial class VideoInspector : Control
 
 		try
 		{
-			var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(filePath);
+			var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(resolvedPath);
 			if (fileMetadata == null)
 			{
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -566,7 +714,7 @@ public partial class VideoInspector : Control
 			return;
 		}
 
-		UpdateVideoUiFields(filePath);
+		UpdateVideoUiFields(pathToStore);
 
 		// Always regenerate waveform when audio is present (RefreshAudioUiState skips if old data remains)
 		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
@@ -600,9 +748,14 @@ public partial class VideoInspector : Control
 		_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 		_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
 
-		GD.Print($"VideoInspector:SetVideoFile - Set video file: {filePath}");
+		GD.Print($"VideoInspector:SetVideoFile - Set video file: {pathToStore}");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-			$"VideoInspector:Set video file to: {Path.GetFileName(filePath)}", 0);
+			$"VideoInspector:Set video file to: {pathToStore}", 0);
+
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+		ApplyFileUrlMissingStyleFromHealth();
+		if (_deleteVideoComponentButton != null)
+			_deleteVideoComponentButton.Visible = true;
 	}
 	
 	/// <summary>
@@ -672,6 +825,9 @@ public partial class VideoInspector : Control
 		_inspectorContent.Visible = true;
 		
 		_fileUrl.Text = file;
+		ApplyFileUrlMissingStyleFromHealth();
+		if (_deleteVideoComponentButton != null)
+			_deleteVideoComponentButton.Visible = true;
 		_startTimeInput.Text = UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
 		_startTimeInput.TooltipText = startTip;
 		

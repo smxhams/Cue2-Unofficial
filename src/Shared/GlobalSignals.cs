@@ -65,6 +65,12 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void StopAllEventHandler();
 	
 	[Signal] public delegate void CreateCueEventHandler();
+
+	/// <summary>Delete currently selected cue(s) from the cuelist.</summary>
+	[Signal] public delegate void DeleteSelectedCuesEventHandler();
+
+	/// <summary>Duplicate currently selected cue(s) (and full child trees when a parent is selected).</summary>
+	[Signal] public delegate void DuplicateSelectedCuesEventHandler();
 	
 	[Signal] public delegate void GroupSelectedCuesEventHandler();
 
@@ -97,6 +103,23 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void AudioDevicesChangedEventHandler();
 	[Signal] public delegate void DisplaysChangedEventHandler();
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
+
+	// Media backup (show-local file copies)
+	/// <summary>
+	/// Fired when media backup progress changes.
+	/// Args: percent (0–100), busy, statusText (e.g. "Copying 45%"), originPath, destPath, completedCount, totalCount.
+	/// </summary>
+	[Signal] public delegate void MediaBackupProgressEventHandler(
+		float percent, bool busy, string statusText, string originPath, string destPath, int completedCount, int totalCount);
+	/// <summary>Fired when the media backup queue becomes idle.</summary>
+	[Signal] public delegate void MediaBackupCompletedEventHandler();
+
+	// Media health (missing files, etc.)
+	/// <summary>
+	/// Fired when a cue's media health state changes.
+	/// Args: cueId, hasIssue, message (tooltip text when hasIssue is true).
+	/// </summary>
+	[Signal] public delegate void CueMediaHealthChangedEventHandler(int cueId, bool hasIssue, string message);
 
 	public static event Action<string, int> Logger;
 

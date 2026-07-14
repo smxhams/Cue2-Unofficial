@@ -90,6 +90,8 @@ public partial class CueList : Control
 		_reorderController = new CueReorder(this, _reorderCueControl, _reorderLocationLabel, _reorderListContainer, _reorderIndicatorPanel, _cueContainer);
 
 		_globalSignals.CreateCue += CreateCue;
+		_globalSignals.DeleteSelectedCues += DeleteSelectedCues;
+		_globalSignals.DuplicateSelectedCues += DuplicateSelectedCues;
 		_globalSignals.GroupSelectedCues += GroupSelectedCues;
 		_globalSignals.CuelistExpandOneLayer += ExpandOneLayer;
 		_globalSignals.CuelistCollapseOneLayer += CollapseOneLayer;
@@ -304,13 +306,16 @@ public partial class CueList : Control
 			bool isVideoOrImage = GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)) ||
 			                       GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
 
+			// Store show-relative path immediately when media backup is enabled
+			string pathToStore = ResolveMediaPathForNewCue(filePath, isAudio);
+
 			if (isAudio)
 			{
-				cue.AddAudioComponent(filePath);
+				cue.AddAudioComponent(pathToStore);
 			}
 			else if (isVideoOrImage)
 			{
-				var vcomp = cue.AddVideoComponent(filePath);
+				cue.AddVideoComponent(pathToStore);
 				// Video may contain audio - we will discover on metadata
 			}
 			else
@@ -465,8 +470,34 @@ public partial class CueList : Control
 	}
 
 	/// <summary>
+	/// When media backup is enabled and a show is open, returns a show-relative path and queues copy.
+	/// Otherwise returns the original absolute path. Metadata loading should still use the absolute source.
+	/// </summary>
+	private string ResolveMediaPathForNewCue(string absolutePath, bool isAudio)
+	{
+		try
+		{
+			var backup = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
+			if (backup == null)
+				return absolutePath;
+
+			var kind = isAudio
+				? MediaBackupKind.Audio
+				: MediaBackupManager.DetectKindFromPath(absolutePath);
+
+			string relative = backup.EnsureMediaBackedUp(absolutePath, kind);
+			return string.IsNullOrEmpty(relative) ? absolutePath : relative;
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"CueList:ResolveMediaPathForNewCue - {ex.Message}");
+			return absolutePath;
+		}
+	}
+
+	/// <summary>
 	/// Asynchronously fetches metadata (and waveform for audio), attaches it to the component, and updates cue duration.
-	/// Safe to fire-and-forget.
+	/// Safe to fire-and-forget. <paramref name="filePath"/> should be a readable absolute path (source file).
 	/// </summary>
 	private async Task ApplyMetadataToNewCueAsync(Cue cue, string filePath, MediaEngine mediaEngine)
 	{
@@ -563,12 +594,293 @@ public partial class CueList : Control
 	}
 	
 	/// <summary>
+	/// Duplicates selected cues (Ctrl+D).
+	/// <list type="bullet">
+	/// <item>If a parent is selected, its full child tree is duplicated; selected descendants of that parent are ignored.</item>
+	/// <item>A single selection is cloned directly below the origin.</item>
+	/// <item>Multiple roots insert as one contiguous block below the most recently selected cue.</item>
+	/// </list>
+	/// </summary>
+	public void DuplicateSelectedCues()
+	{
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		if (selected.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "No cues selected to duplicate.", (int)LogType.Info);
+			return;
+		}
+
+		// Roots only: parent selected ⇒ whole tree; do not also treat selected children as roots
+		var selectedIds = new HashSet<int>(selected.Select(c => c.Id));
+		var roots = selected
+			.Where(c => c != null && !IsDescendantOfAnySelectedAncestor(c, selectedIds))
+			.ToList();
+
+		if (roots.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "No cues selected to duplicate.", (int)LogType.Info);
+			return;
+		}
+
+		// Visual/document order for a stable duplicate block
+		var visualOrder = GetVisualCueOrderIncludingCollapsed();
+		roots = roots
+			.OrderBy(c =>
+			{
+				int idx = visualOrder.IndexOf(c.Id);
+				return idx < 0 ? int.MaxValue : idx;
+			})
+			.ToList();
+
+		// Anchor: most recently selected cue → insert block Below it
+		var anchor = selected.Last();
+		if (anchor?.ShellBar == null || !IsInstanceValid(anchor.ShellBar))
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Cannot duplicate: selection has no shell UI.", 2);
+			return;
+		}
+
+		var (container, insertIndex, parentId) = ResolveInsertLocation(anchor.Id, DropInsertMode.Below);
+		var newTopLevel = new List<Cue>();
+
+		int index = insertIndex;
+		foreach (var root in roots)
+		{
+			var clone = CloneCueTree(root, parentId, container, index);
+			if (clone != null)
+			{
+				newTopLevel.Add(clone);
+				index++; // next top-level sibling after this clone root
+			}
+		}
+
+		// Keep parent ChildCues list aligned with UI order after mid-list inserts
+		if (parentId != -1)
+		{
+			var parentCue = FetchCueFromId(parentId);
+			SyncChildCuesFromShellContainer(parentCue);
+		}
+
+		if (newTopLevel.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Duplication produced no cues.", 1);
+			return;
+		}
+
+		// Select the new duplicates (top-level of the block)
+		foreach (var c in ShellSelection.SelectedCues.ToList())
+			c.ShellBar?.Deselect();
+		ShellSelection.SelectedCues.Clear();
+		foreach (var c in newTopLevel)
+		{
+			if (c.ShellBar != null)
+			{
+				c.ShellBar.Select();
+				ShellSelection.SelectedCues.Add(c);
+			}
+		}
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), newTopLevel.Last().Id);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			newTopLevel.Count == 1
+				? $"Duplicated cue \"{newTopLevel[0].Name}\"."
+				: $"Duplicated {newTopLevel.Count} cues.",
+			(int)LogType.Info);
+		GD.Print($"CueList:DuplicateSelectedCues - Created {newTopLevel.Count} top-level duplicate(s).");
+	}
+
+	/// <summary>
+	/// True if <paramref name="cue"/> has an ancestor whose id is in <paramref name="selectedIds"/>.
+	/// </summary>
+	private static bool IsDescendantOfAnySelectedAncestor(Cue cue, HashSet<int> selectedIds)
+	{
+		int parentId = cue.ParentId;
+		while (parentId != -1)
+		{
+			if (selectedIds.Contains(parentId))
+				return true;
+			var parent = FetchCueFromId(parentId);
+			if (parent == null) break;
+			parentId = parent.ParentId;
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Flat list of all cue ids in UI order (including inside collapsed groups).
+	/// </summary>
+	private List<int> GetVisualCueOrderIncludingCollapsed()
+	{
+		var result = new List<int>();
+		void Walk(VBoxContainer container)
+		{
+			if (container == null) return;
+			foreach (var child in container.GetChildren())
+			{
+				if (child is not ShellBar sb) continue;
+				int id = sb.CueId;
+				result.Add(id);
+				Walk(sb.ShellChildContainer);
+			}
+		}
+		Walk(_cueContainer);
+		return result;
+	}
+
+	/// <summary>
+	/// Deep-clones a cue and all descendants into <paramref name="container"/> at <paramref name="insertIndex"/>.
+	/// </summary>
+	/// <returns>The new root clone, or null on failure.</returns>
+	private Cue CloneCueTree(Cue source, int newParentId, VBoxContainer container, int insertIndex)
+	{
+		if (source == null) return null;
+
+		var clone = CloneCueShallow(source);
+		CreateShellAndInsert(clone, container, insertIndex, newParentId);
+
+		// Children of the source go under the clone's child container, in ChildCues order
+		var childContainer = clone.ShellBar?.ShellChildContainer;
+		if (childContainer != null && source.ChildCues.Count > 0)
+		{
+			int childIndex = 0;
+			foreach (int childId in source.ChildCues.ToList())
+			{
+				var child = FetchCueFromId(childId);
+				if (child == null) continue;
+				CloneCueTree(child, clone.Id, childContainer, childIndex);
+				childIndex++;
+			}
+			clone.Expanded = source.Expanded;
+			clone.ShellBar?.RelationshipChanged();
+			clone.ShellBar?.SetExpanded(clone.Expanded);
+		}
+
+		clone.CalculateTotalDuration();
+		return clone;
+	}
+
+	/// <summary>
+	/// Creates a new cue with a fresh id and copies scalar fields + components from <paramref name="source"/>.
+	/// Does not copy ParentId/ChildCues (set by tree insert).
+	/// </summary>
+	private static Cue CloneCueShallow(Cue source)
+	{
+		var clone = new Cue();
+		clone.Name = source.Name;
+		clone.CueNum = source.CueNum;
+		clone.PreWait = source.PreWait;
+		clone.Duration = source.Duration;
+		clone.TotalDuration = source.TotalDuration;
+		clone.PostWait = source.PostWait;
+		clone.Follow = source.Follow;
+		clone.Expanded = source.Expanded;
+		clone.Color = source.Color;
+		clone.ParentId = -1;
+		clone.ChildCues = new List<int>();
+
+		// Deep-copy components via serialize/deserialize
+		clone.Components.Clear();
+		foreach (var comp in source.Components)
+		{
+			if (comp == null) continue;
+			try
+			{
+				var compDict = comp.GetData();
+				compDict["Type"] = comp.Type;
+				ICueComponent newComp = comp.Type switch
+				{
+					"Audio" => new AudioComponent(),
+					"Video" => new VideoComponent(),
+					"Network" => new NetworkComponent(),
+					"CueLight" => new CueLightComponent(),
+					"OscComponent" => new OscComponent(),
+					_ => null
+				};
+				if (newComp == null) continue;
+				newComp.LoadFromData(compDict);
+				clone.Components.Add(newComp);
+			}
+			catch (Exception ex)
+			{
+				GD.PrintErr($"CueList:CloneCueShallow - Failed to clone component {comp.Type}: {ex.Message}");
+			}
+		}
+
+		return clone;
+	}
+
+	/// <summary>
+	/// Rebuilds <see cref="Cue.ChildCues"/> from the shell child container order.
+	/// </summary>
+	private static void SyncChildCuesFromShellContainer(Cue parent)
+	{
+		if (parent?.ShellBar?.ShellChildContainer == null) return;
+		parent.ChildCues.Clear();
+		foreach (var child in parent.ShellBar.ShellChildContainer.GetChildren())
+		{
+			if (child is ShellBar sb)
+				parent.ChildCues.Add(sb.CueId);
+		}
+		parent.ShellBar.RelationshipChanged();
+	}
+
+	/// <summary>
+	/// Deletes all currently selected cues (Delete key / shell inspector).
+	/// When a parent is selected, children are removed with it even if not multi-selected.
+	/// </summary>
+	public void DeleteSelectedCues()
+	{
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		if (selected.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "No cues selected to delete.", (int)LogType.Info);
+			return;
+		}
+
+		// Avoid double-delete: only delete roots of the selection (parent selected ⇒ children go with it)
+		var selectedIds = new HashSet<int>(selected.Select(c => c.Id));
+		var roots = selected
+			.Where(c => c != null && (c.ParentId == -1 || !selectedIds.Contains(c.ParentId)))
+			.ToList();
+
+		int count = 0;
+		foreach (var cue in roots)
+		{
+			count += RemoveCueRecursive(cue);
+		}
+
+		ShellSelection.SelectedCues.Clear();
+		// Clear inspectors that still reference deleted cues
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			count == 1 ? "Deleted 1 cue." : $"Deleted {count} cues.", (int)LogType.Info);
+		GD.Print($"CueList:DeleteSelectedCues - Removed {count} cue(s).");
+	}
+
+	/// <summary>
 	/// Removes the cue from the index and queues its ShellBar for deletion.
 	/// Prunes from parent's ChildCues (if any) and refreshes the parent's collapse/expand UI.
+	/// Does not recurse into children — use <see cref="RemoveCueRecursive"/> for groups.
 	/// </summary>
 	/// <param name="cue">The cue to remove.</param>
 	public void RemoveCue(Cue cue)
 	{
+		if (cue == null) return;
+
+		// Drop selection state
+		if (ShellSelection.SelectedCues != null && ShellSelection.SelectedCues.Contains(cue))
+		{
+			cue.ShellBar?.Deselect();
+			ShellSelection.SelectedCues.Remove(cue);
+		}
+
+		// Clear media-health tracking for this cue
+		try
+		{
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearIssue(cue.Id);
+		}
+		catch { /* optional */ }
+
 		if (cue.ParentId != -1)
 		{
 			var p = FetchCueFromId(cue.ParentId);
@@ -578,8 +890,32 @@ public partial class CueList : Control
 				p.ShellBar?.RelationshipChanged();
 			}
 		}
-		cue.ShellBar?.QueueFree();
-		CueIndex.Remove(cue.Id);
+
+		if (cue.ShellBar != null && IsInstanceValid(cue.ShellBar))
+			cue.ShellBar.QueueFree();
+		cue.ShellBar = null;
+
+		CueIndex?.Remove(cue.Id);
+	}
+
+	/// <summary>
+	/// Removes a cue and all descendants. Returns number of cues removed.
+	/// </summary>
+	public int RemoveCueRecursive(Cue cue)
+	{
+		if (cue == null) return 0;
+
+		int removed = 0;
+		// Copy child list — RemoveCue mutates parent ChildCues
+		foreach (int childId in cue.ChildCues.ToList())
+		{
+			var child = FetchCueFromId(childId);
+			if (child != null)
+				removed += RemoveCueRecursive(child);
+		}
+
+		RemoveCue(cue);
+		return removed + 1;
 	}
 
 	/// <summary>

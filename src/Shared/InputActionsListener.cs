@@ -38,6 +38,8 @@ public partial class InputActionsListener : Node
         Register("Go", nameof(GlobalSignals.Go), "Go", false);
         Register("StopAll", nameof(GlobalSignals.StopAll), "Stop All", false);
         Register("CreateCue", nameof(GlobalSignals.CreateCue), "Create Cue", true);
+        Register("DeleteCue", nameof(GlobalSignals.DeleteSelectedCues), "Delete Selected Cues", true);
+        Register("DuplicateSelectedCues", nameof(GlobalSignals.DuplicateSelectedCues), "Duplicate Selected Cues", true);
         Register("GroupSelectedCues", nameof(GlobalSignals.GroupSelectedCues), "Group Selected Cues", true);
         Register("SelectNext", nameof(GlobalSignals.SelectNextCue), "Select Next Cue", true);
         Register("SelectPrevious", nameof(GlobalSignals.SelectPreviousCue), "Select Previous Cue", true);

@@ -260,6 +260,15 @@ mouse_filter = 1
 text = "Open Recent "
 alignment = 0
 
+[node name="FileShowFiles" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Show Files "
+alignment = 0
+tooltip_text = "Show file tools: copy media, check presence, open folder"
+
 [node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=374009381]
 layout_mode = 2
 mouse_filter = 2
@@ -309,6 +318,17 @@ horizontal_alignment = 2
 vertical_alignment = 1
 
 [node name="FileOpenRecentArrow" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=311594630]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.62172264, 0.62172264, 0.62172264, 1)
+theme_override_font_sizes/font_size = 8
+text = "▶"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="FileShowFilesArrow" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
@@ -381,3 +401,51 @@ theme_override_constants/margin_bottom = 1
 [node name="RecentContainer" type="VBoxContainer" parent="DropMenuRecent/MarginContainer" unique_id=733323381]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="DropMenuShowFiles" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+offset_left = 260.0
+offset_top = 145.0
+offset_right = 480.0
+offset_bottom = 230.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
+
+[node name="MarginContainer" type="MarginContainer" parent="DropMenuShowFiles"]
+layout_mode = 2
+theme_override_constants/margin_left = 1
+theme_override_constants/margin_top = 1
+theme_override_constants/margin_right = 1
+theme_override_constants/margin_bottom = 1
+
+[node name="ShowFilesContainer" type="VBoxContainer" parent="DropMenuShowFiles/MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ShowFilesCopyMedia" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Copy media files into Showfile folder"
+alignment = 0
+tooltip_text = "Copy all used media into Audio/Video/Images under the show folder and update cue paths to relative URLs. Works even if automatic backup is disabled."
+
+[node name="ShowFilesCheckPresence" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Check file presence"
+alignment = 0
+tooltip_text = "Immediately verify every media path on every cue. Updates missing-file indicators and logs a summary."
+
+[node name="ShowFilesOpenFolder" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+text = "Open showfile folder"
+alignment = 0
+tooltip_text = "Open the show session folder in the system file browser."

@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://cm5s0bi03612d"]
+[gd_scene format=3 uid="uid://cm5s0bi03612d"]
 
 [ext_resource type="Script" uid="uid://bv2kx3l0vphuf" path="res://src/UI/Scenes/Inspectors/ShellInspector.cs" id="1_frsqn"]
 
@@ -6,7 +6,7 @@
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tpxeo"]
 
-[node name="ShellInspector" type="Control"]
+[node name="ShellInspector" type="Control" unique_id=1399499676]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,7 +18,7 @@ size_flags_vertical = 3
 script = ExtResource("1_frsqn")
 metadata/_tab_index = 1
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1175858023]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,33 +30,33 @@ theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer" unique_id=1983524718]
 layout_mode = 2
 
-[node name="GridContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer"]
+[node name="GridContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer" unique_id=1505719586]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 2
 size_flags_vertical = 3
 
-[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer/GridContainer"]
+[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer/GridContainer" unique_id=209245282]
 layout_mode = 2
 columns = 2
 
-[node name="CueId" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="CueId" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1991043765]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ParentCueLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ParentCueLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1938100783]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="CueNumLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="CueNumLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=164424969]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Number:"
 
-[node name="CueNum" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="CueNum" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=869757138]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
@@ -65,30 +65,30 @@ tooltip_text = "Cue numbers, shorthand identifier. Does not need to be unique. M
 placeholder_text = "No Selection"
 max_length = 5
 
-[node name="CueNameLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="CueNameLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1155908889]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Name:"
 
-[node name="ShellName" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ShellName" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1107311686]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 placeholder_text = "No Selection"
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=538649934]
 layout_mode = 2
 theme_override_constants/separation = 16
 theme_override_styles/separator = SubResource("StyleBoxEmpty_frsqn")
 
-[node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=61423710]
 layout_mode = 2
 
-[node name="ColourLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ColourLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=552059970]
 layout_mode = 2
 text = "Colour:"
 
-[node name="ColourPickerButton" type="ColorPickerButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ColourPickerButton" type="ColorPickerButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1545370151]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -99,47 +99,47 @@ text = "Shell Colour"
 color = Color(1, 1, 1, 1)
 edit_alpha = false
 
-[node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1558728979]
 layout_mode = 2
 theme_override_constants/separation = 16
 theme_override_styles/separator = SubResource("StyleBoxEmpty_tpxeo")
 
-[node name="Control" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="Control" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1213666058]
 layout_mode = 2
 
-[node name="PreWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="PreWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1630940266]
 layout_mode = 2
 text = "Pre-wait:"
 
-[node name="PreWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="PreWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=531261277]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "How long to wait between this cue being triggered and activating the cue's components. "
 
-[node name="DurationLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="DurationLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1075776128]
 layout_mode = 2
 text = "Duration:"
 
-[node name="DurationValue" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="DurationValue" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1506119913]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait."
 editable = false
 
-[node name="PostWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="PostWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1130441441]
 layout_mode = 2
 text = "Post-wait:"
 
-[node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=2072409607]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "How long to wait after all the cue's components are completed to continue the next cue (if 'continue' selected.)"
 
-[node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=446303217]
 layout_mode = 2
 text = "Next cue:"
 
-[node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1799703030]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Follow determines behavior of the next cue in the cuelist.
@@ -147,7 +147,29 @@ Continue: Next cue will trigger after this cue is complete (Including post-wait)
 Follow: Next cue will be triggered when this cue is triggered"
 focus_mode = 0
 
-[node name="Triggers" type="VBoxContainer" parent="."]
+[node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1607308950]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="DeleteSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=307789548]
+layout_mode = 2
+
+[node name="DeleteCueButton" type="Button" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1480297068]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Delete this cue (and any child cues)."
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.502, 0.435, 1)
+theme_override_constants/icon_max_width = 14
+text = "Delete Cue"
+expand_icon = true
+
+[node name="DeleteButtonTrail" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+
+[node name="Triggers" type="VBoxContainer" parent="." unique_id=1335561062]
 clip_contents = true
 layout_mode = 0
 offset_left = 400.0
@@ -155,11 +177,11 @@ offset_top = 4.0
 offset_right = 700.0
 offset_bottom = 304.0
 
-[node name="Label" type="Label" parent="Triggers"]
+[node name="Label" type="Label" parent="Triggers" unique_id=1612944111]
 layout_mode = 2
 text = "A cheeky trigger section"
 
-[node name="Label2" type="Label" parent="Triggers"]
+[node name="Label2" type="Label" parent="Triggers" unique_id=1429318585]
 layout_mode = 2
 text = "
 Anyone wanna hotkey?

@@ -5,8 +5,9 @@ using AppSettings = Cue2.Base.Classes.Settings;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// General settings panel: UI scale, Go button scale, and stop fade-out duration.
+/// General settings panel: UI scale, Go button scale, stop fade-out, and media backup.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
+/// Values are stored with the showfile via <see cref="AppSettings"/>.
 /// </summary>
 public partial class SettingsGeneral : ScrollContainer
 {
@@ -22,6 +23,9 @@ public partial class SettingsGeneral : ScrollContainer
 
     private SpinBox _stopFadeSpinBox;
     private Button _stopFadeResetButton;
+
+    private CheckBox _mediaBackupCheckBox;
+    private Button _mediaBackupResetButton;
 
     /// <summary>Go scale option index → scale factor (matches OptionButton order).</summary>
     private static readonly float[] GoScaleValues = { 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 32.0f };
@@ -55,6 +59,12 @@ public partial class SettingsGeneral : ScrollContainer
         _stopFadeResetButton.Pressed += OnStopFadeResetPressed;
         _stopFadeSpinBox.ValueChanged += OnStopFadeChanged;
 
+        _mediaBackupCheckBox = GetNode<CheckBox>("%MediaBackupCheckBox");
+        _mediaBackupCheckBox.Toggled += OnMediaBackupToggled;
+        _mediaBackupResetButton = GetNode<Button>("%MediaBackupResetButton");
+        _mediaBackupResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+        _mediaBackupResetButton.Pressed += OnMediaBackupResetPressed;
+
         SyncSettings();
     }
 
@@ -68,6 +78,8 @@ public partial class SettingsGeneral : ScrollContainer
 
         _stopFadeSpinBox.SetValueNoSignal(_globalData.Settings.StopFadeDuration);
 
+        _mediaBackupCheckBox.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
+
         UpdateAllResetButtons();
     }
 
@@ -76,6 +88,7 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateUiScaleResetButton();
         UpdateGoScaleResetButton();
         UpdateStopFadeResetButton();
+        UpdateMediaBackupResetButton();
     }
 
     // ── UI Scale ──────────────────────────────────────────────────────────
@@ -213,5 +226,32 @@ public partial class SettingsGeneral : ScrollContainer
         _stopFadeResetButton.Visible = !atDefault;
         if (!atDefault)
             _stopFadeResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultStopFadeDuration:0.#}s";
+    }
+
+    // ── Media Backup ──────────────────────────────────────────────────────
+
+    private void OnMediaBackupToggled(bool enabled)
+    {
+        _globalData.Settings.MediaBackupEnabled = enabled;
+        UpdateMediaBackupResetButton();
+    }
+
+    private void OnMediaBackupResetPressed()
+    {
+        _globalData.Settings.MediaBackupEnabled = AppSettings.DefaultMediaBackupEnabled;
+        SyncSettings();
+    }
+
+    private void UpdateMediaBackupResetButton()
+    {
+        if (_mediaBackupResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = _globalData.Settings.MediaBackupEnabled == AppSettings.DefaultMediaBackupEnabled;
+        _mediaBackupResetButton.Visible = !atDefault;
+        if (!atDefault)
+        {
+            string defaultText = AppSettings.DefaultMediaBackupEnabled ? "Enabled" : "Disabled";
+            _mediaBackupResetButton.TooltipText = $"Reset to default: {defaultText}";
+        }
     }
 }

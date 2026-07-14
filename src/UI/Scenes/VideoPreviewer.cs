@@ -71,7 +71,8 @@ public partial class VideoPreviewer : Control
         _decoder = new VideoSourceDecoder();
         _playPauseButton.Icon = GetThemeIcon("Play", "AtlasIcons");
         _isPlaying = false;
-        OpenAsync(file);
+        string resolved = _globalData?.ResolveMediaPath(file) ?? file;
+        OpenAsync(resolved);
     }
 
     private async void OpenAsync(string file)

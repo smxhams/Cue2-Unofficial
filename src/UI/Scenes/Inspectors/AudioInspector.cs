@@ -77,8 +77,9 @@ public partial class AudioInspector : Control
         
 		
         _globalSignals.ShellFocused += ShellSelected;
-        
-
+        // Media backup rewrites paths while a cue stays selected — refresh URL without re-select
+        _globalSignals.SyncShellInspector += RefreshMediaPathDisplay;
+        _globalSignals.CueMediaHealthChanged += OnCueMediaHealthChanged;
         
         
         // Ui Node setup
@@ -87,6 +88,20 @@ public partial class AudioInspector : Control
         _inspectorContent = GetNode<VBoxContainer>("%InspectorContent");
         _buttonSelectFile = GetNode<Button>("%ButtonSelectFile");
         _fileUrl = GetNode<LineEdit>("%FileURL");
+        _fileUrlMissingStyle = InspectorMediaUrlStyle.CreateMissingStyle();
+        _deleteAudioComponentButton = GetNodeOrNull<Button>("%DeleteAudioComponentButton");
+        if (_deleteAudioComponentButton != null)
+        {
+            _deleteAudioComponentButton.Pressed += OnDeleteAudioComponentPressed;
+            _deleteAudioComponentButton.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+            try
+            {
+                _deleteAudioComponentButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+                _deleteAudioComponentButton.ExpandIcon = true;
+            }
+            catch { /* optional */ }
+            _deleteAudioComponentButton.Visible = false;
+        }
         
         _routingCollapseButton = GetNode<Button>("%RoutingCollapseButton");
         _routingCollapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
@@ -578,18 +593,91 @@ public partial class AudioInspector : Control
     }
     
 
+    private StyleBoxFlat _fileUrlMissingStyle;
+    private bool _fileUrlMissing;
+    private Button _deleteAudioComponentButton;
+
+    /// <summary>
+    /// Refreshes the file URL field when media paths are rewritten (e.g. after show-local backup).
+    /// </summary>
+    private void RefreshMediaPathDisplay()
+    {
+        if (_fileUrl == null || _focusedAudioComponent == null)
+            return;
+
+        string path = _focusedAudioComponent.AudioFile ?? string.Empty;
+        if (!string.Equals(_fileUrl.Text, path, StringComparison.Ordinal))
+            _fileUrl.Text = path;
+
+        // Re-check missing state after path rewrite / backup
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue?.Id ?? -1);
+        ApplyFileUrlMissingStyleFromHealth();
+    }
+
+    private void OnCueMediaHealthChanged(int cueId, bool hasIssue, string message)
+    {
+        if (_focusedCue == null || _focusedCue.Id != cueId)
+            return;
+        // Only style this inspector's URL if *audio* is among the missing paths
+        ApplyFileUrlMissingStyleFromHealth();
+    }
+
+    /// <summary>
+    /// Styles the audio URL field only when this cue's audio path is reported missing
+    /// (not when only video/other media is missing).
+    /// </summary>
+    private void ApplyFileUrlMissingStyleFromHealth()
+    {
+        if (_focusedCue == null || _focusedAudioComponent == null ||
+            string.IsNullOrWhiteSpace(_focusedAudioComponent.AudioFile))
+        {
+            ApplyFileUrlMissingStyle(false, null);
+            return;
+        }
+
+        var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+        bool missing = health != null && health.IsPathMissing(_focusedCue.Id, _focusedAudioComponent.AudioFile);
+        ApplyFileUrlMissingStyle(missing, missing ? "File Missing" : null);
+    }
+
+    /// <summary>
+    /// Applies or clears italic + red border styling on the URL field for missing media.
+    /// </summary>
+    private void ApplyFileUrlMissingStyle(bool missing, string tooltip)
+    {
+        _fileUrlMissingStyle ??= InspectorMediaUrlStyle.CreateMissingStyle();
+        InspectorMediaUrlStyle.Apply(_fileUrl, _fileUrlMissingStyle, missing, tooltip);
+        _fileUrlMissing = missing;
+    }
+
     /// <summary>
     /// Called when a cue shell is selected. Updates UI based on presence of AudioComponent.
     /// </summary>
     /// <param name="cueId">The ID of the selected cue.</param>
     private async void ShellSelected(int cueId)
     {
+        if (cueId < 0)
+        {
+            _focusedCue = null;
+            _focusedAudioComponent = null;
+            _fileUrl.Text = "";
+            ApplyFileUrlMissingStyle(false, null);
+            if (_deleteAudioComponentButton != null)
+                _deleteAudioComponentButton.Visible = false;
+            _inspectorContent.Visible = false;
+            _selectFileContainer.Visible = false;
+            return;
+        }
+
         if (_focusedCue != null && _focusedCue.Id == cueId) return;
         _focusedCue = CueList.FetchCueFromId(cueId);
 
         if (_focusedCue == null)
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio Inspector: Cue with ID {cueId} not found.", 2);
+            _focusedAudioComponent = null;
+            ApplyFileUrlMissingStyle(false, null);
+            if (_deleteAudioComponentButton != null)
+                _deleteAudioComponentButton.Visible = false;
             return;
         }
         
@@ -601,11 +689,16 @@ public partial class AudioInspector : Control
             _inspectorContent.Visible = false;
             _focusedAudioComponent = null;
             _fileUrl.Text = "";
+            ApplyFileUrlMissingStyle(false, null);
+            if (_deleteAudioComponentButton != null)
+                _deleteAudioComponentButton.Visible = false;
             return;
         }
         
         // Audio Component Found
         _focusedAudioComponent = _focusedCue.Components.OfType<AudioComponent>().First();
+        if (_deleteAudioComponentButton != null)
+            _deleteAudioComponentButton.Visible = true;
         var file = _focusedAudioComponent.AudioFile;
         
         if (_focusedAudioComponent.Metadata == null)
@@ -648,6 +741,40 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Using cached waveform for {_focusedAudioComponent.AudioFile}", 0);
         }
         await DrawWaveform();
+
+        // Validate media path for this cue (shell X + URL styling)
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+        ApplyFileUrlMissingStyleFromHealth();
+        if (_deleteAudioComponentButton != null)
+            _deleteAudioComponentButton.Visible = _focusedAudioComponent != null;
+    }
+
+    /// <summary>
+    /// Removes the audio component from the focused cue and resets the inspector UI.
+    /// </summary>
+    private void OnDeleteAudioComponentPressed()
+    {
+        if (_focusedCue == null || _focusedAudioComponent == null)
+            return;
+
+        _focusedCue.RemoveICueComponent(_focusedAudioComponent);
+        _focusedAudioComponent = null;
+        _focusedCue.CalculateTotalDuration();
+
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+
+        _infoLabel.Text = "No Audio File";
+        _inspectorContent.Visible = false;
+        _fileUrl.Text = "";
+        ApplyFileUrlMissingStyle(false, null);
+        if (_deleteAudioComponentButton != null)
+            _deleteAudioComponentButton.Visible = false;
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+        _globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"Removed audio component from cue {_focusedCue.Name}", 0);
+        GD.Print($"AudioInspector:OnDeleteAudioComponentPressed - Removed audio from cue {_focusedCue.Id}");
     }
 
     /// <summary>
@@ -660,6 +787,9 @@ public partial class AudioInspector : Control
         _fileUrl.Text = file;
         _infoLabel.Text = "";
         _inspectorContent.Visible = true;
+        ApplyFileUrlMissingStyleFromHealth();
+        if (_deleteAudioComponentButton != null)
+            _deleteAudioComponentButton.Visible = true;
 
         _startTimeInput.Text =
             UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out string startTip);
@@ -955,11 +1085,26 @@ public partial class AudioInspector : Control
     {
         if (_focusedCue == null) return;
 
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        string resolvedPath = _globalData?.ResolveMediaPath(filePath) ?? filePath;
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(resolvedPath))
         {
             GD.Print($"AudioInspector:SetAudioFile - File not found: {filePath}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:File not found: {filePath}", 2);
             return;
+        }
+
+        // Prefer show-relative path when media backup is enabled (copy runs in background)
+        string pathToStore = filePath;
+        try
+        {
+            var backup = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
+            string relative = backup?.EnsureMediaBackedUp(resolvedPath, MediaBackupKind.Audio);
+            if (!string.IsNullOrEmpty(relative))
+                pathToStore = relative;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"AudioInspector:SetAudioFile - Media backup: {ex.Message}");
         }
 
         // Resolve or create component; always assign the path (AddAudioComponent alone does not update existing).
@@ -968,8 +1113,8 @@ public partial class AudioInspector : Control
         if (existingAudio != null)
         {
             _focusedAudioComponent = existingAudio;
-            bool pathChanged = !string.Equals(existingAudio.AudioFile, filePath, StringComparison.OrdinalIgnoreCase);
-            existingAudio.AudioFile = filePath;
+            bool pathChanged = !string.Equals(existingAudio.AudioFile, pathToStore, StringComparison.OrdinalIgnoreCase);
+            existingAudio.AudioFile = pathToStore;
             if (pathChanged)
             {
                 // Stale peaks/metadata from previous file must not stick
@@ -979,10 +1124,10 @@ public partial class AudioInspector : Control
         }
         else
         {
-            _focusedAudioComponent = _focusedCue.AddAudioComponent(filePath);
+            _focusedAudioComponent = _focusedCue.AddAudioComponent(pathToStore);
         }
 
-        _fileUrl.Text = filePath;
+        _fileUrl.Text = pathToStore;
         _inspectorContent.Visible = true;
         _selectFileContainer.Visible = true;
         _infoLabel.Text = "";
@@ -993,7 +1138,7 @@ public partial class AudioInspector : Control
 
         try
         {
-            var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(filePath);
+            var fileMetadata = await _mediaEngine.GetAudioFileMetadataAsync(resolvedPath);
             if (fileMetadata == null)
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -1046,12 +1191,13 @@ public partial class AudioInspector : Control
         // Always (re)generate waveform for the assigned file
         try
         {
+            // Use absolute source for waveform while background copy may still be running
             _focusedAudioComponent.WaveformData =
-                await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                await _mediaEngine.GenerateWaveformAsync(resolvedPath);
             if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-                    $"AudioInspector:SetAudioFile - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
+                    $"AudioInspector:SetAudioFile - Waveform generation failed for {pathToStore}", 2);
             }
         }
         catch (Exception ex)
@@ -1060,7 +1206,7 @@ public partial class AudioInspector : Control
                 $"AudioInspector:SetAudioFile - Error generating waveform: {ex.Message}", 2);
         }
 
-        UpdateAudioUiFields(filePath);
+        UpdateAudioUiFields(pathToStore);
         PopulateOutputOptions();
         BuildRoutingMatrix();
         SyncDuration();
@@ -1072,9 +1218,14 @@ public partial class AudioInspector : Control
         SyncWaveformScrollBar();
         await DrawWaveform();
 
-        GD.Print($"AudioInspector:SetAudioFile - Set audio file: {filePath}");
+        GD.Print($"AudioInspector:SetAudioFile - Set audio file: {pathToStore}");
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-            $"AudioInspector:Set audio file to: {Path.GetFileName(filePath)}", 0);
+            $"AudioInspector:Set audio file to: {pathToStore}", 0);
+
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+        ApplyFileUrlMissingStyleFromHealth();
+        if (_deleteAudioComponentButton != null)
+            _deleteAudioComponentButton.Visible = true;
     }
 
     /// <summary>

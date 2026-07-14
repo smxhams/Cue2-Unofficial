@@ -97,13 +97,28 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     }
 
     /// <summary>
+    /// Resolves show-relative media paths (e.g. Audio/song.wav) to absolute paths.
+    /// </summary>
+    private static string ResolveMediaPath(string storedPath)
+    {
+        if (Engine.GetMainLoop() is SceneTree tree)
+        {
+            var globalData = tree.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
+            if (globalData != null)
+                return globalData.ResolveMediaPath(storedPath);
+        }
+        return storedPath;
+    }
+
+    /// <summary>
     /// Opens the decoder, seeks to start, and prefetches PCM for low-latency GO.
     /// </summary>
     public async Task InitAsync()
     {
         // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
         // subject to decoder size/duration caps. Short looping cues stay exact.
-        await Decoder.OpenAsync(_audioComponent.AudioFile, preferSampleAccurateStore: true);
+        string mediaPath = ResolveMediaPath(_audioComponent.AudioFile);
+        await Decoder.OpenAsync(mediaPath, preferSampleAccurateStore: true);
         SourceChannels = Decoder.Info.Channels;
         SourceSampleRate = Decoder.Info.SampleRate;
         SourceFormat = SDL.AudioFormat.AudioF32LE;

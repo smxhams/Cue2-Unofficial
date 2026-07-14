@@ -88,8 +88,39 @@ public partial class GlobalData : Node
 	public string ActiveShowFile; // URL of current show file to save to
 	public string SessionName;
 	public string SessionPath;
-	public string SessionMediaPath;
+
+	/// <summary>
+	/// Absolute path to the show session folder (directory containing the .c2 file).
+	/// </summary>
+	public string SessionDir;
+
+	/// <summary>
+	/// Absolute path for show-local audio media (<c>SessionDir/Audio</c>).
+	/// </summary>
+	public string SessionAudioPath;
+
+	/// <summary>
+	/// Absolute path for show-local video media (<c>SessionDir/Video</c>).
+	/// </summary>
+	public string SessionVideoPath;
+
+	/// <summary>
+	/// Absolute path for show-local image media (<c>SessionDir/Images</c>).
+	/// </summary>
+	public string SessionImagesPath;
+
+	/// <summary>
+	/// Absolute path for waveform cache files (<c>SessionDir/Waveforms</c>).
+	/// </summary>
 	public string SessionWaveformsPath;
+
+	/// <summary>
+	/// Resolves a cue media path that may be show-relative (e.g. <c>Audio/song.wav</c>) to an absolute path.
+	/// Absolute paths are returned normalized when possible.
+	/// </summary>
+	/// <param name="storedPath">Path as stored on a cue component.</param>
+	/// <returns>Absolute filesystem path for I/O, or the input if it cannot be resolved.</returns>
+	public string ResolveMediaPath(string storedPath) => MediaPaths.Resolve(storedPath, SessionDir);
 
 	/// <summary>
 	/// The absolute filesystem path that Godot resolves "user://" to.
@@ -134,7 +165,9 @@ public partial class GlobalData : Node
 		"ToggleLog",
 		"ExpandOneLayer",
 		"CollapseOneLayer",
-		"ToggleExpandAll"
+		"ToggleExpandAll",
+		"DeleteCue",
+		"DuplicateSelectedCues"
 	};
 
 

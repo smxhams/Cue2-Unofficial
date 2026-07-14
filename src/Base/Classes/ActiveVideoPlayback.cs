@@ -165,6 +165,15 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     }
 
     /// <summary>
+    /// Resolves show-relative media paths (e.g. Video/clip.mp4) to absolute paths.
+    /// </summary>
+    private string ResolveMediaPath(string storedPath)
+    {
+        var globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
+        return globalData?.ResolveMediaPath(storedPath) ?? storedPath;
+    }
+
+    /// <summary>
     /// Opens video (and audio) decoders, seeks to start, prefetches.
     /// </summary>
     public async Task InitAsync()
@@ -172,7 +181,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         GD.Print("ActiveVideoPlayback:InitAsync - Initializing...");
         _currentPlayCount = 1;
 
-        await _videoDecoder.OpenAsync(_videoComponent.VideoFile);
+        string mediaPath = ResolveMediaPath(_videoComponent.VideoFile);
+        await _videoDecoder.OpenAsync(mediaPath);
         if (!_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
             _endTimeUs = _videoDecoder.Info.DurationUs;
 
@@ -210,7 +220,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             // Stream embedded audio (no full PCM expand) — long video soundtracks would
             // otherwise pin tens/hundreds of MB on the LOH for the whole cue lifetime.
             await _audioDecoder.OpenAsync(
-                _videoComponent.VideoFile,
+                mediaPath,
                 preferSampleAccurateStore: false);
             SourceChannels = _audioDecoder.Info.Channels;
             SourceSampleRate = _audioDecoder.Info.SampleRate;

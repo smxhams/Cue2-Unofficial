@@ -30,6 +30,9 @@ public partial class MainTitleBarUI : Control
     private PanelContainer _recentMenuPanel;
     private VBoxContainer _recentContainer;
 
+    // Show Files submenu (hover activated from File > Show Files)
+    private PanelContainer _showFilesMenuPanel;
+
     // Timer for delayed close of submenus when mouse leaves the entire header menu area
     private Timer _menuHideTimer;
 
@@ -49,6 +52,8 @@ public partial class MainTitleBarUI : Control
 
         _recentMenuPanel = GetNode<PanelContainer>("%DropMenuRecent");
         _recentContainer = _recentMenuPanel.GetNode<VBoxContainer>("MarginContainer/RecentContainer");
+
+        _showFilesMenuPanel = GetNodeOrNull<PanelContainer>("%DropMenuShowFiles");
 
         // Create timer for delayed submenu close on mouse leave
         _menuHideTimer = new Timer { OneShot = true, WaitTime = 0.25f }; // 250ms delay for comfortable menu navigation
@@ -83,6 +88,11 @@ public partial class MainTitleBarUI : Control
         {
             _globalData.SessionName = null;
             _globalData.SessionPath = null;
+            _globalData.SessionDir = null;
+            _globalData.SessionAudioPath = null;
+            _globalData.SessionVideoPath = null;
+            _globalData.SessionImagesPath = null;
+            _globalData.SessionWaveformsPath = null;
             UpdateTitle();
             _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
             _mainMenuButton.ButtonPressed = false;
@@ -102,6 +112,12 @@ public partial class MainTitleBarUI : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.OpenSession));
             _mainMenuButton.ButtonPressed = false;
         };
+
+        // Non-submenu File rows: close any open flyout submenu on hover
+        WireFileMenuItemHidesSubmenus("%FileNew");
+        WireFileMenuItemHidesSubmenus("%FileSave");
+        WireFileMenuItemHidesSubmenus("%FileSaveAs");
+        WireFileMenuItemHidesSubmenus("%FileOpenSession");
         
         // Mouse over behavior
         GetNode<Button>("%MainMenuFile").MouseEntered += _onMainMenuFileHover;
@@ -123,6 +139,31 @@ public partial class MainTitleBarUI : Control
         GetNode<Button>("%FileOpenRecent").MouseExited += ScheduleMenuHide;
         GetNode<PanelContainer>("%DropMenuRecent").MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
         GetNode<PanelContainer>("%DropMenuRecent").MouseExited += ScheduleMenuHide;
+
+        // Show Files submenu
+        var showFilesBtn = GetNodeOrNull<Button>("%FileShowFiles");
+        if (showFilesBtn != null)
+        {
+            showFilesBtn.MouseEntered += _onFileShowFilesHover;
+            showFilesBtn.MouseExited += ScheduleMenuHide;
+        }
+        if (_showFilesMenuPanel != null)
+        {
+            _showFilesMenuPanel.MouseEntered += () => { CancelMenuHide(); _mouseInUi = true; };
+            _showFilesMenuPanel.MouseExited += ScheduleMenuHide;
+        }
+
+        var copyMediaBtn = GetNodeOrNull<Button>("%ShowFilesCopyMedia");
+        if (copyMediaBtn != null)
+            copyMediaBtn.Pressed += OnShowFilesCopyMediaPressed;
+
+        var checkPresenceBtn = GetNodeOrNull<Button>("%ShowFilesCheckPresence");
+        if (checkPresenceBtn != null)
+            checkPresenceBtn.Pressed += OnShowFilesCheckPresencePressed;
+
+        var openFolderBtn = GetNodeOrNull<Button>("%ShowFilesOpenFolder");
+        if (openFolderBtn != null)
+            openFolderBtn.Pressed += OnShowFilesOpenFolderPressed;
 
         GetNode<Button>("%AboutButton").TooltipText += Version.FullVersionString;
         
@@ -275,6 +316,29 @@ public partial class MainTitleBarUI : Control
         }
     }
 
+    private void ShowShowFilesSubmenu()
+    {
+        if (_showFilesMenuPanel == null) return;
+
+        var filePanel = GetNodeOrNull<PanelContainer>("%DropMenuFile");
+        var showFilesBtn = GetNodeOrNull<Button>("%FileShowFiles");
+        if (filePanel != null && filePanel.Visible && showFilesBtn != null)
+        {
+            // Align to the right of the File menu, next to the Show Files row
+            _showFilesMenuPanel.Position = new Vector2(
+                filePanel.Position.X + filePanel.Size.X,
+                filePanel.Position.Y + showFilesBtn.Position.Y);
+        }
+
+        _showFilesMenuPanel.Visible = true;
+    }
+
+    private void HideShowFilesSubmenu()
+    {
+        if (_showFilesMenuPanel != null)
+            _showFilesMenuPanel.Visible = false;
+    }
+
     /// <summary>
     /// Hides all dropdown panels. Called on full menu close.
     /// </summary>
@@ -284,6 +348,7 @@ public partial class MainTitleBarUI : Control
         GetNodeOrNull<PanelContainer>("%DropMenuEdit")?.Hide();
         GetNodeOrNull<PanelContainer>("%DropMenuView")?.Hide();
         HideRecentSubmenu();
+        HideShowFilesSubmenu();
     }
 
     private void ScheduleMenuHide()
@@ -323,6 +388,9 @@ public partial class MainTitleBarUI : Control
         if (IsControlUnderMouse("%FileOpenRecent", mousePos)) return true;
         if (IsControlUnderMouse("%DropMenuRecent", mousePos)) return true;
 
+        if (IsControlUnderMouse("%FileShowFiles", mousePos)) return true;
+        if (IsControlUnderMouse("%DropMenuShowFiles", mousePos)) return true;
+
         return false;
     }
 
@@ -337,6 +405,7 @@ public partial class MainTitleBarUI : Control
     {
         CancelMenuHide();
         HideRecentSubmenu();
+        HideShowFilesSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = true;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
         GetNode<PanelContainer>("%DropMenuView").Visible = false;
@@ -347,6 +416,7 @@ public partial class MainTitleBarUI : Control
     {
         CancelMenuHide();
         HideRecentSubmenu();
+        HideShowFilesSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = true;
         GetNode<PanelContainer>("%DropMenuView").Visible = false;
@@ -357,6 +427,7 @@ public partial class MainTitleBarUI : Control
     {
         CancelMenuHide();
         HideRecentSubmenu();
+        HideShowFilesSubmenu();
         GetNode<PanelContainer>("%DropMenuFile").Visible = false;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
         GetNode<PanelContainer>("%DropMenuView").Visible = true;
@@ -370,8 +441,132 @@ public partial class MainTitleBarUI : Control
         GetNode<PanelContainer>("%DropMenuFile").Visible = true;
         GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
         GetNode<PanelContainer>("%DropMenuView").Visible = false;
+        HideShowFilesSubmenu();
         ShowRecentSubmenu();
         _mouseInUi = true;
+    }
+
+    private void _onFileShowFilesHover()
+    {
+        CancelMenuHide();
+        GetNode<PanelContainer>("%DropMenuFile").Visible = true;
+        GetNode<PanelContainer>("%DropMenuEdit").Visible = false;
+        GetNode<PanelContainer>("%DropMenuView").Visible = false;
+        HideRecentSubmenu();
+        ShowShowFilesSubmenu();
+        _mouseInUi = true;
+    }
+
+    /// <summary>
+    /// File menu items without a flyout submenu close any open submenu on hover
+    /// (e.g. leave "Open Recent" → hover "Open" closes the recent list).
+    /// </summary>
+    private void WireFileMenuItemHidesSubmenus(string buttonPath)
+    {
+        var btn = GetNodeOrNull<Button>(buttonPath);
+        if (btn == null) return;
+        btn.MouseEntered += OnFileMenuPlainItemHover;
+    }
+
+    private void OnFileMenuPlainItemHover()
+    {
+        CancelMenuHide();
+        HideRecentSubmenu();
+        HideShowFilesSubmenu();
+        GetNodeOrNull<PanelContainer>("%DropMenuFile")?.Show();
+        _mouseInUi = true;
+    }
+
+    /// <summary>
+    /// Manual media copy into show folders + relative path update (ignores auto-backup setting).
+    /// </summary>
+    private void OnShowFilesCopyMediaPressed()
+    {
+        _mainMenuButton.ButtonPressed = false;
+
+        if (string.IsNullOrEmpty(_globalData?.SessionDir) || string.IsNullOrEmpty(_globalData.SessionPath))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                "Cannot copy media: save the show first so a show folder exists.", 1);
+            return;
+        }
+
+        var backup = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
+        if (backup == null)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Media backup service unavailable.", 2);
+            return;
+        }
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Copying media files into show folder…", 0);
+        backup.EnqueueShowMediaBackup(force: true);
+    }
+
+    /// <summary>
+    /// Immediate full media presence check with summary log.
+    /// </summary>
+    private void OnShowFilesCheckPresencePressed()
+    {
+        _mainMenuButton.ButtonPressed = false;
+
+        var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+        if (health == null)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Media health service unavailable.", 2);
+            return;
+        }
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Checking file presence…", 0);
+        health.CheckAllMediaNow();
+    }
+
+    /// <summary>
+    /// Opens the show session folder in the OS file browser (Explorer / Finder / etc.).
+    /// </summary>
+    private void OnShowFilesOpenFolderPressed()
+    {
+        _mainMenuButton.ButtonPressed = false;
+
+        string dir = _globalData?.SessionDir;
+        if (string.IsNullOrEmpty(dir) && !string.IsNullOrEmpty(_globalData?.SessionPath))
+            dir = _globalData.SessionPath.GetBaseDir();
+
+        if (string.IsNullOrEmpty(dir))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                "No show folder open. Save the show first.", 1);
+            return;
+        }
+
+        try
+        {
+            // Normalize separators for the OS shell
+            string full = Path.GetFullPath(dir);
+            if (!Directory.Exists(full))
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Show folder does not exist: {full}", 2);
+                return;
+            }
+
+            // Godot OS.ShellOpen opens folders in the system file manager cross-platform
+            Error err = OS.ShellOpen(full);
+            if (err != Error.Ok)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Failed to open show folder ({err}): {full}", 2);
+                return;
+            }
+
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Opened show folder: {full}", 0);
+            GD.Print($"MainTitleBarUI:OnShowFilesOpenFolderPressed - Opened {full}");
+        }
+        catch (Exception ex)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Failed to open show folder: {ex.Message}", 2);
+            GD.PrintErr($"MainTitleBarUI:OnShowFilesOpenFolderPressed - {ex.Message}");
+        }
     }
     public override void _Input(InputEvent @event)
     {

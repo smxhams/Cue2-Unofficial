@@ -9,7 +9,8 @@ namespace Cue2.UI.Scenes;
 
 
 /// <summary>
-/// Main application footer bar: device status, connections, log readout, and process resource usage.
+/// Main application footer bar: device status, connections, log readout,
+/// background process progress, and CPU/memory usage.
 /// </summary>
 public partial class Footer : Control
 {
@@ -21,10 +22,15 @@ public partial class Footer : Control
     // Ui
     private Label _cpuUsageLabel;
     private Label _memoryUsageLabel;
+    private Control _processProgressHost;
+    private ProgressBar _bkgProcessStatusBar;
+    private Label _processStatusLabel;
+    private Control _processSeparator;
     private Button _logCountButton;
     private string _logPrintoutBaseTooltip = "Log";
     
     private Timer _updateTimer;
+    private Timer _processHideTimer;
 
     // Process resource tracking (CPU / memory)
     private Process _currentProcess;
@@ -66,6 +72,15 @@ public partial class Footer : Control
         _cpuUsageLabel = GetNode<Label>("%CpuUsageLabel");
         _memoryUsageLabel = GetNode<Label>("%MemoryUsageLabel");
 
+        // Background process progress (media backup) — left of CPU; status text drawn on the bar
+        _processProgressHost = GetNodeOrNull<Control>("%ProcessProgressHost");
+        _bkgProcessStatusBar = GetNodeOrNull<ProgressBar>("%BkgProcessStatusBar");
+        _processStatusLabel = GetNodeOrNull<Label>("%ProcessStatusLabel");
+        _processSeparator = GetNodeOrNull<Control>("%VSeparator5");
+        SetProcessProgressVisible(false);
+        _globalSignals.MediaBackupProgress += OnMediaBackupProgress;
+        _globalSignals.MediaBackupCompleted += OnMediaBackupCompleted;
+
         try
         {
             _currentProcess = Process.GetCurrentProcess();
@@ -87,6 +102,81 @@ public partial class Footer : Control
 
         UpdateDevicesFooterTooltip(); // initial status
         UpdateResourceUsage(); // initial CPU/MEM read
+    }
+
+    /// <summary>
+    /// Updates the process progress bar overlay and tooltip during media backup.
+    /// </summary>
+    private void OnMediaBackupProgress(float percent, bool busy, string statusText, string originPath, string destPath, int completedCount, int totalCount)
+    {
+        if (_bkgProcessStatusBar == null)
+            return;
+
+        // Stay visible for the whole batch; OnMediaBackupCompleted hides after a short delay
+        if (busy || totalCount > 0)
+            SetProcessProgressVisible(true);
+
+        _bkgProcessStatusBar.MaxValue = 100.0;
+        _bkgProcessStatusBar.Value = percent;
+
+        string label = string.IsNullOrEmpty(statusText) ? $"Copying {percent:F0}%" : statusText;
+        if (_processStatusLabel != null)
+            _processStatusLabel.Text = label;
+
+        // Tooltip: percent + origin → dest
+        string origin = string.IsNullOrEmpty(originPath) ? "…" : originPath;
+        string dest = string.IsNullOrEmpty(destPath) ? "…" : destPath;
+        string tip = $"{percent:F0}%\n{origin} → {dest}";
+        if (totalCount > 0)
+            tip += $"\n{completedCount}/{totalCount}";
+
+        _bkgProcessStatusBar.TooltipText = tip;
+        if (_processProgressHost != null)
+            _processProgressHost.TooltipText = tip;
+        if (_processStatusLabel != null)
+            _processStatusLabel.TooltipText = tip;
+    }
+
+    private void OnMediaBackupCompleted()
+    {
+        if (_bkgProcessStatusBar != null)
+            _bkgProcessStatusBar.Value = 100.0;
+        if (_processStatusLabel != null)
+            _processStatusLabel.Text = "Copying 100%";
+
+        // Reuse a single one-shot timer so rapid batches don't stack hide callbacks
+        if (_processHideTimer == null)
+        {
+            _processHideTimer = new Timer { WaitTime = 0.6, OneShot = true };
+            _processHideTimer.Timeout += OnProcessHideTimeout;
+            AddChild(_processHideTimer);
+        }
+        else
+        {
+            _processHideTimer.Stop();
+        }
+
+        _processHideTimer.Start();
+    }
+
+    private void OnProcessHideTimeout()
+    {
+        SetProcessProgressVisible(false);
+        if (_bkgProcessStatusBar != null)
+        {
+            _bkgProcessStatusBar.Value = 0;
+            _bkgProcessStatusBar.TooltipText = "Background process";
+        }
+        if (_processStatusLabel != null)
+            _processStatusLabel.Text = "Copying 0%";
+    }
+
+    private void SetProcessProgressVisible(bool visible)
+    {
+        if (_processProgressHost != null)
+            _processProgressHost.Visible = visible;
+        if (_processSeparator != null)
+            _processSeparator.Visible = visible;
     }
 
     private void _updateLog(String @printout, int @type)

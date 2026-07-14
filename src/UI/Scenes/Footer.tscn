@@ -72,11 +72,45 @@ clip_text = true
 layout_mode = 2
 alignment = 2
 
-[node name="BkgProcessStatusBar" type="ProgressBar" parent="HBoxContainer/BottomRightContainer" unique_id=1709098813]
+[node name="ProcessProgressHost" type="Control" parent="HBoxContainer/BottomRightContainer" unique_id=1709098811]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(110, 16)
 layout_mode = 2
+size_flags_vertical = 4
+
+[node name="BkgProcessStatusBar" type="ProgressBar" parent="HBoxContainer/BottomRightContainer/ProcessProgressHost" unique_id=1709098813]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+max_value = 100.0
 show_percentage = false
+tooltip_text = "Background process"
+
+[node name="ProcessStatusLabel" type="Label" parent="HBoxContainer/BottomRightContainer/ProcessProgressHost" unique_id=1709098812]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 9
+text = "Copying 0%"
+horizontal_alignment = 1
+vertical_alignment = 1
+text_overrun_behavior = 3
+clip_text = true
 
 [node name="VSeparator5" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=1068444882]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
 
 [node name="CpuUsageLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578692]

@@ -126,6 +126,17 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "URL (Can drag and drop files here)"
 
+[node name="DeleteVideoComponentButton" type="Button" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.502, 0.435, 1)
+theme_override_constants/icon_max_width = 14
+text = "Delete"
+tooltip_text = "Remove the video component from this cue."
+expand_icon = true
+
 [node name="Spacer" type="Control" parent="MarginContainer/ShellScroll/VBoxContainer"]
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2

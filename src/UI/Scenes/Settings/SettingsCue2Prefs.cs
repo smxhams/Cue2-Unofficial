@@ -3,6 +3,10 @@ using Godot;
 
 namespace Cue2.UI.Scenes.Settings;
 
+/// <summary>
+/// Cue2 Preferences panel: startup, autosave, and backup depth settings.
+/// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
+/// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
 {
 	private GlobalData _globalData;

@@ -99,6 +99,24 @@ mouse_filter = 1
 icon = SubResource("AtlasTexture_ag1hf")
 expand_icon = true
 
+[node name="IssueIndicator" type="Button" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(16, 18)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+tooltip_text = "Issue"
+focus_mode = 0
+mouse_filter = 1
+theme_override_colors/font_color = Color(1, 0.502, 0.435, 1)
+theme_override_colors/font_hover_color = Color(1, 0.6, 0.55, 1)
+theme_override_colors/font_pressed_color = Color(1, 0.4, 0.35, 1)
+theme_override_font_sizes/font_size = 12
+flat = true
+text = "✕"
+alignment = 1
+
 [node name="CueNumLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(22, 18)

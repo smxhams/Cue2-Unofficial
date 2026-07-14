@@ -6,6 +6,7 @@ using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
+// ShellSelection lives in Cue2.Base.Classes
 
 // This script is attached to shell context tab
 
@@ -30,6 +31,7 @@ public partial class ShellInspector : Control
 	private LineEdit _postWaitInput;
 	private OptionButton _followOption;
 	private ColorPickerButton _colorPicker;
+	private Button _deleteCueButton;
 	
 	
 	public override void _Ready()
@@ -49,6 +51,7 @@ public partial class ShellInspector : Control
 		_postWaitInput = GetNode<LineEdit>("%PostWaitInput");
 		_followOption = GetNode<OptionButton>("%FollowOption");
 		_colorPicker = GetNode<ColorPickerButton>("%ColourPickerButton");
+		_deleteCueButton = GetNodeOrNull<Button>("%DeleteCueButton");
 		
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
 		
@@ -63,16 +66,66 @@ public partial class ShellInspector : Control
 		_postWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _postWaitInput);
 		_followOption.ItemSelected += FollowOptionItemSelected;
 
+		if (_deleteCueButton != null)
+		{
+			_deleteCueButton.Pressed += OnDeleteCuePressed;
+			_deleteCueButton.AddThemeColorOverride("font_color", GlobalStyles.Danger);
+			try
+			{
+				_deleteCueButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+				_deleteCueButton.ExpandIcon = true;
+			}
+			catch { /* icon optional */ }
+			SyncDeleteHotkeyTooltip();
+		}
+
 		_globalSignals.SyncShellInspector += UpdateFields;
 		
-		
-		
-		
+		Visible = false;
+	}
+
+	private void SyncDeleteHotkeyTooltip()
+	{
+		if (_deleteCueButton == null) return;
+		string hotkey = GlobalData.ParseHotkey("DeleteCue");
+		string tip = "Delete this cue (and any child cues).";
+		if (!string.IsNullOrEmpty(hotkey))
+			tip += "\nHotkey: " + hotkey;
+		_deleteCueButton.TooltipText = tip;
+	}
+
+	/// <summary>
+	/// Deletes the focused cue via the cuelist (same path as Delete key).
+	/// </summary>
+	private void OnDeleteCuePressed()
+	{
+		if (_focusedCue == null)
+			return;
+
+		// Ensure this cue is selected so DeleteSelectedCues targets it
+		if (!ShellSelection.SelectedCues.Contains(_focusedCue))
+			_globalData?.ShellSelection?.SelectIndividualShell(_focusedCue);
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.DeleteSelectedCues));
+
+		_focusedCue = null;
+		_focusedCueId = -1;
 		Visible = false;
 	}
 	
 	private void ShellSelected(int cueId)
 	{
+		// cueId < 0 = selection cleared (e.g. after delete)
+		if (cueId < 0)
+		{
+			if (_focusedCue != null)
+				_focusedCue.NameChanged -= OnNameChanged;
+			_focusedCue = null;
+			_focusedCueId = -1;
+			Visible = false;
+			return;
+		}
+
 		Visible = true;
 		// Require both id match and a loaded cue — default _focusedCueId was 0, so
 		// first selection of cue id 0 skipped load and left _focusedCue null.
@@ -86,7 +139,8 @@ public partial class ShellInspector : Control
 		if (_focusedCue == null)
 		{
 			_focusedCueId = -1;
-			GD.PrintErr($"ShellInspector:ShellSelected - Cue id {cueId} not found");
+			Visible = false;
+			GD.Print($"ShellInspector:ShellSelected - Cue id {cueId} not found (cleared).");
 			return;
 		}
 
