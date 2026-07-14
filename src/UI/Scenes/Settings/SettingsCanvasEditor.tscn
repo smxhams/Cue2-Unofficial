@@ -122,11 +122,25 @@ layout_mode = 2
 focus_mode = 0
 text = "Canvas"
 
-[node name="ScreensHeader" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox" unique_id=1950831975]
+[node name="ScreensHeaderRow" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox" unique_id=1950831975]
 layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ScreensHeader" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 11
 text = "SCREENS"
 uppercase = true
+vertical_alignment = 1
+
+[node name="RefreshScreensButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+tooltip_text = "Refresh all screens and outputs (restore closed windows, re-check displays)"
+focus_mode = 0
+flat = true
 
 [node name="ScreensTree" type="Tree" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox" unique_id=1067622962]
 unique_name_in_owner = true
@@ -473,6 +487,7 @@ theme_override_constants/icon_max_width = 12
 expand_icon = true
 
 [node name="DisplayOffsetLabel" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/OutputProps" unique_id=2033241184]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 10
 text = "Display Offset"

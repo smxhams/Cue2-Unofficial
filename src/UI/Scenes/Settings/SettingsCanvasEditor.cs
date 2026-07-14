@@ -42,6 +42,7 @@ public partial class SettingsCanvasEditor : Control
 
     // Hierarchy – two trees
     private Godot.Tree _screensTree;
+    private Button _refreshScreensButton;
     private Godot.Tree _layersTree;
     private Button _canvasSelectButton;
     private Button _addScreenButton;
@@ -133,7 +134,8 @@ public partial class SettingsCanvasEditor : Control
     private Vector2I _dragStartSize;
 
     /// <summary>
-    /// Maps OptionButton item index → monitor index (VirtualMonitorIndex for Virtual Output).
+    /// Maps OptionButton item index → destination index
+    /// (VirtualMonitorIndex, WindowMonitorIndex, or physical monitor index).
     /// </summary>
     private readonly List<int> _outputOptionMonitorMap = new();
 
@@ -394,6 +396,7 @@ public partial class SettingsCanvasEditor : Control
     private void BindNodes()
     {
         _screensTree = GetNode<Godot.Tree>("%ScreensTree");
+        _refreshScreensButton = GetNode<Button>("%RefreshScreensButton");
         _layersTree = GetNode<Godot.Tree>("%LayersTree");
         _canvasSelectButton = GetNode<Button>("%CanvasSelectButton");
         _addScreenButton = GetNode<Button>("%AddScreenButton");
@@ -473,6 +476,13 @@ public partial class SettingsCanvasEditor : Control
             if (btn != null)
                 btn.Icon = icon;
         }
+
+        if (_refreshScreensButton != null)
+        {
+            _refreshScreensButton.Icon = icon;
+            _refreshScreensButton.ExpandIcon = true;
+            _refreshScreensButton.AddThemeConstantOverride("icon_max_width", 14);
+        }
     }
 
     private void SetupBackground()
@@ -516,6 +526,8 @@ public partial class SettingsCanvasEditor : Control
         _layersTree.ItemSelected += OnLayersTreeItemSelected;
         _canvasSelectButton.Pressed += OnCanvasSelectPressed;
         _addScreenButton.Pressed += OnNewScreenPressed;
+        if (_refreshScreensButton != null)
+            _refreshScreensButton.Pressed += OnRefreshScreensPressed;
         _newTargetLayerButton.Pressed += OnNewTargetLayerPressed;
         _moveLayerUpButton.Pressed += OnMoveLayerUpPressed;
         _moveLayerDownButton.Pressed += OnMoveLayerDownPressed;
@@ -1119,14 +1131,12 @@ public partial class SettingsCanvasEditor : Control
         foreach (var screen in DisplaysManager.Screens)
         {
             var item = _screensTree.CreateItem(root);
-            string dest = screen.IsVirtual ? "Virtual" : GetMonitorLabel(screen.TargetMonitor);
+            string dest = GetScreenDestinationShortLabel(screen);
             item.SetText(0, $"{screen.OutputName}  [{dest}]");
             item.SetMetadata(0, screen.OutputId);
             item.SetTooltipText(0,
                 $"{screen.OutputName}\n{screen.OutputSize.X}×{screen.OutputSize.Y} @ {screen.CanvasPosition}\nOutput: {dest}");
-            item.SetCustomColor(0, screen.IsVirtual
-                ? new Color(0.75f, 0.55f, 0.45f)
-                : new Color(1f, 0.55f, 0.45f));
+            item.SetCustomColor(0, GetScreenTreeColor(screen));
         }
     }
 
@@ -1198,8 +1208,10 @@ public partial class SettingsCanvasEditor : Control
 
     private string GetMonitorLabel(int monitorIndex)
     {
-        if (monitorIndex < 0)
+        if (monitorIndex == VideoOutputDevice.VirtualMonitorIndex)
             return "Virtual";
+        if (monitorIndex == VideoOutputDevice.WindowMonitorIndex)
+            return "Window";
 
         var displays = _displaysManager.GetAvailableDisplays();
         foreach (var d in displays)
@@ -1209,6 +1221,31 @@ public partial class SettingsCanvasEditor : Control
         }
 
         return $"Monitor {monitorIndex} (missing)";
+    }
+
+    /// <summary>
+    /// Short destination label for screen tree rows and tooltips.
+    /// </summary>
+    private string GetScreenDestinationShortLabel(VideoOutputDevice screen)
+    {
+        if (screen == null)
+            return "Unknown";
+        if (screen.IsVirtual)
+            return "Virtual";
+        if (screen.IsWindow)
+            return "Window";
+        return GetMonitorLabel(screen.TargetMonitor);
+    }
+
+    private static Color GetScreenTreeColor(VideoOutputDevice screen)
+    {
+        if (screen == null)
+            return new Color(1f, 0.55f, 0.45f);
+        if (screen.IsVirtual)
+            return new Color(0.75f, 0.55f, 0.45f);
+        if (screen.IsWindow)
+            return new Color(0.55f, 0.8f, 0.55f);
+        return new Color(1f, 0.55f, 0.45f);
     }
 
     private void DeselectTrees()
@@ -1367,10 +1404,24 @@ public partial class SettingsCanvasEditor : Control
 
             PopulateOutputOption(screen.TargetMonitor);
             UpdateScreenResetButtons(screen);
+            UpdateDisplayOffsetLabel(screen);
 
             if (screen.IsVirtual)
             {
                 _outputResolutionLabel.Text = "Virtual Output — not shown on a physical display";
+            }
+            else if (screen.IsWindow)
+            {
+                if (screen.IsWindowDismissed)
+                {
+                    _outputResolutionLabel.Text =
+                        "Window closed — change size/position or reselect Window to show again";
+                }
+                else
+                {
+                    _outputResolutionLabel.Text =
+                        $"Portable Window  ·  {screen.OutputSize.X}×{screen.OutputSize.Y}  (OS title bar + controls)";
+                }
             }
             else
             {
@@ -1404,19 +1455,27 @@ public partial class SettingsCanvasEditor : Control
         _screenOutputOption.Clear();
         _outputOptionMonitorMap.Clear();
 
+        // Destination options: Virtual, Window, then physical displays.
         _screenOutputOption.AddItem("Virtual Output");
         _outputOptionMonitorMap.Add(VideoOutputDevice.VirtualMonitorIndex);
 
+        _screenOutputOption.AddItem("Window");
+        _outputOptionMonitorMap.Add(VideoOutputDevice.WindowMonitorIndex);
+
         var displays = _displaysManager.GetAvailableDisplays();
         int selectIndex = 0;
+        if (selectedMonitor == VideoOutputDevice.WindowMonitorIndex)
+            selectIndex = 1;
 
+        // Physical displays start after Virtual (0) and Window (1).
+        const int physicalStartIndex = 2;
         for (int i = 0; i < displays.Count; i++)
         {
             var d = displays[i];
             _screenOutputOption.AddItem($"{d.Name}  ({d.Size.X}×{d.Size.Y})");
             _outputOptionMonitorMap.Add(d.Index);
             if (d.Index == selectedMonitor)
-                selectIndex = i + 1;
+                selectIndex = physicalStartIndex + i;
         }
 
         if (selectedMonitor >= 0 && selectIndex == 0)
@@ -1427,6 +1486,33 @@ public partial class SettingsCanvasEditor : Control
         }
 
         _screenOutputOption.Select(selectIndex);
+    }
+
+    /// <summary>
+    /// Display Offset means monitor-relative offset for physical screens, absolute desktop position for Window.
+    /// </summary>
+    private void UpdateDisplayOffsetLabel(VideoOutputDevice screen)
+    {
+        var offsetLabel = GetNodeOrNull<Label>("%DisplayOffsetLabel");
+        if (offsetLabel == null)
+            return;
+
+        if (screen != null && screen.IsWindow)
+        {
+            offsetLabel.Text = "Window Position";
+            if (_displayOffsetXLineEdit != null)
+                _displayOffsetXLineEdit.TooltipText = "Desktop X position of the portable window";
+            if (_displayOffsetYLineEdit != null)
+                _displayOffsetYLineEdit.TooltipText = "Desktop Y position of the portable window";
+        }
+        else
+        {
+            offsetLabel.Text = "Display Offset";
+            if (_displayOffsetXLineEdit != null)
+                _displayOffsetXLineEdit.TooltipText = "Offset from the target display origin (X)";
+            if (_displayOffsetYLineEdit != null)
+                _displayOffsetYLineEdit.TooltipText = "Offset from the target display origin (Y)";
+        }
     }
 
     private void LoadLayerProps()
@@ -1895,6 +1981,30 @@ public partial class SettingsCanvasEditor : Control
         UpdateCanvasGizmos();
     }
 
+    /// <summary>
+    /// Re-checks all screens/outputs: restores closed portable windows, re-places physical
+    /// outputs, and refreshes the available-display list.
+    /// </summary>
+    private void OnRefreshScreensPressed()
+    {
+        _displaysManager.RefreshAllScreens();
+        RebuildTrees();
+        if (_selectionKind == SelectionKind.Screen && _selectedScreenId >= 0)
+        {
+            SelectScreenInTree(_selectedScreenId);
+            LoadScreenProps();
+        }
+        else if (_selectionKind == SelectionKind.Layer && _selectedLayerId >= 0)
+        {
+            SelectLayerInTree(_selectedLayerId);
+            LoadLayerProps();
+        }
+
+        UpdateCanvasGizmos();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            "Canvas Editor: Screens refreshed.", 0);
+    }
+
     #endregion
 
     #region Layer property handlers
@@ -2231,17 +2341,31 @@ public partial class SettingsCanvasEditor : Control
         foreach (var screen in DisplaysManager.Screens)
         {
             bool selected = _selectionKind == SelectionKind.Screen && screen.OutputId == _selectedScreenId;
+            Color border;
+            Color fill;
+            if (screen.IsVirtual)
+            {
+                border = new Color(1f, 0.5f, 0.2f, 0.85f);
+                fill = new Color(1f, 0.45f, 0.15f, 0.1f);
+            }
+            else if (screen.IsWindow)
+            {
+                border = new Color(0.35f, 0.85f, 0.45f, 0.9f);
+                fill = new Color(0.25f, 0.75f, 0.35f, 0.1f);
+            }
+            else
+            {
+                border = new Color(1f, 0.2f, 0.15f, 0.9f);
+                fill = new Color(1f, 0.15f, 0.1f, 0.12f);
+            }
+
             var gizmo = new CanvasItemGizmo
             {
                 IsScreen = true,
                 ItemId = screen.OutputId,
                 LabelText = screen.OutputName,
-                BorderColor = screen.IsVirtual
-                    ? new Color(1f, 0.5f, 0.2f, 0.85f)
-                    : new Color(1f, 0.2f, 0.15f, 0.9f),
-                FillColor = screen.IsVirtual
-                    ? new Color(1f, 0.45f, 0.15f, 0.1f)
-                    : new Color(1f, 0.15f, 0.1f, 0.12f),
+                BorderColor = border,
+                FillColor = fill,
                 OffsetDash = false,
                 Selected = selected,
                 MouseFilter = MouseFilterEnum.Ignore

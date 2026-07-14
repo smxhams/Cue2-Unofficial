@@ -34,7 +34,7 @@ public partial class DisplaysManager : Node
 
     /// <summary>
     /// List of active screens (video output devices). Each screen maps a canvas region
-    /// to either a physical monitor or Virtual Output.
+    /// to a physical monitor, a portable Window, or Virtual Output.
     /// </summary>
     public static List<VideoOutputDevice> Outputs { get; } = new List<VideoOutputDevice>();
 
@@ -75,7 +75,8 @@ public partial class DisplaysManager : Node
     /// Adds a new screen with the given output assignment.
     /// </summary>
     /// <param name="name">Display name for the screen.</param>
-    /// <param name="monitorIndex">Physical monitor index, or <see cref="VideoOutputDevice.VirtualMonitorIndex"/> for Virtual Output.</param>
+    /// <param name="monitorIndex">Physical monitor index, <see cref="VideoOutputDevice.VirtualMonitorIndex"/>,
+    /// or <see cref="VideoOutputDevice.WindowMonitorIndex"/> for a portable window.</param>
     /// <param name="canvasPosition">Optional canvas position; defaults to origin.</param>
     /// <param name="size">Optional size; defaults to canvas size.</param>
     /// <returns>The created screen (VideoOutputDevice).</returns>
@@ -89,9 +90,23 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Adds a new video output device (screen) for the specified monitor.
+    /// Human-readable destination label for logs and UI.
     /// </summary>
-    /// <param name="monitorIndex">The target monitor index, or <see cref="VideoOutputDevice.VirtualMonitorIndex"/> for virtual.</param>
+    public static string GetOutputDestinationLabel(VideoOutputDevice output)
+    {
+        if (output == null)
+            return "Unknown";
+        if (output.IsVirtual)
+            return "Virtual Output";
+        if (output.IsWindow)
+            return "Window";
+        return $"monitor {output.TargetMonitor}";
+    }
+
+    /// <summary>
+    /// Adds a new video output device (screen) for the specified destination.
+    /// </summary>
+    /// <param name="monitorIndex">Physical monitor index, Virtual Output, or Window sentinel.</param>
     /// <param name="canvasPosition">Position on the canvas.</param>
     /// <param name="size">Size of the output region.</param>
     /// <param name="name">Name of the screen.</param>
@@ -99,30 +114,35 @@ public partial class DisplaysManager : Node
     public VideoOutputDevice AddOutput(int monitorIndex, Vector2I canvasPosition, Vector2I size, string name = null)
     {
         var output = new VideoOutputDevice();
-        output.OutputName = name ?? (monitorIndex < 0 ? $"Screen {Outputs.Count + 1}" : $"Output {monitorIndex}");
+        bool isNamedVirtualOrWindow = monitorIndex == VideoOutputDevice.VirtualMonitorIndex
+            || monitorIndex == VideoOutputDevice.WindowMonitorIndex;
+        output.OutputName = name ?? (isNamedVirtualOrWindow ? $"Screen {Outputs.Count + 1}" : $"Output {monitorIndex}");
         output.CanvasPosition = canvasPosition;
         output.OutputSize = size;
         output.TargetMonitor = monitorIndex;
         AddChild(output);
         
         Outputs.Add(output);
-        // Virtual screens stay hidden; physical screens show via UpdateOutputRegion.
+        // Virtual screens stay hidden; physical / window screens show via UpdateOutputRegion.
+        if (output.IsWindow)
+            output.ClearWindowDismissed();
         if (!output.IsVirtual)
             output.Show();
         output.SetCanvasReference(Canvas);
         UpdateAllLayerTestPatterns();
 
-        string dest = output.IsVirtual ? "Virtual Output" : $"monitor {monitorIndex}";
+        string dest = GetOutputDestinationLabel(output);
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"DisplaysManager: Added screen '{output.OutputName}' ({dest}).", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         return output;
     }
 
     /// <summary>
-    /// Assigns a screen's output destination (physical monitor or Virtual Output).
+    /// Assigns a screen's output destination (physical monitor, portable Window, or Virtual Output).
     /// </summary>
     /// <param name="outputId">Screen output ID.</param>
-    /// <param name="monitorIndex">Monitor index or <see cref="VideoOutputDevice.VirtualMonitorIndex"/>.</param>
+    /// <param name="monitorIndex">Monitor index, <see cref="VideoOutputDevice.VirtualMonitorIndex"/>,
+    /// or <see cref="VideoOutputDevice.WindowMonitorIndex"/>.</param>
     public void UpdateScreenTargetMonitor(int outputId, int monitorIndex)
     {
         var output = Outputs.Find(o => o.OutputId == outputId);
@@ -135,6 +155,16 @@ public partial class DisplaysManager : Node
         {
             output.Hide();
         }
+        else if (output.IsWindow)
+        {
+            output.ClearWindowDismissed();
+            // Leaving borderless exclusive paths: ensure OS chrome is available next place.
+            output.Borderless = false;
+            output.Mode = Window.ModeEnum.Windowed;
+            if (!output.Visible)
+                output.Show();
+            output.UpdateOutputRegion();
+        }
         else
         {
             output.CurrentScreen = monitorIndex;
@@ -145,7 +175,7 @@ public partial class DisplaysManager : Node
 
         UpdateAllLayerTestPatterns();
 
-        string dest = output.IsVirtual ? "Virtual Output" : $"monitor {monitorIndex}";
+        string dest = GetOutputDestinationLabel(output);
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
             $"DisplaysManager: Screen '{output.OutputName}' assigned to {dest}.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -161,6 +191,8 @@ public partial class DisplaysManager : Node
             return;
 
         output.OutputName = newName.Trim();
+        if (output.IsWindow)
+            output.Title = output.OutputName;
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
             $"DisplaysManager: Renamed screen to '{output.OutputName}'.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -178,6 +210,8 @@ public partial class DisplaysManager : Node
             return;
 
         output.DisplayOffset = displayOffset;
+        if (output.IsWindow)
+            output.ClearWindowDismissed();
         output.UpdateOutputRegion();
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
             $"DisplaysManager: Screen '{output.OutputName}' display offset set to {displayOffset}.", 0);
@@ -198,14 +232,15 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Default canvas size for a screen: physical display resolution when assigned, otherwise canvas size.
+    /// Default canvas size for a screen: physical display resolution when assigned,
+    /// otherwise canvas size (Virtual Output and Window).
     /// </summary>
     public Vector2I GetDefaultScreenSize(VideoOutputDevice screen)
     {
         if (screen == null)
             return Canvas?.CanvasSize ?? new Vector2I(1920, 1080);
 
-        if (!screen.IsVirtual && screen.TargetMonitor >= 0 && screen.TargetMonitor < DisplayServer.GetScreenCount())
+        if (screen.IsPhysical && screen.TargetMonitor < DisplayServer.GetScreenCount())
         {
             foreach (var d in GetAvailableDisplays())
             {
@@ -281,6 +316,37 @@ public partial class DisplaysManager : Node
         }
     }
 
+    /// <summary>
+    /// Re-enumerates displays and force-refreshes every screen/output.
+    /// Restores portable windows the user closed, re-places physical outputs, and hides virtual ones.
+    /// </summary>
+    public void RefreshAllScreens()
+    {
+        InvalidateDisplayCache();
+        GetAvailableDisplays(); // warm cache after invalidation
+
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+
+            if (output.IsVirtual)
+            {
+                try { output.Hide(); } catch { /* ignore */ }
+                continue;
+            }
+
+            // Window: clear dismissed so close-button hide is undone.
+            // Physical: re-place on monitor if still available.
+            output.ForceRefreshOutput();
+        }
+
+        UpdateAllLayerTestPatterns();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            "DisplaysManager: Refreshed all screens and outputs.", 0);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+    }
+
     public void UpdateAllLayers()
     {
         foreach (var output in Outputs)
@@ -300,6 +366,9 @@ public partial class DisplaysManager : Node
         if (output != null)
         {
             output.CanvasPosition = newCanvasPosition;
+            // Editor-driven changes re-show a user-closed portable window.
+            if (output.IsWindow)
+                output.ClearWindowDismissed();
             output.UpdateOutputRegion();
             // Screen moved on canvas — layer rects are relative to screen origin.
             output.UpdateAllLayerDisplayRects();
@@ -319,6 +388,8 @@ public partial class DisplaysManager : Node
         if (output != null)
         {
             output.OutputSize = newSize;
+            if (output.IsWindow)
+                output.ClearWindowDismissed();
             output.UpdateOutputRegion();
             UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -719,11 +790,11 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Returns the configured video outputs mapped to whether their target monitor is currently available.
-    /// "Connected" means the TargetMonitor index is valid given the current number of screens.
+    /// Returns the configured video outputs mapped to whether their destination is currently available.
+    /// Physical: target monitor index is valid. Virtual / Window: always available.
     /// Used by the footer to display combined device status.
     /// </summary>
-    /// <returns>Dictionary of "Name (Monitor N)" → isConnected (true = green/available).</returns>
+    /// <returns>Dictionary of "Name (destination)" → isConnected (true = green/available).</returns>
     public Dictionary<string, bool> GetVideoOutputStatuses()
     {
         var result = new Dictionary<string, bool>();
@@ -740,6 +811,11 @@ public partial class DisplaysManager : Node
             {
                 isConnected = true;
                 key = $"{output.OutputName} (Virtual)";
+            }
+            else if (output.IsWindow)
+            {
+                isConnected = true;
+                key = $"{output.OutputName} (Window)";
             }
             else
             {
@@ -844,9 +920,16 @@ public partial class DisplaysManager : Node
                 output.LoadFromData(outputData);
                 AddChild(output);
                 Outputs.Add(output);
-                // Virtual / missing monitors stay hidden; physical available monitors show.
-                if (!output.IsVirtual && output.TargetMonitor < DisplayServer.GetScreenCount())
+                // Virtual / missing monitors stay hidden; Window and available physical monitors show.
+                if (output.IsWindow)
+                {
+                    output.ClearWindowDismissed();
                     output.Show();
+                }
+                else if (output.IsPhysical && output.TargetMonitor < DisplayServer.GetScreenCount())
+                {
+                    output.Show();
+                }
                 output.SetCanvasReference(Canvas);
             }
             // Update _nextOutputId to avoid ID conflicts

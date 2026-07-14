@@ -38,14 +38,32 @@ public partial class VideoOutputDevice : Window, IDisposable
     public const int VirtualMonitorIndex = -1;
 
     /// <summary>
-    /// Target display monitor index. Use <see cref="VirtualMonitorIndex"/> for Virtual Output.
+    /// Sentinel value for a portable OS-decorated window output (title bar + window controls).
+    /// </summary>
+    public const int WindowMonitorIndex = -2;
+
+    /// <summary>
+    /// Target display monitor index.
+    /// Use <see cref="VirtualMonitorIndex"/> for Virtual Output,
+    /// <see cref="WindowMonitorIndex"/> for a portable Window,
+    /// or a physical monitor index (≥ 0).
     /// </summary>
     public int TargetMonitor { get; set; } = VirtualMonitorIndex;
 
     /// <summary>
-    /// Whether this screen is assigned to Virtual Output (no physical display).
+    /// Whether this screen is assigned to Virtual Output (no visible window).
     /// </summary>
-    public bool IsVirtual => TargetMonitor < 0;
+    public bool IsVirtual => TargetMonitor == VirtualMonitorIndex;
+
+    /// <summary>
+    /// Whether this screen is assigned to a portable OS-decorated window.
+    /// </summary>
+    public bool IsWindow => TargetMonitor == WindowMonitorIndex;
+
+    /// <summary>
+    /// Whether this screen is assigned to a physical monitor (borderless output).
+    /// </summary>
+    public bool IsPhysical => TargetMonitor >= 0;
 
     /// <summary>
     /// Whether the output window is transparent.
@@ -53,8 +71,9 @@ public partial class VideoOutputDevice : Window, IDisposable
     public bool OutputTransparent { get; set; } = false;
 
     /// <summary>
-    /// Pixel offset of the output window relative to the target display's origin (home position).
-    /// Applied after canvas clipping when placing the window on a physical monitor.
+    /// Pixel offset of the output window.
+    /// Physical: relative to the target display's origin (home position), applied after canvas clipping.
+    /// Window: absolute desktop position of the portable window.
     /// </summary>
     public Vector2I DisplayOffset { get; set; } = Vector2I.Zero;
 
@@ -99,6 +118,26 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// </summary>
     private Vector2I _lastWindowSize = new Vector2I(int.MinValue, int.MinValue);
 
+    /// <summary>
+    /// When true, the user closed the portable window via the OS close button; stay hidden until re-enabled.
+    /// </summary>
+    private bool _userDismissedWindow;
+
+    /// <summary>
+    /// Prevents feedback loops while programmatically placing the portable window.
+    /// </summary>
+    private bool _isPlacingWindow;
+
+    /// <summary>
+    /// Last OS client size of a portable window (may differ from canvas size when user stretches).
+    /// </summary>
+    private Vector2I _lastPortableClientSize = new Vector2I(int.MinValue, int.MinValue);
+
+    /// <summary>
+    /// Last canvas-region size applied as <see cref="Window.ContentScaleSize"/> for portable windows.
+    /// </summary>
+    private Vector2I _lastPortableContentScaleSize = new Vector2I(int.MinValue, int.MinValue);
+
     public VideoOutputDevice()
     {
         OutputId = _nextOutputId++;
@@ -106,7 +145,71 @@ public partial class VideoOutputDevice : Window, IDisposable
         Borderless = true;
         DisplayServer.ScreenSetKeepOn(true);
 
+        // OS close button on portable windows hides rather than frees the output device.
+        CloseRequested += OnCloseRequested;
+
+        // Used to persist portable-window position / client size after user moves or resizes.
+        SetProcess(true);
+
         InitSceneRoot();
+    }
+
+    private void OnCloseRequested()
+    {
+        if (!IsWindow)
+            return;
+
+        _userDismissedWindow = true;
+        try
+        {
+            if (Visible)
+                Hide();
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        InvalidateGeometryCache();
+        GD.Print($"VideoOutputDevice:OnCloseRequested - Portable window '{OutputName}' dismissed by user.");
+    }
+
+    /// <summary>
+    /// True when the user closed the portable window via the OS close button.
+    /// Reselect Window in the canvas editor (or call <see cref="ClearWindowDismissed"/>) to show it again.
+    /// </summary>
+    public bool IsWindowDismissed => _userDismissedWindow;
+
+    /// <summary>
+    /// Clears a user-dismissed portable window so the next placement shows it again.
+    /// Call when the screen is reassigned to Window from the canvas editor.
+    /// </summary>
+    public void ClearWindowDismissed()
+    {
+        _userDismissedWindow = false;
+    }
+
+    /// <summary>
+    /// Shows a previously dismissed portable window again (no-op if not in Window mode).
+    /// </summary>
+    public void ShowPortableWindow()
+    {
+        if (!IsWindow)
+            return;
+        _userDismissedWindow = false;
+        UpdateOutputRegion();
+    }
+
+    /// <summary>
+    /// Forces a full geometry refresh (used by canvas editor "refresh screens").
+    /// Restores a user-closed portable window and re-applies physical placement.
+    /// </summary>
+    public void ForceRefreshOutput()
+    {
+        if (IsWindow)
+            _userDismissedWindow = false;
+        InvalidateGeometryCache();
+        UpdateOutputRegion();
     }
 
     private void InitSceneRoot()
@@ -287,6 +390,7 @@ public partial class VideoOutputDevice : Window, IDisposable
             /* ignore */
         }
 
+        DisableContentScale();
         InvalidateGeometryCache();
     }
 
@@ -296,6 +400,34 @@ public partial class VideoOutputDevice : Window, IDisposable
         _lastDisplayOffset = new Vector2I(int.MinValue, int.MinValue);
         _lastWindowPos = new Vector2I(int.MinValue, int.MinValue);
         _lastWindowSize = new Vector2I(int.MinValue, int.MinValue);
+        _lastPortableClientSize = new Vector2I(int.MinValue, int.MinValue);
+        _lastPortableContentScaleSize = new Vector2I(int.MinValue, int.MinValue);
+    }
+
+    /// <summary>
+    /// Disables Godot content scaling (used for 1:1 physical outputs and virtual hide).
+    /// </summary>
+    private void DisableContentScale()
+    {
+        ContentScaleMode = ContentScaleModeEnum.Disabled;
+        ContentScaleFactor = 1f;
+        ContentScaleSize = Vector2I.Zero;
+    }
+
+    /// <summary>
+    /// Enables content scale so the canvas-region design size stretches to the OS window client area.
+    /// Canvas editor size is unchanged; only the on-screen presentation scales.
+    /// </summary>
+    private void ApplyPortableContentScale(Vector2I designSize)
+    {
+        if (designSize.X <= 0 || designSize.Y <= 0)
+            return;
+
+        ContentScaleSize = designSize;
+        ContentScaleMode = ContentScaleModeEnum.CanvasItems;
+        // Stretch to fill the window (user may freely resize OS chrome; canvas data stays fixed).
+        ContentScaleAspect = ContentScaleAspectEnum.Ignore;
+        ContentScaleFactor = 1f;
     }
 
     /// <summary>
@@ -372,11 +504,12 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     /// <summary>
     /// Updates the output to show the correct region of the canvas.
-    /// Physical screens are always borderless <b>windowed</b> windows placed via DisplayServer.
+    /// Physical screens are borderless windowed windows on a monitor;
+    /// Window screens are portable OS-decorated windows the user can move freely.
     /// </summary>
     /// <remarks>
-    /// Never use ExclusiveFullscreen for outputs (black frame flashes). Exact full-monitor geometry
-    /// is placed 1px wider so the engine cannot promote the window to exclusive mode.
+    /// Never use ExclusiveFullscreen for physical outputs (black frame flashes). Exact full-monitor
+    /// geometry is placed 1px wider so the engine cannot promote the window to exclusive mode.
     /// Partial sizes must stay true Windowed with Window.Size in sync, or the surface goes grey.
     /// </remarks>
     public void UpdateOutputRegion()
@@ -389,13 +522,6 @@ public partial class VideoOutputDevice : Window, IDisposable
 
         if (IsVirtual)
         {
-            HideScreenWindow();
-            return;
-        }
-
-        if (TargetMonitor < 0 || TargetMonitor >= DisplayServer.GetScreenCount())
-        {
-            GD.PrintErr($"VideoOutputDevice:UpdateOutputRegion - Target monitor {TargetMonitor} is out of bounds (screen_count = {DisplayServer.GetScreenCount()})");
             HideScreenWindow();
             return;
         }
@@ -415,89 +541,9 @@ public partial class VideoOutputDevice : Window, IDisposable
                 return;
             }
 
-            // Display home origin + DisplayOffset + canvas clip adjustment (global desktop coords)
-            var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
-            var intendedPos = monitorPos + DisplayOffset + (Vector2I)(clippedRect.Position - (Vector2)CanvasPosition);
             var intendedSize = (Vector2I)clippedRect.Size;
-            bool fullCoverage = IsFullMonitorCoverage(intendedPos, intendedSize);
 
-            // Exact full-monitor match → +1px width so we never land in ExclusiveFullscreen.
-            var placePos = intendedPos;
-            var placeSize = AntiExclusivePlacementSize(intendedSize, fullCoverage);
-
-            bool modeOk = Mode == ModeEnum.Windowed && !IsExclusiveFullscreen();
-
-            // Skip only when geometry + safe windowed mode are already applied.
-            if (_lastClippedRect == clippedRect
-                && _lastDisplayOffset == DisplayOffset
-                && _lastWindowPos == placePos
-                && _lastWindowSize == placeSize
-                && Visible
-                && Borderless
-                && modeOk
-                && Size == placeSize)
-            {
-                return;
-            }
-
-            bool wasFullscreenLike = IsFullscreenLike();
-
-            Transparent = OutputTransparent;
-            Unresizable = true;
-
-            // Always demote exclusive/fullscreen before free placement (never leave exclusive active).
-            if (wasFullscreenLike || Mode != ModeEnum.Windowed)
-                ForceBorderlessWindowed();
-            else
-            {
-                Mode = ModeEnum.Windowed;
-                Borderless = true;
-            }
-
-            CurrentScreen = TargetMonitor;
-
-            if (!Visible)
-                Show();
-
-            // When leaving exclusive/fullscreen, bounce visibility so the content surface
-            // is recreated cleanly (prevents grey blank windows after mode exit).
-            if (wasFullscreenLike && Visible)
-            {
-                Hide();
-                Show();
-                ForceBorderlessWindowed();
-            }
-
-            ApplyNativeWindowGeometry(placePos, placeSize);
-            EnsureContentLayout(intendedSize);
-            RefreshLayerHostSizes();
-
-            // Final safety: if engine still promoted to exclusive (race after Show/size), demote and re-place.
-            if (IsExclusiveFullscreen() || Mode != ModeEnum.Windowed)
-            {
-                GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' demoting Mode={Mode} (exclusive/fullscreen not allowed on outputs).");
-                ForceBorderlessWindowed();
-                CurrentScreen = TargetMonitor;
-                // Ensure anti-exclusive size even if fullCoverage detection raced
-                var safeSize = placeSize;
-                if (safeSize == DisplayServer.ScreenGetSize(TargetMonitor)
-                    && placePos == DisplayServer.ScreenGetPosition(TargetMonitor))
-                {
-                    safeSize = AntiExclusivePlacementSize(safeSize, true);
-                }
-
-                ApplyNativeWindowGeometry(placePos, safeSize);
-                EnsureContentLayout(intendedSize);
-                RefreshLayerHostSizes();
-            }
-
-            // Deferred re-check: promotion sometimes happens a frame later on Windows.
-            CallDeferred(nameof(DeferredDemoteExclusiveIfNeeded));
-
-            _lastClippedRect = clippedRect;
-            _lastDisplayOffset = DisplayOffset;
-
-            // In-place test pattern update (no destroy/recreate)
+            // In-place test pattern update (shared by physical + window paths)
             if (_testPattern != null)
             {
                 _testPattern.PatternSize = OutputSize;
@@ -505,9 +551,13 @@ public partial class VideoOutputDevice : Window, IDisposable
                 _testPattern.QueueRedraw();
             }
 
-            GD.Print($"VideoOutputDevice:UpdateOutputRegion - '{OutputName}' Mode={Mode} Borderless={Borderless} " +
-                     $"monitor={TargetMonitor} pos={placePos} size={placeSize} intended={intendedSize} " +
-                     $"full={fullCoverage} exclusivePrevent={fullCoverage} clipped={clippedRect}");
+            if (IsWindow)
+            {
+                UpdatePortableWindowRegion(clippedRect, intendedSize);
+                return;
+            }
+
+            UpdatePhysicalMonitorRegion(clippedRect, intendedSize);
         }
         catch (Exception ex)
         {
@@ -516,12 +566,251 @@ public partial class VideoOutputDevice : Window, IDisposable
     }
 
     /// <summary>
+    /// Places a portable window with OS title bar and standard window controls.
+    /// Canvas region size drives <see cref="Window.ContentScaleSize"/>; the OS window may be
+    /// freely resized and content stretches to match without changing canvas editor data.
+    /// </summary>
+    private void UpdatePortableWindowRegion(Rect2 clippedRect, Vector2I intendedSize)
+    {
+        if (_userDismissedWindow)
+        {
+            if (Visible)
+                Hide();
+            return;
+        }
+
+        Title = string.IsNullOrWhiteSpace(OutputName) ? "Cue2 Output" : OutputName;
+        Transparent = OutputTransparent;
+        Unresizable = false;
+        AlwaysOnTop = false;
+        MinSize = new Vector2I(160, 90);
+
+        // Ensure OS-decorated windowed mode (not borderless / exclusive).
+        if (IsFullscreenLike() || Mode != ModeEnum.Windowed)
+            Mode = ModeEnum.Windowed;
+        Borderless = false;
+
+        // Design resolution = canvas output region. OS resize stretches this (Godot content scale).
+        ApplyPortableContentScale(intendedSize);
+
+        Vector2I placePos = ResolvePortableWindowPosition(intendedSize);
+
+        bool designSizeChanged = _lastPortableContentScaleSize != intendedSize
+            || _lastClippedRect != clippedRect;
+        bool firstShow = !Visible || _lastPortableClientSize.X <= 0;
+
+        // Keep the user's OS window size when they stretched it; only reset size when the
+        // canvas-editor design size changes or the window is first shown.
+        Vector2I placeSize = (firstShow || designSizeChanged)
+            ? intendedSize
+            : new Vector2I(Mathf.Max(MinSize.X, Size.X), Mathf.Max(MinSize.Y, Size.Y));
+
+        bool scaleOk = ContentScaleMode == ContentScaleModeEnum.CanvasItems
+            && ContentScaleSize == intendedSize
+            && ContentScaleAspect == ContentScaleAspectEnum.Ignore;
+
+        bool alreadyPlaced = _lastClippedRect == clippedRect
+            && _lastDisplayOffset == DisplayOffset
+            && _lastWindowPos == placePos
+            && _lastPortableContentScaleSize == intendedSize
+            && Visible
+            && !Borderless
+            && Mode == ModeEnum.Windowed
+            && scaleOk;
+
+        if (alreadyPlaced)
+            return;
+
+        _isPlacingWindow = true;
+        try
+        {
+            if (!Visible)
+                Show();
+
+            // Only force Size when design size changed / first show; always sync position.
+            ApplyPortableWindowGeometry(placePos, placeSize, forceSize: firstShow || designSizeChanged);
+            EnsureContentLayout(intendedSize);
+            RefreshLayerHostSizes();
+        }
+        finally
+        {
+            _isPlacingWindow = false;
+        }
+
+        _lastClippedRect = clippedRect;
+        _lastDisplayOffset = DisplayOffset;
+        _lastPortableContentScaleSize = intendedSize;
+        _lastPortableClientSize = Size;
+        _lastWindowSize = Size;
+
+        GD.Print($"VideoOutputDevice:UpdatePortableWindowRegion - '{OutputName}' pos={placePos} " +
+                 $"clientSize={Size} designSize={intendedSize} scale={ContentScaleMode} " +
+                 $"Borderless={Borderless} clipped={clippedRect}");
+    }
+
+    /// <summary>
+    /// Absolute desktop position for a portable window: saved DisplayOffset, or a default on the primary screen.
+    /// </summary>
+    private Vector2I ResolvePortableWindowPosition(Vector2I windowSize)
+    {
+        // Non-zero DisplayOffset is treated as an absolute desktop position (user-moved or saved).
+        if (DisplayOffset != Vector2I.Zero)
+            return DisplayOffset;
+
+        // Default: slightly inset on the primary monitor so the title bar is visible.
+        int primary = DisplayServer.GetPrimaryScreen();
+        if (primary < 0)
+            primary = 0;
+        if (primary >= DisplayServer.GetScreenCount())
+            return new Vector2I(80, 80);
+
+        var monPos = DisplayServer.ScreenGetPosition(primary);
+        var monSize = DisplayServer.ScreenGetSize(primary);
+        int x = monPos.X + Mathf.Max(40, (monSize.X - windowSize.X) / 4);
+        int y = monPos.Y + Mathf.Max(40, (monSize.Y - windowSize.Y) / 4);
+        return new Vector2I(x, y);
+    }
+
+    /// <summary>
+    /// Applies OS-decorated (bordered) window geometry without forcing borderless flags.
+    /// </summary>
+    /// <param name="windowPos">Absolute desktop position.</param>
+    /// <param name="windowSize">Client size to apply when <paramref name="forceSize"/> is true.</param>
+    /// <param name="forceSize">When false, leave the user's OS resize alone and only move the window.</param>
+    private void ApplyPortableWindowGeometry(Vector2I windowPos, Vector2I windowSize, bool forceSize = true)
+    {
+        if (windowSize.X <= 0 || windowSize.Y <= 0)
+            return;
+
+        Mode = ModeEnum.Windowed;
+        Borderless = false;
+
+        if (forceSize && Size != windowSize)
+            Size = windowSize;
+        if (Position != windowPos)
+            Position = windowPos;
+
+        if (TryGetNativeWindowId(out int windowId))
+        {
+            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, windowId);
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, false, windowId);
+            DisplayServer.WindowSetPosition(windowPos, windowId);
+            if (forceSize)
+                DisplayServer.WindowSetSize(windowSize, windowId);
+        }
+
+        _lastWindowPos = windowPos;
+        _lastWindowSize = forceSize ? windowSize : Size;
+    }
+
+    /// <summary>
+    /// Places a borderless window on a physical monitor (existing show-control path).
+    /// </summary>
+    private void UpdatePhysicalMonitorRegion(Rect2 clippedRect, Vector2I intendedSize)
+    {
+        if (TargetMonitor < 0 || TargetMonitor >= DisplayServer.GetScreenCount())
+        {
+            GD.PrintErr($"VideoOutputDevice:UpdatePhysicalMonitorRegion - Target monitor {TargetMonitor} is out of bounds (screen_count = {DisplayServer.GetScreenCount()})");
+            HideScreenWindow();
+            return;
+        }
+
+        // Physical outputs are 1:1 pixels — do not use content scale / stretch.
+        DisableContentScale();
+
+        // Display home origin + DisplayOffset + canvas clip adjustment (global desktop coords)
+        var monitorPos = DisplayServer.ScreenGetPosition(TargetMonitor);
+        var intendedPos = monitorPos + DisplayOffset + (Vector2I)(clippedRect.Position - (Vector2)CanvasPosition);
+        bool fullCoverage = IsFullMonitorCoverage(intendedPos, intendedSize);
+
+        // Exact full-monitor match → +1px width so we never land in ExclusiveFullscreen.
+        var placePos = intendedPos;
+        var placeSize = AntiExclusivePlacementSize(intendedSize, fullCoverage);
+
+        bool modeOk = Mode == ModeEnum.Windowed && !IsExclusiveFullscreen();
+
+        // Skip only when geometry + safe windowed mode are already applied.
+        if (_lastClippedRect == clippedRect
+            && _lastDisplayOffset == DisplayOffset
+            && _lastWindowPos == placePos
+            && _lastWindowSize == placeSize
+            && Visible
+            && Borderless
+            && modeOk
+            && Size == placeSize)
+        {
+            return;
+        }
+
+        bool wasFullscreenLike = IsFullscreenLike();
+
+        Transparent = OutputTransparent;
+        Unresizable = true;
+
+        // Always demote exclusive/fullscreen before free placement (never leave exclusive active).
+        if (wasFullscreenLike || Mode != ModeEnum.Windowed)
+            ForceBorderlessWindowed();
+        else
+        {
+            Mode = ModeEnum.Windowed;
+            Borderless = true;
+        }
+
+        CurrentScreen = TargetMonitor;
+
+        if (!Visible)
+            Show();
+
+        // When leaving exclusive/fullscreen, bounce visibility so the content surface
+        // is recreated cleanly (prevents grey blank windows after mode exit).
+        if (wasFullscreenLike && Visible)
+        {
+            Hide();
+            Show();
+            ForceBorderlessWindowed();
+        }
+
+        ApplyNativeWindowGeometry(placePos, placeSize);
+        EnsureContentLayout(intendedSize);
+        RefreshLayerHostSizes();
+
+        // Final safety: if engine still promoted to exclusive (race after Show/size), demote and re-place.
+        if (IsExclusiveFullscreen() || Mode != ModeEnum.Windowed)
+        {
+            GD.Print($"VideoOutputDevice:UpdatePhysicalMonitorRegion - '{OutputName}' demoting Mode={Mode} (exclusive/fullscreen not allowed on outputs).");
+            ForceBorderlessWindowed();
+            CurrentScreen = TargetMonitor;
+            // Ensure anti-exclusive size even if fullCoverage detection raced
+            var safeSize = placeSize;
+            if (safeSize == DisplayServer.ScreenGetSize(TargetMonitor)
+                && placePos == DisplayServer.ScreenGetPosition(TargetMonitor))
+            {
+                safeSize = AntiExclusivePlacementSize(safeSize, true);
+            }
+
+            ApplyNativeWindowGeometry(placePos, safeSize);
+            EnsureContentLayout(intendedSize);
+            RefreshLayerHostSizes();
+        }
+
+        // Deferred re-check: promotion sometimes happens a frame later on Windows.
+        CallDeferred(nameof(DeferredDemoteExclusiveIfNeeded));
+
+        _lastClippedRect = clippedRect;
+        _lastDisplayOffset = DisplayOffset;
+
+        GD.Print($"VideoOutputDevice:UpdatePhysicalMonitorRegion - '{OutputName}' Mode={Mode} Borderless={Borderless} " +
+                 $"monitor={TargetMonitor} pos={placePos} size={placeSize} intended={intendedSize} " +
+                 $"full={fullCoverage} exclusivePrevent={fullCoverage} clipped={clippedRect}");
+    }
+
+    /// <summary>
     /// One-frame later guard: Windows/Godot may promote exact-size borderless windows to exclusive
-    /// after the initial placement call returns.
+    /// after the initial placement call returns. Portable Window mode is excluded.
     /// </summary>
     private void DeferredDemoteExclusiveIfNeeded()
     {
-        if (!GodotObject.IsInstanceValid(this) || IsVirtual)
+        if (!GodotObject.IsInstanceValid(this) || IsVirtual || IsWindow)
             return;
 
         if (!IsExclusiveFullscreen() && Mode == ModeEnum.Windowed)
@@ -547,6 +836,40 @@ public partial class VideoOutputDevice : Window, IDisposable
             ApplyNativeWindowGeometry(pos, size);
             EnsureContentLayout(size);
             RefreshLayerHostSizes();
+        }
+    }
+
+    /// <summary>
+    /// Syncs portable-window position into DisplayOffset after the user moves it (for session save).
+    /// Content stretch on OS resize is handled by Godot <see cref="Window.ContentScaleMode"/>.
+    /// </summary>
+    public override void _Process(double delta)
+    {
+        if (!IsWindow || !Visible || _isPlacingWindow || _userDismissedWindow)
+            return;
+
+        // Persist free placement so reload restores the last user position.
+        if (Position != DisplayOffset && Position != Vector2I.Zero)
+        {
+            DisplayOffset = Position;
+            _lastDisplayOffset = DisplayOffset;
+            _lastWindowPos = Position;
+        }
+
+        // Remember client size only — do not write back to OutputSize / canvas editor.
+        // ContentScaleSize stays at the canvas design size so content stretches to fit.
+        if (Size.X > 0 && Size.Y > 0)
+        {
+            _lastPortableClientSize = Size;
+            _lastWindowSize = Size;
+        }
+
+        // Keep content scale locked to canvas design size if something external cleared it.
+        if (_lastPortableContentScaleSize.X > 0
+            && (ContentScaleMode != ContentScaleModeEnum.CanvasItems
+                || ContentScaleSize != _lastPortableContentScaleSize))
+        {
+            ApplyPortableContentScale(_lastPortableContentScaleSize);
         }
     }
 
