@@ -8,22 +8,43 @@ namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
 /// Settings panel for viewing and editing the project's InputMap actions.
-/// Displays action cards inside a FlowContainer and supports rebinding.
+/// Groups actions into collapsible category sections and supports rebinding with
+/// duplicate-key rejection and conflict highlighting.
 /// </summary>
 public partial class SettingsInputMap : ScrollContainer
 {
     private GlobalSignals _globalSignals;
-
-    private FlowContainer _inputsContainer;
-    private PackedScene _inputActionCardScene;
     private GlobalData _globalData;
+    private HistoryManager _historyManager;
+
+    private VBoxContainer _inputsContainer;
+    private PackedScene _inputActionCardScene;
+
+    /// <summary>Action name → card for conflict highlighting.</summary>
+    private readonly Dictionary<string, InputActionCard> _cardsByAction = new();
+
+    /// <summary>Action name → accordion section metadata (expand on conflict).</summary>
+    private readonly Dictionary<string, CategorySection> _sectionByAction = new();
+
+    /// <summary>The single card currently waiting for a key press, if any.</summary>
+    private InputActionCard _activeListeningCard;
+
+    /// <summary>Tracks one collapsible category in the input map panel.</summary>
+    private sealed class CategorySection
+    {
+        public string Title;
+        public Button Header;
+        public Control Content;
+        public bool Expanded = true;
+    }
 
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
+        _historyManager = _globalData?.HistoryManager;
 
-        _inputsContainer = GetNode<FlowContainer>("%InputsContainer");
+        _inputsContainer = GetNode<VBoxContainer>("%InputsContainer");
 
         // Load by path for now (uid will be assigned by editor on first save of the scene).
         _inputActionCardScene = SceneLoader.LoadPackedScene(
@@ -35,11 +56,32 @@ public partial class SettingsInputMap : ScrollContainer
 
         VisibilityChanged += OnVisibilityChanged;
 
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
+
         // Initial populate if already visible (e.g. opened directly)
         if (IsVisibleInTree())
         {
             PopulateActions();
         }
+    }
+
+    public override void _ExitTree()
+    {
+        VisibilityChanged -= OnVisibilityChanged;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
+        base._ExitTree();
+    }
+
+    /// <summary>
+    /// After settings undo/redo (input map included), rebuild cards from live InputMap.
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Settings) return;
+        if (!Visible) return;
+        PopulateActions();
     }
 
     private void OnVisibilityChanged()
@@ -50,16 +92,19 @@ public partial class SettingsInputMap : ScrollContainer
         }
         else
         {
-            // Optional: clear to reduce node count when hidden
             ClearCards();
         }
     }
 
     /// <summary>
-    /// Clears existing action cards from the container.
+    /// Clears existing category sections and action cards from the container.
     /// </summary>
     private void ClearCards()
     {
+        _activeListeningCard = null;
+        _cardsByAction.Clear();
+        _sectionByAction.Clear();
+
         if (_inputsContainer == null) return;
         foreach (Node child in _inputsContainer.GetChildren())
         {
@@ -69,7 +114,7 @@ public partial class SettingsInputMap : ScrollContainer
     }
 
     /// <summary>
-    /// Reads actions from the project InputMap and creates a card for each relevant action.
+    /// Reads actions from the project InputMap and creates categorized accordion sections.
     /// </summary>
     private void PopulateActions()
     {
@@ -77,44 +122,175 @@ public partial class SettingsInputMap : ScrollContainer
 
         ClearCards();
 
-        // Use the centralized list of mappable actions defined in GlobalData.
         var managed = GlobalData.MappableInputActions;
+        var remaining = new HashSet<string>(managed.Where(a => InputMap.HasAction(a)));
 
-        // Prefer our curated list so order and visibility is controlled.
-        // Fall back to discovering from InputMap if an action is missing from the list.
-        var actionsToShow = new List<string>();
-
-        foreach (var action in managed)
+        // Category sections in defined order.
+        foreach (var (category, actions) in GlobalData.MappableInputActionCategories)
         {
-            if (InputMap.HasAction(action))
+            var categoryActions = new List<string>();
+            foreach (var action in actions)
             {
-                actionsToShow.Add(action);
+                if (!remaining.Contains(action)) continue;
+                categoryActions.Add(action);
+                remaining.Remove(action);
             }
+
+            if (categoryActions.Count == 0) continue;
+            AddCategorySection(category, categoryActions);
         }
 
-        // Also discover any other non-ui_ actions that exist at runtime but are not in our list yet.
-        var allActions = InputMap.GetActions();
-        foreach (StringName actionName in allActions)
+        // Any curated actions not assigned to a category.
+        if (remaining.Count > 0)
+        {
+            AddCategorySection("Other", remaining.OrderBy(a => a).ToList());
+            remaining.Clear();
+        }
+
+        // Discover runtime non-ui_ actions missing from the curated list.
+        var discovered = new List<string>();
+        foreach (StringName actionName in InputMap.GetActions())
         {
             string name = actionName.ToString();
             if (name.StartsWith("ui_")) continue;
-            if (actionsToShow.Contains(name)) continue;
             if (managed.Contains(name)) continue;
-            actionsToShow.Add(name);
+            if (_cardsByAction.ContainsKey(name)) continue;
+            discovered.Add(name);
         }
 
-        GD.Print($"SettingsInputMap:PopulateActions - Populating {actionsToShow.Count} input action cards");
+        if (discovered.Count > 0)
+        {
+            discovered.Sort(StringComparer.Ordinal);
+            AddCategorySection("Other", discovered);
+        }
 
-        foreach (var actionName in actionsToShow)
+        GD.Print($"SettingsInputMap:PopulateActions - Populated {_cardsByAction.Count} input action cards in categories");
+    }
+
+    /// <summary>
+    /// Builds a collapsible accordion section with a header button and a flow of action cards.
+    /// </summary>
+    private void AddCategorySection(string categoryTitle, List<string> actions)
+    {
+        var sectionRoot = new VBoxContainer();
+        sectionRoot.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        sectionRoot.AddThemeConstantOverride("separation", 2);
+
+        var header = new Button();
+        header.Text = $"▼  {categoryTitle}";
+        header.Alignment = HorizontalAlignment.Left;
+        header.Flat = true;
+        header.FocusMode = FocusModeEnum.None;
+        header.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        header.AddThemeFontSizeOverride("font_size", 11);
+        header.AddThemeColorOverride("font_color", GlobalStyles.SoftFontColor);
+        header.AddThemeColorOverride("font_hover_color", Colors.White);
+        header.AddThemeColorOverride("font_pressed_color", Colors.White);
+
+        var content = new FlowContainer();
+        content.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        content.AddThemeConstantOverride("h_separation", 4);
+        content.AddThemeConstantOverride("v_separation", 4);
+
+        var section = new CategorySection
+        {
+            Title = categoryTitle,
+            Header = header,
+            Content = content,
+            Expanded = true,
+        };
+
+        header.Pressed += () =>
+        {
+            section.Expanded = !section.Expanded;
+            content.Visible = section.Expanded;
+            header.Text = section.Expanded ? $"▼  {section.Title}" : $"▶  {section.Title}";
+        };
+
+        // Attach section to the tree first so card _Ready runs when children are added.
+        sectionRoot.AddChild(header);
+        sectionRoot.AddChild(content);
+
+        // Subtle separator under each category group.
+        var sep = new HSeparator();
+        sep.AddThemeConstantOverride("separation", 6);
+        sectionRoot.AddChild(sep);
+
+        _inputsContainer.AddChild(sectionRoot);
+
+        foreach (var actionName in actions)
         {
             var card = _inputActionCardScene.Instantiate<InputActionCard>();
-            _inputsContainer.AddChild(card);
             card.SetAction(actionName);
+            content.AddChild(card);
+            card.BindingConflict += OnBindingConflict;
+            card.ListeningStarted += OnCardListeningStarted;
+            _cardsByAction[actionName] = card;
+            _sectionByAction[actionName] = section;
         }
     }
 
-    public override void _ExitTree()
+    /// <summary>
+    /// Ensures only one card listens at a time: cancel any previous rebind when a new one starts.
+    /// </summary>
+    private void OnCardListeningStarted(InputActionCard card)
     {
-        VisibilityChanged -= OnVisibilityChanged;
+        if (_activeListeningCard != null &&
+            _activeListeningCard != card &&
+            IsInstanceValid(_activeListeningCard))
+        {
+            // Another card is taking over; don't re-enable global input until the new card finishes.
+            _activeListeningCard.CancelListening(emitFocusExit: false);
+        }
+
+        _activeListeningCard = card;
+    }
+
+    /// <summary>
+    /// Called when a card rejects a rebind because another action already uses that key combo.
+    /// Expands the owning category if needed and flashes the conflicting card red.
+    /// </summary>
+    private void OnBindingConflict(string conflictingAction, string attemptedCombo)
+    {
+        if (string.IsNullOrEmpty(conflictingAction)) return;
+
+        // Ensure the conflicting card's category is expanded so the user can see it.
+        if (_sectionByAction.TryGetValue(conflictingAction, out var section) && section != null)
+        {
+            if (!section.Expanded && section.Content != null && section.Header != null)
+            {
+                section.Expanded = true;
+                section.Content.Visible = true;
+                section.Header.Text = $"▼  {section.Title}";
+            }
+        }
+
+        if (_cardsByAction.TryGetValue(conflictingAction, out var card) && IsInstanceValid(card))
+        {
+            card.FlashConflict();
+        }
+
+        string pretty = PrettifyActionName(conflictingAction);
+        string msg = string.IsNullOrEmpty(attemptedCombo)
+            ? $"Hotkey already used by '{pretty}'."
+            : $"Hotkey '{attemptedCombo}' is already used by '{pretty}'.";
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), msg, (int)LogType.Warning);
+        GD.Print($"SettingsInputMap:OnBindingConflict - {msg}");
+    }
+
+    private static string PrettifyActionName(string action)
+    {
+        if (string.IsNullOrEmpty(action)) return "";
+        string result = "";
+        for (int i = 0; i < action.Length; i++)
+        {
+            char c = action[i];
+            if (i > 0 && char.IsUpper(c) && (char.IsLower(action[i - 1]) || char.IsDigit(action[i - 1])))
+            {
+                result += " ";
+            }
+            result += c;
+        }
+        return result;
     }
 }

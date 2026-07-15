@@ -37,6 +37,8 @@ public partial class MainTitleBarUI : Control
     private Timer _menuHideTimer;
 
     private Label _titleLabel;
+    private Button _editUndoButton;
+    private Button _editRedoButton;
     
     
     public override void _Ready()
@@ -113,6 +115,27 @@ public partial class MainTitleBarUI : Control
             _mainMenuButton.ButtonPressed = false;
         };
 
+        // Edit drop down (Undo / Redo)
+        _editUndoButton = GetNode<Button>("%EditUndo");
+        _editRedoButton = GetNode<Button>("%EditRedo");
+        _editUndoButton.Pressed += () =>
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Undo));
+            _mainMenuButton.ButtonPressed = false;
+        };
+        _editRedoButton.Pressed += () =>
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Redo));
+            _mainMenuButton.ButtonPressed = false;
+        };
+        if (_globalData.HistoryManager != null)
+        {
+            _globalData.HistoryManager.HistoryChanged += UpdateUndoRedoMenuState;
+            // Hotkey labels may change when input map is undone/redone.
+            _globalData.HistoryManager.HistoryRestored += OnHistoryRestored;
+            UpdateUndoRedoMenuState();
+        }
+
         // Non-submenu File rows: close any open flyout submenu on hover
         WireFileMenuItemHidesSubmenus("%FileNew");
         WireFileMenuItemHidesSubmenus("%FileSave");
@@ -176,10 +199,30 @@ public partial class MainTitleBarUI : Control
         GetNode<Label>("%FileSaveHotkey").Text = GlobalData.ParseHotkey("SaveSession");
         GetNode<Label>("%FileSaveAsHotkey").Text = GlobalData.ParseHotkey("SaveAsSession");
         GetNode<Label>("%FileOpenHotkey").Text = GlobalData.ParseHotkey("OpenSession");
+        GetNode<Label>("%EditUndoHotkey").Text = GlobalData.ParseHotkey("Undo");
+        GetNode<Label>("%EditRedoHotkey").Text = GlobalData.ParseHotkey("Redo");
 
         var settingsBtn = GetNode<Button>("%SettingsButton");
         string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");
         settingsBtn.TooltipText = "Settings" + (!string.IsNullOrEmpty(settingsHotkey) ? "\nHotkey: " + settingsHotkey : "");
+    }
+
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Settings) return;
+        SyncHotkeys();
+    }
+
+    /// <summary>
+    /// Enables or disables Edit → Undo/Redo based on history stack state.
+    /// </summary>
+    private void UpdateUndoRedoMenuState()
+    {
+        var history = _globalData?.HistoryManager;
+        if (_editUndoButton != null)
+            _editUndoButton.Disabled = history == null || !history.CanUndo;
+        if (_editRedoButton != null)
+            _editRedoButton.Disabled = history == null || !history.CanRedo;
     }
 
     public void UpdateTitle()

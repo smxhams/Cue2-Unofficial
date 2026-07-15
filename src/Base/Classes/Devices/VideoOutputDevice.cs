@@ -1028,6 +1028,8 @@ public partial class VideoOutputDevice : Window, IDisposable
         data.Add("DisplayOffsetX", DisplayOffset.X);
         data.Add("DisplayOffsetY", DisplayOffset.Y);
         data.Add("KeepAspect", KeepAspect);
+        // Runtime overlay state — required so undo/redo restores screen test patterns.
+        data.Add("TestPatternEnabled", TestPatternStatus());
         return data;
     }
 
@@ -1035,6 +1037,10 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// Loads the output device data from a dictionary.
     /// </summary>
     /// <param name="data">Dictionary containing output data.</param>
+    /// <remarks>
+    /// Does not apply test-pattern overlays here — callers re-apply after the window is
+    /// parented and sized (see <see cref="Cue2.Shared.DisplaysManager.LoadFromData"/>).
+    /// </remarks>
     public void LoadFromData(Godot.Collections.Dictionary data)
     {
         OutputId = (int)data["OutputId"];

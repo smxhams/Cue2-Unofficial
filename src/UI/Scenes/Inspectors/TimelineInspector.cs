@@ -372,9 +372,14 @@ public partial class TimelineInspector : Control
                     _initialBarPos = bar.Position;
                     _initialMousePos = GetViewport().GetMousePosition();
                     _draggedCue = cue;
+                    // Continuous drag session — seal on mouse up.
+                    _globalData?.HistoryManager?.RecordCueChange(
+                        cue.Id, "Edit pre-wait (timeline)", $"cue:{cue.Id}:timeline-prewait");
                 }
                 else
                 {
+                    if (_draggedCue != null)
+                        _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_draggedCue.Id}:timeline-prewait");
                     _dragging = false;
                     _draggedCue = null;
                     // Emit signal to update external UI

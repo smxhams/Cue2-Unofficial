@@ -69,6 +69,8 @@ public partial class ShellBar : PanelContainer
 		_cueNameLineEdit.EditingToggled += OnNameEditToggled;
 		_preWaitLineEdit.EditingToggled += OnPreWaitEditToggled;
 		_postWaitLineEdit.EditingToggled += OnPostWaitEditToggled;
+		if (_followCheckBox != null)
+			_followCheckBox.Toggled += OnFollowToggled;
 
 		_dragButton.Icon = GetThemeIcon("Rearrange", "AtlasIcons");
 		_collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
@@ -215,8 +217,8 @@ public partial class ShellBar : PanelContainer
 		_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
 		_colorBarStyle.BgColor = _cue.Color;
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
-		if (cue.Follow == FollowType.Follow) _followCheckBox.ButtonPressed = true;
-		else _followCheckBox.ButtonPressed = false;
+		if (_followCheckBox != null)
+			_followCheckBox.SetPressedNoSignal(cue.Follow == FollowType.Follow);
 		// Initialize collapse/expand UI based on children (SetCue path)
 		UpdateCollapseUI();
 		RefreshIssueIndicatorFromService();
@@ -239,6 +241,29 @@ public partial class ShellBar : PanelContainer
 		_durationLineEdit.Text = FormatDurationField(_cue.Duration);
 		if (!_isEditingPostWait)
 			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+	}
+
+	/// <summary>
+	/// Refreshes shell fields from the bound cue after an in-place history restore.
+	/// Property change events cover name/num/color/times; this covers follow and a full times pass.
+	/// </summary>
+	public void RefreshAllFromCue()
+	{
+		if (_cue == null) return;
+		if (!_isEditingName)
+			_cueNameLineEdit.Text = _cue.Name;
+		if (!_isEditingCueNum)
+			_cueNumLineEdit.Text = _cue.CueNum;
+		RefreshTimesFromCue();
+		if (_colorBarStyle != null)
+		{
+			_colorBarStyle.BgColor = _cue.Color;
+			_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
+		}
+		if (_followCheckBox != null)
+			_followCheckBox.SetPressedNoSignal(_cue.Follow == FollowType.Follow);
+		UpdateCollapseUI();
+		RefreshIssueIndicatorFromService();
 	}
 
 	private static string FormatDurationField(double seconds)
@@ -287,10 +312,18 @@ public partial class ShellBar : PanelContainer
 
 	private void OnCueNumEditToggled(bool editing)
 	{
+		if (_cue == null) return;
 		if (_isEditingCueNum && editing == false)
 		{
 			_cueNumLineEdit.Editable = false;
-			_cue.CueNum = _cueNumLineEdit.Text;
+			string newNum = _cueNumLineEdit.Text ?? string.Empty;
+			if (!string.Equals(_cue.CueNum ?? string.Empty, newNum, System.StringComparison.Ordinal))
+			{
+				// Discrete commit when leaving inline edit (double-click to edit on shell).
+				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue number");
+				_cue.CueNum = newNum;
+				NotifyInspectorsOfCueEdit();
+			}
 			_cueNumLineEdit.FocusMode = FocusModeEnum.None;
 			_isEditingCueNum = false;
 		}
@@ -317,10 +350,17 @@ public partial class ShellBar : PanelContainer
 
 	private void OnNameEditToggled(bool editing)
 	{
+		if (_cue == null) return;
 		if (_isEditingName && editing == false)
 		{
 			_cueNameLineEdit.Editable = false;
-			_cue.Name = _cueNameLineEdit.Text;
+			string newName = _cueNameLineEdit.Text ?? string.Empty;
+			if (!string.Equals(_cue.Name ?? string.Empty, newName, System.StringComparison.Ordinal))
+			{
+				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue name");
+				_cue.Name = newName;
+				NotifyInspectorsOfCueEdit();
+			}
 			_cueNameLineEdit.FocusMode = FocusModeEnum.None;
 			_isEditingName = false;
 		}
@@ -335,6 +375,7 @@ public partial class ShellBar : PanelContainer
 
 	private void OnPreWaitEditToggled(bool editing)
 	{
+		if (_cue == null) return;
 		if (_isEditingPreWait && editing == false)
 		{
 			var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
@@ -342,12 +383,17 @@ public partial class ShellBar : PanelContainer
 			{
 				_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
 			}
-			else
+			else if (System.Math.Abs(_cue.PreWait - time) >= 1e-9)
 			{
+				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit pre-wait");
 				_cue.PreWait = time;
 				_cue.CalculateTotalDuration();
 				_preWaitLineEdit.Text = ret;
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+				NotifyInspectorsOfCueEdit();
+			}
+			else
+			{
+				_preWaitLineEdit.Text = ret;
 			}
 			_preWaitLineEdit.ReleaseFocus();
 			_isEditingPreWait = false;
@@ -357,6 +403,7 @@ public partial class ShellBar : PanelContainer
 
 	private void OnPostWaitEditToggled(bool editing)
 	{
+		if (_cue == null) return;
 		if (_isEditingPostWait && editing == false)
 		{
 			var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
@@ -364,17 +411,49 @@ public partial class ShellBar : PanelContainer
 			{
 				_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
 			}
-			else
+			else if (System.Math.Abs(_cue.PostWait - time) >= 1e-9)
 			{
+				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit post-wait");
 				_cue.PostWait = time;
 				_cue.CalculateTotalDuration();
 				_postWaitLineEdit.Text = ret;
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+				NotifyInspectorsOfCueEdit();
+			}
+			else
+			{
+				_postWaitLineEdit.Text = ret;
 			}
 			_postWaitLineEdit.ReleaseFocus();
 			_isEditingPostWait = false;
 		}
 		else if (_isEditingPostWait == false && editing) _isEditingPostWait = true;
+	}
+
+	/// <summary>
+	/// Follow checkbox on the shell row: toggles Follow vs None (matches prior display mapping).
+	/// </summary>
+	private void OnFollowToggled(bool pressed)
+	{
+		if (_cue == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var desired = pressed ? FollowType.Follow : FollowType.None;
+		if (_cue.Follow == desired) return;
+
+		_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit follow mode");
+		_cue.Follow = desired;
+		NotifyInspectorsOfCueEdit();
+	}
+
+	/// <summary>
+	/// Pushes shell-row model edits into inspectors (and any other SyncShellInspector listeners).
+	/// Name also notifies via NameChanged; cue number / waits / follow need an explicit refresh.
+	/// </summary>
+	private void NotifyInspectorsOfCueEdit()
+	{
+		if (_cue == null) return;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _cue.Id);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 	}
 
 

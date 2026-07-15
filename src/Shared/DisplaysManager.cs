@@ -862,26 +862,41 @@ public partial class DisplaysManager : Node
     /// Loads the displays manager data from a dictionary.
     /// </summary>
     /// <param name="data">Dictionary containing layers and outputs data.</param>
+    /// <remarks>
+    /// Safe for JSON-round-tripped history snapshots (Variant-wrapped nested dicts/arrays).
+    /// Replaces all screens (Window nodes) and layer models. Emits
+    /// <see cref="GlobalSignals.DisplaysChanged"/> and <see cref="GlobalSignals.CanvasSizeChanged"/>
+    /// so the canvas editor and footer can rebuild.
+    /// </remarks>
     public void LoadFromData(Godot.Collections.Dictionary data)
     {
+        if (data == null)
+            return;
+
+        // Track screen test-pattern flags while loading — overlays need a parented window.
+        var pendingScreenTestPatterns = new System.Collections.Generic.List<(int outputId, bool enabled)>();
+
         if (data.ContainsKey("Canvas"))
         {
-            var canvasData = (Godot.Collections.Dictionary) data["Canvas"];
+            var canvasData = data["Canvas"].AsGodotDictionary();
             Canvas.LoadFromData(canvasData);
         }
-        
+
         Layers.Clear();
         // Reset id allocator before reloading so LoadFromData can advance it cleanly.
         VideoTargetLayer.SetNextLayerId(0);
-        
+
         if (data.ContainsKey("Layers"))
         {
-            var layersData = (Godot.Collections.Array) data["Layers"];
+            var layersData = data["Layers"].AsGodotArray();
             // Array order is authoritative (top-first). Do not re-sort by ZIndex — equal/stale
             // Z values produced unstable multi-layer order and broke cue TargetLayerId mapping
             // when combined with the old LayerId++ load bug.
-            foreach (Godot.Collections.Dictionary layerData in layersData)
+            foreach (var layerVar in layersData)
             {
+                if (layerVar.VariantType != Variant.Type.Dictionary)
+                    continue;
+                var layerData = layerVar.AsGodotDictionary();
                 var layer = new VideoTargetLayer();
                 layer.LoadFromData(layerData);
                 Layers.Add(layer);
@@ -904,18 +919,24 @@ public partial class DisplaysManager : Node
             VideoTargetLayer.SetNextLayerId(maxLayerId + 1);
         }
 
-        foreach (var output in Outputs)
+        foreach (var output in Outputs.ToList())
         {
-            RemoveChild(output);
-            output.QueueFree();
+            if (output != null && GodotObject.IsInstanceValid(output))
+            {
+                RemoveChild(output);
+                output.QueueFree();
+            }
         }
         Outputs.Clear();
 
         if (data.ContainsKey("Outputs"))
         {
-            var outputsData = (Godot.Collections.Array) data["Outputs"];
-            foreach (Godot.Collections.Dictionary outputData in outputsData)
+            var outputsData = data["Outputs"].AsGodotArray();
+            foreach (var outputVar in outputsData)
             {
+                if (outputVar.VariantType != Variant.Type.Dictionary)
+                    continue;
+                var outputData = outputVar.AsGodotDictionary();
                 var output = new VideoOutputDevice();
                 output.LoadFromData(outputData);
                 AddChild(output);
@@ -931,6 +952,11 @@ public partial class DisplaysManager : Node
                     output.Show();
                 }
                 output.SetCanvasReference(Canvas);
+                output.SetTransparent(output.OutputTransparent);
+
+                bool testPattern = outputData.ContainsKey("TestPatternEnabled")
+                    && (bool)outputData["TestPatternEnabled"];
+                pendingScreenTestPatterns.Add((output.OutputId, testPattern));
             }
             // Update _nextOutputId to avoid ID conflicts
             if (Outputs.Count > 0)
@@ -943,8 +969,33 @@ public partial class DisplaysManager : Node
         // Always keep at least one screen after load
         EnsureDefaultScreen();
 
+        // Re-apply screen test patterns after windows exist in the tree.
+        foreach (var (outputId, enabled) in pendingScreenTestPatterns)
+        {
+            var output = GetOutputById(outputId);
+            if (output != null && GodotObject.IsInstanceValid(output))
+                output.ToggleTestPattern(enabled);
+        }
+
         UpdateAllLayerTestPatterns();
-        DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
+        ApplyLayerDrawOrderToOutputs();
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), Canvas.CanvasSize);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+
+        // Avoid stealing focus during undo/redo restores (history IsRestoring path).
+        var history = GetNodeOrNull<GlobalData>("/root/GlobalData")?.HistoryManager;
+        if (history == null || !history.IsRestoring)
+        {
+            try
+            {
+                DisplayServer.WindowMoveToForeground(GetWindow().GetWindowId());
+            }
+            catch
+            {
+                // Window may not be ready during early session load.
+            }
+        }
     }
 
     public override void _ExitTree()

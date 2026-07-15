@@ -117,6 +117,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void CreateCue()
 	{
+		_globalData?.HistoryManager?.RecordCuelistChange("Create cue");
 		var newCue = new Cue(); // Create a cue with default values
 		AddCue(newCue);
 
@@ -153,6 +154,8 @@ public partial class CueList : Control
 				"CueList:GroupSelectedCues - No cues selected. Select one or more cues then press the Group shortcut.", (int)LogType.Error);
 			return;
 		}
+
+		_globalData?.HistoryManager?.RecordCuelistChange("Group cues");
 
 		// Work on a snapshot to avoid issues if selection changes during the operation
 		var toGroup = selected;
@@ -263,6 +266,8 @@ public partial class CueList : Control
 	public void CreateCuesFromDroppedFiles(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
 	{
 		if (files == null || files.Length == 0) return;
+
+		_globalData?.HistoryManager?.RecordCuelistChange("Import media cues");
 
 		var mediaEngine = GetNodeOrNull<MediaEngine>("/root/MediaEngine");
 		var newCues = new List<Cue>();
@@ -622,6 +627,8 @@ public partial class CueList : Control
 			return;
 		}
 
+		_globalData?.HistoryManager?.RecordCuelistChange("Duplicate cues");
+
 		// Visual/document order for a stable duplicate block
 		var visualOrder = GetVisualCueOrderIncludingCollapsed();
 		roots = roots
@@ -843,6 +850,8 @@ public partial class CueList : Control
 			.Where(c => c != null && (c.ParentId == -1 || !selectedIds.Contains(c.ParentId)))
 			.ToList();
 
+		_globalData?.HistoryManager?.RecordCuelistChange("Delete cues");
+
 		int count = 0;
 		foreach (var cue in roots)
 		{
@@ -983,6 +992,118 @@ public partial class CueList : Control
 	internal void EmitLog(string message, int type)
 	{
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), message, type);
+	}
+
+	/// <summary>
+	/// Records a cuelist-scoped history checkpoint (used by structural ops and <see cref="CueReorder"/>).
+	/// </summary>
+	/// <param name="description">Human-readable undo description.</param>
+	/// <param name="coalesceKey">Optional coalesce key for continuous edits.</param>
+	internal void RecordHistory(string description, string coalesceKey = null)
+	{
+		_globalData?.HistoryManager?.RecordCuelistChange(description, coalesceKey);
+	}
+
+	/// <summary>
+	/// Re-links component runtime references (patches, cue lights, OSC) after a cue data apply.
+	/// </summary>
+	/// <param name="cue">Cue whose components should be re-linked.</param>
+	internal void RelinkCueComponents(Cue cue)
+	{
+		if (cue == null) return;
+
+		var audio = cue.GetAudioComponent();
+		if (audio != null)
+		{
+			var patches = _globalData.Settings.GetAudioOutputPatches();
+			patches.TryGetValue(audio.PatchId, out var patch);
+			audio.Patch = patch;
+		}
+
+		var video = cue.GetVideoComponent();
+		if (video != null)
+		{
+			var patches = _globalData.Settings.GetAudioOutputPatches();
+			patches.TryGetValue(video.PatchId, out var patch);
+			video.Patch = patch;
+		}
+
+		var cueLightComps = cue.GetCueLightComponents();
+		if (cueLightComps != null)
+		{
+			foreach (var cueLightComp in cueLightComps)
+			{
+				var cuelight = _globalData.CueLightManager.GetCueLight(cueLightComp.CueLightId);
+				cueLightComp.CueLight = cuelight;
+			}
+		}
+
+		var oscComponents = cue.GetOscComponents();
+		if (oscComponents != null)
+		{
+			foreach (var oscComp in oscComponents)
+			{
+				var oscConnection = OscConnections.GetCueOscConnection(oscComp.OscConnectionId);
+				oscComp.OscConnection = oscConnection;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Applies a single-cue history snapshot in place without rebuilding the cuelist or settings.
+	/// </summary>
+	/// <param name="cueId">Target cue id.</param>
+	/// <param name="cueData">Deep-cloned <see cref="Cue.GetData"/> dictionary.</param>
+	/// <returns>True if the cue was found and applied.</returns>
+	internal bool ApplyCueHistorySnapshot(int cueId, Dictionary cueData)
+	{
+		var cue = FetchCueFromId(cueId);
+		if (cue == null || cueData == null)
+		{
+			GD.PrintErr($"CueList:ApplyCueHistorySnapshot - Cue {cueId} not found or data null.");
+			return false;
+		}
+
+		cue.ApplyFromData(cueData);
+		RelinkCueComponents(cue);
+		cue.ShellBar?.RefreshAllFromCue();
+
+		// Keep shell selection list pointing at the same cue instance.
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(cueId);
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cueId);
+		// Always request shell-inspector repaint from model (no-op if nothing focused).
+		// Do not rely on re-emitting ShellFocused: ShellSelected early-outs when id is unchanged.
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+
+		// Other inspectors (audio/video) rebuild on ShellFocused; force when this cue is focused.
+		if (_globalData != null && _globalData.FocusedCue == cueId)
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), cueId);
+
+		return true;
+	}
+
+	/// <summary>
+	/// Rebuilds only the cuelist from a history snapshot (no settings / displays reload).
+	/// </summary>
+	/// <param name="cuesData">Deep-cloned <see cref="GetData"/> dictionary.</param>
+	internal void ApplyCuelistHistorySnapshot(Dictionary cuesData)
+	{
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+		int previousFocus = _globalData?.FocusedCue ?? -1;
+
+		ResetCuelist();
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
+
+		if (cuesData != null)
+			LoadData(cuesData);
+
+		if (previousFocus >= 0 && CueIndex.ContainsKey(previousFocus))
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), previousFocus);
+		else
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 	}
 
 	internal void SelectIndividualForReorder(int cueId)

@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using Cue2.Base.Classes.CueTypes;
+using Cue2.Shared;
 
 namespace Cue2.UI.Scenes.Inspectors;
 public partial class InspectorOscConnectionCard : PanelContainer
@@ -54,7 +55,18 @@ public partial class InspectorOscConnectionCard : PanelContainer
 	{
 		_commandEditing = false;
 		_commandLineEdit.ReleaseFocus();
-		_oscComponent.OscMessage = text;
+		if (_oscComponent != null && _oscComponent.OscMessage != text)
+		{
+			var gd = GetNodeOrNull<GlobalData>("/root/GlobalData");
+			int cueId = gd?.FocusedCue ?? -1;
+			if (cueId >= 0)
+				gd?.HistoryManager?.RecordCueChange(cueId, "Edit OSC command");
+			_oscComponent.OscMessage = text;
+		}
+		else if (_oscComponent != null)
+		{
+			_oscComponent.OscMessage = text;
+		}
 	}
 
 	private void RemoveComponent()

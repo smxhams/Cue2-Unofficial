@@ -286,5 +286,226 @@ public partial class Settings : Node
             _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
         }
     }
+
+    /// <summary>
+    /// Applies a partial settings dictionary for scoped undo/redo without a full session reset.
+    /// Only keys present in <paramref name="settingsData"/> are touched (e.g. StopFadeDuration alone
+    /// will not rebuild displays).
+    /// </summary>
+    /// <param name="settingsData">Subset of <see cref="GetData"/> keys to restore.</param>
+    public void ApplyPartialFromHistory(Dictionary settingsData)
+    {
+        if (settingsData == null || settingsData.Count == 0) return;
+
+        GD.Print($"Settings:ApplyPartialFromHistory - Applying {settingsData.Count} key(s)");
+
+        // Open devices first so patch UI / playback can resolve hardware after restore.
+        // We intentionally do not close devices absent from the snapshot — another patch or
+        // direct-output cue may still need them, and closing mid-session is disruptive.
+        if (TryGetSettingsValue(settingsData, "AudioDevices", out var devices))
+        {
+            var deviceArray = devices.AsGodotArray();
+            foreach (var device in deviceArray)
+            {
+                string deviceName = device.AsString();
+                if (string.IsNullOrEmpty(deviceName)) continue;
+                _audioDevices.OpenAudioDevice(deviceName, out var _);
+            }
+        }
+
+        // Replace the entire patch table when AudioPatch is present. Old GodotObjects are freed
+        // so no UI or cue may keep a dangling reference — callers must rebuild matrix UIs and
+        // RelinkCueComponents after restore (HistoryManager does both).
+        if (TryGetSettingsValue(settingsData, "AudioPatch", out var patchs)
+            && patchs.VariantType == Variant.Type.Dictionary)
+        {
+            foreach (var patch in _audioOutputPatches.Values.ToList())
+            {
+                if (patch != null && GodotObject.IsInstanceValid(patch))
+                    patch.Free();
+            }
+            _audioOutputPatches.Clear();
+
+            var patchDict = patchs.AsGodotDictionary();
+            foreach (var patchKey in patchDict.Keys)
+            {
+                var patchAsDict = patchDict[patchKey].AsGodotDictionary();
+                var patchObj = AudioOutputPatch.FromData(patchAsDict);
+                if (patchObj != null)
+                    AddPatch(patchObj);
+                else
+                    GD.PrintErr($"Settings:ApplyPartialFromHistory - Failed to restore patch key '{patchKey}'");
+            }
+
+            GD.Print($"Settings:ApplyPartialFromHistory - Restored {_audioOutputPatches.Count} audio output patch(es)");
+        }
+
+        if (TryGetSettingsValue(settingsData, "Displays", out var displays)
+            && displays.VariantType == Variant.Type.Dictionary)
+        {
+            _displaysManager.LoadFromData(displays.AsGodotDictionary());
+        }
+
+        if (settingsData.TryGetValue("CueLights", out var cueLights))
+        {
+            var cueLightsAsDict = cueLights.AsGodotDictionary();
+            _globalData.CueLightManager.LoadData(cueLightsAsDict);
+        }
+
+        if (TryGetSettingsValue(settingsData, "UiScale", out var value))
+        {
+            UiScale = value.AsSingle();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
+        }
+        if (TryGetSettingsValue(settingsData, "GoScale", out value))
+        {
+            GoScale = value.AsSingle();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+        }
+        if (TryGetSettingsValue(settingsData, "WaveformResolution", out value))
+            WaveformResolution = value.AsInt32();
+        if (TryGetSettingsValue(settingsData, "StopFadeDuration", out value))
+            StopFadeDuration = value.AsSingle();
+        if (TryGetSettingsValue(settingsData, "MediaBackupEnabled", out value))
+            MediaBackupEnabled = ReadBoolVariant(value);
+
+        if (settingsData.TryGetValue("CueLightIdleColour", out value))
+            CueLightIdleColour = Color.FromString(value.AsString(), CueLightIdleColour);
+        if (settingsData.TryGetValue("CueLightGoColour", out value))
+            CueLightGoColour = Color.FromString(value.AsString(), CueLightGoColour);
+        if (settingsData.TryGetValue("CueLightStandbyColour", out value))
+            CueLightStandbyColour = Color.FromString(value.AsString(), CueLightStandbyColour);
+        if (settingsData.TryGetValue("CueLightCountInColour", out value))
+            CueLightCountInColour = Color.FromString(value.AsString(), CueLightCountInColour);
+        if (settingsData.TryGetValue("CueLightBrightness", out value))
+            CueLightBrightness = (byte)value;
+
+        if (settingsData.TryGetValue("OscListen", out var oscListen))
+        {
+            var oscListenAsDict = oscListen.AsGodotDictionary();
+            GetNode<OscListen>("/root/OscListen").LoadFromData(oscListenAsDict);
+        }
+
+        if (settingsData.TryGetValue("OscConnections", out var oscConnections))
+        {
+            var oscConnectionsAsDict = oscConnections.AsGodotDictionary();
+            GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
+        }
+
+        if (TryGetSettingsValue(settingsData, "InputMap", out var inputMapData) && _globalData != null)
+            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
+    }
+
+    /// <summary>
+    /// Captures a settings subset for undo/redo. Scalar general-settings keys are read directly
+    /// (no full GetData) so history does not depend on displays/OSC/etc. serialization.
+    /// When <paramref name="keys"/> is null or empty, returns a full <see cref="GetData"/> snapshot.
+    /// </summary>
+    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "InputMap").</param>
+    /// <returns>Dictionary suitable for history storage (caller should deep-clone if needed).</returns>
+    public Dictionary CaptureHistorySlice(params string[] keys)
+    {
+        if (keys == null || keys.Length == 0)
+            return GetData();
+
+        var slice = new Dictionary();
+        foreach (var key in keys)
+        {
+            if (string.IsNullOrEmpty(key)) continue;
+            if (TryCaptureScalarHistoryKey(key, out var value))
+                slice[key] = value;
+            else if (key == "InputMap" && _globalData != null)
+                slice[key] = _globalData.GetCustomInputBindings();
+            else if (key == "AudioPatch")
+            {
+                var patchTable = new Dictionary();
+                foreach (var patch in _audioOutputPatches)
+                    patchTable.Add(patch.Key, patch.Value.GetData());
+                slice[key] = patchTable;
+            }
+            else if (key == "AudioDevices")
+            {
+                slice[key] = _audioDevices != null
+                    ? _audioDevices.GetOpenAudioDevicesNames()
+                    : new Array<string>();
+            }
+            else if (key == "Displays")
+            {
+                // Canvas size + screens + target layers — avoid full GetData (patches, OSC, …).
+                slice[key] = _displaysManager != null
+                    ? _displaysManager.GetData()
+                    : new Dictionary();
+            }
+            else
+            {
+                // Fallback for other complex keys (CueLights, OscListen, …)
+                var full = GetData();
+                if (full.ContainsKey(key))
+                    slice[key] = full[key];
+            }
+        }
+        return slice;
+    }
+
+    /// <summary>
+    /// Reads known general-settings scalars without building a full session settings dump.
+    /// </summary>
+    private bool TryCaptureScalarHistoryKey(string key, out Variant value)
+    {
+        switch (key)
+        {
+            case "UiScale":
+                value = UiScale;
+                return true;
+            case "GoScale":
+                value = GoScale;
+                return true;
+            case "WaveformResolution":
+                value = WaveformResolution;
+                return true;
+            case "StopFadeDuration":
+                value = StopFadeDuration;
+                return true;
+            case "MediaBackupEnabled":
+                // Store as int for stable JSON round-trip across Godot versions.
+                value = MediaBackupEnabled ? 1 : 0;
+                return true;
+            default:
+                value = default;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// TryGetValue that tolerates string / StringName keys after JSON history clones.
+    /// </summary>
+    private static bool TryGetSettingsValue(Dictionary data, string key, out Variant value)
+    {
+        value = default;
+        if (data == null || string.IsNullOrEmpty(key)) return false;
+        if (data.TryGetValue(key, out value)) return true;
+
+        foreach (var k in data.Keys)
+        {
+            if (k.AsString() == key)
+            {
+                value = data[k];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool ReadBoolVariant(Variant value)
+    {
+        return value.VariantType switch
+        {
+            Variant.Type.Bool => value.AsBool(),
+            Variant.Type.Int => value.AsInt32() != 0,
+            Variant.Type.Float => !Mathf.IsZeroApprox(value.AsSingle()),
+            Variant.Type.String => value.AsString() is "1" or "true" or "True",
+            _ => value.AsBool()
+        };
+    }
     
 }

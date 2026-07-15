@@ -32,6 +32,12 @@ public partial class ShellInspector : Control
 	private OptionButton _followOption;
 	private ColorPickerButton _colorPicker;
 	private Button _deleteCueButton;
+
+	/// <summary>
+	/// True while UI is being pushed from the model (undo/redo, sync). Prevents TextChanged handlers
+	/// from writing back into the model / recording history.
+	/// </summary>
+	private bool _isRefreshingUi;
 	
 	
 	public override void _Ready()
@@ -57,8 +63,11 @@ public partial class ShellInspector : Control
 		
 		_cueNum.TextChanged += _onCueNumTextChanged;
 		_cueName.TextChanged += _onCueNameTextChanged;
+		// Seal continuous name/number typing so the next edit is a new undo step.
 		_cueNum.TextSubmitted += _ => { _cueNum.ReleaseFocus(); };
 		_cueName.TextSubmitted += _ => { _cueName.ReleaseFocus(); };
+		_cueNum.FocusExited += () => _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCueId}:num");
+		_cueName.FocusExited += () => _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCueId}:name");
 
 		_colorPicker.PopupClosed += AssignColor;
 		
@@ -146,20 +155,19 @@ public partial class ShellInspector : Control
 
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
-		_cueNum.Text = _focusedCue.CueNum;
-		_cueName.Text = _focusedCue.Name;
-		
 		_focusedCue.NameChanged += OnNameChanged;
+		EnsureFollowOptions();
+		UpdateFields();
+	}
 
-		_cueId.Text = $"ID: {_focusedCue.Id.ToString()}";
-		if (_focusedCue.ParentId != -1)
-		{
-			var parent = CueList.FetchCueFromId(_focusedCue.ParentId);
-			_parentCueLabel.Text = parent != null ? ("Parent: " + parent.Name) : "";
-		}
-		else _parentCueLabel.Text = "";
-		
-		
+	/// <summary>
+	/// Ensures the follow OptionButton is populated with FollowType entries.
+	/// </summary>
+	private void EnsureFollowOptions()
+	{
+		if (_followOption == null) return;
+		if (_followOption.ItemCount > 0) return;
+
 		var followOptions = Enum.GetValues(typeof(FollowType));
 		_followOption.Clear();
 		for (int i = 0; i < followOptions.Length; i++)
@@ -167,42 +175,84 @@ public partial class ShellInspector : Control
 			var enumValue = (FollowType)followOptions.GetValue(i)!;
 			_followOption.AddItem(enumValue.ToString());
 			_followOption.SetItemMetadata(i, (int)enumValue);
-			_followOption.TooltipText = _followOption.TooltipText;
 		}
-		_followOption.Selected = (int)_focusedCue.Follow;
-		
-		_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
-		_durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
-		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
-		
-		_colorPicker.Color = _focusedCue.Color;
-
 	}
 
 	/// <summary>
-	/// Refreshes pre/post wait and duration fields after media duration changes.
-	/// Safe no-op if no shell is focused yet.
+	/// Full refresh of shell inspector fields from the focused cue model.
+	/// Wired to <see cref="GlobalSignals.SyncShellInspector"/> so undo/redo and other
+	/// model changes can repaint without re-selecting the cue.
 	/// </summary>
 	public void UpdateFields()
 	{
-		if (_focusedCue == null || _preWaitInput == null || _postWaitInput == null || _durationValue == null)
+		if (_focusedCue == null || !GodotObject.IsInstanceValid(this))
+			return;
+		if (_preWaitInput == null || _postWaitInput == null || _durationValue == null)
 			return;
 
-		_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
-		_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
-		var duration = _focusedCue.TotalDuration;
-		if (duration < 0)
+		_isRefreshingUi = true;
+		try
 		{
-			_durationValue.Text = "Until Stopped";
+			if (_cueNum != null)
+				_cueNum.Text = _focusedCue.CueNum ?? string.Empty;
+			if (_cueName != null)
+				_cueName.Text = _focusedCue.Name ?? string.Empty;
+
+			if (_cueId != null)
+				_cueId.Text = $"ID: {_focusedCue.Id}";
+
+			if (_parentCueLabel != null)
+			{
+				if (_focusedCue.ParentId != -1)
+				{
+					var parent = CueList.FetchCueFromId(_focusedCue.ParentId);
+					_parentCueLabel.Text = parent != null ? ("Parent: " + parent.Name) : "";
+				}
+				else
+				{
+					_parentCueLabel.Text = "";
+				}
+			}
+
+			EnsureFollowOptions();
+			if (_followOption != null)
+			{
+				int followIndex = (int)_focusedCue.Follow;
+				if (followIndex >= 0 && followIndex < _followOption.ItemCount)
+					_followOption.Selected = followIndex;
+			}
+
+			_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
+			_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
+			var duration = _focusedCue.TotalDuration;
+			if (duration < 0)
+				_durationValue.Text = "Until Stopped";
+			else
+				_durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
+
+			if (_colorPicker != null)
+				_colorPicker.Color = _focusedCue.Color;
 		}
-		else _durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
+		finally
+		{
+			_isRefreshingUi = false;
+		}
 	}
 
 	private void OnNameChanged(string name)
 	{
+		if (_isRefreshingUi || _cueName == null) return;
 		int caretPosition = _cueName.CaretColumn;
-		_cueName.Text = name;
-		_cueName.SetCaretColumn(caretPosition);
+		_isRefreshingUi = true;
+		try
+		{
+			_cueName.Text = name;
+			_cueName.SetCaretColumn(caretPosition);
+		}
+		finally
+		{
+			_isRefreshingUi = false;
+		}
 	}
 	
 
@@ -229,10 +279,13 @@ public partial class ShellInspector : Control
 			textField.TooltipText = labeledTime;
 			if (textField == _preWaitInput)
 			{
+				// Discrete commit (Enter / submit) — each change is its own undo step.
+				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit pre-wait");
 				_focusedCue.PreWait = timeSecs;
 			}
 			else if (textField == _postWaitInput)
 			{
+				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit post-wait");
 				_focusedCue.PostWait = timeSecs;
 			}
 
@@ -254,30 +307,37 @@ public partial class ShellInspector : Control
 
 	private void FollowOptionItemSelected(long index)
 	{
+		if (_isRefreshingUi || _focusedCue == null) return;
 		int selectedValue = _followOption.GetItemMetadata((int)index).AsInt32();
+		if ((int)_focusedCue.Follow == selectedValue) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit follow mode");
 		_focusedCue.Follow = (FollowType)selectedValue;
 	}
 
 	private void AssignColor()
 	{
+		if (_isRefreshingUi || _focusedCue == null) return;
 		GD.Print($"ShellInspector:AsignColor - Assigning color. {_colorPicker.Color.R}, {_colorPicker.Color.G}, {_colorPicker.Color.B}");
+		if (_focusedCue.Color.IsEqualApprox(_colorPicker.Color)) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue color");
 		_focusedCue.Color = _colorPicker.Color;
 	}
 
 	// Handling the updating of fields
 	private void _onCueNumTextChanged(string data)
 	{
-		_focusedCue.CueNum = data; // Updates Cue with user input
-		var shellObj = _focusedCue.ShellBar;
-		shellObj.GetNode<LineEdit>("%CueNumber").Text = data;
-		
+		if (_isRefreshingUi || _focusedCue == null) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue number", $"cue:{_focusedCue.Id}:num");
+		// ShellBar listens to CueNumChanged — do not look up shell LineEdits by hand
+		// (unique names are %CueNumLineEdit / %CueNameLineEdit, not %CueNumber / %CueName).
+		_focusedCue.CueNum = data;
 	}
 	
 	private void _onCueNameTextChanged(string data)
 	{
+		if (_isRefreshingUi || _focusedCue == null) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue name", $"cue:{_focusedCue.Id}:name");
+		// ShellBar listens to NameChanged and updates %CueNameLineEdit.
 		_focusedCue.Name = data;
-
-		var shellObj = _focusedCue.ShellBar;
-		shellObj.GetNode<LineEdit>("%CueName").Text = data;
 	}
 }

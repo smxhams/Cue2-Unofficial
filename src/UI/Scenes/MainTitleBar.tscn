@@ -342,12 +342,12 @@ vertical_alignment = 1
 [node name="DropMenuEdit" type="PanelContainer" parent="." unique_id=1141345260]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(100, 78)
+custom_minimum_size = Vector2(140, 54)
 layout_mode = 0
 offset_left = 108.0
 offset_top = 30.0
-offset_right = 208.0
-offset_bottom = 108.0
+offset_right = 268.0
+offset_bottom = 84.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
 
 [node name="MarginContainer" type="MarginContainer" parent="DropMenuEdit" unique_id=416709885]
@@ -359,6 +359,50 @@ theme_override_constants/margin_bottom = 2
 
 [node name="dmFileContainer" type="VBoxContainer" parent="DropMenuEdit/MarginContainer" unique_id=110020484]
 layout_mode = 2
+
+[node name="EditUndo" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+disabled = true
+text = "Undo"
+alignment = 0
+
+[node name="EditRedo" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+mouse_filter = 1
+disabled = true
+text = "Redo"
+alignment = 0
+
+[node name="dmEditHotkeys" type="VBoxContainer" parent="DropMenuEdit/MarginContainer"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="EditUndoHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
+theme_override_font_sizes/font_size = 8
+text = "Hotkey"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="EditRedoHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
+theme_override_font_sizes/font_size = 8
+text = "Hotkey"
+horizontal_alignment = 2
+vertical_alignment = 1
 
 [node name="DropMenuView" type="PanelContainer" parent="." unique_id=2034320650]
 unique_name_in_owner = true

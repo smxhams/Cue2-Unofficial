@@ -37,8 +37,14 @@ public partial class SettingsCanvasEditor : Control
 
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private HistoryManager _historyManager;
     private Canvas _canvas;
     private DisplaysManager _displaysManager;
+
+    /// <summary>
+    /// Coalesce key for the active stage drag (move/resize). Sealed when the drag ends.
+    /// </summary>
+    private string _activeDragCoalesceKey;
 
     // Hierarchy – two trees
     private Godot.Tree _screensTree;
@@ -123,6 +129,11 @@ public partial class SettingsCanvasEditor : Control
     private bool _isDraggingCanvas;
     /// <summary>Heavy stage setup is deferred until the panel is actually shown.</summary>
     private bool _stageInitialized;
+
+    /// <summary>
+    /// True when Displays history restored while this editor was hidden — refresh on next show.
+    /// </summary>
+    private bool _needsHistoryRefresh;
 
     private SelectionKind _selectionKind = SelectionKind.None;
     private int _selectedScreenId = -1;
@@ -247,11 +258,15 @@ public partial class SettingsCanvasEditor : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _historyManager = _globalData?.HistoryManager;
         _canvas = DisplaysManager.Canvas;
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 
         _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), Callable.From(OnDisplaysChanged));
         _globalSignals.Connect(nameof(GlobalSignals.CanvasSizeChanged), Callable.From<Vector2I>(OnCanvasSizeChanged));
+
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
 
         GetWindow().SizeChanged += OnWindowSizeChanged;
         VisibilityChanged += OnEditorVisibilityChanged;
@@ -348,6 +363,11 @@ public partial class SettingsCanvasEditor : Control
             // Heavy init only when user actually opens Canvas Editor (not every Settings open).
             CallDeferred(nameof(EnsureStageInitialized));
             CallDeferred(nameof(RefreshStageView));
+            if (_needsHistoryRefresh && _stageInitialized)
+            {
+                _needsHistoryRefresh = false;
+                CallDeferred(nameof(RefreshAfterHistoryRestore));
+            }
         }
     }
 
@@ -802,6 +822,13 @@ public partial class SettingsCanvasEditor : Control
         _dragStartCanvasMouse = canvasMouse;
         _dragStartPos = pos;
         _dragStartSize = size;
+
+        // Snapshot once at drag start; continuous move/resize coalesces into one undo step.
+        string kind = _selectionKind == SelectionKind.Screen ? "screen" : "layer";
+        int id = _selectionKind == SelectionKind.Screen ? _selectedScreenId : _selectedLayerId;
+        _activeDragCoalesceKey = $"settings:displays:{kind}:{id}:geom";
+        string desc = mode == DragMode.Move ? "Move canvas item" : "Resize canvas item";
+        RecordDisplaysHistory(desc, _activeDragCoalesceKey);
     }
 
     private void UpdateCanvasDrag()
@@ -1029,6 +1056,13 @@ public partial class SettingsCanvasEditor : Control
         var mode = _dragMode;
         _dragMode = DragMode.None;
 
+        // Seal the drag session so the next move/resize is a new undo step.
+        if (!string.IsNullOrEmpty(_activeDragCoalesceKey))
+        {
+            _historyManager?.EndCoalesceSession(_activeDragCoalesceKey);
+            _activeDragCoalesceKey = null;
+        }
+
         if (mode == DragMode.None)
             return;
 
@@ -1036,6 +1070,7 @@ public partial class SettingsCanvasEditor : Control
             return;
 
         // Commit through DisplaysManager so outputs / test patterns update
+        // (geometry was already applied live; history was captured at StartDrag).
         if (_selectionKind == SelectionKind.Screen)
         {
             _displaysManager.UpdateOutputCanvasPosition(_selectedScreenId, pos);
@@ -1188,6 +1223,12 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        if (_historyManager != null && _historyManager.IsRestoring)
+            return;
+        // Only snapshot when the layer can actually move (avoid no-op undo steps).
+        if (_displaysManager.GetLayerStackIndex(_selectedLayerId) <= 0)
+            return;
+        RecordDisplaysHistory("Move layer up");
         if (_displaysManager.MoveLayerUp(_selectedLayerId))
         {
             RebuildTrees();
@@ -1199,6 +1240,13 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        if (_historyManager != null && _historyManager.IsRestoring)
+            return;
+        int index = _displaysManager.GetLayerStackIndex(_selectedLayerId);
+        int count = DisplaysManager.Layers.Count;
+        if (index < 0 || index >= count - 1)
+            return;
+        RecordDisplaysHistory("Move layer down");
         if (_displaysManager.MoveLayerDown(_selectedLayerId))
         {
             RebuildTrees();
@@ -1612,6 +1660,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen output");
         _displaysManager.UpdateScreenTargetMonitor(screen.OutputId, DefaultOutputMonitor);
         RebuildTrees();
         LoadScreenProps();
@@ -1623,6 +1672,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen size");
         var def = _displaysManager.GetDefaultScreenSize(screen);
         _displaysManager.UpdateOutputSize(screen.OutputId, def);
         LoadScreenProps();
@@ -1634,6 +1684,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen keep-aspect");
         _displaysManager.UpdateScreenKeepAspect(screen.OutputId, DefaultKeepAspect);
         LoadScreenProps();
     }
@@ -1643,6 +1694,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen position");
         _displaysManager.UpdateOutputCanvasPosition(screen.OutputId, DefaultCanvasPosition);
         LoadScreenProps();
         UpdateCanvasGizmos();
@@ -1653,6 +1705,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen display offset");
         _displaysManager.UpdateScreenDisplayOffset(screen.OutputId, DefaultDisplayOffset);
         LoadScreenProps();
     }
@@ -1662,6 +1715,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen transparency");
         screen.SetTransparent(DefaultTransparent);
         LoadScreenProps();
     }
@@ -1671,6 +1725,7 @@ public partial class SettingsCanvasEditor : Control
         var screen = GetSelectedScreen();
         if (screen == null)
             return;
+        RecordDisplaysHistory("Reset screen test pattern");
         screen.ToggleTestPattern(DefaultTestPattern);
         LoadScreenProps();
     }
@@ -1679,6 +1734,7 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        RecordDisplaysHistory("Reset layer size");
         var def = _displaysManager.GetDefaultLayerSize();
         _displaysManager.UpdateLayerSize(_selectedLayerId, def);
         LoadLayerProps();
@@ -1689,6 +1745,7 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        RecordDisplaysHistory("Reset layer keep-aspect");
         _displaysManager.UpdateLayerKeepAspect(_selectedLayerId, DefaultKeepAspect);
         LoadLayerProps();
     }
@@ -1697,6 +1754,7 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        RecordDisplaysHistory("Reset layer position");
         _displaysManager.UpdateLayerCanvasPosition(_selectedLayerId, DefaultCanvasPosition);
         LoadLayerProps();
         UpdateCanvasGizmos();
@@ -1706,6 +1764,7 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        RecordDisplaysHistory("Reset layer transparency");
         _displaysManager.UpdateLayerTransparent(_selectedLayerId, DefaultTransparent);
         LoadLayerProps();
     }
@@ -1714,6 +1773,7 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        RecordDisplaysHistory("Reset layer test pattern");
         _displaysManager.ToggleLayerTestPattern(_selectedLayerId, DefaultTestPattern);
         LoadLayerProps();
     }
@@ -1744,6 +1804,7 @@ public partial class SettingsCanvasEditor : Control
             return;
         }
 
+        RecordDisplaysHistory("Rename screen");
         _displaysManager.UpdateScreenName(screen.OutputId, text);
         RebuildTrees();
         UpdateCanvasGizmos();
@@ -1764,6 +1825,10 @@ public partial class SettingsCanvasEditor : Control
             return;
 
         int monitor = _outputOptionMonitorMap[i];
+        if (screen.TargetMonitor == monitor)
+            return;
+
+        RecordDisplaysHistory("Change screen output");
         _displaysManager.UpdateScreenTargetMonitor(screen.OutputId, monitor);
         RebuildTrees();
         if (_selectionKind == SelectionKind.Screen)
@@ -1786,6 +1851,12 @@ public partial class SettingsCanvasEditor : Control
             Vector2I size = screen.KeepAspect
                 ? SizeWithKeepAspect(screen.OutputSize, val, null)
                 : new Vector2I(val, screen.OutputSize.Y);
+            if (size == screen.OutputSize)
+            {
+                _outputSizeXLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen size");
             _displaysManager.UpdateOutputSize(screen.OutputId, size);
             LoadScreenProps();
             UpdateCanvasGizmos();
@@ -1813,6 +1884,12 @@ public partial class SettingsCanvasEditor : Control
             Vector2I size = screen.KeepAspect
                 ? SizeWithKeepAspect(screen.OutputSize, null, val)
                 : new Vector2I(screen.OutputSize.X, val);
+            if (size == screen.OutputSize)
+            {
+                _outputSizeYLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen size");
             _displaysManager.UpdateOutputSize(screen.OutputId, size);
             LoadScreenProps();
             UpdateCanvasGizmos();
@@ -1837,6 +1914,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == screen.CanvasPosition.X)
+            {
+                _outputPosXLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen position");
             _displaysManager.UpdateOutputCanvasPosition(screen.OutputId, new Vector2I(val, screen.CanvasPosition.Y));
             LoadScreenProps();
             UpdateCanvasGizmos();
@@ -1861,6 +1944,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == screen.CanvasPosition.Y)
+            {
+                _outputPosYLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen position");
             _displaysManager.UpdateOutputCanvasPosition(screen.OutputId, new Vector2I(screen.CanvasPosition.X, val));
             LoadScreenProps();
             UpdateCanvasGizmos();
@@ -1885,6 +1974,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == screen.DisplayOffset.X)
+            {
+                _displayOffsetXLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen display offset");
             _displaysManager.UpdateScreenDisplayOffset(screen.OutputId, new Vector2I(val, screen.DisplayOffset.Y));
             UpdateScreenResetButtons(screen);
         }
@@ -1908,6 +2003,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == screen.DisplayOffset.Y)
+            {
+                _displayOffsetYLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change screen display offset");
             _displaysManager.UpdateScreenDisplayOffset(screen.OutputId, new Vector2I(screen.DisplayOffset.X, val));
             UpdateScreenResetButtons(screen);
         }
@@ -1928,6 +2029,7 @@ public partial class SettingsCanvasEditor : Control
         if (screen == null)
             return;
 
+        RecordDisplaysHistory(toggled ? "Enable screen keep-aspect" : "Disable screen keep-aspect");
         _displaysManager.UpdateScreenKeepAspect(screen.OutputId, toggled);
         UpdateScreenResetButtons(screen);
     }
@@ -1938,9 +2040,11 @@ public partial class SettingsCanvasEditor : Control
             return;
 
         var screen = GetSelectedScreen();
-        screen?.SetTransparent(toggled);
-        if (screen != null)
-            UpdateScreenResetButtons(screen);
+        if (screen == null)
+            return;
+        RecordDisplaysHistory(toggled ? "Enable screen transparency" : "Disable screen transparency");
+        screen.SetTransparent(toggled);
+        UpdateScreenResetButtons(screen);
     }
 
     private void OnScreenTestPatternToggled(bool toggled)
@@ -1949,9 +2053,11 @@ public partial class SettingsCanvasEditor : Control
             return;
 
         var screen = GetSelectedScreen();
-        screen?.ToggleTestPattern(toggled);
-        if (screen != null)
-            UpdateScreenResetButtons(screen);
+        if (screen == null)
+            return;
+        RecordDisplaysHistory(toggled ? "Enable screen test pattern" : "Disable screen test pattern");
+        screen.ToggleTestPattern(toggled);
+        UpdateScreenResetButtons(screen);
     }
 
     private void OnDeleteScreenPressed()
@@ -1966,6 +2072,7 @@ public partial class SettingsCanvasEditor : Control
             return;
         }
 
+        RecordDisplaysHistory("Delete screen");
         _displaysManager.RemoveOutput(_selectedScreenId);
         RebuildTrees(selectCanvas: true);
         UpdateCanvasGizmos();
@@ -1973,6 +2080,7 @@ public partial class SettingsCanvasEditor : Control
 
     private void OnNewScreenPressed()
     {
+        RecordDisplaysHistory("Create screen");
         string name = $"Screen {DisplaysManager.Screens.Count + 1}";
         var screen = _displaysManager.AddScreen(name, VideoOutputDevice.VirtualMonitorIndex);
         RebuildTrees();
@@ -2017,6 +2125,7 @@ public partial class SettingsCanvasEditor : Control
             return;
         }
 
+        RecordDisplaysHistory("Rename layer");
         _displaysManager.UpdateLayerName(_selectedLayerId, text);
         RebuildTrees();
         UpdateCanvasGizmos();
@@ -2044,6 +2153,12 @@ public partial class SettingsCanvasEditor : Control
             Vector2I size = layer.KeepAspect
                 ? SizeWithKeepAspect(layer.Size, val, null)
                 : new Vector2I(val, layer.Size.Y);
+            if (size == layer.Size)
+            {
+                _layerSizeXLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change layer size");
             _displaysManager.UpdateLayerSize(_selectedLayerId, size);
             LoadLayerProps();
             UpdateCanvasGizmos();
@@ -2077,6 +2192,12 @@ public partial class SettingsCanvasEditor : Control
             Vector2I size = layer.KeepAspect
                 ? SizeWithKeepAspect(layer.Size, null, val)
                 : new Vector2I(layer.Size.X, val);
+            if (size == layer.Size)
+            {
+                _layerSizeYLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change layer size");
             _displaysManager.UpdateLayerSize(_selectedLayerId, size);
             LoadLayerProps();
             UpdateCanvasGizmos();
@@ -2107,6 +2228,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == layer.CanvasPosition.X)
+            {
+                _layerPosXLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change layer position");
             _displaysManager.UpdateLayerCanvasPosition(_selectedLayerId, new Vector2I(val, layer.CanvasPosition.Y));
             LoadLayerProps();
             UpdateCanvasGizmos();
@@ -2137,6 +2264,12 @@ public partial class SettingsCanvasEditor : Control
         try
         {
             int val = int.Parse(text);
+            if (val == layer.CanvasPosition.Y)
+            {
+                _layerPosYLineEdit.ReleaseFocus();
+                return;
+            }
+            RecordDisplaysHistory("Change layer position");
             _displaysManager.UpdateLayerCanvasPosition(_selectedLayerId, new Vector2I(layer.CanvasPosition.X, val));
             LoadLayerProps();
             UpdateCanvasGizmos();
@@ -2154,6 +2287,7 @@ public partial class SettingsCanvasEditor : Control
         if (_isUpdatingProps || _selectionKind != SelectionKind.Layer)
             return;
 
+        RecordDisplaysHistory(toggled ? "Enable layer keep-aspect" : "Disable layer keep-aspect");
         _displaysManager.UpdateLayerKeepAspect(_selectedLayerId, toggled);
         var layer = DisplaysManager.GetLayerById(_selectedLayerId);
         if (layer != null)
@@ -2165,6 +2299,7 @@ public partial class SettingsCanvasEditor : Control
         if (_isUpdatingProps || _selectionKind != SelectionKind.Layer)
             return;
 
+        RecordDisplaysHistory(toggled ? "Enable layer transparency" : "Disable layer transparency");
         _displaysManager.UpdateLayerTransparent(_selectedLayerId, toggled);
         var layer = DisplaysManager.GetLayerById(_selectedLayerId);
         if (layer != null)
@@ -2176,6 +2311,7 @@ public partial class SettingsCanvasEditor : Control
         if (_isUpdatingProps || _selectionKind != SelectionKind.Layer)
             return;
 
+        RecordDisplaysHistory(toggled ? "Enable layer test pattern" : "Disable layer test pattern");
         _displaysManager.ToggleLayerTestPattern(_selectedLayerId, toggled);
         var layer = DisplaysManager.GetLayerById(_selectedLayerId);
         if (layer != null)
@@ -2187,6 +2323,7 @@ public partial class SettingsCanvasEditor : Control
         if (_selectionKind != SelectionKind.Layer)
             return;
 
+        RecordDisplaysHistory("Delete layer");
         _displaysManager.RemoveLayer(_selectedLayerId);
         RebuildTrees(selectCanvas: true);
         UpdateCanvasGizmos();
@@ -2194,6 +2331,7 @@ public partial class SettingsCanvasEditor : Control
 
     private void OnNewTargetLayerPressed()
     {
+        RecordDisplaysHistory("Create target layer");
         string name = $"Layer {DisplaysManager.Layers.Count + 1}";
         int zIndex = DisplaysManager.Layers.Count;
         var layer = _displaysManager.AddLayer(name, zIndex);
@@ -2215,6 +2353,14 @@ public partial class SettingsCanvasEditor : Control
             int x = int.Parse(_canvasSizeXLineEdit.Text);
             int y = int.Parse(_canvasSizeYLineEdit.Text);
 
+            if (x == _canvas.CanvasSize.X && y == _canvas.CanvasSize.Y)
+            {
+                _canvasSizeXLineEdit.ReleaseFocus();
+                _canvasSizeYLineEdit.ReleaseFocus();
+                return;
+            }
+
+            RecordDisplaysHistory("Change canvas size");
             _canvas.SetCanvasSize(new Vector2I(x, y));
 
             _canvasOutlinePanel.CustomMinimumSize = new Vector2(_canvas.CanvasSize.X, _canvas.CanvasSize.Y);
@@ -2232,6 +2378,7 @@ public partial class SettingsCanvasEditor : Control
             _canvasSelectButton.Text = $"Canvas ({x}×{y})";
             UpdateCanvasGizmos();
 
+            _globalSignals.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), _canvas.CanvasSize);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Canvas size submitted and updated to {x}x{y}.", 0);
         }
@@ -2414,10 +2561,110 @@ public partial class SettingsCanvasEditor : Control
         VisibilityChanged -= OnEditorVisibilityChanged;
         if (_scrollContainer != null && IsInstanceValid(_scrollContainer))
             _scrollContainer.Resized -= OnStageResized;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
+    }
+
+    /// <summary>
+    /// Records a full Displays snapshot (canvas + screens + layers) before a user mutation.
+    /// </summary>
+    private void RecordDisplaysHistory(string description, string coalesceKey = null)
+    {
+        if (_historyManager == null || _historyManager.IsRestoring)
+            return;
+        _historyManager.RecordSettingsChange(description, coalesceKey, "Displays");
+    }
+
+    /// <summary>
+    /// After settings undo/redo that reloads Displays, rebuild trees/gizmos/props from the new model.
+    /// Output windows are recreated by <see cref="DisplaysManager.LoadFromData"/> — never keep
+    /// stale screen references in selection beyond IDs.
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Settings)
+            return;
+        if (!IsInstanceValid(this))
+            return;
+
+        // Drop any in-progress drag against a model that was just replaced.
+        _isDraggingCanvas = false;
+        _dragMode = DragMode.None;
+        if (!string.IsNullOrEmpty(_activeDragCoalesceKey))
+        {
+            _historyManager?.EndCoalesceSession(_activeDragCoalesceKey);
+            _activeDragCoalesceKey = null;
+        }
+
+        // Canvas instance is stable; size may have changed.
+        _canvas = DisplaysManager.Canvas;
+
+        if (!_stageInitialized || !IsVisibleInTree())
+        {
+            // Stage not ready / not shown — refresh when the user opens this panel again.
+            _needsHistoryRefresh = true;
+            return;
+        }
+
+        _needsHistoryRefresh = false;
+        RefreshAfterHistoryRestore();
+    }
+
+    /// <summary>
+    /// Full UI sync after Displays history restore (or when stage becomes visible after a restore).
+    /// </summary>
+    private void RefreshAfterHistoryRestore()
+    {
+        if (!IsInstanceValid(this) || _canvas == null)
+            return;
+
+        // Drop selection if the screen/layer no longer exists after restore.
+        if (_selectionKind == SelectionKind.Screen
+            && _displaysManager.GetOutputById(_selectedScreenId) == null)
+        {
+            _selectionKind = SelectionKind.Canvas;
+            _selectedScreenId = -1;
+            _selectedLayerId = -1;
+        }
+        else if (_selectionKind == SelectionKind.Layer
+                 && DisplaysManager.GetLayerById(_selectedLayerId) == null)
+        {
+            _selectionKind = SelectionKind.Canvas;
+            _selectedScreenId = -1;
+            _selectedLayerId = -1;
+        }
+
+        Vector2I size = _canvas.CanvasSize;
+        if (_canvasOutlinePanel != null && IsInstanceValid(_canvasOutlinePanel))
+            _canvasOutlinePanel.CustomMinimumSize = new Vector2(size.X, size.Y);
+        if (_canvasSelectButton != null && IsInstanceValid(_canvasSelectButton))
+            _canvasSelectButton.Text = $"Canvas ({size.X}×{size.Y})";
+
+        _isUpdatingProps = true;
+        try
+        {
+            if (_canvasSizeXLineEdit != null)
+                _canvasSizeXLineEdit.Text = size.X.ToString();
+            if (_canvasSizeYLineEdit != null)
+                _canvasSizeYLineEdit.Text = size.Y.ToString();
+        }
+        finally
+        {
+            _isUpdatingProps = false;
+        }
+
+        RebuildTrees();
+        UpdateCanvasGizmos();
+        ShowPropertiesForSelection();
+        CallDeferred(nameof(RefreshStageView));
     }
 
     private void OnDisplaysChanged()
     {
+        // Skip mid-history restore — OnHistoryRestored performs a coordinated full refresh.
+        if (_historyManager != null && _historyManager.IsRestoring)
+            return;
+
         // Skip UI work while canvas editor is not shown — keeps main thread free for video.
         if (!_stageInitialized || !IsVisibleInTree())
             return;
@@ -2435,6 +2682,9 @@ public partial class SettingsCanvasEditor : Control
 
     private void OnCanvasSizeChanged(Vector2I newSize)
     {
+        if (_historyManager != null && _historyManager.IsRestoring)
+            return;
+
         if (_canvasSizeXLineEdit != null)
             _canvasSizeXLineEdit.Text = newSize.X.ToString();
         if (_canvasSizeYLineEdit != null)

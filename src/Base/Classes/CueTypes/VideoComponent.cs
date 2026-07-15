@@ -256,7 +256,7 @@ public class VideoComponent : ICueComponent
         data.Add("HasAudio", HasAudio);
         data.Add("UseAudio", UseAudio);
         data.Add("PatchId", Patch?.Id ?? PatchId); // Reference patch by ID; fall back to stored PatchId
-        data.Add("DirectOutput", DirectOutput);
+        data.Add("DirectOutput", DirectOutput ?? string.Empty);
         if (Routing != null)
         {
             data.Add("Routing", Routing.GetData());
@@ -291,27 +291,27 @@ public class VideoComponent : ICueComponent
             return;
         }
         VideoFile = (string)data["VideoFile"];
-        StartTime = data.ContainsKey("StartTime") ? (double)data["StartTime"] : 0.0;
-        EndTime = data.ContainsKey("EndTime") ? (double)data["EndTime"] : -1.0;
-        TargetLayerId = data.ContainsKey("TargetLayerId") ? (int)data["TargetLayerId"] : 0;
+        StartTime = data.ContainsKey("StartTime") ? data["StartTime"].AsDouble() : 0.0;
+        EndTime = data.ContainsKey("EndTime") ? data["EndTime"].AsDouble() : -1.0;
+        TargetLayerId = data.ContainsKey("TargetLayerId") ? data["TargetLayerId"].AsInt32() : 0;
         LoadTextureLayoutFromData(data);
         Opacity = data.ContainsKey("Opacity") ? ParseOpacity(data["Opacity"]) : 1f;
-        Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
-        Loop = data.ContainsKey("Loop") ? (bool)data["Loop"] : false;
-        Volume = data.ContainsKey("Volume") ? (float)data["Volume"] : 1.0f;
-        PlayCount = data.ContainsKey("PlayCount") ? (int)data["PlayCount"] : 1;
-        FadeInDuration = data.ContainsKey("FadeInDuration") ? (double)data["FadeInDuration"] : 0.0;
-        FadeOutDuration = data.ContainsKey("FadeOutDuration") ? (double)data["FadeOutDuration"] : 0.0;
-        ScaledWidth = data.ContainsKey("ScaledWidth") ? (int)data["ScaledWidth"] : 0;
-        ScaledHeight = data.ContainsKey("ScaledHeight") ? (int)data["ScaledHeight"] : 0;
-        OffsetX = data.ContainsKey("OffsetX") ? (int)data["OffsetX"] : 0;
-        OffsetY = data.ContainsKey("OffsetY") ? (int)data["OffsetY"] : 0;
-        HasAudio = data.ContainsKey("HasAudio") ? (bool)data["HasAudio"] : false;
-        UseAudio = data.ContainsKey("UseAudio") ? (bool)data["UseAudio"] : true;
-        PatchId = data.ContainsKey("PatchId") ? (int)data["PatchId"] : -1;
-        DirectOutput = data.ContainsKey("DirectOutput") ? (string)data["DirectOutput"] : null;
+        Duration = data.ContainsKey("Duration") ? data["Duration"].AsDouble() : 0.0;
+        Loop = data.ContainsKey("Loop") ? data["Loop"].AsBool() : false;
+        Volume = data.ContainsKey("Volume") ? data["Volume"].AsSingle() : 1.0f;
+        PlayCount = data.ContainsKey("PlayCount") ? data["PlayCount"].AsInt32() : 1;
+        FadeInDuration = data.ContainsKey("FadeInDuration") ? data["FadeInDuration"].AsDouble() : 0.0;
+        FadeOutDuration = data.ContainsKey("FadeOutDuration") ? data["FadeOutDuration"].AsDouble() : 0.0;
+        ScaledWidth = data.ContainsKey("ScaledWidth") ? data["ScaledWidth"].AsInt32() : 0;
+        ScaledHeight = data.ContainsKey("ScaledHeight") ? data["ScaledHeight"].AsInt32() : 0;
+        OffsetX = data.ContainsKey("OffsetX") ? data["OffsetX"].AsInt32() : 0;
+        OffsetY = data.ContainsKey("OffsetY") ? data["OffsetY"].AsInt32() : 0;
+        HasAudio = data.ContainsKey("HasAudio") ? data["HasAudio"].AsBool() : false;
+        UseAudio = data.ContainsKey("UseAudio") ? data["UseAudio"].AsBool() : true;
+        PatchId = data.ContainsKey("PatchId") ? data["PatchId"].AsInt32() : -1;
+        DirectOutput = data.ContainsKey("DirectOutput") ? data["DirectOutput"].AsString() : null;
 
-        WaveformData = data.ContainsKey("WaveformData") ? (byte[])data["WaveformData"] : null;
+        WaveformData = TryReadByteArray(data, "WaveformData");
         if (data.ContainsKey("Routing"))
         {
             Routing = new CuePatch();
@@ -339,6 +339,38 @@ public class VideoComponent : ICueComponent
             GD.Print("VideoComponent:LoadFromData - No metadata in save data; will extract on next load.");
             Metadata = null;
         }
+    }
+
+    /// <summary>
+    /// Reads a byte[] field that may arrive as raw bytes, PackedByteArray, or a JSON number array.
+    /// </summary>
+    private static byte[] TryReadByteArray(Godot.Collections.Dictionary data, string key)
+    {
+        if (data == null || !data.ContainsKey(key)) return null;
+        try
+        {
+            var variant = data[key];
+            if (variant.VariantType == Variant.Type.Nil) return null;
+            if (variant.AsByteArray() is { Length: > 0 } packed)
+                return packed;
+            if (variant.VariantType == Variant.Type.PackedByteArray)
+                return variant.AsByteArray();
+            if (variant.Obj is byte[] bytes)
+                return bytes;
+            if (variant.VariantType == Variant.Type.Array)
+            {
+                var arr = variant.AsGodotArray();
+                var result = new byte[arr.Count];
+                for (int i = 0; i < arr.Count; i++)
+                    result[i] = (byte)arr[i].AsInt32();
+                return result;
+            }
+        }
+        catch
+        {
+            // Leave waveform null; UI regenerates peaks from media when needed.
+        }
+        return null;
     }
 
     public double RecalculateDuration()

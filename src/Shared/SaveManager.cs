@@ -296,6 +296,9 @@ public partial class SaveManager : Node
 		ResetSession();
 		
 		LoadSession(selectedPath);
+
+		// Document history is not retained across open/load.
+		_globalData.HistoryManager?.Clear();
 		
 		// Track in persistent recent files for "Open Recent" in header
 		_globalData.UserDataManager?.AddRecentShowFile(selectedPath);

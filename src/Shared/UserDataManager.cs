@@ -34,6 +34,7 @@ public partial class UserDataManager : Node
 
 	private int _autosaveInterval = 5; // minutes, 0 = disabled
 	private int _backupDepth = DefaultBackupDepth;
+	private int _undoDepth = DefaultUndoDepth;
 
 	/// <summary>
 	/// The production default autosave interval in minutes.
@@ -44,6 +45,17 @@ public partial class UserDataManager : Node
 	/// The production default number of autosave backups to keep.
 	/// </summary>
 	public static readonly int DefaultBackupDepth = 3;
+
+	/// <summary>
+	/// The production default number of undo/redo history steps to keep.
+	/// </summary>
+	public static readonly int DefaultUndoDepth = 50;
+
+	/// <summary>Minimum allowed undo history depth.</summary>
+	public const int MinUndoDepth = 4;
+
+	/// <summary>Maximum allowed undo history depth.</summary>
+	public const int MaxUndoDepth = 200;
 
 	/// <summary>
 	/// Defines the startup behavior when the application launches without a file argument.
@@ -146,6 +158,24 @@ public partial class UserDataManager : Node
 			if (_backupDepth != value)
 			{
 				_backupDepth = Math.Max(1, value);
+				SaveUserData();
+			}
+		}
+	}
+
+	/// <summary>
+	/// Number of document undo/redo steps to retain. Clamped to <see cref="MinUndoDepth"/>–<see cref="MaxUndoDepth"/>.
+	/// </summary>
+	/// <value>History depth used by <c>HistoryManager</c>.</value>
+	public int UndoDepth
+	{
+		get => _undoDepth;
+		set
+		{
+			int clamped = Math.Clamp(value, MinUndoDepth, MaxUndoDepth);
+			if (_undoDepth != clamped)
+			{
+				_undoDepth = clamped;
 				SaveUserData();
 			}
 		}
@@ -509,9 +539,13 @@ public partial class UserDataManager : Node
 			{
 				_backupDepth = Math.Max(1, depthVal.AsInt32());
 			}
+			if (data.TryGetValue("UndoDepth", out var undoDepthVal))
+			{
+				_undoDepth = Math.Clamp(undoDepthVal.AsInt32(), MinUndoDepth, MaxUndoDepth);
+			}
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth}");
 		}
 		catch (Exception ex)
 		{
@@ -570,6 +604,7 @@ public partial class UserDataManager : Node
 
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;
+			data["UndoDepth"] = _undoDepth;
 
 			data["Version"] = 1;
 			// Additional user-persistent keys can be added here in the future.

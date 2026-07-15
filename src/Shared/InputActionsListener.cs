@@ -50,6 +50,7 @@ public partial class InputActionsListener : Node
         Register("ExpandOneLayer", nameof(GlobalSignals.CuelistExpandOneLayer), "Expand One Group Layer", true);
         Register("CollapseOneLayer", nameof(GlobalSignals.CuelistCollapseOneLayer), "Collapse One Group Layer", true);
         Register("ToggleExpandAll", nameof(GlobalSignals.ToggleExpandAll), "Toggle Expand/Collapse Groups", true);
+        // Undo/Redo are handled separately so they still work while a LineEdit/SpinBox has focus.
     }
 
     private void Register(string action, string signalName, string logName, bool exact)
@@ -63,12 +64,26 @@ public partial class InputActionsListener : Node
 
     public override void _Process(double delta)
     {
+        if (!Input.IsAnythingPressed()) return;
+
+        // Always process document undo/redo — do not block when a text field has focus
+        // (SpinBox / LineEdit focus previously left listening disabled and "broke" undo).
+        if (Input.IsActionJustPressed("Undo", true))
+        {
+            GD.Print("InputActionsListener:Actions - Input Action: Undo");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Undo));
+            return;
+        }
+        if (Input.IsActionJustPressed("Redo", true))
+        {
+            GD.Print("InputActionsListener:Actions - Input Action: Redo");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Redo));
+            return;
+        }
+
         if (!_listenForInput) return;
 
-        if (Input.IsAnythingPressed())
-        {
-            Actions();
-        }
+        Actions();
     }
 
     private void Actions()

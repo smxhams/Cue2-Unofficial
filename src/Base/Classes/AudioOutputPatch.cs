@@ -348,6 +348,7 @@ public partial class AudioOutputPatch : Godot.GodotObject
             outputDevicesData.Add(device.Key, outputsArray);
         }
         data.Add("OutputDevices", outputDevicesData);
+        data.Add("Volume", Volume);
 
         return data;
     }

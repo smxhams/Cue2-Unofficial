@@ -214,6 +214,9 @@ internal sealed class CueReorder(
             }
         }
 
+        // Record after validation so cancelled reorders do not pollute history.
+        owner.RecordHistory("Reorder cues");
+
         // Snapshot the shells we will move, trying to preserve their relative visual order.
         // Fall back to SelectedCues order if we cannot obtain a full ordered list.
         var toMove = new List<ShellBar>();

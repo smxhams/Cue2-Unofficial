@@ -43,11 +43,11 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 tooltip_text = "Scales whole UI.
-Caution: Will apply immediately"
-focus_mode = 0
+Caution: Will apply on Enter."
+focus_mode = 2
 text = "100%"
 alignment = 1
-max_length = 4
+max_length = 6
 
 [node name="UiScaleSlider" type="HSlider" parent="VBoxContainer/Row2" unique_id=289576580]
 unique_name_in_owner = true
@@ -164,13 +164,14 @@ layout_mode = 2
 tooltip_text = "Fade-out duration when Stop is pressed (seconds).
 First Stop fades out; second Stop while fading hard-stops.
 Set to 0 for immediate stop."
-focus_mode = 0
+focus_mode = 2
 min_value = 0.0
 max_value = 30.0
 step = 0.1
 value = 2.5
 suffix = "s"
 alignment = 1
+editable = true
 
 [node name="StopFadeResetButton" type="Button" parent="VBoxContainer/StopFadeRow"]
 unique_name_in_owner = true

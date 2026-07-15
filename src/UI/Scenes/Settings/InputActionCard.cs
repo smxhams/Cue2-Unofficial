@@ -7,6 +7,7 @@ namespace Cue2.UI.Scenes.Settings;
 /// <summary>
 /// A card displayed in the Input Map settings representing a single InputMap action.
 /// Allows viewing the current binding and rebinding or clearing it.
+/// Rejects rebinds that collide with another action and can flash red on conflict.
 /// </summary>
 public partial class InputActionCard : PanelContainer
 {
@@ -22,6 +23,26 @@ public partial class InputActionCard : PanelContainer
 
     private bool _isListeningForInput;
 
+    private StyleBoxFlat _normalStyle;
+    private StyleBoxFlat _flashStyle;
+    private Tween _flashTween;
+
+    /// <summary>
+    /// Raised when a rebind is rejected because <paramref name="conflictingAction"/> already uses the combo.
+    /// Second argument is a display string for the attempted key combo.
+    /// </summary>
+    public event Action<string, string> BindingConflict;
+
+    /// <summary>
+    /// Raised when this card begins listening for a new key (so the parent can cancel any other active rebind).
+    /// </summary>
+    public event Action<InputActionCard> ListeningStarted;
+
+    /// <summary>
+    /// True while this card is waiting for a key press to rebind.
+    /// </summary>
+    public bool IsListeningForInput => _isListeningForInput;
+
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
@@ -32,6 +53,8 @@ public partial class InputActionCard : PanelContainer
         _resetButton = GetNode<Button>("%ResetButton");
         _clearButton = GetNode<Button>("%ClearButton");
 
+        CaptureNormalStyle();
+
         _bindingButton.Pressed += OnBindingButtonPressed;
         _resetButton.Pressed += OnResetButtonPressed;
         _clearButton.Pressed += OnClearButtonPressed;
@@ -39,21 +62,27 @@ public partial class InputActionCard : PanelContainer
         _clearButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
         _resetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
+        // SetAction may run before _Ready when the card is parented off-tree; apply stored Action now.
+        ApplyActionLabel();
         RefreshDisplay();
     }
 
     /// <summary>
     /// Sets the action this card represents and refreshes its display.
+    /// Safe to call before the card enters the tree (_Ready applies labels when ready).
     /// </summary>
     /// <param name="actionName">The InputMap action name (e.g. "Go", "CreateCue").</param>
     public void SetAction(string actionName)
     {
         Action = actionName;
-        if (_actionNameLabel != null)
-        {
-            _actionNameLabel.Text = PrettifyActionName(actionName);
-        }
+        ApplyActionLabel();
         RefreshDisplay();
+    }
+
+    private void ApplyActionLabel()
+    {
+        if (_actionNameLabel == null) return;
+        _actionNameLabel.Text = PrettifyActionName(Action);
     }
 
     private static string PrettifyActionName(string action)
@@ -64,7 +93,7 @@ public partial class InputActionCard : PanelContainer
         for (int i = 0; i < action.Length; i++)
         {
             char c = action[i];
-            if (i > 0 && char.IsUpper(c) && (char.IsLower(action[i-1]) || char.IsDigit(action[i-1])))
+            if (i > 0 && char.IsUpper(c) && (char.IsLower(action[i - 1]) || char.IsDigit(action[i - 1])))
             {
                 result += " ";
             }
@@ -145,7 +174,10 @@ public partial class InputActionCard : PanelContainer
     private void OnClearButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
+        // Snapshot full input map before mutation (session-persisted under settings "InputMap").
+        _globalData?.HistoryManager?.RecordSettingsChange("Clear input binding", null, "InputMap");
         InputMap.ActionEraseEvents(Action);
         GD.Print($"InputActionCard:OnClearButtonPressed - Cleared events for action '{Action}'");
         RefreshDisplay();
@@ -154,7 +186,24 @@ public partial class InputActionCard : PanelContainer
     private void OnResetButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || _globalData == null) return;
+        if (_globalData.HistoryManager?.IsRestoring == true) return;
 
+        // Block reset if any default event collides with another action's current binding.
+        var defaults = _globalData.GetDefaultInputEvents(Action);
+        foreach (InputEvent ev in defaults)
+        {
+            if (ev is not InputEventKey key) continue;
+            string conflict = GlobalData.FindConflictingInputAction(Action, key);
+            if (!string.IsNullOrEmpty(conflict))
+            {
+                string combo = GlobalData.FormatInputEvent(key);
+                BindingConflict?.Invoke(conflict, combo);
+                GD.Print($"InputActionCard:OnResetButtonPressed - Reset blocked for '{Action}'; default '{combo}' used by '{conflict}'");
+                return;
+            }
+        }
+
+        _globalData.HistoryManager?.RecordSettingsChange("Reset input binding", null, "InputMap");
         _globalData.ResetInputActionToDefault(Action);
         GD.Print($"InputActionCard:OnResetButtonPressed - Reset '{Action}' to default via refresh button.");
         RefreshDisplay();
@@ -162,6 +211,9 @@ public partial class InputActionCard : PanelContainer
 
     private void StartListening()
     {
+        // Let the parent cancel any other card first (exclusive rebind).
+        ListeningStarted?.Invoke(this);
+
         _isListeningForInput = true;
         _bindingButton.Text = "Press key... (Esc cancels)";
         // Pause global input action listener (reuses existing focus signals as a coordination mechanism)
@@ -169,11 +221,20 @@ public partial class InputActionCard : PanelContainer
         GD.Print($"InputActionCard:StartListening - Listening for new binding for '{Action}'");
     }
 
-    private void CancelListening()
+    /// <summary>
+    /// Cancels an in-progress rebind, if any. Safe to call when not listening.
+    /// </summary>
+    /// <param name="emitFocusExit">
+    /// When false, skips the TextEditFocusExited signal (used when another card is immediately taking over listening).
+    /// </param>
+    public void CancelListening(bool emitFocusExit = true)
     {
+        if (!_isListeningForInput) return;
+
         _isListeningForInput = false;
         RefreshDisplay();
-        _globalSignals.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
+        if (emitFocusExit)
+            _globalSignals.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
         GD.Print($"InputActionCard:CancelListening - Cancelled listening for '{Action}'");
     }
 
@@ -181,6 +242,8 @@ public partial class InputActionCard : PanelContainer
     {
         if (!_isListeningForInput) return;
         if (@event is not InputEventKey keyEvent || !keyEvent.Pressed) return;
+        // Ignore pure modifier presses (user is still holding Ctrl etc.)
+        if (IsModifierOnlyKey(keyEvent.Keycode)) return;
 
         if (keyEvent.Keycode == Key.Escape)
         {
@@ -189,18 +252,41 @@ public partial class InputActionCard : PanelContainer
             return;
         }
 
+        GetViewport().SetInputAsHandled();
+
+        // Reject if another action already uses this combo.
+        string conflict = GlobalData.FindConflictingInputAction(Action, keyEvent);
+        if (!string.IsNullOrEmpty(conflict))
+        {
+            string combo = GlobalData.FormatInputEvent(keyEvent);
+            BindingConflict?.Invoke(conflict, combo);
+            GD.Print($"InputActionCard:_UnhandledInput - Rejected '{combo}' for '{Action}'; used by '{conflict}'");
+            // Stay listening so the user can try another key, but restore button hint.
+            _bindingButton.Text = "Press key... (Esc cancels)";
+            return;
+        }
+
         // Apply the captured key as the (sole) binding for this action.
         ApplyNewBinding(keyEvent);
         _isListeningForInput = false;
         RefreshDisplay();
-        GetViewport().SetInputAsHandled();
         _globalSignals.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
         GD.Print($"InputActionCard:_UnhandledInput - Set binding for '{Action}' to {GlobalData.FormatInputEvent(keyEvent)}");
+    }
+
+    private static bool IsModifierOnlyKey(Key keycode)
+    {
+        // Ignore pure modifier presses while listening (user is composing a combo).
+        return keycode is Key.Ctrl or Key.Shift or Key.Alt or Key.Meta;
     }
 
     private void ApplyNewBinding(InputEventKey source)
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+        // Snapshot before rebind so undo restores the previous map state.
+        _globalData?.HistoryManager?.RecordSettingsChange("Change input binding", null, "InputMap");
 
         // For v1: replace all existing bindings with this single key event.
         InputMap.ActionEraseEvents(Action);
@@ -213,14 +299,91 @@ public partial class InputActionCard : PanelContainer
             ShiftPressed = source.ShiftPressed,
             AltPressed = source.AltPressed,
             MetaPressed = source.MetaPressed,
-            // Echo etc left default
         };
 
         InputMap.ActionAddEvent(Action, newEvent);
     }
 
+    /// <summary>
+    /// Briefly highlights this card in red (border + tint), then fades back to normal.
+    /// Used when another rebind attempt collides with this card's binding.
+    /// </summary>
+    public void FlashConflict()
+    {
+        CaptureNormalStyle();
+        EnsureFlashStyle();
+
+        if (_flashTween != null && GodotObject.IsInstanceValid(_flashTween))
+        {
+            _flashTween.Kill();
+            _flashTween = null;
+        }
+
+        // Instant red state.
+        _flashStyle.BorderColor = GlobalStyles.Danger;
+        _flashStyle.BgColor = new Color(0.32f, 0.08f, 0.08f, 1f);
+        AddThemeStyleboxOverride("panel", _flashStyle);
+
+        // Hold red briefly, then fade border/bg back toward normal and restore style.
+        _flashTween = CreateTween();
+        _flashTween.SetParallel(true);
+        _flashTween.TweenProperty(_flashStyle, "border_color", _normalStyle.BorderColor, 0.85f)
+            .SetDelay(0.45f)
+            .SetTrans(Tween.TransitionType.Sine)
+            .SetEase(Tween.EaseType.InOut);
+        _flashTween.TweenProperty(_flashStyle, "bg_color", _normalStyle.BgColor, 0.85f)
+            .SetDelay(0.45f)
+            .SetTrans(Tween.TransitionType.Sine)
+            .SetEase(Tween.EaseType.InOut);
+        _flashTween.SetParallel(false);
+        _flashTween.TweenCallback(Callable.From(RestoreNormalStyle));
+    }
+
+    private void CaptureNormalStyle()
+    {
+        if (_normalStyle != null) return;
+
+        var existing = GetThemeStylebox("panel");
+        if (existing is StyleBoxFlat flat)
+        {
+            _normalStyle = (StyleBoxFlat)flat.Duplicate();
+        }
+        else
+        {
+            _normalStyle = new StyleBoxFlat
+            {
+                BgColor = new Color(0.12f, 0.12f, 0.12f, 1f),
+                BorderColor = new Color(0.35f, 0.35f, 0.35f, 1f),
+            };
+            _normalStyle.SetBorderWidthAll(1);
+            _normalStyle.SetCornerRadiusAll(4);
+        }
+    }
+
+    private void EnsureFlashStyle()
+    {
+        if (_flashStyle != null) return;
+        CaptureNormalStyle();
+        _flashStyle = (StyleBoxFlat)_normalStyle.Duplicate();
+        _flashStyle.SetBorderWidthAll(Math.Max(2, _normalStyle.GetBorderWidth(Side.Left)));
+    }
+
+    private void RestoreNormalStyle()
+    {
+        if (_normalStyle != null)
+            AddThemeStyleboxOverride("panel", _normalStyle);
+        else
+            RemoveThemeStyleboxOverride("panel");
+    }
+
     public override void _ExitTree()
     {
+        if (_flashTween != null && GodotObject.IsInstanceValid(_flashTween))
+        {
+            _flashTween.Kill();
+            _flashTween = null;
+        }
+
         if (_isListeningForInput)
         {
             // Ensure we re-enable global listener if card is removed while listening

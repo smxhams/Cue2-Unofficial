@@ -397,5 +397,92 @@ public class Cue : ICue
 
         return dict;
     }
+
+    /// <summary>
+    /// Applies serialized cue data onto this instance in place (identity preserved).
+    /// Used by scoped undo/redo so a single cue can be restored without rebuilding the list.
+    /// </summary>
+    /// <param name="data">Dictionary previously produced by <see cref="GetData"/>.</param>
+    /// <remarks>
+    /// Does not free or recreate <see cref="ShellBar"/>. Hierarchy fields (ParentId, ChildCues)
+    /// are applied from data; structural list rebuilds should use full cuelist history instead.
+    /// </remarks>
+    public void ApplyFromData(Dictionary data)
+    {
+        if (data == null) return;
+
+        // Identity: keep existing Id; only advance static counter if needed for consistency.
+        if (data.ContainsKey("Id"))
+        {
+            int loadedId = data["Id"].AsInt32();
+            if (loadedId != Id)
+                GD.PrintErr($"Cue:ApplyFromData - Id mismatch (live={Id}, data={loadedId}); keeping live Id.");
+        }
+
+        Name = data.ContainsKey("Name") ? (string)data["Name"] : Name;
+        CueNum = data.ContainsKey("CueNum") ? (string)data["CueNum"] : CueNum;
+        ParentId = data.ContainsKey("ParentId") ? data["ParentId"].AsInt32() : ParentId;
+
+        ChildCues.Clear();
+        if (data.ContainsKey("ChildCues"))
+        {
+            var childArray = data["ChildCues"].AsGodotArray();
+            foreach (var childInt in childArray)
+                ChildCues.Add(childInt.AsInt32());
+        }
+
+        PreWait = data.ContainsKey("PreWait") ? (double)data["PreWait"] : PreWait;
+        Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : Duration;
+        TotalDuration = data.ContainsKey("TotalDuration") ? (double)data["TotalDuration"] : TotalDuration;
+        PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : PostWait;
+        Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : Follow;
+        Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : Expanded;
+        Color = data.TryGetValue("Color", out var colorVal)
+            ? Color.FromString(colorVal.AsString(), Color)
+            : Color;
+
+        Components.Clear();
+        if (data.ContainsKey("Components"))
+        {
+            var compData = data["Components"].AsGodotArray();
+            foreach (var compVar in compData)
+            {
+                if (compVar.VariantType != Variant.Type.Dictionary)
+                {
+                    GD.PrintErr("Cue:ApplyFromData - Component data is not a dictionary.");
+                    continue;
+                }
+                var compHash = compVar.AsGodotDictionary();
+                if (!compHash.ContainsKey("Type"))
+                {
+                    GD.PrintErr("Cue:ApplyFromData - Missing 'Type' in component data.");
+                    continue;
+                }
+                string type = (string)compHash["Type"];
+                ICueComponent comp = type switch
+                {
+                    "Audio" => new AudioComponent(),
+                    "Video" => new VideoComponent(),
+                    "Network" => new NetworkComponent(),
+                    "CueLight" => new CueLightComponent(),
+                    "OscComponent" => new OscComponent(),
+                    _ => null
+                };
+                if (comp == null) continue;
+                try
+                {
+                    comp.LoadFromData(compHash);
+                    Components.Add(comp);
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"Cue:ApplyFromData - Failed to load component '{type}': {ex.Message}");
+                }
+            }
+        }
+
+        FollowChanged?.Invoke(Follow);
+        ShellBar?.RelationshipChanged();
+    }
     
 }

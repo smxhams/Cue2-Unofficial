@@ -131,6 +131,8 @@ public partial class ConnectionInspector : Control
 
     public void RemoveComponent(ICueComponent component)
     {
+        if (_focusedCue != null)
+            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove connection component");
         _focusedCue.RemoveICueComponent(component);
     }
 
@@ -173,7 +175,10 @@ public partial class ConnectionInspector : Control
         actionOptionButton.ItemSelected += (long index) => 
         { 
             try 
-            { 
+            {
+                if ((int)cueLightComp.Action == (int)index) return;
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue light action");
                 cueLightComp.Action = (CueLightAction)index; 
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated action for CueLightComponent in Cue {_focusedCue.Id} to {cueLightComp.Action}", 0); 
             } 
@@ -187,6 +192,8 @@ public partial class ConnectionInspector : Control
         countInLineEdit.TextSubmitted += (string newText) =>
         {
             var time = UiUtilities.ParseAndFormatTime(newText, out var seconds);
+            if (_focusedCue != null)
+                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue light count-in");
             cueLightComp.CountInTime = (float)seconds; 
             countInLineEdit.Text = time; 
             countInLineEdit.ReleaseFocus();
@@ -196,7 +203,9 @@ public partial class ConnectionInspector : Control
         deleteButton.Pressed += () => 
         { 
             try 
-            { 
+            {
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove cue light component");
                 _focusedCue.Components.Remove(cueLightComp); 
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed CueLightComponent from Cue {_focusedCue.Id}", 0); 
                 LoadConnections(); 
@@ -215,6 +224,8 @@ public partial class ConnectionInspector : Control
         if (selectedObj is CueLight selectedCueLight)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: Cue Light - {selectedCueLight.Name}", 0);
+            if (_focusedCue != null)
+                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add cue light component");
             var cueLightComponent = new CueLightComponent { CueLight = selectedCueLight, CueLightId = selectedCueLight.Id };
             _focusedCue.AddICueComponent(cueLightComponent);
             LoadConnections();
@@ -222,6 +233,8 @@ public partial class ConnectionInspector : Control
         else if (selectedObj is CueOscConnection selectedOscConnection)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: OSC Connection - {selectedOscConnection.Name}", 0);
+            if (_focusedCue != null)
+                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add OSC component");
             var oscComponent = new OscComponent { OscConnection = selectedOscConnection, OscConnectionId = selectedOscConnection.Id };
             _focusedCue.AddICueComponent(oscComponent);
             LoadConnections();

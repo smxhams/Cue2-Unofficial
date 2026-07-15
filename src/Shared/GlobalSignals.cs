@@ -83,8 +83,12 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void CuelistExpandOneLayerEventHandler();
 	[Signal] public delegate void CuelistCollapseOneLayerEventHandler();
 	[Signal] public delegate void ToggleExpandAllEventHandler();
-	
-	
+
+	/// <summary>Undo the last document edit (cues / settings data).</summary>
+	[Signal] public delegate void UndoEventHandler();
+
+	/// <summary>Redo the last undone document edit.</summary>
+	[Signal] public delegate void RedoEventHandler();
 	
 	// Text edit signal connector
 	[Signal]  public delegate void TextEditFocusEnteredEventHandler();

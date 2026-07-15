@@ -113,19 +113,32 @@ public class CuePatch
     /// </summary>
     public void LoadFromData(Dictionary dataDict)
     {
-        InputChannels = (int)dataDict["InputChannels"];
-        InputLabels = new List<string>((Array<string>)dataDict["InputLabels"]);
-        OutputChannels = (int)dataDict["OutputChannels"];
-        OutputLabels = new List<string>((Array<string>)dataDict["OutputLabels"]);
+        InputChannels = dataDict["InputChannels"].AsInt32();
+        InputLabels = new List<string>();
+        if (dataDict.ContainsKey("InputLabels"))
+        {
+            var inLabels = dataDict["InputLabels"].AsGodotArray();
+            foreach (var label in inLabels)
+                InputLabels.Add(label.AsString());
+        }
+        OutputChannels = dataDict["OutputChannels"].AsInt32();
+        OutputLabels = new List<string>();
+        if (dataDict.ContainsKey("OutputLabels"))
+        {
+            var outLabels = dataDict["OutputLabels"].AsGodotArray();
+            foreach (var label in outLabels)
+                OutputLabels.Add(label.AsString());
+        }
 
-        var matrixData = (Godot.Collections.Array)dataDict["VolumeMatrix"];
+        var matrixData = dataDict["VolumeMatrix"].AsGodotArray();
         VolumeMatrix = new float[InputChannels, OutputChannels];
         for (int i = 0; i < InputChannels; i++)
         {
-            var row = (Godot.Collections.Array)matrixData[i];
+            var row = matrixData[i].AsGodotArray();
             for (int j = 0; j < OutputChannels; j++)
             {
-                VolumeMatrix[i, j] = (float)row[j];
+                // After JSON history clone values are typically doubles.
+                VolumeMatrix[i, j] = row[j].AsSingle();
             }
         }
     }

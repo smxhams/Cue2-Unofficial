@@ -64,8 +64,19 @@ public partial class GlobalData : Node
 
 	public FileDropper FileDropper;
 	public UserDataManager UserDataManager;
+	public HistoryManager HistoryManager;
 	
+	/// <summary>
+	/// Id of the cue currently focused for inspectors (-1 if none).
+	/// Kept in sync via <see cref="GlobalSignals.ShellFocused"/>.
+	/// </summary>
 	public int FocusedCue = -1;
+
+	private void OnShellFocused(int cueId)
+	{
+		FocusedCue = cueId;
+	}
+
 	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
 	public int CueCount;
@@ -167,7 +178,23 @@ public partial class GlobalData : Node
 		"CollapseOneLayer",
 		"ToggleExpandAll",
 		"DeleteCue",
-		"DuplicateSelectedCues"
+		"DuplicateSelectedCues",
+		"Undo",
+		"Redo"
+	};
+
+	/// <summary>
+	/// Display categories for the Input Map settings panel (order is UI order).
+	/// Actions not listed here still appear under "Other" when discovered at runtime.
+	/// </summary>
+	public static readonly (string Category, string[] Actions)[] MappableInputActionCategories =
+	{
+		("Session", new[] { "NewSession", "OpenSession", "SaveSession", "SaveAsSession" }),
+		("Playback", new[] { "Go", "StopAll", "PauseAll", "ResumeAll" }),
+		("Cue Editing", new[] { "CreateCue", "GroupSelectedCues", "DeleteCue", "DuplicateSelectedCues" }),
+		("Navigation", new[] { "SelectNext", "SelectPrevious", "ExpandOneLayer", "CollapseOneLayer", "ToggleExpandAll" }),
+		("Windows", new[] { "ToggleSettings", "ToggleLog" }),
+		("History", new[] { "Undo", "Redo" }),
 	};
 
 
@@ -178,6 +205,9 @@ public partial class GlobalData : Node
 
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
+
+		// Track focused cue for history restore and cross-system queries.
+		_globalSignals.ShellFocused += OnShellFocused;
 
 		// Print the full resolved path for user:// (Godot's user data directory) as early as possible
 		GodotUserDataPath = ProjectSettings.GlobalizePath("user://");
@@ -214,6 +244,9 @@ public partial class GlobalData : Node
 
 		UserDataManager = new UserDataManager();
 		AddChild(UserDataManager);
+
+		HistoryManager = new HistoryManager();
+		AddChild(HistoryManager);
 
 		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 		
@@ -379,38 +412,79 @@ public partial class GlobalData : Node
 		foreach (var action in MappableInputActions)
 		{
 			if (!InputMap.HasAction(action)) continue;
-			if (!bindingsData.ContainsKey(action)) continue;
+			if (!TryGetBindingActionList(bindingsData, action, out var evList)) continue;
 
 			InputMap.ActionEraseEvents(action);
 
-			var evList = bindingsData[action].AsGodotArray();
 			foreach (var item in evList)
 			{
+				if (item.VariantType != Variant.Type.Dictionary) continue;
 				var evDict = item.AsGodotDictionary();
 				if (evDict == null) continue;
 
-				if (!evDict.TryGetValue("type", out var typeVal) || typeVal.AsString() != "InputEventKey")
+				if (!TryGetDictValue(evDict, "type", out var typeVal) || typeVal.AsString() != "InputEventKey")
 					continue;
 
 				var keyEvent = new InputEventKey();
 
-				if (evDict.TryGetValue("keycode", out var kc))
+				if (TryGetDictValue(evDict, "keycode", out var kc))
 					keyEvent.Keycode = (Key)kc.AsInt32();
-				if (evDict.TryGetValue("physical_keycode", out var pkc))
+				if (TryGetDictValue(evDict, "physical_keycode", out var pkc))
 					keyEvent.PhysicalKeycode = (Key)pkc.AsInt32();
-				if (evDict.TryGetValue("ctrl", out var ctrl))
+				if (TryGetDictValue(evDict, "ctrl", out var ctrl))
 					keyEvent.CtrlPressed = ctrl.AsBool();
-				if (evDict.TryGetValue("shift", out var shift))
+				if (TryGetDictValue(evDict, "shift", out var shift))
 					keyEvent.ShiftPressed = shift.AsBool();
-				if (evDict.TryGetValue("alt", out var alt))
+				if (TryGetDictValue(evDict, "alt", out var alt))
 					keyEvent.AltPressed = alt.AsBool();
-				if (evDict.TryGetValue("meta", out var meta))
+				if (TryGetDictValue(evDict, "meta", out var meta))
 					keyEvent.MetaPressed = meta.AsBool();
 
 				InputMap.ActionAddEvent(action, keyEvent);
 			}
 		}
 		GD.Print("GlobalData:ApplyInputBindings - Restored custom input bindings from session data.");
+	}
+
+	/// <summary>
+	/// Finds an action's event list in a bindings dictionary (tolerates StringName keys after JSON clone).
+	/// </summary>
+	private static bool TryGetBindingActionList(Dictionary bindingsData, string action, out Godot.Collections.Array evList)
+	{
+		evList = null;
+		if (bindingsData == null || string.IsNullOrEmpty(action)) return false;
+
+		if (bindingsData.TryGetValue(action, out var raw))
+		{
+			evList = raw.AsGodotArray();
+			return true;
+		}
+
+		foreach (var k in bindingsData.Keys)
+		{
+			if (k.AsString() == action)
+			{
+				evList = bindingsData[k].AsGodotArray();
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static bool TryGetDictValue(Dictionary dict, string key, out Variant value)
+	{
+		value = default;
+		if (dict == null || string.IsNullOrEmpty(key)) return false;
+		if (dict.TryGetValue(key, out value)) return true;
+		foreach (var k in dict.Keys)
+		{
+			if (k.AsString() == key)
+			{
+				value = dict[k];
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/// <summary>
@@ -573,15 +647,67 @@ public partial class GlobalData : Node
 	private bool InputEventsEqual(InputEvent a, InputEvent b)
 	{
 		if (a is InputEventKey ka && b is InputEventKey kb)
-		{
-			return ka.Keycode == kb.Keycode &&
-			       ka.PhysicalKeycode == kb.PhysicalKeycode &&
-			       ka.CtrlPressed == kb.CtrlPressed &&
-			       ka.ShiftPressed == kb.ShiftPressed &&
-			       ka.AltPressed == kb.AltPressed &&
-			       ka.MetaPressed == kb.MetaPressed;
-		}
+			return KeyEventsMatch(ka, kb);
 		return a.AsText() == b.AsText();
+	}
+
+	/// <summary>
+	/// Returns true if two key events represent the same hotkey (key + modifiers).
+	/// Compares effective keycode (falls back to physical) and Ctrl/Shift/Alt/Meta.
+	/// </summary>
+	public static bool KeyEventsMatch(InputEventKey a, InputEventKey b)
+	{
+		if (a == null || b == null) return false;
+
+		Key aKey = a.Keycode != Key.None ? a.Keycode : a.PhysicalKeycode;
+		Key bKey = b.Keycode != Key.None ? b.Keycode : b.PhysicalKeycode;
+		if (aKey == Key.None || bKey == Key.None || aKey != bKey)
+			return false;
+
+		return a.CtrlPressed == b.CtrlPressed &&
+		       a.ShiftPressed == b.ShiftPressed &&
+		       a.AltPressed == b.AltPressed &&
+		       a.MetaPressed == b.MetaPressed;
+	}
+
+	/// <summary>
+	/// Finds another mappable action that already uses the given key combo.
+	/// </summary>
+	/// <param name="excludeAction">Action currently being rebound (ignored in the search).</param>
+	/// <param name="keyEvent">Proposed key binding.</param>
+	/// <returns>Conflicting action name, or null if the combo is free.</returns>
+	public static string FindConflictingInputAction(string excludeAction, InputEventKey keyEvent)
+	{
+		if (keyEvent == null) return null;
+
+		foreach (var action in MappableInputActions)
+		{
+			if (action == excludeAction) continue;
+			if (!InputMap.HasAction(action)) continue;
+
+			foreach (InputEvent ev in InputMap.ActionGetEvents(action))
+			{
+				if (ev is InputEventKey other && KeyEventsMatch(other, keyEvent))
+					return action;
+			}
+		}
+
+		// Also scan non-ui_ actions not in the curated list (same scope as the settings UI).
+		foreach (StringName actionName in InputMap.GetActions())
+		{
+			string action = actionName.ToString();
+			if (string.IsNullOrEmpty(action) || action.StartsWith("ui_")) continue;
+			if (action == excludeAction) continue;
+			if (System.Array.IndexOf(MappableInputActions, action) >= 0) continue;
+
+			foreach (InputEvent ev in InputMap.ActionGetEvents(action))
+			{
+				if (ev is InputEventKey other && KeyEventsMatch(other, keyEvent))
+					return action;
+			}
+		}
+
+		return null;
 	}
 
 	public Dictionary GetAvailableConnections()

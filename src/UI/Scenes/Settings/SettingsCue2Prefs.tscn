@@ -132,3 +132,35 @@ theme_override_constants/icon_max_width = 12
 expand_icon = true
 visible = false
 tooltip_text = "Reset to default"
+
+[node name="UndoDepthRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="UndoDepthLabel" type="Label" parent="VBoxContainer/UndoDepthRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Undo Depth"
+vertical_alignment = 1
+tooltip_text = "How many undo/redo steps to keep for document edits (cues, components, settings)."
+
+[node name="UndoDepth" type="SpinBox" parent="VBoxContainer/UndoDepthRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = 4.0
+max_value = 200.0
+value = 50.0
+allow_greater = false
+allow_lesser = false
+tooltip_text = "How many undo/redo steps to keep for document edits (cues, components, settings)."
+
+[node name="UndoDepthResetButton" type="Button" parent="VBoxContainer/UndoDepthRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"

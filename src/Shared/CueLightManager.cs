@@ -239,13 +239,19 @@ public partial class CueLightManager : Node
 
     public async Task LoadData(Dictionary data)
     {
+        // Replace, do not merge — required for session load and document undo/redo restore.
+        _cueLights.Clear();
+        _nextId = 0;
+
+        if (data == null) return;
+
         foreach (var value in data.Values)
         {
             var cueLightDict = value.AsGodotDictionary();
             if (!cueLightDict.ContainsKey("Id"))
             {
                 GD.PrintErr("CueLightManager:LoadData - Missing 'Id' key in data.");
-                return;
+                continue;
             }
             if ((int)cueLightDict["Id"] >= _nextId) _nextId = (int)cueLightDict["Id"] + 1;
             var cueLight = new CueLight(cueLightDict);

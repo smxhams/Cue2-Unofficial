@@ -4,7 +4,7 @@ using Godot;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// Cue2 Preferences panel: startup, autosave, and backup depth settings.
+/// Cue2 Preferences panel: startup, autosave, backup depth, and undo depth settings.
 /// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
 /// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
@@ -16,6 +16,8 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	private Button _autosaveResetButton;
 	private SpinBox _backupDepth;
 	private Button _backupResetButton;
+	private SpinBox _undoDepth;
+	private Button _undoDepthResetButton;
 
 	public override void _Ready()
 	{
@@ -42,6 +44,15 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_backupResetButton.Pressed += OnBackupResetButtonPressed;
 		_backupResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
+		_undoDepth = GetNode<SpinBox>("%UndoDepth");
+		_undoDepth.MinValue = UserDataManager.MinUndoDepth;
+		_undoDepth.MaxValue = UserDataManager.MaxUndoDepth;
+		_undoDepth.ValueChanged += OnUndoDepthChanged;
+
+		_undoDepthResetButton = GetNode<Button>("%UndoDepthResetButton");
+		_undoDepthResetButton.Pressed += OnUndoDepthResetButtonPressed;
+		_undoDepthResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+
 		SyncSettings();
 	}
 
@@ -53,9 +64,11 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			_startupOptionButton.Selected = (int)udm.Startup;
 			_autosaveInterval.Value = udm.AutosaveInterval;
 			_backupDepth.Value = udm.BackupDepth;
+			_undoDepth.Value = udm.UndoDepth;
 			UpdateStartupResetButton();
 			UpdateAutosaveResetButton();
 			UpdateBackupResetButton();
+			UpdateUndoDepthResetButton();
 		}
 	}
 
@@ -156,6 +169,39 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		if (!atDefault)
 		{
 			_backupResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultBackupDepth}";
+		}
+	}
+
+	private void OnUndoDepthChanged(double value)
+	{
+		if (_globalData?.UserDataManager != null)
+		{
+			_globalData.UserDataManager.UndoDepth = (int)value;
+			_globalData.HistoryManager?.TrimToMaxDepth();
+			UpdateUndoDepthResetButton();
+		}
+	}
+
+	private void OnUndoDepthResetButtonPressed()
+	{
+		if (_globalData?.UserDataManager != null)
+		{
+			_globalData.UserDataManager.UndoDepth = UserDataManager.DefaultUndoDepth;
+			_globalData.HistoryManager?.TrimToMaxDepth();
+			SyncSettings();
+		}
+	}
+
+	private void UpdateUndoDepthResetButton()
+	{
+		if (_undoDepthResetButton == null || _globalData?.UserDataManager == null) return;
+
+		bool atDefault = _globalData.UserDataManager.UndoDepth == UserDataManager.DefaultUndoDepth;
+		_undoDepthResetButton.Visible = !atDefault;
+
+		if (!atDefault)
+		{
+			_undoDepthResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUndoDepth}";
 		}
 	}
 }

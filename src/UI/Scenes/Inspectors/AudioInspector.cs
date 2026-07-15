@@ -163,10 +163,18 @@ public partial class AudioInspector : Control
         
         _startTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _startTimeInput);
         _endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
+        // Commit on blur as well (Enter is not the only way users finish an edit).
+        _startTimeInput.FocusExited += () => TimeFieldSubmitted(_startTimeInput.Text, _startTimeInput);
+        _endTimeInput.FocusExited += () => TimeFieldSubmitted(_endTimeInput.Text, _endTimeInput);
         _volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
-        _loopInput.Toggled += state => { _focusedAudioComponent.Loop = state; SyncDuration();};
+        _volumeInput.FocusExited += () => VolumeInputSubmitted(_volumeInput.Text, _volumeInput);
+        _loopInput.Toggled += OnLoopToggled;
         _playCountInput.TextSubmitted += OnPlayCountSubmitted;
+        _playCountInput.FocusExited += () => OnPlayCountSubmitted(_playCountInput.Text);
         _outputOptionButton.ItemSelected += OutputOptionSelected;
+
+        // Undo/redo and other model restores push this signal; rebind component + refresh UI.
+        _globalSignals.SyncShellInspector += OnSyncFromHistory;
         
         UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
         
@@ -188,17 +196,29 @@ public partial class AudioInspector : Control
     /// <summary>
     /// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
     /// Blank or -1 input sets time to undefined (EndTime=-1, StartTime=0).
+    /// End times at or beyond file duration are clamped to full duration (EndTime=-1).
     /// </summary>
     /// <param name="text">The submitted text.</param>
     /// <param name="textField">The LineEdit field.</param>
     private void TimeFieldSubmitted(string text, LineEdit textField)
     {
+        if (_focusedCue == null || _focusedAudioComponent == null || textField == null)
+            return;
+        // Ignore while focus moves during refresh, or if component is no longer on the cue.
+        if (_globalData?.HistoryManager?.IsRestoring == true)
+            return;
+        if (!_focusedCue.Components.Contains(_focusedAudioComponent))
+            return;
+
         try
         {
             if (string.IsNullOrWhiteSpace(text) || text.Trim() == "-1")
             {
                 if (textField == _startTimeInput)
                 {
+                    if (Math.Abs(_focusedAudioComponent.StartTime) < 1e-9)
+                        return;
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio start time");
                     _focusedAudioComponent.StartTime = 0.0;
                     textField.Text = "00:00.000";
                     textField.TooltipText = "00m:00s.000ms";
@@ -206,14 +226,19 @@ public partial class AudioInspector : Control
                 }
                 else if (textField == _endTimeInput)
                 {
+                    if (_focusedAudioComponent.EndTime < 0)
+                        return;
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio end time");
                     _focusedAudioComponent.EndTime = -1.0; // Undefined = play to end
-                    textField.Text = $"Full ({UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration)})";
+                    double metaDur = _focusedAudioComponent.Metadata?.Duration ?? 0;
+                    textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
                     textField.TooltipText = "End time undefined (plays full file)";
                     GD.Print("AudioInspector:TimeFieldSubmitted - End time set to undefined (full)");
                 }
                 
                 SyncDuration();
-                textField.ReleaseFocus();
+                if (textField.HasFocus())
+                    textField.ReleaseFocus();
                 DrawWaveform();
                 return;
             }
@@ -225,20 +250,58 @@ public partial class AudioInspector : Control
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid time format in {textField.Name}: {text}", 1);
                 return;
             }
-            
-            textField.Text = time;
-            textField.TooltipText = labeledTime;
+
             if (textField == _startTimeInput)
             {
+                if (Math.Abs(_focusedAudioComponent.StartTime - timeSecs) < 1e-9)
+                {
+                    textField.Text = time;
+                    textField.TooltipText = labeledTime;
+                    return;
+                }
+                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio start time");
                 _focusedAudioComponent.StartTime = timeSecs;
             }
             else if (textField == _endTimeInput)
             {
+                // At or beyond file duration = play to end (same as blank field).
+                double fileDuration = _focusedAudioComponent.Metadata?.Duration ?? 0;
+                if (fileDuration > 0 && timeSecs >= fileDuration)
+                {
+                    if (_focusedAudioComponent.EndTime < 0)
+                    {
+                        textField.Text = $"Full ({UiUtilities.FormatTime(fileDuration)})";
+                        textField.TooltipText = "End time undefined (plays full file)";
+                        return;
+                    }
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio end time");
+                    _focusedAudioComponent.EndTime = -1.0;
+                    textField.Text = $"Full ({UiUtilities.FormatTime(fileDuration)})";
+                    textField.TooltipText = "End time undefined (plays full file)";
+                    GD.Print("AudioInspector:TimeFieldSubmitted - End time clamped to full (exceeded file duration)");
+                    SyncDuration();
+                    if (textField.HasFocus())
+                        textField.ReleaseFocus();
+                    DrawWaveform();
+                    return;
+                }
+
+                if (Math.Abs(_focusedAudioComponent.EndTime - timeSecs) < 1e-9)
+                {
+                    textField.Text = time;
+                    textField.TooltipText = labeledTime;
+                    return;
+                }
+                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio end time");
                 _focusedAudioComponent.EndTime = timeSecs;
             }
+
+            textField.Text = time;
+            textField.TooltipText = labeledTime;
             
             SyncDuration();
-            textField.ReleaseFocus();
+            if (textField.HasFocus())
+                textField.ReleaseFocus();
             DrawWaveform();
 
         }
@@ -247,6 +310,85 @@ public partial class AudioInspector : Control
             GD.Print($"AudioInspector:TimeFieldSubmitted - Error parsing time: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing time: {ex.Message}", 2);
         }
+    }
+
+    private void OnLoopToggled(bool state)
+    {
+        if (_focusedCue == null || _focusedAudioComponent == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+        if (_focusedAudioComponent.Loop == state) return;
+        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio loop");
+        _focusedAudioComponent.Loop = state;
+        SyncDuration();
+    }
+
+    /// <summary>
+    /// Re-binds the audio component from the live cue and refreshes fields (undo/redo, external edits).
+    /// </summary>
+    private async void OnSyncFromHistory()
+    {
+        if (_focusedCue == null) return;
+        // Re-fetch cue in case instance was replaced (cuelist-scope restore).
+        var cue = CueList.FetchCueFromId(_focusedCue.Id);
+        if (cue == null)
+        {
+            _focusedCue = null;
+            _focusedAudioComponent = null;
+            return;
+        }
+        _focusedCue = cue;
+        _focusedAudioComponent = cue.GetAudioComponent();
+        if (_focusedAudioComponent == null)
+        {
+            _infoLabel.Text = "No Audio File";
+            _selectFileContainer.Visible = true;
+            _inspectorContent.Visible = false;
+            _fileUrl.Text = "";
+            if (_deleteAudioComponentButton != null)
+                _deleteAudioComponentButton.Visible = false;
+            return;
+        }
+
+        UpdateAudioUiFields(_focusedAudioComponent.AudioFile ?? string.Empty);
+        // Output routing is not part of the scalar time fields — refresh dropdown + matrix too.
+        PopulateOutputOptions();
+        BuildRoutingMatrix();
+
+        // History snapshots omit WaveformData; invalidate cache and regenerate peaks so start/end
+        // selection colors + handles redraw after undo/redo.
+        _cachedPeaks = null;
+        _cachedPeaksSource = null;
+        _isDraggingStart = false;
+        _isDraggingEnd = false;
+
+        if (!string.IsNullOrEmpty(_focusedAudioComponent.AudioFile)
+            && (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0))
+        {
+            try
+            {
+                _focusedAudioComponent.WaveformData =
+                    await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"AudioInspector:OnSyncFromHistory - Waveform regen failed: {ex.Message}");
+            }
+        }
+
+        if (_focusedAudioComponent.Metadata == null && !string.IsNullOrEmpty(_focusedAudioComponent.AudioFile))
+        {
+            try
+            {
+                _focusedAudioComponent.Metadata =
+                    await _mediaEngine.GetAudioFileMetadataAsync(_focusedAudioComponent.AudioFile);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"AudioInspector:OnSyncFromHistory - Metadata refresh failed: {ex.Message}");
+            }
+        }
+
+        await DrawWaveform();
     }
     
     
@@ -257,13 +399,15 @@ public partial class AudioInspector : Control
     /// <param name="textField">The LineEdit field.</param>
     private void VolumeInputSubmitted(string text, LineEdit textField)
     {
+        if (_focusedCue == null || _focusedAudioComponent == null || textField == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
         try
         {
             if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid volume format: {text}", 1);
                 textField.Text = $"{UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume)}dB";
-                textField.ReleaseFocus();
+                if (textField.HasFocus()) textField.ReleaseFocus();
                 return;
             }
             if (dbValue > 0)
@@ -273,8 +417,14 @@ public partial class AudioInspector : Control
             var volume = UiUtilities.DbToLinear(dbValue.ToString());
             var dbReturn = UiUtilities.LinearToDb(volume);
             textField.Text = $"{dbReturn}dB";
+            if (Math.Abs(_focusedAudioComponent.Volume - volume) < 1e-6f)
+            {
+                if (textField.HasFocus()) textField.ReleaseFocus();
+                return;
+            }
+            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio volume");
             _focusedAudioComponent.Volume = volume;
-            textField.ReleaseFocus();
+            if (textField.HasFocus()) textField.ReleaseFocus();
         }
         catch (Exception ex)
         {
@@ -288,8 +438,16 @@ public partial class AudioInspector : Control
     /// <param name="newText">The submitted text.</param>
     private void OnPlayCountSubmitted(string newText)
     {
+        if (_focusedCue == null || _focusedAudioComponent == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
         if (int.TryParse(newText, out var playCount) && playCount > 0)
         {
+            if (_focusedAudioComponent.PlayCount == playCount)
+            {
+                if (_playCountInput.HasFocus()) _playCountInput.ReleaseFocus();
+                return;
+            }
+            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio play count");
             _focusedAudioComponent.PlayCount = playCount;
             SyncDuration();
         }
@@ -298,86 +456,162 @@ public partial class AudioInspector : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid play count: {newText}. Must be positive integer.", 1);
             _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString(); // Revert to previous
         }
-        _playCountInput.ReleaseFocus();
+        if (_playCountInput.HasFocus())
+            _playCountInput.ReleaseFocus();
     }
     
     private void PopulateOutputOptions()
     {
-        // Remove items from output options
-        var itemCount = _outputOptionButton.GetItemCount();
-        for (int i = 0; i < itemCount; i++)
-        {
-            _outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount()-1); // Removes last item
-        }
-        // Add patches as options
-        _outputOptionButton.AddItem("No output");
-        foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
-        {
-            _outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
-            _outputOptionButton.SetItemMetadata(_outputOptionButton.GetItemCount()-1,patch.Value.Id);
-            if (patch.Value.Id == _focusedAudioComponent.PatchId)
-            {
-                _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
-            }
-        }
+        if (_outputOptionButton == null || _focusedAudioComponent == null) return;
 
-        foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
+        // Block ItemSelected while rebuilding the list (Select would re-enter OutputOptionSelected).
+        _outputOptionButton.SetBlockSignals(true);
+        try
         {
-            _outputOptionButton.AddItem($"Direct Output: {output}");
-            if (output == _focusedAudioComponent.DirectOutput)
+            // Remove items from output options
+            var itemCount = _outputOptionButton.GetItemCount();
+            for (int i = 0; i < itemCount; i++)
             {
-                _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
+                _outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount() - 1); // Removes last item
             }
-        }
 
-        if (_outputOptionButton.Selected == 0 && _focusedAudioComponent.DirectOutput != null)
-        {
-            _outputOptionButton.AddItem($"!!! Missing output: {_focusedAudioComponent.DirectOutput}");
-            _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
-            
+            // Add patches as options
+            _outputOptionButton.AddItem("No output");
+            int selectedIndex = 0;
+
+            foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+            {
+                _outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+                int idx = _outputOptionButton.GetItemCount() - 1;
+                _outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
+                if (patch.Value.Id == _focusedAudioComponent.PatchId)
+                    selectedIndex = idx;
+            }
+
+            foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
+            {
+                _outputOptionButton.AddItem($"Direct Output: {output}");
+                int idx = _outputOptionButton.GetItemCount() - 1;
+                if (!string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput)
+                    && output == _focusedAudioComponent.DirectOutput)
+                {
+                    selectedIndex = idx;
+                }
+            }
+
+            if (selectedIndex == 0 && !string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput))
+            {
+                _outputOptionButton.AddItem($"!!! Missing output: {_focusedAudioComponent.DirectOutput}");
+                selectedIndex = _outputOptionButton.GetItemCount() - 1;
+            }
+            if (selectedIndex == 0 && _focusedAudioComponent.PatchId >= 0
+                && (_focusedAudioComponent.Patch != null
+                    || !_globalData.Settings.GetAudioOutputPatches().ContainsKey(_focusedAudioComponent.PatchId)))
+            {
+                string name = _focusedAudioComponent.Patch?.Name ?? $"id {_focusedAudioComponent.PatchId}";
+                _outputOptionButton.AddItem($"!!! Missing patch: {name}");
+                selectedIndex = _outputOptionButton.GetItemCount() - 1;
+            }
+
+            _outputOptionButton.Select(selectedIndex);
         }
-        if (_outputOptionButton.Selected == 0 && _focusedAudioComponent.Patch != null)
+        finally
         {
-            _outputOptionButton.AddItem($"!!! Missing patch: {_focusedAudioComponent.Patch.Name}");
-            _outputOptionButton.Select(_outputOptionButton.GetItemCount()-1);
-            
+            _outputOptionButton.SetBlockSignals(false);
         }
     }
     
     private void OutputOptionSelected(long index)
     {
+        if (_focusedCue == null || _focusedAudioComponent == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
         var item = _outputOptionButton.GetItemText((int)index);
+
+        // Resolve intended new routing without writing yet (so we can skip no-ops).
+        int newPatchId = -1;
+        string newDirect = null;
+        AudioOutputPatch newPatch = null;
+
         if (item.StartsWith("Patch"))
         {
-            var patchId = (int)_outputOptionButton.GetItemMetadata((int)index);
-            GD.Print($"AudioInspector:OutputOptionSelected - Patch selected with id {patchId}");
-            if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
+            newPatchId = (int)_outputOptionButton.GetItemMetadata((int)index);
+            if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(newPatchId, out var patch))
             {
-                _focusedAudioComponent.Patch = patch;
-                _focusedAudioComponent.PatchId = patchId;
-                _focusedAudioComponent.DirectOutput = null;
-                GD.Print($"AudioInspector:OutputOptionSelected - Patch set to: {patch.Name}");
+                newPatch = patch;
+                newDirect = null;
             }
             else
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OutputOptionSelected - Patch ID {patchId} not found, resetting output", 1);
+                newPatchId = -1;
+                newPatch = null;
+                newDirect = null;
+            }
+        }
+        else if (item.StartsWith("Direct Output"))
+        {
+            newDirect = item.Replace("Direct Output: ", "");
+            newPatchId = -1;
+            newPatch = null;
+        }
+        else if (item.StartsWith("!!! Missing"))
+        {
+            // Keep current assignment when user re-selects a missing entry.
+            return;
+        }
+        else
+        {
+            // "No output"
+            newPatchId = -1;
+            newPatch = null;
+            newDirect = null;
+        }
+
+        bool samePatch = newPatchId == _focusedAudioComponent.PatchId
+                         && string.IsNullOrEmpty(newDirect)
+                         && string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput);
+        bool sameDirect = newPatchId < 0
+                          && string.Equals(newDirect ?? string.Empty,
+                              _focusedAudioComponent.DirectOutput ?? string.Empty,
+                              StringComparison.Ordinal);
+        if (samePatch || sameDirect)
+            return;
+
+        // Discrete selection — do not coalesce; each change is its own undo step.
+        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio output");
+
+        if (item.StartsWith("Patch"))
+        {
+            GD.Print($"AudioInspector:OutputOptionSelected - Patch selected with id {newPatchId}");
+            if (newPatch != null)
+            {
+                _focusedAudioComponent.Patch = newPatch;
+                _focusedAudioComponent.PatchId = newPatchId;
+                _focusedAudioComponent.DirectOutput = null;
+                GD.Print($"AudioInspector:OutputOptionSelected - Patch set to: {newPatch.Name}");
+            }
+            else
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"AudioInspector:OutputOptionSelected - Patch ID {newPatchId} not found, resetting output", 1);
                 _focusedAudioComponent.Patch = null;
                 _focusedAudioComponent.PatchId = -1;
                 _focusedAudioComponent.DirectOutput = null;
-                _outputOptionButton.Select(0); // Select "No output"
+                _outputOptionButton.SetBlockSignals(true);
+                _outputOptionButton.Select(0);
+                _outputOptionButton.SetBlockSignals(false);
             }
             BuildRoutingMatrix();
         }
         else if (item.StartsWith("Direct Output"))
         {
-            var dirOutName = item.Replace("Direct Output: ", "");
-            GD.Print($"AudioInspector:OutputOptionSelected - Direct output selected: {dirOutName}");
-            _focusedAudioComponent.DirectOutput = dirOutName;
+            GD.Print($"AudioInspector:OutputOptionSelected - Direct output selected: {newDirect}");
+            _focusedAudioComponent.DirectOutput = newDirect;
             _focusedAudioComponent.Patch = null;
             _focusedAudioComponent.PatchId = -1;
             BuildRoutingMatrix();
         }
-        else // "No output" or missing patch/output case
+        else
         {
             _focusedAudioComponent.Patch = null;
             _focusedAudioComponent.PatchId = -1;
@@ -525,6 +759,7 @@ public partial class AudioInspector : Control
                 var row1 = row;
                 var col1 = col;
                 volumeEdit.TextSubmitted += (string newText) => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
+                volumeEdit.FocusExited += () => OnMatrixVolumeSubmitted(volumeEdit.Text, volumeEdit, row1, col1);
                 _routingMatrixGrid.AddChild(volumeEdit);
             }
         }
@@ -541,29 +776,51 @@ public partial class AudioInspector : Control
     /// <param name="outputCh">Output channel index.</param>
     private void OnMatrixVolumeSubmitted(string text, LineEdit textField, int inputCh, int outputCh)
     {
-        GD.Print($"In {inputCh}. Out {outputCh}");
+        if (_focusedCue == null || _focusedAudioComponent?.Routing == null || textField == null)
+            return;
+        if (_globalData?.HistoryManager?.IsRestoring == true)
+            return;
+
+        GD.Print($"AudioInspector:OnMatrixVolumeSubmitted - In {inputCh}. Out {outputCh}");
         try
         {
             float dbValue;
-            if (string.IsNullOrWhiteSpace(text.Replace("dB", "").Trim()))
+            if (string.IsNullOrWhiteSpace((text ?? string.Empty).Replace("dB", "").Trim()))
             {
                 dbValue = -60.0f;
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OnMatrixVolumeSubmitted - Blank input treated as OFF for In {inputCh}, Out {outputCh}", 0);
             }
-            else if (!float.TryParse(text.Replace("dB", "").Trim(), out dbValue))
+            else if (!float.TryParse((text ?? string.Empty).Replace("dB", "").Trim(), out dbValue))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:OnMatrixVolumeSubmitted - Invalid matrix volume: {text}", 1);
                 return;
             }
 
-            var linear = UiUtilities.DbToLinear(dbValue.ToString());
+            float linear = (float)UiUtilities.DbToLinear(dbValue.ToString());
+            float current = _focusedAudioComponent.Routing.GetVolume(inputCh, outputCh);
+            if (Math.Abs(current - linear) < 1e-6f)
+            {
+                if (linear > 0.0f)
+                    textField.Text = $"{UiUtilities.LinearToDb(linear)}dB";
+                if (textField.HasFocus())
+                    textField.ReleaseFocus();
+                return;
+            }
+
+            // Discrete cell commit — each matrix cell change is its own undo step.
+            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio routing volume");
             _focusedAudioComponent.Routing.SetVolume(inputCh, outputCh, linear);
             if (linear > 0.0f)
             {
                 var dbReturn = UiUtilities.LinearToDb(linear);
                 textField.Text = $"{dbReturn}dB";
             }
-            textField.ReleaseFocus();
+            else
+            {
+                textField.Text = string.Empty;
+            }
+            if (textField.HasFocus())
+                textField.ReleaseFocus();
         }
         catch (Exception ex)
         {
@@ -669,7 +926,15 @@ public partial class AudioInspector : Control
             return;
         }
 
-        if (_focusedCue != null && _focusedCue.Id == cueId) return;
+        // Only skip a full reload when we still hold a valid component reference on the same cue.
+        // After undo/redo, ApplyFromData replaces component instances — early-out would leave a stale ref.
+        if (_focusedCue != null && _focusedCue.Id == cueId
+            && _focusedAudioComponent != null
+            && _focusedCue.Components.Contains(_focusedAudioComponent))
+        {
+            UpdateAudioUiFields(_focusedAudioComponent.AudioFile ?? string.Empty);
+            return;
+        }
         _focusedCue = CueList.FetchCueFromId(cueId);
 
         if (_focusedCue == null)
@@ -757,6 +1022,7 @@ public partial class AudioInspector : Control
         if (_focusedCue == null || _focusedAudioComponent == null)
             return;
 
+        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove audio component");
         _focusedCue.RemoveICueComponent(_focusedAudioComponent);
         _focusedAudioComponent = null;
         _focusedCue.CalculateTotalDuration();
@@ -791,21 +1057,24 @@ public partial class AudioInspector : Control
         if (_deleteAudioComponentButton != null)
             _deleteAudioComponentButton.Visible = true;
 
+        if (_focusedAudioComponent == null) return;
+
         _startTimeInput.Text =
             UiUtilities.ParseAndFormatTime(_focusedAudioComponent.StartTime.ToString(), out _, out string startTip);
         _startTimeInput.TooltipText = startTip;
-        
+
+        double metaDur = _focusedAudioComponent.Metadata?.Duration ?? 0;
         if (_focusedAudioComponent.EndTime < 0)
         {
-            _endTimeInput.Text = $"Full ({UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration)})";
+            _endTimeInput.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
         }
         else
         {
             _endTimeInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.EndTime);
         }
         _durationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Duration);
-        _fileDurationValue.Text = UiUtilities.FormatTime(_focusedAudioComponent.Metadata.Duration);
-        _loopInput.ButtonPressed = _focusedAudioComponent.Loop;
+        _fileDurationValue.Text = UiUtilities.FormatTime(metaDur);
+        _loopInput.SetPressedNoSignal(_focusedAudioComponent.Loop);
         _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
         _volumeInput.Text = $"{volumeDb}dB";
@@ -890,7 +1159,7 @@ public partial class AudioInspector : Control
     /// </summary>
     private async Task DrawWaveform()
     {
-        if (_waveformAccordian.Visible == false) return;
+        if (_waveformAccordian == null || _waveformAccordian.Visible == false) return;
         if (_focusedAudioComponent?.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "AudioInspector:DrawWaveform - No waveform data available", 1);
@@ -898,6 +1167,10 @@ public partial class AudioInspector : Control
         }
 
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+        // Guard: component may have been rebound during the await (undo/redo).
+        if (_focusedAudioComponent?.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
+            return;
 
         float width = _waveformPanel.Size.X;
         if (width < 50)
@@ -954,11 +1227,19 @@ public partial class AudioInspector : Control
         if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
             if (mouseButton.Pressed)
+            {
+                // Continuous drag session: one undo step for the whole drag.
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio start time",
+                        $"cue:{_focusedCue.Id}:audio-start-drag");
                 _isDraggingStart = true;
+            }
             else if (_isDraggingStart)
             {
                 SyncDuration();
                 _isDraggingStart = false;
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCue.Id}:audio-start-drag");
             }
         }
         else if (@event is InputEventMouseMotion && _isDraggingStart)
@@ -984,11 +1265,18 @@ public partial class AudioInspector : Control
         if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
             if (mouseButton.Pressed)
+            {
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio end time",
+                        $"cue:{_focusedCue.Id}:audio-end-drag");
                 _isDraggingEnd = true;
+            }
             else if (_isDraggingEnd)
             {
                 SyncDuration();
                 _isDraggingEnd = false;
+                if (_focusedCue != null)
+                    _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCue.Id}:audio-end-drag");
             }
         }
         else if (@event is InputEventMouseMotion && _isDraggingEnd)
@@ -1110,6 +1398,9 @@ public partial class AudioInspector : Control
         // Resolve or create component; always assign the path (AddAudioComponent alone does not update existing).
         var existingAudio = _focusedCue.Components.OfType<AudioComponent>().FirstOrDefault();
         bool isNewComponent = existingAudio == null;
+        if (_focusedCue != null)
+            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
+                isNewComponent ? "Add audio component" : "Change audio file");
         if (existingAudio != null)
         {
             _focusedAudioComponent = existingAudio;

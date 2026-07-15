@@ -69,6 +69,7 @@ public partial class AudioOutputPatchMatrix : Control
         _patchName = GetNode<LineEdit>("%PatchName");
         _patchName.Text = Patch?.Name ?? "Unnamed";
         _patchName.TextChanged += PatchNameOnTextChanged;
+        _patchName.FocusExited += OnPatchNameFocusExited;
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
         _deletePatchButton.Pressed += DeletePatchButtonPressed;
@@ -83,12 +84,23 @@ public partial class AudioOutputPatchMatrix : Control
     }
 
     /// <summary>
+    /// Records a full audio-patch table snapshot before a user mutation (settings-scoped history).
+    /// </summary>
+    private void RecordPatchHistory(string description, string coalesceKey = null)
+    {
+        if (_isDisposed || _globalData?.HistoryManager == null) return;
+        if (_globalData.HistoryManager.IsRestoring) return;
+        _globalData.HistoryManager.RecordSettingsChange(description, coalesceKey, "AudioPatch", "AudioDevices");
+    }
+
+    /// <summary>
     /// Handles the deletion of the current patch and removes the UI node.
     /// </summary>
     private void DeletePatchButtonPressed()
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
+        RecordPatchHistory("Delete audio output patch");
         _globalData.Settings.DeletePatch(Patch.Id);
         QueueFree();
     }
@@ -100,6 +112,9 @@ public partial class AudioOutputPatchMatrix : Control
     private async void SyncAudioDeviceDisplays()
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
+        // Skip mid-history restore: Settings frees/recreates patches and the parent panel rebuilds UIs after.
+        if (_globalData?.HistoryManager?.IsRestoring == true)
             return;
         if (_isRebuilding)
             return;
@@ -123,6 +138,11 @@ public partial class AudioOutputPatchMatrix : Control
             }
 
             await ToSignal(GetTree(), "process_frame");
+
+            if (_isDisposed || !GodotObject.IsInstanceValid(this)
+                || Patch == null || !GodotObject.IsInstanceValid(Patch)
+                || _globalData?.HistoryManager?.IsRestoring == true)
+                return;
 
             var available = _audioDevices.GetAvailableAudioDeviceNames() ?? new List<string>();
             _availableDeviceList = available;
@@ -190,11 +210,13 @@ public partial class AudioOutputPatchMatrix : Control
         deleteChannelButton.IconAlignment = HorizontalAlignment.Center;
         
         channelHBox.AddChild(deleteChannelButton);
+        int channelId = channel.Key;
         deleteChannelButton.Pressed += () =>
         {
             if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
                 return;
-            Patch.RemoveChannel(channel.Key);
+            RecordPatchHistory("Delete patch channel");
+            Patch.RemoveChannel(channelId);
             SyncAudioDeviceDisplays();
         };
         
@@ -211,20 +233,25 @@ public partial class AudioOutputPatchMatrix : Control
             $"Channel: {channel.Value}, cues get routed to this channel. " +
             $"From here you route this to a physical output device."; 
         
+        string chCoalesceKey = $"settings:patch:{Patch.Id}:ch:{channelId}:name";
         channelLabel.TextChanged += newText =>
         {
             if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
                 return;
             try
             {
-                Patch.RenameChannel(channel.Key, newText);
+                // Continuous rename session; sealed on focus exit.
+                RecordPatchHistory("Rename patch channel", chCoalesceKey);
+                Patch.RenameChannel(channelId, newText);
             }
             catch (Exception ex)
             {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to rename channel {channel.Key}: {ex.Message}", 2);
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to rename channel {channelId}: {ex.Message}", 2);
                 GD.PrintErr($"AudioOutputPatchMatrix:NewChannelRow - Rename exception: {ex}");
             }
         };
+        channelLabel.FocusExited += () =>
+            _globalData?.HistoryManager?.EndCoalesceSession(chCoalesceKey);
     }
     
     private void NewUsedDeviceColumn(string deviceName, List<OutputChannel> outputChannels)
@@ -290,13 +317,16 @@ public partial class AudioOutputPatchMatrix : Control
         
             // Capture locals for the closure
             int capturedIndex = outputIndex;
+            string outCoalesceKey = $"settings:patch:{Patch.Id}:dev:{deviceName}:out:{capturedIndex}:name";
             outputNameEdit.TextChanged += newText =>
             {
                 if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
                     return;
+                // Snapshot before rename; coalesce continuous typing on this field.
+                RecordPatchHistory("Rename device output", outCoalesceKey);
                 if (!Patch.RenameDeviceChannel(deviceName, capturedIndex, newText))
                 {
-                    // Revert to current (unchanged) name on failure
+                    // Revert to current (unchanged) name on failure — history may include a no-op step if rename rejected.
                     string currentName = Patch.GetDeviceOutputName(deviceName, capturedIndex);
                     if (currentName != null)
                     {
@@ -308,6 +338,8 @@ public partial class AudioOutputPatchMatrix : Control
                     }
                 }
             };
+            outputNameEdit.FocusExited += () =>
+                _globalData?.HistoryManager?.EndCoalesceSession(outCoalesceKey);
         }
 
         return deviceOutputNodes;
@@ -320,6 +352,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
+        RecordPatchHistory("Add patch channel");
         Patch.NewChannel("New Channel", out var error);
         if (error != null)
         {
@@ -350,11 +383,16 @@ public partial class AudioOutputPatchMatrix : Control
             {
                 return;
             }
+            if (_globalData?.HistoryManager?.IsRestoring == true)
+                return;
+
             _globalSignals.AudioDevicesChanged -= SyncAudioDeviceDisplays;
             try
             {
                 if (pressed)
                 {
+                    // Record before open/model change so undo restores prior routing + open set.
+                    RecordPatchHistory(pressed ? "Enable patch device" : "Disable patch device");
                     AudioDevice enabledDevice = _audioDevices.OpenAudioDevice(name, out string error);
                     if (enabledDevice == null)
                     {
@@ -370,6 +408,7 @@ public partial class AudioOutputPatchMatrix : Control
                 }
                 else
                 {
+                    RecordPatchHistory("Disable patch device");
                     Patch.RemoveOutputDevice(name);
                 }
 
@@ -393,6 +432,8 @@ public partial class AudioOutputPatchMatrix : Control
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
+        if (_globalData?.HistoryManager?.IsRestoring == true)
+            return;
 
         // For now remove everything and start over on each build - eventually should build once and update
         var children = _patchMatrix.GetChildren();
@@ -402,6 +443,11 @@ public partial class AudioOutputPatchMatrix : Control
         }
 
         await ToSignal(GetTree(), "process_frame");
+
+        if (_isDisposed || !GodotObject.IsInstanceValid(this)
+            || Patch == null || !GodotObject.IsInstanceValid(Patch)
+            || _globalData?.HistoryManager?.IsRestoring == true)
+            return;
 
         var deviceHeaders = _deviceContainer.GetChildren();
 
@@ -436,8 +482,14 @@ public partial class AudioOutputPatchMatrix : Control
                     {
                         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
                             return;
+                        if (_globalData?.HistoryManager?.IsRestoring == true)
+                            return;
                         try
                         {
+                            // Discrete route toggle — each click is its own undo step (routing is not coalesced).
+                            RecordPatchHistory(pressed
+                                ? "Route patch channel"
+                                : "Unroute patch channel");
                             Patch.SetRouting(deviceName, outputIndex, channelId, pressed);
                             GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix - {(pressed ? "Routed" : "Unrouted")} channel {channelId} to {deviceName}:index {outputIndex}");
                         }
@@ -469,8 +521,17 @@ public partial class AudioOutputPatchMatrix : Control
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
+        // Continuous typing session; sealed when the name field loses focus.
+        _globalData?.HistoryManager?.RecordSettingsChange("Rename audio output patch",
+            $"settings:patch:{Patch.Id}:name", "AudioPatch");
         Patch.Name = newtext;
         _globalData.Settings.UpdatePatch(Patch);
+    }
+
+    private void OnPatchNameFocusExited()
+    {
+        if (Patch == null) return;
+        _globalData?.HistoryManager?.EndCoalesceSession($"settings:patch:{Patch.Id}:name");
     }
     
     /// <summary>
