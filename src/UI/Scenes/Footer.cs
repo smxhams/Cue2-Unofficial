@@ -10,7 +10,7 @@ namespace Cue2.UI.Scenes;
 
 /// <summary>
 /// Main application footer bar: device status, connections, log readout,
-/// background process progress, and CPU/memory usage.
+/// total cue count, background process progress, and CPU/memory usage.
 /// </summary>
 public partial class Footer : Control
 {
@@ -20,6 +20,7 @@ public partial class Footer : Control
     private Node _logWindow;
 
     // Ui
+    private Label _totalCuesLabel;
     private Label _cpuUsageLabel;
     private Label _memoryUsageLabel;
     private Control _processProgressHost;
@@ -69,10 +70,11 @@ public partial class Footer : Control
 
         _syncHotkeys();
         
+        _totalCuesLabel = GetNodeOrNull<Label>("%TotalCuesLabel");
         _cpuUsageLabel = GetNode<Label>("%CpuUsageLabel");
         _memoryUsageLabel = GetNode<Label>("%MemoryUsageLabel");
 
-        // Background process progress (media backup) — left of CPU; status text drawn on the bar
+        // Background process progress (media backup) — left of total cues / CPU; status text drawn on the bar
         _processProgressHost = GetNodeOrNull<Control>("%ProcessProgressHost");
         _bkgProcessStatusBar = GetNodeOrNull<ProgressBar>("%BkgProcessStatusBar");
         _processStatusLabel = GetNodeOrNull<Label>("%ProcessStatusLabel");
@@ -80,6 +82,7 @@ public partial class Footer : Control
         SetProcessProgressVisible(false);
         _globalSignals.MediaBackupProgress += OnMediaBackupProgress;
         _globalSignals.MediaBackupCompleted += OnMediaBackupCompleted;
+        _globalSignals.TotalCuesChanged += OnTotalCuesChanged;
 
         try
         {
@@ -101,7 +104,36 @@ public partial class Footer : Control
         _updateTimer.Timeout += UpdateResourceUsage;
 
         UpdateDevicesFooterTooltip(); // initial status
+        // Prefer live cuelist count if already available (session may load after footer ready)
+        int initialTotal = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
+        UpdateTotalCuesLabel(initialTotal);
         UpdateResourceUsage(); // initial CPU/MEM read
+    }
+
+    /// <summary>
+    /// Handles <see cref="GlobalSignals.TotalCuesChanged"/> and refreshes the footer readout.
+    /// </summary>
+    /// <param name="total">New total cue count for the show.</param>
+    private void OnTotalCuesChanged(int total)
+    {
+        UpdateTotalCuesLabel(total);
+    }
+
+    /// <summary>
+    /// Sets the footer total-cues label text (e.g. "42 total cues").
+    /// </summary>
+    /// <param name="total">Number of cues currently in the show.</param>
+    private void UpdateTotalCuesLabel(int total)
+    {
+        if (_totalCuesLabel == null)
+            return;
+
+        int safeTotal = Math.Max(0, total);
+        _totalCuesLabel.Text = $"{safeTotal} total cues";
+        _totalCuesLabel.TooltipText =
+            safeTotal == 1
+                ? "1 cue in the show"
+                : $"{safeTotal} total cues in the show";
     }
 
     /// <summary>

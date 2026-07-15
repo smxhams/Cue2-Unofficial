@@ -133,6 +133,18 @@ public partial class OscListen : Node
         Port = OscListenData.TryGetValue("Port", out value) ? (int)value : Port;
         SessionName = OscListenData.TryGetValue("SessionName", out value) ? (string)value : SessionName;
     }
+
+    /// <summary>
+    /// Restores OSC listen defaults for a new empty session.
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        SetEnabled(false);
+        OscListenEnabled = false;
+        Port = 7001;
+        SessionName = string.Empty;
+        GD.Print("OscListen:ResetToDefaults - OSC listen disabled, port 7001.");
+    }
     
     public override void _ExitTree()
     {

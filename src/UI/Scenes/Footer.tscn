@@ -113,6 +113,16 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
+[node name="TotalCuesLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578690]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Total cues in the show"
+mouse_filter = 1
+text = "0 total cues"
+
+[node name="VSeparator7" type="VSeparator" parent="HBoxContainer/BottomRightContainer" unique_id=367578691]
+layout_mode = 2
+
 [node name="CpuUsageLabel" type="Label" parent="HBoxContainer/BottomRightContainer" unique_id=367578692]
 unique_name_in_owner = true
 layout_mode = 2

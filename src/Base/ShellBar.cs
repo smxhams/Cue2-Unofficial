@@ -130,7 +130,7 @@ public partial class ShellBar : PanelContainer
 	}
 
 	/// <summary>
-	/// Shows or hides the red ✕ issue indicator (e.g. missing media file).
+	/// Shows or hides the red ✕ issue indicator (missing media file, audio output, or video target layer).
 	/// </summary>
 	private void ApplyIssueIndicator(bool hasIssue, string message)
 	{

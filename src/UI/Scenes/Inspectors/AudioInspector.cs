@@ -567,14 +567,16 @@ public partial class AudioInspector : Control
             newDirect = null;
         }
 
-        bool samePatch = newPatchId == _focusedAudioComponent.PatchId
-                         && string.IsNullOrEmpty(newDirect)
-                         && string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput);
-        bool sameDirect = newPatchId < 0
-                          && string.Equals(newDirect ?? string.Empty,
-                              _focusedAudioComponent.DirectOutput ?? string.Empty,
-                              StringComparison.Ordinal);
-        if (samePatch || sameDirect)
+        // No-op only when both patch id and direct output match the intended target.
+        // (A previous check treated "empty direct" alone as sameDirect, which blocked
+        // Patch → "No output" because both sides had null DirectOutput.)
+        bool unchanged =
+            newPatchId == _focusedAudioComponent.PatchId
+            && string.Equals(
+                newDirect ?? string.Empty,
+                _focusedAudioComponent.DirectOutput ?? string.Empty,
+                StringComparison.Ordinal);
+        if (unchanged)
             return;
 
         // Discrete selection — do not coalesce; each change is its own undo step.
@@ -618,6 +620,9 @@ public partial class AudioInspector : Control
             _focusedAudioComponent.DirectOutput = null;
             BuildRoutingMatrix();
         }
+
+        // Refresh shell ✕ for output not assigned / missing
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
     }
 
     

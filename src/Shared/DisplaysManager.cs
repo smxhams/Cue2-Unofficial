@@ -72,6 +72,45 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Resets canvas, layers, and screens to a clean new-show default state.
+    /// </summary>
+    /// <remarks>
+    /// Canvas 1920×1080, one "Default" layer, one virtual "Screen 1". Emits
+    /// <see cref="GlobalSignals.CanvasSizeChanged"/> and <see cref="GlobalSignals.DisplaysChanged"/>.
+    /// </remarks>
+    public void ResetToDefaults()
+    {
+        // Free all output windows
+        foreach (var output in Outputs.ToList())
+        {
+            if (output != null && GodotObject.IsInstanceValid(output))
+            {
+                RemoveChild(output);
+                output.QueueFree();
+            }
+        }
+        Outputs.Clear();
+        VideoOutputDevice.SetNextOutputId(0);
+
+        Layers.Clear();
+        VideoTargetLayer.SetNextLayerId(0);
+
+        Canvas ??= new Canvas();
+        Canvas.SetCanvasSize(new Vector2I(1920, 1080));
+
+        AddLayer("Default", 0);
+        EnsureDefaultScreen();
+
+        UpdateAllLayerTestPatterns();
+        ApplyLayerDrawOrderToOutputs();
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), Canvas.CanvasSize);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
+
+        GD.Print("DisplaysManager:ResetToDefaults - Canvas/layers/screens restored to defaults.");
+    }
+
+    /// <summary>
     /// Adds a new screen with the given output assignment.
     /// </summary>
     /// <param name="name">Display name for the screen.</param>

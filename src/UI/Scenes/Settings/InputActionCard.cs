@@ -174,11 +174,9 @@ public partial class InputActionCard : PanelContainer
     private void OnClearButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
-        // Snapshot full input map before mutation (session-persisted under settings "InputMap").
-        _globalData?.HistoryManager?.RecordSettingsChange("Clear input binding", null, "InputMap");
         InputMap.ActionEraseEvents(Action);
+        _globalData?.UserDataManager?.PersistLiveInputMap();
         GD.Print($"InputActionCard:OnClearButtonPressed - Cleared events for action '{Action}'");
         RefreshDisplay();
     }
@@ -186,7 +184,6 @@ public partial class InputActionCard : PanelContainer
     private void OnResetButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || _globalData == null) return;
-        if (_globalData.HistoryManager?.IsRestoring == true) return;
 
         // Block reset if any default event collides with another action's current binding.
         var defaults = _globalData.GetDefaultInputEvents(Action);
@@ -203,8 +200,8 @@ public partial class InputActionCard : PanelContainer
             }
         }
 
-        _globalData.HistoryManager?.RecordSettingsChange("Reset input binding", null, "InputMap");
         _globalData.ResetInputActionToDefault(Action);
+        _globalData.UserDataManager?.PersistLiveInputMap();
         GD.Print($"InputActionCard:OnResetButtonPressed - Reset '{Action}' to default via refresh button.");
         RefreshDisplay();
     }
@@ -283,10 +280,6 @@ public partial class InputActionCard : PanelContainer
     private void ApplyNewBinding(InputEventKey source)
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
-
-        // Snapshot before rebind so undo restores the previous map state.
-        _globalData?.HistoryManager?.RecordSettingsChange("Change input binding", null, "InputMap");
 
         // For v1: replace all existing bindings with this single key event.
         InputMap.ActionEraseEvents(Action);
@@ -302,6 +295,8 @@ public partial class InputActionCard : PanelContainer
         };
 
         InputMap.ActionAddEvent(Action, newEvent);
+        // User preference — persist immediately (not showfile / document history).
+        _globalData?.UserDataManager?.PersistLiveInputMap();
     }
 
     /// <summary>

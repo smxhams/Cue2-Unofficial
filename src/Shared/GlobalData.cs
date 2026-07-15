@@ -80,6 +80,11 @@ public partial class GlobalData : Node
 	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
 	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
 	public int CueCount;
+
+	/// <summary>
+	/// Total number of cues in the show (including nested group children). Kept in sync by <see cref="CueList"/>.
+	/// </summary>
+	/// <value>Non-negative count of cues currently in the cuelist.</value>
 	public int CueTotal;
 	public int CueOrder;
 	public int NextCue = -1;
@@ -156,7 +161,8 @@ public partial class GlobalData : Node
 	public static readonly string AllSupportedFileFilters = string.Join(",", VideoFileFilters.Concat(ImageFileFilters).Concat(AudioFileFilters));
 
 	/// <summary>
-	/// List of input actions whose bindings can be customized by the user and persisted with sessions.
+	/// List of input actions whose bindings can be customized by the user and persisted in user preferences
+	/// (<c>user://user_data.json</c>), not in the showfile.
 	/// </summary>
 	public static readonly string[] MappableInputActions =
 	{
@@ -298,7 +304,9 @@ public partial class GlobalData : Node
 			}
 		}
 
+		// Capture project.godot factory bindings first, then overlay user-customized shortcuts.
 		CaptureDefaultInputBindings();
+		UserDataManager?.ApplyInputMapFromUserData();
 	}
 
 	public override void _ExitTree()
@@ -367,7 +375,8 @@ public partial class GlobalData : Node
 	}
 
 	/// <summary>
-	/// Serializes the current state of all mappable input actions into a Dictionary suitable for saving with the session.
+	/// Serializes the current state of all mappable input actions into a Dictionary
+	/// suitable for user-preference storage.
 	/// Empty lists are included so that "cleared" bindings are preserved.
 	/// </summary>
 	public Dictionary GetCustomInputBindings()
@@ -404,7 +413,7 @@ public partial class GlobalData : Node
 	/// Applies a previously saved set of input bindings to the live InputMap.
 	/// Existing events for the action are erased first.
 	/// </summary>
-	/// <param name="bindingsData">Dictionary from save file (under "InputMap" key).</param>
+	/// <param name="bindingsData">Dictionary from user data (under "InputMap" key).</param>
 	public void ApplyInputBindings(Dictionary bindingsData)
 	{
 		if (bindingsData == null || bindingsData.Count == 0) return;
@@ -443,7 +452,7 @@ public partial class GlobalData : Node
 				InputMap.ActionAddEvent(action, keyEvent);
 			}
 		}
-		GD.Print("GlobalData:ApplyInputBindings - Restored custom input bindings from session data.");
+		GD.Print("GlobalData:ApplyInputBindings - Restored custom input bindings from user preferences.");
 	}
 
 	/// <summary>
@@ -489,7 +498,8 @@ public partial class GlobalData : Node
 
 	/// <summary>
 	/// Restores every mappable action to the original bindings captured from project.godot at startup.
-	/// Called on New Session.
+	/// Used by Input Map "reset all" style flows; does not change user-data storage until
+	/// <see cref="UserDataManager.PersistLiveInputMap"/> is called.
 	/// </summary>
 	public void ResetInputBindingsToDefaults()
 	{

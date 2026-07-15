@@ -57,8 +57,6 @@ public partial class FileDropPopup : Window
 		_cancelButton.Pressed += OnCancelPressed;
 		_createButton.Pressed += OnCreatePressed;
 
-		// Ensure we have a reasonable default size
-		if (Size.X < 500) Size = new Vector2I(560, 380);
 	}
 
 	public override void _ExitTree()
@@ -112,16 +110,13 @@ public partial class FileDropPopup : Window
 			? $"File: {fileNames[0]}" 
 			: $"Files ({_files.Length}): {string.Join(", ", fileNames.Take(3))}{( _files.Length > 3 ? "..." : "")}";
 
-		// File list (compact)
+		// Dynamic rows use project base_theme (set on Window) — no font-size overrides.
 		var filesHeader = new Label { Text = "Dropped Files:" };
-		filesHeader.AddThemeFontSizeOverride("font_size", 9);
 		container.AddChild(filesHeader);
 
 		foreach (string f in _files.Take(6))
 		{
-			var fl = new Label { Text = $"  • {Path.GetFileName(f)}" };
-			fl.AddThemeFontSizeOverride("font_size", 9);
-			container.AddChild(fl);
+			container.AddChild(new Label { Text = $"  • {Path.GetFileName(f)}" });
 		}
 		if (_files.Length > 6)
 		{
@@ -134,11 +129,10 @@ public partial class FileDropPopup : Window
 		// Position options (only meaningful for ShellBar target)
 		if (_targetType == FileDropTargetType.ShellBar && _targetCueId >= 0)
 		{
-			var posLabel = new Label { Text = "Insert Position:" };
-			posLabel.AddThemeFontSizeOverride("font_size", 9);
-			container.AddChild(posLabel);
+			container.AddChild(new Label { Text = "Insert Position:" });
 
 			var posContainer = new VBoxContainer();
+			posContainer.AddThemeConstantOverride("separation", 2);
 			posContainer.AddChild(CreatePositionChoice("Above target cue", DropInsertMode.Above));
 			posContainer.AddChild(CreatePositionChoice("Below target cue", DropInsertMode.Below, isDefault: true));
 			posContainer.AddChild(CreatePositionChoice("As child of target cue", DropInsertMode.AsChild));
@@ -146,19 +140,14 @@ public partial class FileDropPopup : Window
 		}
 		else
 		{
-			var locLabel = new Label { Text = "Insert Location: End of list (or after current selection)" };
-			locLabel.AddThemeFontSizeOverride("font_size", 9);
-			container.AddChild(locLabel);
+			container.AddChild(new Label { Text = "Insert Location: End of list (or after current selection)" });
 		}
 
 		// Multi-file options
 		if (_files.Length > 1)
 		{
 			container.AddChild(new HSeparator());
-
-			var multiLabel = new Label { Text = "Multiple Files Action:" };
-			multiLabel.AddThemeFontSizeOverride("font_size", 9);
-			container.AddChild(multiLabel);
+			container.AddChild(new Label { Text = "Multiple Files Action:" });
 
 			var separateBtn = new CheckBox { Text = "Create separate cue for each file (recommended)", ButtonPressed = !_chosenAsGroup };
 			var groupBtn = new CheckBox { Text = "Wrap all files inside one new Group cue", ButtonPressed = _chosenAsGroup };
@@ -183,11 +172,6 @@ public partial class FileDropPopup : Window
 			container.AddChild(separateBtn);
 			container.AddChild(groupBtn);
 		}
-
-		// Hint
-		var hint = new Label { Text = "Click 'Create Cues' to proceed or Cancel." };
-		hint.AddThemeFontSizeOverride("font_size", 8);
-		container.AddChild(hint);
 	}
 
 	private CheckBox CreatePositionChoice(string text, DropInsertMode mode, bool isDefault = false)
@@ -258,8 +242,12 @@ public partial class FileDropPopup : Window
 	}
 
 	/// <summary>
-	/// Convenience to show the configured popup centered.
+	/// Shows the configured popup centered.
 	/// </summary>
+	/// <remarks>
+	/// Avoid runtime ResetSize / min-size rewrites on full-rect layout — they break anchors.
+	/// Size is set by the scene and <see cref="UiUtilities.RescaleWindow"/>.
+	/// </remarks>
 	public void ShowConfigured()
 	{
 		PopupCentered();

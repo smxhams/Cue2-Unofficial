@@ -37,6 +37,12 @@ public partial class UserDataManager : Node
 	private int _undoDepth = DefaultUndoDepth;
 
 	/// <summary>
+	/// Serialized custom InputMap bindings (action → event list). Null/empty means use project defaults.
+	/// Loaded from disk before factory defaults are captured; applied after <see cref="GlobalData"/> captures defaults.
+	/// </summary>
+	private Dictionary _inputMapBindings;
+
+	/// <summary>
 	/// The production default autosave interval in minutes.
 	/// </summary>
 	public static readonly int DefaultAutosaveInterval = 5;
@@ -189,6 +195,36 @@ public partial class UserDataManager : Node
 		LoadUserData();
 
 		GD.Print("UserDataManager:_Ready - Initialized. Recent show files loaded: " + _recentShowFiles.Count);
+	}
+
+	/// <summary>
+	/// Applies input bindings loaded from user data onto the live InputMap.
+	/// Must run after factory defaults were captured by <see cref="GlobalData"/>.
+	/// </summary>
+	public void ApplyInputMapFromUserData()
+	{
+		if (_globalData == null || _inputMapBindings == null || _inputMapBindings.Count == 0)
+		{
+			GD.Print("UserDataManager:ApplyInputMapFromUserData - No custom InputMap stored; keeping defaults.");
+			return;
+		}
+
+		_globalData.ApplyInputBindings(_inputMapBindings);
+		GD.Print($"UserDataManager:ApplyInputMapFromUserData - Applied {_inputMapBindings.Count} action binding(s) from user preferences.");
+	}
+
+	/// <summary>
+	/// Snapshots the live InputMap into user preferences and writes user_data.json.
+	/// Call after the user changes a shortcut in Input Map settings.
+	/// </summary>
+	public void PersistLiveInputMap()
+	{
+		if (_globalData == null)
+			return;
+
+		_inputMapBindings = _globalData.GetCustomInputBindings();
+		SaveUserData();
+		GD.Print("UserDataManager:PersistLiveInputMap - Input Map saved to user preferences.");
 	}
 
 	internal string NormalizeForRecent(string path)
@@ -544,8 +580,16 @@ public partial class UserDataManager : Node
 				_undoDepth = Math.Clamp(undoDepthVal.AsInt32(), MinUndoDepth, MaxUndoDepth);
 			}
 
+			// Custom keyboard shortcuts (Cue2 Preferences → Input Map)
+			if (data.TryGetValue("InputMap", out var inputMapVal))
+			{
+				var mapDict = inputMapVal.AsGodotDictionary();
+				if (mapDict != null && mapDict.Count > 0)
+					_inputMapBindings = mapDict;
+			}
+
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
 		}
 		catch (Exception ex)
 		{
@@ -605,6 +649,14 @@ public partial class UserDataManager : Node
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;
 			data["UndoDepth"] = _undoDepth;
+
+			// Live InputMap snapshot (or last loaded if GlobalData not ready)
+			if (_globalData != null)
+				_inputMapBindings = _globalData.GetCustomInputBindings();
+			if (_inputMapBindings != null)
+				data["InputMap"] = _inputMapBindings;
+			else
+				data["InputMap"] = new Dictionary();
 
 			data["Version"] = 1;
 			// Additional user-persistent keys can be added here in the future.

@@ -5,6 +5,7 @@ using System.Linq;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
+using Cue2.UI.Scenes.Popups;
 
 namespace Cue2.Base.Settings;
 
@@ -37,6 +38,7 @@ public partial class AudioOutputPatchMatrix : Control
     
     private bool _isRebuilding;
     private bool _isDisposed;
+    private ResourceInUseDeleteDialog _activeDeleteDialog;
     
     /// <summary>
     /// Initializes the node, loads required scenes, sets up UI elements, and connects signals.
@@ -95,13 +97,109 @@ public partial class AudioOutputPatchMatrix : Control
 
     /// <summary>
     /// Handles the deletion of the current patch and removes the UI node.
+    /// If cues still use the patch, prompts to unassign or replace before deleting.
     /// </summary>
     private void DeletePatchButtonPressed()
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
+        if (_globalData?.HistoryManager?.IsRestoring == true)
+            return;
+
+        // Avoid stacking multiple dialogs for the same matrix
+        if (_activeDeleteDialog != null && GodotObject.IsInstanceValid(_activeDeleteDialog))
+            return;
+
+        int patchId = Patch.Id;
+        string patchName = Patch.Name ?? $"Patch {patchId}";
+        var usage = CueResourceUsage.FindCuesUsingAudioPatch(patchId);
+
+        if (usage.Count == 0)
+        {
+            PerformPatchDelete(patchId, reassign: null);
+            return;
+        }
+
+        var alternatives = _globalData.Settings.GetAudioOutputPatches()
+            .Where(p => p.Key != patchId && p.Value != null && GodotObject.IsInstanceValid(p.Value))
+            .OrderBy(p => p.Value.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .Select(p => (p.Key, p.Value.Name ?? $"Patch {p.Key}"))
+            .ToList();
+
+        // Same flow as FileDropPopup: Create → Configure → AddChild → ShowConfigured
+        var dialog = ResourceInUseDeleteDialog.Create(out string loadErr);
+        if (dialog == null)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Failed to open delete dialog: {loadErr}", 2);
+            return;
+        }
+
+        _activeDeleteDialog = dialog;
+        dialog.Configure("audio output patch", patchName, usage.Cues, alternatives);
+        dialog.Confirmed += result => OnPatchDeleteDialogConfirmed(patchId, result);
+        dialog.Cancelled += () =>
+        {
+            if (_activeDeleteDialog == dialog) _activeDeleteDialog = null;
+        };
+        dialog.TreeExiting += () =>
+        {
+            if (_activeDeleteDialog == dialog) _activeDeleteDialog = null;
+        };
+
+        GetTree()?.Root?.AddChild(dialog);
+        dialog.ShowConfigured();
+    }
+
+    private void OnPatchDeleteDialogConfirmed(int patchId, ResourceInUseDeleteResult result)
+    {
+        if (_activeDeleteDialog != null)
+            _activeDeleteDialog = null;
+
+        if (result == null || result.Action == ResourceInUseDeleteAction.Cancel)
+            return;
+
+        if (_isDisposed || !GodotObject.IsInstanceValid(this))
+            return;
+
+        var usingCues = CueResourceUsage.FindCuesUsingAudioPatch(patchId).Cues;
+        Action reassign = null;
+
+        if (result.Action == ResourceInUseDeleteAction.Unassign)
+        {
+            reassign = () => CueResourceUsage.UnassignAudioPatch(usingCues, patchId);
+        }
+        else if (result.Action == ResourceInUseDeleteAction.Replace)
+        {
+            if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(result.ReplaceWithId, out var replacement)
+                || replacement == null || !GodotObject.IsInstanceValid(replacement))
+            {
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Cannot replace patch: target id {result.ReplaceWithId} not found.", 2);
+                return;
+            }
+            reassign = () => CueResourceUsage.ReplaceAudioPatch(usingCues, patchId, replacement);
+        }
+
+        PerformPatchDelete(patchId, reassign);
+    }
+
+    /// <summary>
+    /// Records history, optionally reassigns cues, deletes the patch, and frees this matrix UI.
+    /// </summary>
+    private void PerformPatchDelete(int patchId, Action reassign)
+    {
+        // Capture settings (with patch) then cuelist (with assignments) so undo restores both.
         RecordPatchHistory("Delete audio output patch");
-        _globalData.Settings.DeletePatch(Patch.Id);
+        if (reassign != null)
+        {
+            _globalData?.HistoryManager?.RecordCuelistChange("Reassign cues after patch delete");
+            reassign.Invoke();
+        }
+
+        _globalData.Settings.DeletePatch(patchId);
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
         QueueFree();
     }
 

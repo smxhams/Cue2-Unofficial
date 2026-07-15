@@ -95,6 +95,8 @@ public partial class VideoInspector : Control
 		// Media backup rewrites paths while a cue stays selected — refresh URL without re-select
 		_globalSignals.SyncShellInspector += RefreshMediaPathDisplay;
 		_globalSignals.CueMediaHealthChanged += OnCueMediaHealthChanged;
+		// Layer add/remove/rename while inspector is open — refresh without failover
+		_globalSignals.DisplaysChanged += OnDisplaysChangedForTargetLayers;
 
 		AssignUiNodeParameters();
 		SetupWaveformUi();
@@ -480,28 +482,7 @@ public partial class VideoInspector : Control
 
 		UpdateVideoUiFields(file);
 
-		// Populate target layer options
-		_targetLayerOptionButton.Clear();
-		for (int i = 0; i < DisplaysManager.Layers.Count; i++)
-		{
-			var layer = DisplaysManager.Layers[i];
-			_targetLayerOptionButton.AddItem(layer.LayerName, layer.LayerId);
-		}
-		// Select the current target layer
-		for (int i = 0; i < _targetLayerOptionButton.ItemCount; i++)
-		{
-			if (_targetLayerOptionButton.GetItemId(i) == _focusedVideoComponent.TargetLayerId)
-			{
-				_targetLayerOptionButton.Select(i);
-				break;
-			}
-		}
-		// Handle missing layer
-		if (_targetLayerOptionButton.Selected == -1)
-		{
-			_targetLayerOptionButton.AddItem($"!!! Missing layer: {_focusedVideoComponent.TargetLayerId}");
-			_targetLayerOptionButton.Select(_targetLayerOptionButton.ItemCount - 1);
-		} 
+		PopulateTargetLayerOptions();
 
 		// Initalize preview
 		if (_previewContainer.Visible)
@@ -1079,6 +1060,11 @@ public partial class VideoInspector : Control
 
 		UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
 
+		// Target layer / output assignment may have changed externally (delete→unassign/replace, undo).
+		PopulateTargetLayerOptions();
+		if (_videoPreviewer != null && _focusedVideoComponent.TargetLayerId >= 0)
+			_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+
 		// Invalidate waveform cache; history omits peak payloads and component instance is new.
 		_cachedPeaks = null;
 		_cachedPeaksSource = null;
@@ -1252,6 +1238,9 @@ public partial class VideoInspector : Control
 		if (_focusedVideoComponent.UseAudio == state) return;
 		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video use-audio");
 		_focusedVideoComponent.UseAudio = state;
+		// Embedded-audio output is only required while Use Audio is on
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+		_ = RefreshAudioUiState();
 	}
 
 	/// <summary>
@@ -1313,35 +1302,86 @@ public partial class VideoInspector : Control
 	{
 		if (_focusedCue == null || _focusedVideoComponent == null) return;
 		if (_globalData?.HistoryManager?.IsRestoring == true) return;
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video audio output");
+
 		var item = _outputOptionButton.GetItemText((int)index);
+
+		// Resolve intended new routing without writing yet (so we can skip no-ops).
+		int newPatchId = -1;
+		string newDirect = null;
+		AudioOutputPatch newPatch = null;
+
 		if (item.StartsWith("Patch"))
 		{
-			var patchId = (int)_outputOptionButton.GetItemMetadata((int)index);
-			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {patchId}");
-			if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(patchId, out var patch))
+			newPatchId = (int)_outputOptionButton.GetItemMetadata((int)index);
+			if (_globalData.Settings.GetAudioOutputPatches().TryGetValue(newPatchId, out var patch))
 			{
-				_focusedVideoComponent.Patch = patch;
-				_focusedVideoComponent.PatchId = patchId;
-				
-				_focusedVideoComponent.DirectOutput = null;
-				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {patch.Name}");
+				newPatch = patch;
+				newDirect = null;
 			}
 			else
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:OutputOptionSelected - Patch ID {patchId} not found, resetting output", 1);
+				newPatchId = -1;
+				newPatch = null;
+				newDirect = null;
+			}
+		}
+		else if (item.StartsWith("Direct Output"))
+		{
+			newDirect = item.Replace("Direct Output: ", "");
+			newPatchId = -1;
+			newPatch = null;
+		}
+		else if (item.StartsWith("!!! Missing"))
+		{
+			// Keep current assignment when user re-selects a missing entry.
+			return;
+		}
+		else
+		{
+			// "No output"
+			newPatchId = -1;
+			newPatch = null;
+			newDirect = null;
+		}
+
+		bool unchanged =
+			newPatchId == _focusedVideoComponent.PatchId
+			&& string.Equals(
+				newDirect ?? string.Empty,
+				_focusedVideoComponent.DirectOutput ?? string.Empty,
+				StringComparison.Ordinal);
+		if (unchanged)
+			return;
+
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video audio output");
+
+		if (item.StartsWith("Patch"))
+		{
+			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {newPatchId}");
+			if (newPatch != null)
+			{
+				_focusedVideoComponent.Patch = newPatch;
+				_focusedVideoComponent.PatchId = newPatchId;
+				_focusedVideoComponent.DirectOutput = null;
+				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {newPatch.Name}");
+			}
+			else
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"VideoInspector:OutputOptionSelected - Patch ID {newPatchId} not found, resetting output", 1);
 				_focusedVideoComponent.Patch = null;
 				_focusedVideoComponent.PatchId = -1;
 				_focusedVideoComponent.DirectOutput = null;
-				_outputOptionButton.Select(0); // Select "No output"
+				_outputOptionButton.SetBlockSignals(true);
+				_outputOptionButton.Select(0);
+				_outputOptionButton.SetBlockSignals(false);
 			}
 			BuildRoutingMatrix();
 		}
 		else if (item.StartsWith("Direct Output"))
 		{
-			var dirOutName = item.Replace("Direct Output: ", "");
-			GD.Print($"VideoInspector:OutputOptionSelected - Direct output selected: {dirOutName}");
-			_focusedVideoComponent.DirectOutput = dirOutName;
+			GD.Print($"VideoInspector:OutputOptionSelected - Direct output selected: {newDirect}");
+			_focusedVideoComponent.DirectOutput = newDirect;
 			_focusedVideoComponent.Patch = null;
 			_focusedVideoComponent.PatchId = -1;
 			BuildRoutingMatrix();
@@ -1354,6 +1394,93 @@ public partial class VideoInspector : Control
 			_focusedVideoComponent.PatchId = -1;
 			_routingContainer.Visible = false;
 		}
+
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+	}
+
+	/// <summary>
+	/// Refreshes the target-layer list when layers are added/removed/renamed, or when cues are
+	/// reassigned after a layer delete (unassign / replace) while this inspector is open.
+	/// Preserves the cue's stored <see cref="VideoComponent.TargetLayerId"/> (no failover).
+	/// </summary>
+	private void OnDisplaysChangedForTargetLayers()
+	{
+		if (_focusedCue == null)
+			return;
+
+		// Re-bind from live cue — external reassignment may have changed TargetLayerId.
+		var live = CueList.FetchCueFromId(_focusedCue.Id);
+		if (live != null)
+		{
+			_focusedCue = live;
+			_focusedVideoComponent = live.GetVideoComponent();
+		}
+
+		if (_focusedVideoComponent == null)
+			return;
+
+		PopulateTargetLayerOptions();
+		if (_videoPreviewer != null && _focusedVideoComponent.TargetLayerId >= 0)
+			_videoPreviewer.SetAreasDeferred(_focusedVideoComponent.TargetLayerId);
+	}
+
+	/// <summary>
+	/// Builds the target-layer OptionButton: "No Output", live layers, or a missing-layer entry.
+	/// Does not rewrite <see cref="VideoComponent.TargetLayerId"/> when the layer is gone
+	/// (no silent failover to another layer).
+	/// </summary>
+	private void PopulateTargetLayerOptions()
+	{
+		if (_targetLayerOptionButton == null || _focusedVideoComponent == null)
+			return;
+
+		// Block ItemSelected while rebuilding — OptionButton would otherwise auto-select
+		// the first real layer and overwrite a missing / No Output assignment.
+		_targetLayerOptionButton.SetBlockSignals(true);
+		try
+		{
+			_targetLayerOptionButton.Clear();
+
+			// Index 0: explicit none. Use metadata so id does not collide with layer 0
+			// (Godot remaps AddItem id -1 to the item index).
+			_targetLayerOptionButton.AddItem("No Output");
+			_targetLayerOptionButton.SetItemMetadata(0, -1);
+
+			int targetId = _focusedVideoComponent.TargetLayerId;
+			int selectedIndex = 0;
+			bool matched = targetId < 0; // -1 = No Output
+
+			if (DisplaysManager.Layers != null)
+			{
+				foreach (var layer in DisplaysManager.Layers)
+				{
+					if (layer == null) continue;
+					_targetLayerOptionButton.AddItem(layer.LayerName);
+					int idx = _targetLayerOptionButton.ItemCount - 1;
+					_targetLayerOptionButton.SetItemMetadata(idx, layer.LayerId);
+					if (layer.LayerId == targetId)
+					{
+						selectedIndex = idx;
+						matched = true;
+					}
+				}
+			}
+
+			// Keep the stored id when the layer was deleted — show missing entry, do not reassign.
+			if (!matched && targetId >= 0)
+			{
+				_targetLayerOptionButton.AddItem("!!! Missing Layer");
+				int missIdx = _targetLayerOptionButton.ItemCount - 1;
+				_targetLayerOptionButton.SetItemMetadata(missIdx, targetId);
+				selectedIndex = missIdx;
+			}
+
+			_targetLayerOptionButton.Select(selectedIndex);
+		}
+		finally
+		{
+			_targetLayerOptionButton.SetBlockSignals(false);
+		}
 	}
 
 	/// <summary>
@@ -1364,12 +1491,26 @@ public partial class VideoInspector : Control
 	{
 		if (_focusedCue == null || _focusedVideoComponent == null) return;
 		if (_globalData?.HistoryManager?.IsRestoring == true) return;
-		int layerId = _targetLayerOptionButton.GetItemId((int)index);
+		if (_targetLayerOptionButton == null) return;
+
+		var item = _targetLayerOptionButton.GetItemText((int)index);
+		if (item != null && item.StartsWith("!!! Missing"))
+		{
+			// Keep stored missing id; do not reassign.
+			return;
+		}
+
+		int layerId = (int)_targetLayerOptionButton.GetItemMetadata((int)index);
 		if (_focusedVideoComponent.TargetLayerId == layerId) return;
+
 		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video target layer");
 		_focusedVideoComponent.TargetLayerId = layerId;
-		_videoPreviewer.SetAreasDeferred(layerId);
+		if (layerId >= 0)
+			_videoPreviewer?.SetAreasDeferred(layerId);
 		GD.Print($"VideoInspector:TargetLayerSelected - Target layer set to ID {layerId}");
+
+		// Refresh shell ✕ for target layer not assigned / missing
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
 	}
 
 	private void ExpandModeSelected(long index)
@@ -1467,42 +1608,54 @@ public partial class VideoInspector : Control
 	/// </summary>
 	private void PopulateOutputOptions()
 	{
-		// Remove items from output options
-		var itemCount = _outputOptionButton.GetItemCount();
-		for (int i = 0; i < itemCount; i++)
-		{
-			_outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount() - 1); // Removes last item
-		}
-		// Add patches as options
-		_outputOptionButton.AddItem("No output");
-		foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
-		{
-			_outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
-			_outputOptionButton.SetItemMetadata(_outputOptionButton.GetItemCount() - 1, patch.Value.Id);
-			if (patch.Value.Id == _focusedVideoComponent.PatchId)
-			{
-				_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
-			}
-		}
+		if (_outputOptionButton == null || _focusedVideoComponent == null) return;
 
-		foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
+		_outputOptionButton.SetBlockSignals(true);
+		try
 		{
-			_outputOptionButton.AddItem($"Direct Output: {output}");
-			if (output == _focusedVideoComponent.DirectOutput)
-			{
-				_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
-			}
-		}
+			var itemCount = _outputOptionButton.GetItemCount();
+			for (int i = 0; i < itemCount; i++)
+				_outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount() - 1);
 
-		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.DirectOutput != null)
-		{
-			_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
-			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+			_outputOptionButton.AddItem("No output");
+			int selectedIndex = 0;
+
+			foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
+			{
+				_outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+				int idx = _outputOptionButton.GetItemCount() - 1;
+				_outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
+				if (patch.Value.Id == _focusedVideoComponent.PatchId)
+					selectedIndex = idx;
+			}
+
+			foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
+			{
+				_outputOptionButton.AddItem($"Direct Output: {output}");
+				int idx = _outputOptionButton.GetItemCount() - 1;
+				if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput)
+				    && output == _focusedVideoComponent.DirectOutput)
+				{
+					selectedIndex = idx;
+				}
+			}
+
+			if (selectedIndex == 0 && !string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
+			{
+				_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
+				selectedIndex = _outputOptionButton.GetItemCount() - 1;
+			}
+			if (selectedIndex == 0 && _focusedVideoComponent.PatchId >= 0)
+			{
+				_outputOptionButton.AddItem($"!!! Missing patch: ID {_focusedVideoComponent.PatchId}");
+				selectedIndex = _outputOptionButton.GetItemCount() - 1;
+			}
+
+			_outputOptionButton.Select(selectedIndex);
 		}
-		if (_outputOptionButton.Selected == 0 && _focusedVideoComponent.PatchId != -1)
+		finally
 		{
-			_outputOptionButton.AddItem($"!!! Missing patch: ID {_focusedVideoComponent.PatchId}");
-			_outputOptionButton.Select(_outputOptionButton.GetItemCount() - 1);
+			_outputOptionButton.SetBlockSignals(false);
 		}
 	}
 

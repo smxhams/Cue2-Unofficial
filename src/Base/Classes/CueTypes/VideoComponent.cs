@@ -24,7 +24,10 @@ public class VideoComponent : ICueComponent
     /// <summary>Start Time in seconds</summary>
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
-    public int TargetLayerId { get; set; } = 0; // ID of the target layer to render on
+    /// <summary>
+    /// Target video layer id for playback. <c>-1</c> means no layer assigned ("No Output").
+    /// </summary>
+    public int TargetLayerId { get; set; } = -1;
 
     /// <summary>
     /// Godot <see cref="TextureRect.ExpandMode"/> for how the control size interacts with the texture.
@@ -293,6 +296,7 @@ public class VideoComponent : ICueComponent
         VideoFile = (string)data["VideoFile"];
         StartTime = data.ContainsKey("StartTime") ? data["StartTime"].AsDouble() : 0.0;
         EndTime = data.ContainsKey("EndTime") ? data["EndTime"].AsDouble() : -1.0;
+        // Legacy saves without the key used layer 0; explicit -1 is "No Output".
         TargetLayerId = data.ContainsKey("TargetLayerId") ? data["TargetLayerId"].AsInt32() : 0;
         LoadTextureLayoutFromData(data);
         Opacity = data.ContainsKey("Opacity") ? ParseOpacity(data["Opacity"]) : 1f;

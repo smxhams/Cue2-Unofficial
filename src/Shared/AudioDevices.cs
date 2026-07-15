@@ -196,7 +196,7 @@ public partial class AudioDevices : Node
     {
 	    try
 	    {
-		    GD.Print("AudioDevices:GetAvailableAudioDeviceNames - Enumerating playback devices");
+		    //GD.Print("AudioDevices:GetAvailableAudioDeviceNames - Enumerating playback devices");
 		    // Get number of playback devices
 		    var devices = SDL.GetAudioPlaybackDevices(out int _);
 		    var deviceNames = new List<string>();

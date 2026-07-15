@@ -85,6 +85,8 @@ public partial class SettingsGeneral : ScrollContainer
         // fade was jumping while undoing unrelated steps).
         if (_historyManager != null)
             _historyManager.HistoryRestored += OnHistoryRestored;
+        if (_globalSignals != null)
+            _globalSignals.NewSession += OnNewSession;
 
         SyncSettings();
     }
@@ -93,6 +95,8 @@ public partial class SettingsGeneral : ScrollContainer
     {
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
+        if (_globalSignals != null)
+            _globalSignals.NewSession -= OnNewSession;
         base._ExitTree();
     }
 
@@ -104,6 +108,13 @@ public partial class SettingsGeneral : ScrollContainer
         if (!GodotObject.IsInstanceValid(this) || _globalData?.Settings == null)
             return;
         if (scope != (int)HistoryManager.HistoryScope.Settings)
+            return;
+        SyncSettings();
+    }
+
+    private void OnNewSession()
+    {
+        if (!GodotObject.IsInstanceValid(this) || _globalData?.Settings == null)
             return;
         SyncSettings();
     }

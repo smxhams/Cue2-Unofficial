@@ -40,8 +40,38 @@ public partial class SettingsOscConnections : ScrollContainer
         _portLabel.Resized += UpdateUiColumns;
 
         VisibilityChanged += SyncConnections;
+
+        var signals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+        if (signals != null)
+            signals.NewSession += OnNewSession;
     }
 
+    public override void _ExitTree()
+    {
+        VisibilityChanged -= SyncConnections;
+        var signals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+        if (signals != null)
+            signals.NewSession -= OnNewSession;
+        base._ExitTree();
+    }
+
+    private void OnNewSession()
+    {
+        // Always drop cards so we never hold freed connection refs
+        ClearConnectionCards();
+        if (Visible)
+            SyncConnections();
+    }
+
+    private void ClearConnectionCards()
+    {
+        if (_connectionsContainer == null) return;
+        foreach (var child in _connectionsContainer.GetChildren())
+        {
+            _connectionsContainer.RemoveChild(child);
+            child.QueueFree();
+        }
+    }
 
     public void SyncConnections()
     {
@@ -49,11 +79,7 @@ public partial class SettingsOscConnections : ScrollContainer
         if (Visible)
         {
             // Clear existing cards
-            foreach (var child in _connectionsContainer.GetChildren())
-            {
-                _connectionsContainer.RemoveChild(child);
-                child.QueueFree();
-            }
+            ClearConnectionCards();
 
             // Add cards for each connection
             var ratios = GetColumnRatios();

@@ -105,6 +105,29 @@ public partial class OscConnections : Node
             GD.Print($"OscConnections: Loaded {Connections.Count} connections");
         }
     }
+
+    /// <summary>
+    /// Closes and removes all OSC send connections (New Session).
+    /// </summary>
+    public void ClearAll()
+    {
+        foreach (var connection in Connections.ToList())
+        {
+            try
+            {
+                connection.CloseConnection();
+                if (GodotObject.IsInstanceValid(connection))
+                    connection.Free();
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"OscConnections:ClearAll - {ex.Message}");
+            }
+        }
+        Connections.Clear();
+        CueOscConnection._nextId = 0;
+        GD.Print("OscConnections:ClearAll - All OSC connections cleared.");
+    }
     
     
 }

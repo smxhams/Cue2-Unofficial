@@ -1,5 +1,6 @@
 [gd_scene format=3 uid="uid://cwvgtrsfp0vjh"]
 
+[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_theme"]
 [ext_resource type="Script" uid="uid://ddcjfwkgmammb" path="res://src/UI/Scenes/Popups/FileDropPopup.cs" id="1_qyoqp"]
 [ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn" id="1_scr2m"]
 
@@ -8,8 +9,9 @@ disable_3d = true
 oversampling_override = 1.0
 title = "File Dropped"
 initial_position = 4
-size = Vector2i(600, 400)
+size = Vector2i(480, 320)
 borderless = true
+theme = ExtResource("1_theme")
 script = ExtResource("1_qyoqp")
 
 [node name="Panel" type="Panel" parent="." unique_id=741722731]
@@ -27,24 +29,28 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 5
-theme_override_constants/margin_right = 5
-theme_override_constants/margin_bottom = 5
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=479946794]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="Label" type="Label" parent="MarginContainer/VBoxContainer" unique_id=2038879069]
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
 text = "File Dropped"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="FileOptionsContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer" unique_id=2035131928]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/FileOptionsContainer" unique_id=271002947]
 layout_mode = 2
@@ -64,13 +70,11 @@ size_flags_vertical = 3
 [node name="DropTargetLabel" type="Label" parent="MarginContainer/VBoxContainer/FileOptionsContainer/MarginContainer/OptionsListContiner" unique_id=2030158069]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
 text = "Drop Target: "
 
 [node name="DropFileName" type="Label" parent="MarginContainer/VBoxContainer/FileOptionsContainer/MarginContainer/OptionsListContiner" unique_id=1765762191]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 10
 text = "Files:"
 
 [node name="ActionBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=987654321]

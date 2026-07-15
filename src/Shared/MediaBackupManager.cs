@@ -80,6 +80,23 @@ public partial class MediaBackupManager : Node
         }
     }
 
+    /// <summary>
+    /// Drops queued backup jobs (in-flight copy may still finish). Used on New Session.
+    /// </summary>
+    public void ClearPendingJobs()
+    {
+        lock (_queueLock)
+        {
+            _queue.Clear();
+            _queuedSourceKeys.Clear();
+            _totalJobs = 0;
+            _completedJobs = 0;
+            _currentOriginPath = string.Empty;
+            _currentDestPath = string.Empty;
+        }
+        GD.Print("MediaBackupManager:ClearPendingJobs - Pending media backup queue cleared.");
+    }
+
     /// <summary>0–100 overall progress for the current batch.</summary>
     public float ProgressPercent
     {

@@ -40,7 +40,7 @@ public partial class SaveManager : Node
 		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
 		// TODO: _openDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
 
-		_globalSignals.NewSession += ResetSession;
+		_globalSignals.NewSession += OnNewSession;
 		_globalSignals.Save += Save;
 		_globalSignals.SaveAs += SaveAs;
 		_globalSignals.OpenSession += OpenSession;
@@ -290,10 +290,10 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Set name/path early so title updates see it (signal handlers run in connection order)
+		// Wipe previous show first, then attach paths and load.
+		ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+
 		ApplySessionPaths(selectedPath);
-		
-		ResetSession();
 		
 		LoadSession(selectedPath);
 
@@ -309,13 +309,62 @@ public partial class SaveManager : Node
 		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
 	}
 
-	private void ResetSession()
+	/// <summary>Signal handler for File → New / New Session hotkey.</summary>
+	private void OnNewSession()
 	{
-		// Reset session
-		_globalData.Cuelist.ResetCuelist();
-		_globalData.Devices.ResetAudioDevices();
-		_globalData.Settings.ResetSettings();
+		ResetSession(clearSessionIdentity: true, logAsNewSession: true);
+	}
+
+	/// <summary>
+	/// Fully clears the open show and restores session defaults (File → New / New Session hotkey).
+	/// Also used as the wipe step before Open Session.
+	/// </summary>
+	/// <param name="clearSessionIdentity">
+	/// When true (New Session), clears SessionPath/name/media dirs.
+	/// When opening a file, paths are cleared then re-applied by the caller after this wipe.
+	/// </param>
+	/// <param name="logAsNewSession">When true, logs the user-facing "New session" message.</param>
+	private void ResetSession(bool clearSessionIdentity, bool logAsNewSession)
+	{
+		// Stop live playback before tearing down cues / devices
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+
+		if (clearSessionIdentity)
+		{
+			// Detach from any saved show path (hotkey New may skip the menu path-clearing)
+			_globalData.SessionName = null;
+			_globalData.SessionPath = null;
+			_globalData.SessionDir = null;
+			_globalData.SessionAudioPath = null;
+			_globalData.SessionVideoPath = null;
+			_globalData.SessionImagesPath = null;
+			_globalData.SessionWaveformsPath = null;
+			_globalData.ActiveShowFile = null;
+		}
+
+		_globalData.FocusedCue = -1;
+		_globalData.NextCue = -1;
+		_globalData.CueTotal = 0;
+
+		// Document model
+		_globalData.Cuelist?.ResetCuelist();
+		_globalData.Devices?.ResetAudioDevices();
+		_globalData.Settings?.ResetSettings();
+
+		// Transient services
 		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
+		_mediaBackupManager?.ClearPendingJobs();
+
+		// Inspectors / selection
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+
+		// No path → autosave off (reconfigured again after Open applies paths)
+		ConfigureAutosave();
+
+		if (logAsNewSession)
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "New session — show data reset to defaults.", 0);
+		GD.Print("SaveManager:ResetSession - Full session reset complete.");
 	}
 	
 	
@@ -360,6 +409,9 @@ public partial class SaveManager : Node
 				var cuesData = saveData["cues"].AsGodotDictionary();
 				_globalData.Cuelist.LoadData(cuesData);
 			}
+
+			// After settings + cues are linked, evaluate missing files / output / target layers.
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
 		}
 		catch (Exception ex)
 		{

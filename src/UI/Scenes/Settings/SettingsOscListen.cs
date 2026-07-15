@@ -29,18 +29,41 @@ public partial class SettingsOscListen : ScrollContainer
         _sessionNameLineEdit = GetNode<LineEdit>("%SessionNameLineEdit");
         _portLineEdit = GetNode<LineEdit>("%PortLineEdit");
 
-        // Set ui feilds
-        _enabledCheckButton.SetPressed(OscListen.OscListenEnabled);
-        _portLineEdit.Text = OscListen.Port.ToString();
-        _sessionNameLineEdit.Text = OscListen.SessionName;
-        
         // Connect ui logic
         _enabledCheckButton.Toggled += OscListen.SetEnabled;
         _portLineEdit.EditingToggled += PortEditing;
         _sessionNameLineEdit.EditingToggled += SessionNameEditing;
 
-        DisplayIpAddresses();
+        _globalSignals.NewSession += SyncFromModel;
+        VisibilityChanged += OnVisibilityChanged;
 
+        SyncFromModel();
+        DisplayIpAddresses();
+    }
+
+    public override void _ExitTree()
+    {
+        if (_globalSignals != null)
+            _globalSignals.NewSession -= SyncFromModel;
+        VisibilityChanged -= OnVisibilityChanged;
+        base._ExitTree();
+    }
+
+    private void OnVisibilityChanged()
+    {
+        if (Visible)
+            SyncFromModel();
+    }
+
+    /// <summary>
+    /// Pushes live OscListen statics into the form (New Session / show panel).
+    /// </summary>
+    private void SyncFromModel()
+    {
+        if (_enabledCheckButton == null) return;
+        _enabledCheckButton.SetPressedNoSignal(OscListen.OscListenEnabled);
+        _portLineEdit.Text = OscListen.Port.ToString();
+        _sessionNameLineEdit.Text = OscListen.SessionName ?? string.Empty;
     }
 
     private void SessionNameEditing(bool toggledon)

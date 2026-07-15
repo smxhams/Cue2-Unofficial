@@ -1,9 +1,11 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.Devices;
 using Cue2.Shared;
+using Cue2.UI.Scenes.Popups;
 
 namespace Cue2.UI.Scenes.Settings;
 
@@ -40,6 +42,7 @@ public partial class SettingsCanvasEditor : Control
     private HistoryManager _historyManager;
     private Canvas _canvas;
     private DisplaysManager _displaysManager;
+    private ResourceInUseDeleteDialog _activeLayerDeleteDialog;
 
     /// <summary>
     /// Coalesce key for the active stage drag (move/resize). Sealed when the drag ends.
@@ -2322,9 +2325,100 @@ public partial class SettingsCanvasEditor : Control
     {
         if (_selectionKind != SelectionKind.Layer)
             return;
+        if (_historyManager?.IsRestoring == true)
+            return;
+        if (_activeLayerDeleteDialog != null && GodotObject.IsInstanceValid(_activeLayerDeleteDialog))
+            return;
 
+        int layerId = _selectedLayerId;
+        var layer = DisplaysManager.GetLayerById(layerId);
+        if (layer == null)
+            return;
+
+        string layerName = layer.LayerName ?? $"Layer {layerId}";
+        var usage = CueResourceUsage.FindCuesUsingTargetLayer(layerId);
+
+        if (usage.Count == 0)
+        {
+            PerformLayerDelete(layerId, reassign: null);
+            return;
+        }
+
+        var alternatives = DisplaysManager.Layers
+            .Where(l => l != null && l.LayerId != layerId)
+            .OrderBy(l => l.LayerName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .Select(l => (l.LayerId, l.LayerName ?? $"Layer {l.LayerId}"))
+            .ToList();
+
+        // Same flow as FileDropPopup: Create → Configure → AddChild → ShowConfigured
+        var dialog = ResourceInUseDeleteDialog.Create(out string loadErr);
+        if (dialog == null)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Failed to open delete dialog: {loadErr}", 2);
+            return;
+        }
+
+        _activeLayerDeleteDialog = dialog;
+        dialog.Configure("target layer", layerName, usage.Cues, alternatives);
+        dialog.Confirmed += result => OnLayerDeleteDialogConfirmed(layerId, result);
+        dialog.Cancelled += () =>
+        {
+            if (_activeLayerDeleteDialog == dialog) _activeLayerDeleteDialog = null;
+        };
+        dialog.TreeExiting += () =>
+        {
+            if (_activeLayerDeleteDialog == dialog) _activeLayerDeleteDialog = null;
+        };
+
+        GetTree()?.Root?.AddChild(dialog);
+        dialog.ShowConfigured();
+    }
+
+    private void OnLayerDeleteDialogConfirmed(int layerId, ResourceInUseDeleteResult result)
+    {
+        if (_activeLayerDeleteDialog != null)
+            _activeLayerDeleteDialog = null;
+
+        if (result == null || result.Action == ResourceInUseDeleteAction.Cancel)
+            return;
+
+        var usingCues = CueResourceUsage.FindCuesUsingTargetLayer(layerId).Cues;
+        Action reassign = null;
+
+        if (result.Action == ResourceInUseDeleteAction.Unassign)
+        {
+            reassign = () => CueResourceUsage.UnassignTargetLayer(usingCues, layerId);
+        }
+        else if (result.Action == ResourceInUseDeleteAction.Replace)
+        {
+            if (DisplaysManager.GetLayerById(result.ReplaceWithId) == null)
+            {
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Cannot replace layer: target id {result.ReplaceWithId} not found.", 2);
+                return;
+            }
+            reassign = () => CueResourceUsage.ReplaceTargetLayer(usingCues, layerId, result.ReplaceWithId);
+        }
+
+        PerformLayerDelete(layerId, reassign);
+    }
+
+    /// <summary>
+    /// Records history, optionally reassigns cues, removes the layer, and refreshes the canvas UI.
+    /// </summary>
+    private void PerformLayerDelete(int layerId, Action reassign)
+    {
         RecordDisplaysHistory("Delete layer");
-        _displaysManager.RemoveLayer(_selectedLayerId);
+        if (reassign != null)
+        {
+            _historyManager?.RecordCuelistChange("Reassign cues after layer delete");
+            reassign.Invoke();
+        }
+
+        _displaysManager.RemoveLayer(layerId);
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
         RebuildTrees(selectCanvas: true);
         UpdateCanvasGizmos();
     }
@@ -2665,9 +2759,15 @@ public partial class SettingsCanvasEditor : Control
         if (_historyManager != null && _historyManager.IsRestoring)
             return;
 
-        // Skip UI work while canvas editor is not shown — keeps main thread free for video.
+        // Canvas instance is stable; rebind size after ResetToDefaults / load.
+        _canvas = DisplaysManager.Canvas;
+
+        // Skip UI work while canvas editor is not shown — mark dirty for next open.
         if (!_stageInitialized || !IsVisibleInTree())
+        {
+            _needsHistoryRefresh = true;
             return;
+        }
 
         if (_isDraggingCanvas)
         {
@@ -2678,6 +2778,9 @@ public partial class SettingsCanvasEditor : Control
         if (!_isRebuildingTree)
             RebuildTrees();
         UpdateCanvasGizmos();
+        // Keep canvas size labels in sync (New Session / load)
+        if (_canvas != null)
+            OnCanvasSizeChanged(_canvas.CanvasSize);
     }
 
     private void OnCanvasSizeChanged(Vector2I newSize)

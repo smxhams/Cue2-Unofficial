@@ -237,6 +237,16 @@ public partial class CueLightManager : Node
         return data;
     }
 
+    /// <summary>
+    /// Removes all cue lights and resets the id allocator (New Session).
+    /// </summary>
+    public void Reset()
+    {
+        _cueLights.Clear();
+        _nextId = 0;
+        GD.Print("CueLightManager:Reset - All cue lights cleared.");
+    }
+
     public async Task LoadData(Dictionary data)
     {
         // Replace, do not merge — required for session load and document undo/redo restore.

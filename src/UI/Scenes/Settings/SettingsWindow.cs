@@ -446,11 +446,9 @@ public partial class SettingsWindow : Window
 		TreeItem root = _setTree.CreateItem();
 		_setTree.HideRoot = true;
 
-		//General
+		//General (show-scoped)
 		TreeItem tiGeneral = _setTree.CreateItem(root);
 		tiGeneral.SetText(0, "General");
-		TreeItem tiInputMap = _setTree.CreateItem(tiGeneral);
-		tiInputMap.SetText(0, "Input Map");
 
 		// Audio
 		TreeItem tiAudio = _setTree.CreateItem(root);
@@ -491,9 +489,13 @@ public partial class SettingsWindow : Window
 		tiVideoCueDefaults.SetText(0, "Video Defaults");
 		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues.");
 
+		// App preferences (user:// — not stored in the showfile)
 		TreeItem tiCue2Preferences = _setTree.CreateItem(root);
 		tiCue2Preferences.SetText(0, "Cue2 Preferences");
-		tiCue2Preferences.SetTooltipText(0, "Set showfile independant preferences");
+		tiCue2Preferences.SetTooltipText(0, "Showfile-independent preferences (stored per user)");
+		TreeItem tiInputMap = _setTree.CreateItem(tiCue2Preferences);
+		tiInputMap.SetText(0, "Input Map");
+		tiInputMap.SetTooltipText(0, "Keyboard shortcuts — saved with Cue2 Preferences, not the show");
 	}
 
 	/// <summary>

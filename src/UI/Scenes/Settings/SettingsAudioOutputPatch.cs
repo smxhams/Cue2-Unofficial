@@ -34,6 +34,10 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 
 		if (_historyManager != null)
 			_historyManager.HistoryRestored += OnHistoryRestored;
+
+		var signals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+		if (signals != null)
+			signals.NewSession += OnNewSession;
 	}
 
 	public override void _ExitTree()
@@ -42,7 +46,22 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		if (_historyManager != null)
 			_historyManager.HistoryRestored -= OnHistoryRestored;
 
+		var signals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+		if (signals != null)
+			signals.NewSession -= OnNewSession;
+
 		ClearAllPatchMatrices();
+	}
+
+	private void OnNewSession()
+	{
+		// Patches were freed — drop stale matrix UIs (and rebuild if this panel is open).
+		if (!Visible)
+		{
+			ClearAllPatchMatrices();
+			return;
+		}
+		RebuildAllPatchMatrices();
 	}
 
 	private void OnVisibilityChanged()

@@ -97,6 +97,8 @@ public partial class Settings : Node
     {
         _audioOutputPatches[patchId].Free();
         _audioOutputPatches.Remove(patchId);
+        // Shell ✕ / media health depends on patch existence
+        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
     } 
     
     public AudioOutputPatch CreateNewPatch()
@@ -125,6 +127,8 @@ public partial class Settings : Node
         {
             _audioDevices.OpenAudioDevice(device.Key, out var _);
         }
+        // Note: callers that bulk-add patches (load/history) should recheck once afterward;
+        // single interactive deletes recheck in DeletePatch.
     }
 
     private void PrintPatches()
@@ -140,26 +144,56 @@ public partial class Settings : Node
     
     
     // Save and loads
+    /// <summary>
+    /// Resets all show/session settings to factory defaults (New Session / before Open).
+    /// </summary>
+    /// <remarks>
+    /// Clears audio patches, displays (canvas/layers/screens), cue lights, OSC listen/connections,
+    /// and general scalars. Does <b>not</b> reset Input Map — that lives in user preferences.
+    /// Emits scale/display signals so live UI can resync.
+    /// </remarks>
     public void ResetSettings()
     {
-        foreach (var patch in _audioOutputPatches)
+        // Audio output patches
+        foreach (var patch in _audioOutputPatches.Values.ToList())
         {
-            patch.Value.Free();
+            if (patch != null && GodotObject.IsInstanceValid(patch))
+                patch.Free();
         }
         _audioOutputPatches.Clear();
-        
+
+        // General show scalars
         UiScale = DefaultUiScale;
         GoScale = DefaultGoScale;
         WaveformResolution = DefaultWaveformResolution;
         StopFadeDuration = DefaultStopFadeDuration;
         MediaBackupEnabled = DefaultMediaBackupEnabled;
+        VerbosePrint = true;
+
+        // Cue light appearance defaults
         CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
         CueLightGoColour = new Color(0f, 1f, 0f, 1f);
         CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
         CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
+        CueLightBrightness = 50;
 
-        // Restore input map bindings to project defaults (e.g. on New Session)
-        _globalData?.ResetInputBindingsToDefaults();
+        // Input Map is user-scoped (UserDataManager) — leave live bindings alone on New Session.
+
+        // Displays / canvas editor model
+        _displaysManager?.ResetToDefaults();
+
+        // Cue lights registry
+        _globalData?.CueLightManager?.Reset();
+
+        // OSC
+        GetNodeOrNull<OscListen>("/root/OscListen")?.ResetToDefaults();
+        GetNodeOrNull<OscConnections>("/root/OscConnections")?.ClearAll();
+
+        // Notify live UI (settings general, GO scale, etc.)
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+
+        GD.Print("Settings:ResetSettings - Show settings restored to defaults.");
     }
 
     public Dictionary GetData()
@@ -198,11 +232,7 @@ public partial class Settings : Node
         // Osc Connections
         saveTable.Add("OscConnections", GetNode<OscConnections>("/root/OscConnections").GetData());
 
-        // Per-session custom input bindings (from live InputMap)
-        if (_globalData != null)
-            saveTable.Add("InputMap", _globalData.GetCustomInputBindings());
-        else
-            saveTable.Add("InputMap", new Dictionary());
+        // Input Map is stored in user:// via UserDataManager (not in the showfile).
         
         return saveTable;
     }
@@ -279,11 +309,10 @@ public partial class Settings : Node
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
         }
 
-        // Custom input map bindings saved with the session
-        if (settingsData.TryGetValue("InputMap", out var inputMapData) && _globalData != null)
+        // Legacy showfiles may still contain "InputMap" — ignore; bindings are user preferences.
+        if (settingsData.ContainsKey("InputMap"))
         {
-            GD.Print($"Settings:LoadSettings - Loading custom InputMap bindings");
-            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
+            GD.Print("Settings:LoadSettings - Ignoring showfile InputMap (now stored in user preferences).");
         }
     }
 
@@ -338,12 +367,14 @@ public partial class Settings : Node
             }
 
             GD.Print($"Settings:ApplyPartialFromHistory - Restored {_audioOutputPatches.Count} audio output patch(es)");
+            GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
         }
 
         if (TryGetSettingsValue(settingsData, "Displays", out var displays)
             && displays.VariantType == Variant.Type.Dictionary)
         {
             _displaysManager.LoadFromData(displays.AsGodotDictionary());
+            // DisplaysChanged is emitted by LoadFromData; MediaHealthService also listens there.
         }
 
         if (settingsData.TryGetValue("CueLights", out var cueLights))
@@ -392,8 +423,7 @@ public partial class Settings : Node
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
         }
 
-        if (TryGetSettingsValue(settingsData, "InputMap", out var inputMapData) && _globalData != null)
-            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
+        // InputMap is not part of document history / show settings anymore.
     }
 
     /// <summary>
@@ -401,7 +431,7 @@ public partial class Settings : Node
     /// (no full GetData) so history does not depend on displays/OSC/etc. serialization.
     /// When <paramref name="keys"/> is null or empty, returns a full <see cref="GetData"/> snapshot.
     /// </summary>
-    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "InputMap").</param>
+    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "AudioPatch").</param>
     /// <returns>Dictionary suitable for history storage (caller should deep-clone if needed).</returns>
     public Dictionary CaptureHistorySlice(params string[] keys)
     {
@@ -412,10 +442,10 @@ public partial class Settings : Node
         foreach (var key in keys)
         {
             if (string.IsNullOrEmpty(key)) continue;
+            if (key == "InputMap")
+                continue; // User prefs — not document history
             if (TryCaptureScalarHistoryKey(key, out var value))
                 slice[key] = value;
-            else if (key == "InputMap" && _globalData != null)
-                slice[key] = _globalData.GetCustomInputBindings();
             else if (key == "AudioPatch")
             {
                 var patchTable = new Dictionary();

@@ -24,6 +24,14 @@ public class Cue : ICue
     private static int _nextId = 0;
     public int Id { get; set; }
 
+    /// <summary>
+    /// Resets the static cue-id allocator (call when starting a new empty session).
+    /// </summary>
+    public static void ResetIdAllocator()
+    {
+        _nextId = 0;
+    }
+
     private string _name;
     public string Name
     {
@@ -249,6 +257,10 @@ public class Cue : ICue
             return existing;
         }
         var videoComp = new VideoComponent { VideoFile = videoFile };
+        // Prefer a real layer when one exists so new media cues are playable;
+        // user can still choose "No Output" (-1) in the inspector.
+        if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
+            videoComp.TargetLayerId = DisplaysManager.Layers[0].LayerId;
         //videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
         Components.Add(videoComp);
         return videoComp;

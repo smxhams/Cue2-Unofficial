@@ -15,7 +15,6 @@ public partial class SettingsInputMap : ScrollContainer
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
-    private HistoryManager _historyManager;
 
     private VBoxContainer _inputsContainer;
     private PackedScene _inputActionCardScene;
@@ -42,7 +41,6 @@ public partial class SettingsInputMap : ScrollContainer
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
-        _historyManager = _globalData?.HistoryManager;
 
         _inputsContainer = GetNode<VBoxContainer>("%InputsContainer");
 
@@ -56,9 +54,6 @@ public partial class SettingsInputMap : ScrollContainer
 
         VisibilityChanged += OnVisibilityChanged;
 
-        if (_historyManager != null)
-            _historyManager.HistoryRestored += OnHistoryRestored;
-
         // Initial populate if already visible (e.g. opened directly)
         if (IsVisibleInTree())
         {
@@ -69,19 +64,7 @@ public partial class SettingsInputMap : ScrollContainer
     public override void _ExitTree()
     {
         VisibilityChanged -= OnVisibilityChanged;
-        if (_historyManager != null)
-            _historyManager.HistoryRestored -= OnHistoryRestored;
         base._ExitTree();
-    }
-
-    /// <summary>
-    /// After settings undo/redo (input map included), rebuild cards from live InputMap.
-    /// </summary>
-    private void OnHistoryRestored(int scope)
-    {
-        if (scope != (int)HistoryManager.HistoryScope.Settings) return;
-        if (!Visible) return;
-        PopulateActions();
     }
 
     private void OnVisibilityChanged()

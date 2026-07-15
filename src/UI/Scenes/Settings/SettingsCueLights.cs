@@ -57,7 +57,8 @@ public partial class SettingsCueLights : ScrollContainer
         _cueLightInstanceScene = SceneLoader.LoadPackedScene("uid://6vou7cplmgmo", out string _);
 
         VisibilityChanged += OnVisible;
-        
+        if (_globalSignals != null)
+            _globalSignals.NewSession += OnNewSession;
         
         // UI
         _cueLightsContainer = GetNode<VBoxContainer>("%CueLightsContainer");
@@ -114,9 +115,49 @@ public partial class SettingsCueLights : ScrollContainer
         
         _newCueLightButton.Pressed += NewCueLightButton;
         
-        // Load cue-lights
-        var cueLights = _cueLightManager.GetCueLights();
-        foreach (var cueLight in cueLights)
+        RebuildCueLightList();
+    }
+
+    private void OnNewSession()
+    {
+        RebuildCueLightList();
+        OnVisible();
+    }
+
+    /// <summary>
+    /// Rebuilds cue-light instance cards from the live manager (New Session / full resync).
+    /// </summary>
+    private void RebuildCueLightList()
+    {
+        if (_cueLightsContainer == null || _cueLightInstanceScene == null)
+            return;
+
+        // Disconnect handlers before freeing UI
+        foreach (var pair in _cueLightHandlers.ToList())
+        {
+            var cueLight = pair.Key;
+            var handler = pair.Value;
+            if (GodotObject.IsInstanceValid(cueLight))
+            {
+                try
+                {
+                    cueLight.Disconnect(CueLight.SignalName.ConnectionChanged, handler);
+                }
+                catch { /* already disconnected */ }
+            }
+        }
+        _cueLightHandlers.Clear();
+
+        foreach (var child in _cueLightsContainer.GetChildren())
+        {
+            _cueLightsContainer.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        if (_cueLightManager == null)
+            return;
+
+        foreach (var cueLight in _cueLightManager.GetCueLights())
         {
             PanelContainer instance = _cueLightInstanceScene.Instantiate<PanelContainer>();
             _cueLightsContainer.AddChild(instance);
@@ -342,17 +383,23 @@ public partial class SettingsCueLights : ScrollContainer
     
     private void OnVisible()
     {
-        if (Visible)
-        {
-            _idleColour.Color = _settings.CueLightIdleColour;
-            _goColour.Color = _settings.CueLightGoColour;
-            _standbyColour.Color = _settings.CueLightStandbyColour;
-            _countInColour.Color = _settings.CueLightCountInColour;
-        }
+        if (!Visible || _settings == null)
+            return;
+
+        _idleColour.Color = _settings.CueLightIdleColour;
+        _goColour.Color = _settings.CueLightGoColour;
+        _standbyColour.Color = _settings.CueLightStandbyColour;
+        _countInColour.Color = _settings.CueLightCountInColour;
+        if (_brightnessLineEdit != null)
+            _brightnessLineEdit.Text = Math.Round(_settings.CueLightBrightness * 100f / 255f).ToString();
     }
     
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.NewSession -= OnNewSession;
+        VisibilityChanged -= OnVisible;
+
         foreach (var pair in _cueLightHandlers)
         {
             var cueLight = pair.Key;

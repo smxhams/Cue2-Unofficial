@@ -35,6 +35,12 @@ public partial class CueList : Control
 	/// Global lookup of all cues by ID. Populated on creation and used for fast access.
 	/// </summary>
 	public static System.Collections.Generic.Dictionary<int, Cue> CueIndex; // <CueId, Cue>
+
+	/// <summary>
+	/// Total number of cues in the show (all levels, including group children).
+	/// </summary>
+	/// <value>Count of entries in <see cref="CueIndex"/>.</value>
+	public int TotalCueCount => CueIndex?.Count ?? 0;
 	
 	// Reordering is handled by a dedicated controller (see CueReorder.cs).
 	private CueReorder _reorderController;
@@ -457,6 +463,7 @@ public partial class CueList : Control
 			CueIndex.Add(cue.Id, cue);
 		else
 			CueIndex[cue.Id] = cue;
+		NotifyTotalCuesChanged();
 
 		cue.ParentId = parentId;
 		if (parentId != -1)
@@ -554,9 +561,21 @@ public partial class CueList : Control
 	{
 		CreateNewShell(cue);
 		CueIndex.Add(cue.Id, cue);
+		NotifyTotalCuesChanged();
 		// Will make new cues focused
 		//FocusCue(cue); //Read select shell when finished
 
+	}
+
+	/// <summary>
+	/// Syncs <see cref="GlobalData.CueTotal"/> and notifies listeners when the cue count changes.
+	/// </summary>
+	private void NotifyTotalCuesChanged()
+	{
+		int total = TotalCueCount;
+		if (_globalData != null)
+			_globalData.CueTotal = total;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.TotalCuesChanged), total);
 	}
 	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
@@ -905,6 +924,7 @@ public partial class CueList : Control
 		cue.ShellBar = null;
 
 		CueIndex?.Remove(cue.Id);
+		NotifyTotalCuesChanged();
 	}
 
 	/// <summary>
@@ -1103,6 +1123,7 @@ public partial class CueList : Control
 		else
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
 
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 	}
 
@@ -1205,6 +1226,8 @@ public partial class CueList : Control
 		// Resets 
 		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
 		ShellSelection.SelectedCues = new List<Cue>();
+		Cue.ResetIdAllocator();
+		NotifyTotalCuesChanged();
 	}
 	
 	/// <summary>

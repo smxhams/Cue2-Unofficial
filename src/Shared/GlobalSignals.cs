@@ -66,6 +66,12 @@ public partial class GlobalSignals : Node
 	
 	[Signal] public delegate void CreateCueEventHandler();
 
+	/// <summary>
+	/// Fired when the total number of cues in the show changes (create, delete, load, reset, undo/redo).
+	/// </summary>
+	/// <remarks>Argument is the new total cue count (all cues including group children).</remarks>
+	[Signal] public delegate void TotalCuesChangedEventHandler(int total);
+
 	/// <summary>Delete currently selected cue(s) from the cuelist.</summary>
 	[Signal] public delegate void DeleteSelectedCuesEventHandler();
 
