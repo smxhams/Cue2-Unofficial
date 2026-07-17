@@ -1,8 +1,7 @@
-[gd_scene load_steps=8 format=3 uid="uid://d207a67e3ebww"]
+[gd_scene load_steps=6 format=3 uid="uid://d207a67e3ebww"]
 
 [ext_resource type="Script" uid="uid://c5iiiivhxukfl" path="res://src/Base/ShellBar.cs" id="1_34bmx"]
 [ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_o55rx"]
-[ext_resource type="Texture2D" uid="uid://c7jh2vkj0tntc" path="res://src/UI/Assets/icons.png" id="2_o55rx"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_nqr4j"]
 
@@ -10,15 +9,13 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_34bmx"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_ag1hf"]
-atlas = ExtResource("2_o55rx")
-region = Rect2(645, 258, 128, 128)
-
 [node name="ShellBar" type="PanelContainer"]
+clip_contents = false
+custom_minimum_size = Vector2(0, 24)
 offset_right = 497.0
 offset_bottom = 28.0
 size_flags_horizontal = 3
-size_flags_vertical = 0
+size_flags_vertical = 1
 focus_mode = 1
 theme = ExtResource("1_o55rx")
 script = ExtResource("1_34bmx")
@@ -33,94 +30,106 @@ theme_override_styles/panel = SubResource("StyleBoxEmpty_nqr4j")
 [node name="ShellPanel" type="Panel" parent="."]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(0, 26)
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxEmpty_o55rx")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="."]
+[node name="RootVBox" type="VBoxContainer" parent="."]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="RowHBox" type="HBoxContainer" parent="RootVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 2
+alignment = 0
+
+[node name="LeadingHBox" type="HBoxContainer" parent="RootVBox/RowHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 4
 theme_override_constants/separation = 2
+alignment = 1
 
-[node name="ColorPanel" type="Panel" parent="HBoxContainer"]
+[node name="ColorPanel" type="Panel" parent="RootVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(3, 0)
 layout_mode = 2
 size_flags_horizontal = 0
+size_flags_vertical = 3
+mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_34bmx")
 
-[node name="MarginContainer" type="MarginContainer" parent="HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="VBoxContainer" type="VBoxContainer" parent="HBoxContainer/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="PanelContainer" type="HBoxContainer" parent="HBoxContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="DragBar" type="Button" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
+[node name="DragBar" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(18, 18)
+custom_minimum_size = Vector2(18, 20)
 layout_mode = 2
-size_flags_horizontal = 4
+size_flags_horizontal = 0
 size_flags_vertical = 4
 focus_mode = 0
 mouse_default_cursor_shape = 6
-theme_override_colors/icon_normal_color = Color(0.3318613, 0.33186132, 0.3318613, 1)
+theme_override_colors/icon_normal_color = Color(0.72, 0.78, 0.82, 0.95)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_constants/icon_max_width = 14
 theme_override_font_sizes/font_size = 10
 keep_pressed_outside = true
-icon_alignment = 1
-expand_icon = true
-
-[node name="CollapseButton" type="Button" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(18, 18)
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-focus_mode = 0
-theme_override_constants/icon_max_width = 10
-icon_alignment = 1
-expand_icon = true
-
-[node name="TypeIcon" type="Button" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
-custom_minimum_size = Vector2(18, 18)
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-tooltip_text = "This Cue has no connections"
-focus_mode = 0
-mouse_filter = 1
-icon = SubResource("AtlasTexture_ag1hf")
-expand_icon = true
-
-[node name="IssueIndicator" type="Button" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(16, 18)
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-tooltip_text = "Issue"
-focus_mode = 0
-mouse_filter = 1
-theme_override_colors/font_color = Color(1, 0.502, 0.435, 1)
-theme_override_colors/font_hover_color = Color(1, 0.6, 0.55, 1)
-theme_override_colors/font_pressed_color = Color(1, 0.4, 0.35, 1)
-theme_override_font_sizes/font_size = 12
 flat = true
-text = "✕"
-alignment = 1
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
 
-[node name="CueNumLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
+[node name="IssueIndicator" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(22, 18)
+custom_minimum_size = Vector2(14, 20)
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+focus_mode = 0
+mouse_filter = 2
+theme_override_colors/icon_normal_color = Color(1, 0.502, 0.435, 1)
+theme_override_colors/icon_hover_color = Color(1, 0.6, 0.55, 1)
+theme_override_colors/icon_pressed_color = Color(1, 0.4, 0.35, 1)
+theme_override_constants/icon_max_width = 12
+flat = true
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="TreeIndent" type="Control" parent="RootVBox/RowHBox/LeadingHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+mouse_filter = 2
+
+[node name="CollapseButton" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 20)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+focus_mode = 0
+mouse_filter = 2
+theme_override_constants/icon_max_width = 10
+flat = true
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="CueNumLineEdit" type="LineEdit" parent="RootVBox/RowHBox/LeadingHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 20)
+layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 4
 focus_mode = 0
 mouse_filter = 1
@@ -128,9 +137,9 @@ mouse_default_cursor_shape = 0
 theme_override_font_sizes/font_size = 10
 max_length = 5
 
-[node name="CueNameLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
+[node name="CueNameLineEdit" type="LineEdit" parent="RootVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 18)
+custom_minimum_size = Vector2(40, 20)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
@@ -141,46 +150,61 @@ theme_override_font_sizes/font_size = 10
 placeholder_text = "New Shell"
 max_length = 50
 
-[node name="HBoxContainer" type="HBoxContainer" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer"]
-layout_mode = 2
-
-[node name="PreWaitLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer/HBoxContainer"]
+[node name="TrailingHBox" type="HBoxContainer" parent="RootVBox/RowHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 4
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="PreWaitLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 20)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 10
 select_all_on_focus = true
 
-[node name="DurationLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer/HBoxContainer"]
+[node name="DurationLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
+custom_minimum_size = Vector2(60, 20)
 layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 4
 focus_mode = 0
 mouse_default_cursor_shape = 0
+theme_override_font_sizes/font_size = 10
 editable = false
 
-[node name="PostWaitLineEdit" type="LineEdit" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer/HBoxContainer"]
+[node name="PostWaitLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(60, 0)
+custom_minimum_size = Vector2(60, 20)
 layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 4
+theme_override_font_sizes/font_size = 10
 select_all_on_focus = true
 
-[node name="FollowCheckBox" type="CheckBox" parent="HBoxContainer/MarginContainer/VBoxContainer/PanelContainer/HBoxContainer"]
+[node name="FollowButton" type="Button" parent="RootVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(30, 0)
+custom_minimum_size = Vector2(34, 20)
 layout_mode = 2
+size_flags_horizontal = 0
 size_flags_vertical = 4
+tooltip_text = "Continue mode (click to cycle):
+None → Auto-continue → Auto-follow
+→  Auto-continue (after post-wait)
+↳  Auto-follow (after cue completes)"
 focus_mode = 0
-icon_alignment = 1
-expand_icon = true
+flat = true
+alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="HBoxContainer/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="ShellChildContainer" type="VBoxContainer" parent="HBoxContainer/MarginContainer/VBoxContainer/HBoxContainer"]
+[node name="ShellChildContainer" type="VBoxContainer" parent="RootVBox"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 2
+size_flags_vertical = 0
+theme_override_constants/separation = 0

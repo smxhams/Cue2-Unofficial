@@ -133,18 +133,19 @@ text = "Post-wait:"
 [node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=2072409607]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "How long to wait after all the cue's components are completed to continue the next cue (if 'continue' selected.)"
+tooltip_text = "Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment."
 
 [node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=446303217]
 layout_mode = 2
-text = "Next cue:"
+text = "Continue:"
 
 [node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1799703030]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Follow determines behavior of the next cue in the cuelist.
-Continue: Next cue will trigger after this cue is complete (Including post-wait)
-Follow: Next cue will be triggered when this cue is triggered"
+tooltip_text = "Cue sequence mode for the next cue at the same nesting level.
+None: Do not auto-start the next cue.
+Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Continue + this post-wait).
+Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
 focus_mode = 0
 
 [node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1607308950]

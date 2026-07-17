@@ -344,6 +344,7 @@ internal sealed class CueReorder(
             }
         }
 
+        owner.RefreshShellZebra();
         Cleanup(keepChanges: true);
     }
 

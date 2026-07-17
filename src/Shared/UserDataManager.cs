@@ -36,6 +36,12 @@ public partial class UserDataManager : Node
 	private int _backupDepth = DefaultBackupDepth;
 	private int _undoDepth = DefaultUndoDepth;
 
+	/// <summary>Cuelist shell number column width (0 = use default).</summary>
+	private float _shellNumberColumnWidth;
+
+	/// <summary>Cuelist shell pre/duration/post column width (0 = use default).</summary>
+	private float _shellTimeColumnWidth;
+
 	/// <summary>
 	/// Serialized custom InputMap bindings (action → event list). Null/empty means use project defaults.
 	/// Loaded from disk before factory defaults are captured; applied after <see cref="GlobalData"/> captures defaults.
@@ -185,6 +191,27 @@ public partial class UserDataManager : Node
 				SaveUserData();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Persisted cuelist number-column width in pixels. 0 means use the layout default.
+	/// </summary>
+	public float ShellNumberColumnWidth => _shellNumberColumnWidth;
+
+	/// <summary>
+	/// Persisted cuelist time-column width (pre/duration/post) in pixels. 0 means use the layout default.
+	/// </summary>
+	public float ShellTimeColumnWidth => _shellTimeColumnWidth;
+
+	/// <summary>
+	/// Updates shell column width preferences in memory. Written to disk with the next user-data save.
+	/// </summary>
+	/// <param name="numberWidth">Cue number column width.</param>
+	/// <param name="timeWidth">Pre-wait / duration / post-wait column width.</param>
+	public void SetShellColumnWidths(float numberWidth, float timeWidth)
+	{
+		_shellNumberColumnWidth = numberWidth;
+		_shellTimeColumnWidth = timeWidth;
 	}
 
 	public override void _Ready()
@@ -580,6 +607,15 @@ public partial class UserDataManager : Node
 				_undoDepth = Math.Clamp(undoDepthVal.AsInt32(), MinUndoDepth, MaxUndoDepth);
 			}
 
+			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
+			{
+				_shellNumberColumnWidth = shellNumW.AsSingle();
+			}
+			if (data.TryGetValue("ShellTimeColumnWidth", out var shellTimeW))
+			{
+				_shellTimeColumnWidth = shellTimeW.AsSingle();
+			}
+
 			// Custom keyboard shortcuts (Cue2 Preferences → Input Map)
 			if (data.TryGetValue("InputMap", out var inputMapVal))
 			{
@@ -649,6 +685,11 @@ public partial class UserDataManager : Node
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;
 			data["UndoDepth"] = _undoDepth;
+
+			if (_shellNumberColumnWidth > 0)
+				data["ShellNumberColumnWidth"] = _shellNumberColumnWidth;
+			if (_shellTimeColumnWidth > 0)
+				data["ShellTimeColumnWidth"] = _shellTimeColumnWidth;
 
 			// Live InputMap snapshot (or last loaded if GlobalData not ready)
 			if (_globalData != null)

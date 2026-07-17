@@ -57,6 +57,16 @@ public partial class CueList : Control
 	private Button _addCueButton;
 	private Button _expandAllButton;
 
+	private Control _headerColorPad;
+	private Control _headerIssuePad;
+	private Label _numberHeaderLabel;
+	private Control _numberNameResizeGrip;
+	private Label _nameHeaderLabel;
+	private Label _preWaitHeaderLabel;
+	private Label _durationHeaderLabel;
+	private Label _postWaitHeaderLabel;
+	private Label _followHeaderLabel;
+
 	private Control _reorderCueControl;
 	private Label _reorderLocationLabel;
 	private VBoxContainer _reorderListContainer;
@@ -64,6 +74,9 @@ public partial class CueList : Control
 
 	// Expand/collapse all state
 	private bool _allExpanded = false;
+
+	/// <summary>True while the user is dragging the Number/Name column grip.</summary>
+	private bool _isDraggingNumberColumn;
 	
 	public CueList()
 	{
@@ -80,6 +93,16 @@ public partial class CueList : Control
 		_cueContainer = GetNode<VBoxContainer>("%CueContainer");
 		_addCueButton = GetNode<Button>("%AddCueButton");
 		_expandAllButton = GetNode<Button>("%ExpandAllButton");
+
+		_headerColorPad = GetNodeOrNull<Control>("%HeaderColorPad");
+		_headerIssuePad = GetNodeOrNull<Control>("%HeaderIssuePad");
+		_numberHeaderLabel = GetNodeOrNull<Label>("%NumberHeaderLabel");
+		_numberNameResizeGrip = GetNodeOrNull<Control>("%NumberNameResizeGrip");
+		_nameHeaderLabel = GetNodeOrNull<Label>("%NameHeaderLabel");
+		_preWaitHeaderLabel = GetNodeOrNull<Label>("%PreWaitHeaderLabel");
+		_durationHeaderLabel = GetNodeOrNull<Label>("%DurationHeaderLabel");
+		_postWaitHeaderLabel = GetNodeOrNull<Label>("%PostWaitHeaderLabel");
+		_followHeaderLabel = GetNodeOrNull<Label>("%FollowHeaderLabel");
 		
 		_reorderCueControl = GetNode<Control>("%ReorderCueControl");
 		_reorderLocationLabel = GetNode<Label>("%ReorderLocationLabel");
@@ -90,6 +113,10 @@ public partial class CueList : Control
 		_expandAllButton.Icon = GetThemeIcon("Right", "AtlasIcons");
 
 		_reorderCueControl.Visible = false;
+
+		LoadShellColumnPrefs();
+		SetupShellColumnHeader();
+		ShellColumnLayout.Changed += OnShellColumnLayoutChanged;
 
 		_syncHotkeys();
 
@@ -104,6 +131,171 @@ public partial class CueList : Control
 		_globalSignals.ToggleExpandAll += OnExpandAllPressed;
 		_addCueButton.Pressed += CreateCue;
 		_expandAllButton.Pressed += OnExpandAllPressed;
+	}
+
+	public override void _ExitTree()
+	{
+		ShellColumnLayout.Changed -= OnShellColumnLayoutChanged;
+		if (_numberNameResizeGrip != null)
+			_numberNameResizeGrip.GuiInput -= OnNumberNameGripGuiInput;
+		if (_durationHeaderLabel != null)
+			_durationHeaderLabel.GuiInput -= OnTimeHeaderGuiInput;
+		base._ExitTree();
+	}
+
+	/// <summary>
+	/// Wires the cuelist header to mirror shell column chrome and user-resizable widths.
+	/// Order matches rows: Color | Drag(Add) | Issue pad | Collapse(Expand) | Number | grip | Name | times.
+	/// </summary>
+	private void SetupShellColumnHeader()
+	{
+		if (_addCueButton != null)
+			_addCueButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, 18);
+		if (_expandAllButton != null)
+			_expandAllButton.CustomMinimumSize = new Vector2(ShellColumnLayout.CollapseWidth, 18);
+
+		if (_headerColorPad != null)
+			_headerColorPad.CustomMinimumSize = new Vector2(ShellColumnLayout.ColorWidth, 15);
+		if (_headerIssuePad != null)
+			_headerIssuePad.CustomMinimumSize = new Vector2(ShellColumnLayout.IssueWidth, 15);
+
+		// Dedicated grip is more reliable than HSplit for this header (Godot 4.6 multi-split quirks).
+		if (_numberNameResizeGrip != null)
+		{
+			_numberNameResizeGrip.MouseDefaultCursorShape = Control.CursorShape.Hsize;
+			_numberNameResizeGrip.GuiInput += OnNumberNameGripGuiInput;
+		}
+
+		// Drag on duration header to resize all three time columns together.
+		if (_durationHeaderLabel != null)
+			_durationHeaderLabel.GuiInput += OnTimeHeaderGuiInput;
+
+		ApplyHeaderColumnLayout();
+	}
+
+	private void OnShellColumnLayoutChanged()
+	{
+		if (!IsInstanceValid(this))
+			return;
+		// ShellBar instances subscribe to ShellColumnLayout.Changed themselves.
+		ApplyHeaderColumnLayout();
+		PersistShellColumnPrefs();
+	}
+
+	/// <summary>
+	/// Applies current <see cref="ShellColumnLayout"/> widths to header labels.
+	/// </summary>
+	private void ApplyHeaderColumnLayout()
+	{
+		float numW = ShellColumnLayout.NumberWidth;
+		float timeW = ShellColumnLayout.TimeWidth;
+		float followW = ShellColumnLayout.FollowWidth;
+
+		if (_numberHeaderLabel != null)
+			_numberHeaderLabel.CustomMinimumSize = new Vector2(numW, 0);
+		if (_preWaitHeaderLabel != null)
+			_preWaitHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
+		if (_durationHeaderLabel != null)
+		{
+			_durationHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
+			_durationHeaderLabel.TooltipText = "Drag horizontally to resize Pre-Wait / Duration / Post-Wait columns.";
+			_durationHeaderLabel.MouseDefaultCursorShape = Control.CursorShape.Hsize;
+		}
+		if (_postWaitHeaderLabel != null)
+			_postWaitHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
+		if (_followHeaderLabel != null)
+			_followHeaderLabel.CustomMinimumSize = new Vector2(followW, 0);
+	}
+
+	/// <summary>
+	/// Drags the Number/Name boundary grip to resize the number column.
+	/// </summary>
+	private void OnNumberNameGripGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
+		{
+			_isDraggingNumberColumn = mb.Pressed;
+			if (!mb.Pressed)
+				PersistShellColumnPrefs();
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		if (@event is InputEventMouseMotion motion
+		    && _isDraggingNumberColumn
+		    && (motion.ButtonMask & MouseButtonMask.Left) != 0)
+		{
+			ShellColumnLayout.NumberWidth = ShellColumnLayout.NumberWidth + motion.Relative.X;
+			GetViewport().SetInputAsHandled();
+		}
+	}
+
+	/// <summary>
+	/// Horizontal drag on the Duration header resizes the three timing columns together.
+	/// </summary>
+	private void OnTimeHeaderGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseMotion motion
+		    && (motion.ButtonMask & MouseButtonMask.Left) != 0)
+		{
+			ShellColumnLayout.TimeWidth = ShellColumnLayout.TimeWidth + motion.Relative.X;
+			GetViewport().SetInputAsHandled();
+		}
+	}
+
+	/// <summary>
+	/// Pushes shared column widths to every shell row in the hierarchy.
+	/// </summary>
+	private void ApplyColumnLayoutToAllShells()
+	{
+		if (_cueContainer == null)
+			return;
+		ApplyColumnLayoutRecursive(_cueContainer);
+	}
+
+	private static void ApplyColumnLayoutRecursive(VBoxContainer container)
+	{
+		if (container == null)
+			return;
+		foreach (var child in container.GetChildren())
+		{
+			if (child is ShellBar shell)
+			{
+				shell.ApplyColumnLayout();
+				if (shell.ShellChildContainer != null)
+					ApplyColumnLayoutRecursive(shell.ShellChildContainer);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Loads persisted shell column widths from user preferences when available.
+	/// </summary>
+	private void LoadShellColumnPrefs()
+	{
+		var udm = _globalData?.UserDataManager;
+		if (udm == null)
+			return;
+
+		float number = udm.ShellNumberColumnWidth;
+		float time = udm.ShellTimeColumnWidth;
+		if (number > 0 || time > 0)
+		{
+			ShellColumnLayout.SetWidthsSilent(
+				number > 0 ? number : ShellColumnLayout.DefaultNumberWidth,
+				time > 0 ? time : ShellColumnLayout.DefaultTimeWidth);
+		}
+	}
+
+	/// <summary>
+	/// Saves current shell column widths into user preferences.
+	/// </summary>
+	private void PersistShellColumnPrefs()
+	{
+		var udm = _globalData?.UserDataManager;
+		if (udm == null)
+			return;
+		udm.SetShellColumnWidths(ShellColumnLayout.NumberWidth, ShellColumnLayout.TimeWidth);
 	}
 	
 	/// <summary>
@@ -466,6 +658,8 @@ public partial class CueList : Control
 		NotifyTotalCuesChanged();
 
 		cue.ParentId = parentId;
+		// ParentId is applied after SetCue — refresh depth-based indent now.
+		shellBar.ApplyTreeIndent();
 		if (parentId != -1)
 		{
 			var parent = FetchCueFromId(parentId);
@@ -570,12 +764,38 @@ public partial class CueList : Control
 	/// <summary>
 	/// Syncs <see cref="GlobalData.CueTotal"/> and notifies listeners when the cue count changes.
 	/// </summary>
+	/// <summary>
+	/// Assigns even/odd zebra indices to every visible shell (including expanded children)
+	/// so shell washes and the blank-space stripes stay consistent.
+	/// </summary>
+	public void RefreshShellZebra()
+	{
+		if (_cueContainer == null) return;
+		int index = 0;
+		AssignZebraRecursive(_cueContainer, ref index);
+	}
+
+	private static void AssignZebraRecursive(VBoxContainer container, ref int index)
+	{
+		if (container == null) return;
+		foreach (var child in container.GetChildren())
+		{
+			if (child is not ShellBar shell) continue;
+			shell.SetZebraIndex(index++);
+			// Only walk into currently visible nested shells.
+			if (shell.ShellChildContainer != null && shell.ShellChildContainer.Visible)
+				AssignZebraRecursive(shell.ShellChildContainer, ref index);
+		}
+	}
+
 	private void NotifyTotalCuesChanged()
 	{
 		int total = TotalCueCount;
 		if (_globalData != null)
 			_globalData.CueTotal = total;
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.TotalCuesChanged), total);
+		// Count/structure changes almost always affect visual order.
+		CallDeferred(nameof(RefreshShellZebra));
 	}
 	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
@@ -1163,6 +1383,7 @@ public partial class CueList : Control
 		_allExpanded = !_allExpanded;
 		SetAllExpanded(_allExpanded);
 		_expandAllButton.Icon = GetThemeIcon(_allExpanded ? "Down" : "Right", "AtlasIcons");
+		RefreshShellZebra();
 	}
 
 	private void SetAllExpanded(bool expanded)
@@ -1212,6 +1433,7 @@ public partial class CueList : Control
 				// Intentionally do not recurse into child containers - this is "one layer"
 			}
 		}
+		RefreshShellZebra();
 	}
 
 	//--- Save and load ---//
@@ -1412,6 +1634,8 @@ public partial class CueList : Control
 				cue.ShellBar.RelationshipChanged();
 			}
 		}
+
+		RefreshShellZebra();
 	}
 
 	/// <summary>

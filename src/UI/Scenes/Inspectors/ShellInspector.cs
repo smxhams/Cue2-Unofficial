@@ -128,7 +128,10 @@ public partial class ShellInspector : Control
 		if (cueId < 0)
 		{
 			if (_focusedCue != null)
+			{
 				_focusedCue.NameChanged -= OnNameChanged;
+				_focusedCue.FollowChanged -= OnFollowChanged;
+			}
 			_focusedCue = null;
 			_focusedCueId = -1;
 			Visible = false;
@@ -142,6 +145,7 @@ public partial class ShellInspector : Control
 		if (_focusedCue != null)
 		{
 			_focusedCue.NameChanged -= OnNameChanged;
+			_focusedCue.FollowChanged -= OnFollowChanged;
 		}
 		
 		_focusedCue = CueList.FetchCueFromId(cueId);
@@ -156,26 +160,69 @@ public partial class ShellInspector : Control
 		// Init shell inspector and load relevant data
 		_focusedCueId = cueId;
 		_focusedCue.NameChanged += OnNameChanged;
+		_focusedCue.FollowChanged += OnFollowChanged;
 		EnsureFollowOptions();
 		UpdateFields();
 	}
 
 	/// <summary>
-	/// Ensures the follow OptionButton is populated with FollowType entries.
+	/// Keeps the follow OptionButton in sync when the mode is edited from the shell bar.
+	/// </summary>
+	private void OnFollowChanged(FollowType follow)
+	{
+		if (_isRefreshingUi || _followOption == null) return;
+		_isRefreshingUi = true;
+		try
+		{
+			SelectFollowOption(follow);
+		}
+		finally
+		{
+			_isRefreshingUi = false;
+		}
+	}
+
+	/// <summary>
+	/// Selects the OptionButton item matching <paramref name="follow"/>.
+	/// </summary>
+	private void SelectFollowOption(FollowType follow)
+	{
+		if (_followOption == null) return;
+		EnsureFollowOptions();
+		for (int i = 0; i < _followOption.ItemCount; i++)
+		{
+			if (_followOption.GetItemMetadata(i).AsInt32() == (int)follow)
+			{
+				_followOption.Selected = i;
+				return;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Ensures the follow OptionButton is populated with continue-mode labels.
 	/// </summary>
 	private void EnsureFollowOptions()
 	{
 		if (_followOption == null) return;
 		if (_followOption.ItemCount > 0) return;
 
-		var followOptions = Enum.GetValues(typeof(FollowType));
 		_followOption.Clear();
-		for (int i = 0; i < followOptions.Length; i++)
-		{
-			var enumValue = (FollowType)followOptions.GetValue(i)!;
-			_followOption.AddItem(enumValue.ToString());
-			_followOption.SetItemMetadata(i, (int)enumValue);
-		}
+		AddFollowOption(FollowType.None, "None");
+		AddFollowOption(FollowType.Continue, "Auto-continue");
+		AddFollowOption(FollowType.Follow, "Auto-follow");
+	}
+
+	/// <summary>
+	/// Adds one continue-mode entry to the follow OptionButton.
+	/// </summary>
+	/// <param name="type">Enum value stored as item metadata.</param>
+	/// <param name="label">User-facing label.</param>
+	private void AddFollowOption(FollowType type, string label)
+	{
+		int index = _followOption.ItemCount;
+		_followOption.AddItem(label);
+		_followOption.SetItemMetadata(index, (int)type);
 	}
 
 	/// <summary>
@@ -215,12 +262,7 @@ public partial class ShellInspector : Control
 			}
 
 			EnsureFollowOptions();
-			if (_followOption != null)
-			{
-				int followIndex = (int)_focusedCue.Follow;
-				if (followIndex >= 0 && followIndex < _followOption.ItemCount)
-					_followOption.Selected = followIndex;
-			}
+			SelectFollowOption(_focusedCue.Follow);
 
 			_preWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PreWait);
 			_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
@@ -308,10 +350,13 @@ public partial class ShellInspector : Control
 	private void FollowOptionItemSelected(long index)
 	{
 		if (_isRefreshingUi || _focusedCue == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
 		int selectedValue = _followOption.GetItemMetadata((int)index).AsInt32();
 		if ((int)_focusedCue.Follow == selectedValue) return;
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit follow mode");
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit continue mode");
 		_focusedCue.Follow = (FollowType)selectedValue;
+		// Shell bar listens to FollowChanged; also push a general sync for any other listeners.
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
 	}
 
 	private void AssignColor()

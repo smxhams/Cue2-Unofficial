@@ -1,30 +1,31 @@
 using Godot;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Cue2.Shared;
 
 namespace Cue2.Shared;
-	public partial class EventLogger : Node
-{
 
+/// <summary>
+/// Receives log signals, keeps an in-memory history, and appends to a rotating log file on disk.
+/// </summary>
+/// <remarks>
+/// Log type meanings (see <see cref="LogType"/>):
+/// 0 = Information (white text, default),
+/// 1 = Warning (yellow text),
+/// 2 = System error (red text),
+/// 3 = Alert (red text; may flash window border) — for issues that may affect playback.
+/// </remarks>
+public partial class EventLogger : Node
+{
 	private GlobalSignals _globalSignals;
 
 	private static List<string> _logList = new List<string>();
 	private static int _logCount;
 
 	private const string LogFilePath = "user://logs/cue2.log";
-	private const long MaxLogFileSize = 1 * 1024 * 1024; // 1 MB max size - rotate to .old when exceeded to avoid overflowing the log file
+	private const long MaxLogFileSize = 1 * 1024 * 1024; // 1 MB max size - rotate to .old when exceeded
 
-	/*
-	 * Receives log signals to register in log list. Each logged event has a "type" refering to what it indicates. See LogType enum.
-	 * 0 = Information (white text and default)
-	 * 1 = Warning (yellow text)
-	 * 2 = System error (red text)
-	 * 3 = Alert (red text, flash window border red) This is to only be called for issues that may effect playback. Ie Devices disconnecting, network dropout etc.
-	 */
-	
 	public override void _Ready()
 	{
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
@@ -81,7 +82,6 @@ namespace Cue2.Shared;
 			GD.PrintErr("EventLogger:LoadPreviousLogs - Failed to load previous logs: " + ex.Message);
 		}
 	}
-	
 
 	private void LogEvent(string @logString, int @type)
 	{
@@ -133,14 +133,62 @@ namespace Cue2.Shared;
 		}
 		return "Unknown";
 	}
-	
+
+	/// <summary>
+	/// Returns the number of log entries recorded during the current session (not including prior file history).
+	/// </summary>
+	/// <returns>Session log count.</returns>
 	public static int GetLogCount()
 	{
 		return _logCount;
 	}
-	
+
+	/// <summary>
+	/// Returns the full in-memory log list (oldest first). Callers must not mutate the list.
+	/// </summary>
+	/// <returns>In-memory log lines, oldest at index 0.</returns>
 	public List<string> GetLogList()
 	{
 		return _logList;
+	}
+
+	/// <summary>
+	/// Returns the total number of log lines currently held in memory (including prior sessions loaded from disk).
+	/// </summary>
+	/// <returns>Total in-memory log count.</returns>
+	public int GetTotalLogCount()
+	{
+		return _logList.Count;
+	}
+
+	/// <summary>
+	/// Clears all in-memory logs and deletes log files on disk (current and rotated .old).
+	/// </summary>
+	/// <remarks>
+	/// Does not emit log signals; callers that need UI feedback should log after clearing.
+	/// </remarks>
+	public void ClearLogs()
+	{
+		_logList.Clear();
+		_logCount = 0;
+
+		try
+		{
+			string fullPath = ProjectSettings.GlobalizePath(LogFilePath);
+			if (File.Exists(fullPath))
+			{
+				File.Delete(fullPath);
+			}
+
+			string oldPath = fullPath + ".old";
+			if (File.Exists(oldPath))
+			{
+				File.Delete(oldPath);
+			}
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr("EventLogger:ClearLogs - Failed to delete log file(s): " + ex.Message);
+		}
 	}
 }

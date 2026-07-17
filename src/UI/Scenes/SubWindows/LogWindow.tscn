@@ -43,6 +43,27 @@ text = "Log"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="Toolbar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="LoadMoreButton" type="Button" parent="MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Load next 100"
+
+[node name="ShowingLabel" type="Label" parent="MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Showing 0/0 Logs"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ClearLogsButton" type="Button" parent="MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear logs"
+
 [node name="LogContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3

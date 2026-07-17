@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://dt7rlfag7yr2c"]
+[gd_scene load_steps=9 format=3 uid="uid://dt7rlfag7yr2c"]
 
 [ext_resource type="PackedScene" uid="uid://cb7g4xgryo2dg" path="res://src/UI/Scenes/ComponentProgressBar.tscn" id="1_4ndav"]
 
@@ -15,6 +15,12 @@ bg_color = Color(0, 0.695857, 0.616515, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kb0cf"]
 bg_color = Color(0.454109, 0.000192667, 0.47222, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_seqfill"]
+bg_color = Color(0.12, 0.42, 0.55, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_postfill"]
+bg_color = Color(0.22, 0.48, 0.28, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_usfis"]
 bg_color = Color(0.592157, 0.294118, 0.0313726, 1)
@@ -54,6 +60,70 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 1
+
+[node name="SequenceBar" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="SequenceProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_styles/fill = SubResource("StyleBoxFlat_seqfill")
+show_percentage = false
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer"]
+layout_mode = 2
+
+[node name="SequencePause" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_constants/icon_max_width = 14
+
+[node name="SequenceLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Continue"
+
+[node name="SequenceNameLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Next cue"
+horizontal_alignment = 1
+
+[node name="SequenceTimer" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "0"
+horizontal_alignment = 2
+
+[node name="SequenceSkip" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar/SequenceProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_constants/icon_max_width = 14
 
 [node name="PreWaitBar" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
 unique_name_in_owner = true
@@ -111,6 +181,70 @@ text = "0"
 horizontal_alignment = 2
 
 [node name="PreWaitSkip" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar/PreWaitProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_constants/icon_max_width = 14
+
+[node name="PostWaitBar" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="PostWaitProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_styles/fill = SubResource("StyleBoxFlat_postfill")
+show_percentage = false
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer"]
+layout_mode = 2
+
+[node name="PostWaitPause" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_constants/icon_max_width = 14
+
+[node name="PostWaitLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Post-Wait"
+
+[node name="PostWaitNameLabel" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Name"
+horizontal_alignment = 1
+
+[node name="PostWaitTimer" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "0"
+horizontal_alignment = 2
+
+[node name="PostWaitSkip" type="Button" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar/PostWaitProgress/MarginContainer/HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2

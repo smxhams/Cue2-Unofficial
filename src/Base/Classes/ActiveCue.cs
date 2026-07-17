@@ -25,6 +25,11 @@ public partial class ActiveCue : GodotObject
     private readonly AudioDevices _audioDevices;
     private readonly Settings _settings;
 
+    /// <summary>
+    /// Chain membership from GO (null for nested child activations under a parent group).
+    /// </summary>
+    private readonly CueChainMember _chainMember;
+
     private PanelContainer _activeCueBar;
     private Timer _fadeTimer; // For fade-in/out
     private Timer _updateTimer;
@@ -34,13 +39,51 @@ public partial class ActiveCue : GodotObject
     private readonly object _lock = new object(); // For thread safety
 
     private Timer _preWaitTimer;
+    private Timer _incomingWaitTimer;
+    private bool _preWaitUpdateHooked;
+    private bool _incomingWaitUpdateHooked;
+    private bool _incomingWaitTimeoutHooked;
+
+    /// <summary>True once content setup/trigger has been kicked off.</summary>
+    private bool _contentStarted;
+
+    /// <summary>True after UI has been built and added to the active list (may precede StartAsync).</summary>
+    private bool _uiPrepared;
+
+    /// <summary>True after chain member entry path has run (pending or head start).</summary>
+    private bool _chainRunStarted;
+
+    /// <summary>True after <see cref="ArmIncoming"/> has been called (or head started).</summary>
+    private bool _incomingArmed;
+
+    /// <summary>True while counting the post-wait lead-in after arm.</summary>
+    private bool _inIncomingWait;
+
+    /// <summary>Post-wait duration for the active incoming lead-in (from previous cue).</summary>
+    private double _incomingWaitDuration;
+
+    /// <summary>Mode of the active/pending incoming link.</summary>
+    private FollowType _incomingMode;
+
+    /// <summary>User skipped this cue's pre-wait (now or when it becomes active).</summary>
+    private bool _skipPreWait;
+
+    /// <summary>True while PreWaitComplete is subscribed to the pre-wait timer.</summary>
+    private bool _preWaitTimeoutHooked;
+
+    /// <summary>Guards against double entry into content after pre-wait.</summary>
+    private bool _preWaitFinished;
     
-    private Dictionary<PanelContainer, ActiveAudioPlayback> _activeAudioComponents = new Dictionary<PanelContainer, ActiveAudioPlayback>();
-    private Dictionary<PanelContainer, AudioComponent> _componentToAudio = new Dictionary<PanelContainer, AudioComponent>();
-    private Dictionary<PanelContainer, ActiveVideoPlayback> _activeVideoComponents = new Dictionary<PanelContainer, ActiveVideoPlayback>();
-    private Dictionary<PanelContainer, VideoComponent> _componentToVideo = new Dictionary<PanelContainer, VideoComponent>();
-    private Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new Dictionary<PanelContainer, CueLightComponent>();
-    private Dictionary<PanelContainer, OscComponent> _activeOscComponents = new Dictionary<PanelContainer, OscComponent>();
+    private readonly Dictionary<PanelContainer, ActiveAudioPlayback> _activeAudioComponents = new();
+    private readonly Dictionary<PanelContainer, AudioComponent> _componentToAudio = new();
+    private readonly Dictionary<PanelContainer, ActiveVideoPlayback> _activeVideoComponents = new();
+    private readonly Dictionary<PanelContainer, VideoComponent> _componentToVideo = new();
+    private readonly Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new();
+    private readonly Dictionary<PanelContainer, OscComponent> _activeOscComponents = new();
+
+    /// <summary>Keeps handler refs so we can disconnect before freeing UI (avoids disposed-panel callbacks).</summary>
+    private readonly List<(ActiveAudioPlayback Playback, ActiveAudioPlayback.CompletedEventHandler Handler)> _audioCompleteHandlers = new();
+    private readonly List<(ActiveVideoPlayback Playback, ActiveVideoPlayback.CompletedEventHandler Handler)> _videoCompleteHandlers = new();
     
     private int _activeComponentCount = 0;
     
@@ -65,10 +108,42 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
-    /// Event raised when the cue playback is completed.
+    /// Event raised when the cue playback is completed (cleanup finished).
     /// </summary>
     [Signal]
     public delegate void CompletedEventHandler();
+
+    /// <summary>
+    /// Raised once when cue content finishes naturally (components + child cues done).
+    /// Not raised on stop/panic. Used for auto-follow arming (real completion, seek-aware).
+    /// </summary>
+    public event Action ContentCompleted;
+
+    /// <summary>
+    /// Raised when the content phase begins (after this cue's pre-wait / lead-in).
+    /// Used for auto-continue arming.
+    /// </summary>
+    public event Action ContentPhaseStarted;
+
+    /// <summary>
+    /// Next cue in a pre-spawned continue/follow chain (cancelled if this cue is stopped early).
+    /// </summary>
+    public ActiveCue NextInChain { get; set; }
+
+    /// <summary>
+    /// True after natural content completion has been reported (or suppressed by stop).
+    /// </summary>
+    private bool _contentCompletedRaised;
+
+    /// <summary>
+    /// True after content-phase-started has been reported.
+    /// </summary>
+    private bool _contentPhaseStartedRaised;
+
+    /// <summary>
+    /// When true, stop paths must not report natural content completion or arm the chain.
+    /// </summary>
+    private bool _suppressContentCompleted;
     
     
     // UI
@@ -87,6 +162,22 @@ public partial class ActiveCue : GodotObject
     private PanelContainer _preWaitPanel;
     private Button _preWaitPause;
     private Button _preWaitSkip;
+
+    private PanelContainer _sequencePanel;
+    private ProgressBar _sequenceProgress;
+    private Label _sequenceLabel;
+    private Label _sequenceNameLabel;
+    private Label _sequenceTimerLabel;
+    private Button _sequencePause;
+    private Button _sequenceSkip;
+
+    private PanelContainer _postWaitPanel;
+    private ProgressBar _postWaitProgress;
+    private Label _postWaitLabel;
+    private Label _postWaitNameLabel;
+    private Label _postWaitTimerLabel;
+    private Button _postWaitPause;
+    private Button _postWaitSkip;
     
     // Main cue progress scene
     private PackedScene _activeCueBarScene = SceneLoader.LoadPackedScene("uid://dt7rlfag7yr2c", out string error); 
@@ -119,7 +210,16 @@ public partial class ActiveCue : GodotObject
     /// <param name="mediaEngine">The media engine for audio processing.</param>
     /// <param name="audioDevices">The audio devices manager.</param>
     /// <param name="globalSignals">The global signals for event communication.</param>
-    public ActiveCue(Cue cue, VBoxContainer activeCueList, MediaEngine mediaEngine, AudioDevices audioDevices, GlobalSignals globalSignals)
+    /// <param name="chainMember">
+    /// Optional chain membership from GO. Null for nested child cues under a parent group.
+    /// </param>
+    public ActiveCue(
+        Cue cue,
+        VBoxContainer activeCueList,
+        MediaEngine mediaEngine,
+        AudioDevices audioDevices,
+        GlobalSignals globalSignals,
+        CueChainMember chainMember = null)
     {
         _cue = cue ?? throw new ArgumentNullException(nameof(cue));
         _activeCueList = activeCueList;
@@ -127,8 +227,22 @@ public partial class ActiveCue : GodotObject
         _audioDevices = audioDevices ?? throw new ArgumentNullException(nameof(audioDevices));
         _globalSignals = globalSignals ?? throw new ArgumentNullException(nameof(globalSignals));
         _settings = _activeCueList.GetNode<GlobalData>("/root/GlobalData").Settings;
-        
-        
+        _chainMember = chainMember;
+        _incomingMode = chainMember?.IncomingMode ?? FollowType.None;
+        _incomingWaitDuration = chainMember?.IncomingPostWait ?? 0.0;
+    }
+
+    /// <summary>
+    /// Builds the active-cue row and inserts it into the list immediately (synchronous).
+    /// Call in chain order so the active list matches sequence occurrence order.
+    /// </summary>
+    public void PrepareUiInOrder()
+    {
+        if (_uiPrepared || _isCleaned) return;
+        SetupUi();
+        SetupSignals();
+        SetupTimers();
+        _uiPrepared = true;
     }
 
     private void SetupUi()
@@ -151,6 +265,31 @@ public partial class ActiveCue : GodotObject
         _preWaitPause = _preWaitPanel.GetNode<Button>("%PreWaitPause");
         _preWaitSkip = _preWaitPanel.GetNode<Button>("%PreWaitSkip");
 
+        _sequencePanel = _activeCueBar.GetNodeOrNull<PanelContainer>("%SequenceBar");
+        if (_sequencePanel != null)
+        {
+            _sequenceProgress = _sequencePanel.GetNodeOrNull<ProgressBar>("%SequenceProgress");
+            _sequenceLabel = _sequencePanel.GetNodeOrNull<Label>("%SequenceLabel");
+            _sequenceNameLabel = _sequencePanel.GetNodeOrNull<Label>("%SequenceNameLabel");
+            _sequenceTimerLabel = _sequencePanel.GetNodeOrNull<Label>("%SequenceTimer");
+            _sequencePause = _sequencePanel.GetNodeOrNull<Button>("%SequencePause");
+            _sequenceSkip = _sequencePanel.GetNodeOrNull<Button>("%SequenceSkip");
+        }
+
+        _postWaitPanel = _activeCueBar.GetNodeOrNull<PanelContainer>("%PostWaitBar");
+        if (_postWaitPanel != null)
+        {
+            _postWaitProgress = _postWaitPanel.GetNodeOrNull<ProgressBar>("%PostWaitProgress");
+            _postWaitLabel = _postWaitPanel.GetNodeOrNull<Label>("%PostWaitLabel");
+            _postWaitNameLabel = _postWaitPanel.GetNodeOrNull<Label>("%PostWaitNameLabel");
+            _postWaitTimerLabel = _postWaitPanel.GetNodeOrNull<Label>("%PostWaitTimer");
+            _postWaitPause = _postWaitPanel.GetNodeOrNull<Button>("%PostWaitPause");
+            _postWaitSkip = _postWaitPanel.GetNodeOrNull<Button>("%PostWaitSkip");
+        }
+
+        // Continue/follow completes before pre-wait — keep that bar above pre-wait.
+        EnsureSequenceBarAbovePreWait();
+
         //GD.Print($"ActiveCue:SetupUi - Setting everything the same colour why? {_cue.Name}");
         var cueColor = _cue.Color;
         var colorBar = _activeCueBar.GetNode<Panel>("%ColorBar");
@@ -172,6 +311,23 @@ public partial class ActiveCue : GodotObject
         _headLabelTimeRight.Text = $"-({UiUtilities.FormatTime(_cue.Duration)})";
     }
 
+    /// <summary>
+    /// Moves the continue/follow strip above pre-wait (sequence lead-in runs first).
+    /// </summary>
+    private void EnsureSequenceBarAbovePreWait()
+    {
+        if (_sequencePanel == null || _preWaitPanel == null) return;
+        if (!IsInstanceValid(_sequencePanel) || !IsInstanceValid(_preWaitPanel)) return;
+
+        var parent = _sequencePanel.GetParent();
+        if (parent == null || _preWaitPanel.GetParent() != parent) return;
+
+        int preIdx = _preWaitPanel.GetIndex();
+        int seqIdx = _sequencePanel.GetIndex();
+        if (seqIdx > preIdx)
+            parent.MoveChild(_sequencePanel, preIdx);
+    }
+
     private void SetupSignals()
     {
         _globalSignals.StopAll += GlobalStopAll;
@@ -183,7 +339,16 @@ public partial class ActiveCue : GodotObject
         _headStop.Pressed += OnHeadStopPressed;
 
         _preWaitPause.Pressed += TogglePreWaitPause;
-        _preWaitSkip.Pressed += PreWaitComplete;
+        _preWaitSkip.Pressed += OnPreWaitSkipPressed;
+
+        if (_sequencePause != null)
+            _sequencePause.Pressed += ToggleSchedulePause;
+        if (_sequenceSkip != null)
+            _sequenceSkip.Pressed += OnSequenceSkipPressed;
+        if (_postWaitPause != null)
+            _postWaitPause.Pressed += ToggleSchedulePause;
+        if (_postWaitSkip != null)
+            _postWaitSkip.Pressed += OnPostWaitSkipPressed;
     }
 
     private void OnHeadStopPressed()
@@ -214,20 +379,83 @@ public partial class ActiveCue : GodotObject
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task StartAsync()
     {
-        if (_isPlaying) return;
-        GD.Print($"ActiveCue:StartAsync - Starting: {_cue.Name}");
+        if (_isPlaying || _contentStarted) return;
+        GD.Print($"ActiveCue:StartAsync - Starting: {_cue.Name} (chain={_chainMember != null}, incoming={_incomingMode})");
         
-        // Setup UI
-        SetupUi();
-        SetupSignals();
-        SetupTimers();
-        
+        // UI may already be prepared (chain order); otherwise build now.
+        if (!_uiPrepared)
+            PrepareUiInOrder();
+
+        // GO chain member: show pending continue/follow + inactive pre-wait; head starts now.
+        if (_chainMember != null)
+        {
+            if (_chainRunStarted) return;
+            BeginChainMemberRun();
+            return;
+        }
+
+        // Nested child under a parent: classic path.
+        await StartPlaybackCoreAsync(includePreWait: true);
+    }
+
+    /// <summary>
+    /// Arms this cue from the previous chain member (continue at content-phase start, follow at complete).
+    /// Starts post-wait lead-in, then this cue's pre-wait and content.
+    /// </summary>
+    /// <param name="mode">Continue or Follow (for UI).</param>
+    /// <param name="postWait">Previous cue's post-wait duration.</param>
+    public void ArmIncoming(FollowType mode, double postWait)
+    {
+        if (_isCleaned || _suppressContentCompleted || _incomingArmed || _contentStarted)
+            return;
+
+        _incomingMode = mode;
+        _incomingWaitDuration = Math.Max(0.0, postWait);
+        _incomingArmed = true;
+
+        GD.Print(
+            $"ActiveCue:ArmIncoming - {_cue.Name} mode={mode} postWait={_incomingWaitDuration:F3} skipPre={_skipPreWait}");
+
+        // Zero post-wait: go straight into this cue's pre-wait / content.
+        if (_incomingWaitDuration <= 1e-9)
+        {
+            HideSequencePanel();
+            _ = StartPlaybackCoreAsync(includePreWait: true);
+            return;
+        }
+
+        BeginIncomingPostWait();
+    }
+
+    /// <summary>
+    /// Cancels this cue if it has not started content yet, and propagates to the rest of the chain.
+    /// </summary>
+    public void CancelPendingFromPredecessor()
+    {
+        if (_isCleaned) return;
+        if (_contentStarted) return;
+
+        _suppressContentCompleted = true;
+        NextInChain?.CancelPendingFromPredecessor();
+        Cleanup();
+    }
+
+    /// <summary>
+    /// Children, components, optional pre-wait, then content trigger.
+    /// </summary>
+    private async Task StartPlaybackCoreAsync(bool includePreWait)
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+        _contentStarted = true;
+        _incomingArmed = true;
+        HideSequencePanel();
+
         foreach (var childId in _cue.ChildCues)
         {
             var child = CueList.FetchCueFromId(childId);
             if (child == null)
             {
-                GD.PrintErr($"ActiveCue:StartAsync - Child cue {childId} not found");
+                GD.PrintErr($"ActiveCue:StartPlaybackCoreAsync - Child cue {childId} not found");
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"Child cue {childId} not found for parent {_cue.Name}", 2);
                 continue;
@@ -248,31 +476,34 @@ public partial class ActiveCue : GodotObject
             _isFinished = true;
             if (_childActiveCues.Count == 0)
             {
-                Cleanup();
+                RaiseContentPhaseStarted();
+                HandleNaturalContentFinished();
                 return;
             }
-            // Parent with only children: stay alive until children complete
+            // Parent with only children: content phase starts when children start.
+            RaiseContentPhaseStarted();
             _isPlaying = true;
             return;
         }
 
         _isPlaying = true;
 
-        // Pre-wait
-        if (_cue.PreWait > 0)
+        bool doPreWait = includePreWait && !_skipPreWait && _cue.PreWait > 0;
+        if (doPreWait)
         {
             PreWait();
         }
         else
         {
+            HidePreWaitPanel();
+            RaiseContentPhaseStarted();
             await TriggerComponents();
-            // If every component failed to start, clean up the orphaned bar
             EnsureAliveOrCleanup();
         }
     }
 
     /// <summary>
-    /// After trigger, if nothing is left running and no children remain, clean up the active bar.
+    /// After trigger, if nothing is left running and no children remain, finish content (and sequence if needed).
     /// </summary>
     private void EnsureAliveOrCleanup()
     {
@@ -288,9 +519,7 @@ public partial class ActiveCue : GodotObject
         {
             _isFinished = true;
             if (_childActiveCues.Count == 0)
-            {
-                Cleanup();
-            }
+                HandleNaturalContentFinished();
         }
     }
 
@@ -344,12 +573,16 @@ public partial class ActiveCue : GodotObject
                 GD.PrintErr($"ActiveCue:TriggerAudioComponent - Failed to start audio for {audioComp.AudioFile}");
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"Failed to start audio in {_cue.Name}: no output streams (check patch/device assignment).", 2);
-                // Clean() emits Completed → HandleAudioComponentCompleted removes UI
+                // Clean() emits Completed → CompleteAudioByPanelId removes UI
                 playback.Clean();
                 return;
             }
 
             playback.Play();
+            // Honour cue-level pause (e.g. global pause while this component was still setting up).
+            if (_isPaused)
+                playback.Pause();
+            SyncPauseTransportUi();
         }
         catch (Exception ex)
         {
@@ -397,6 +630,9 @@ public partial class ActiveCue : GodotObject
             }
 
             await playback.PlayAsync();
+            if (_isPaused)
+                playback.Pause();
+            SyncPauseTransportUi();
         }
         catch (Exception ex)
         {
@@ -459,26 +695,46 @@ public partial class ActiveCue : GodotObject
     {
         GD.Print($"ActiveCue:PreWait - Pre-wait of {_cue.PreWait} detected");
         
+        // Ensure timer exists (chain path may have skipped SetupTimers pre-wait if duration was 0 at setup).
+        if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer))
+        {
+            _preWaitTimer = new Timer { WaitTime = _cue.PreWait, OneShot = true, IgnoreTimeScale = true };
+            _activeCueBar.AddChild(_preWaitTimer);
+        }
+        else
+        {
+            _preWaitTimer.WaitTime = _cue.PreWait;
+        }
+
         //Ui
         var preWaitNameLabel = _activeCueBar.GetNode<Label>("%PreWaitNameLabel");
         preWaitNameLabel.Text = _cue.Name;
-        _preWaitTimerLabel.Text = _preWaitTimer.TimeLeft.ToString();
+        _preWaitTimerLabel.Text = UiUtilities.FormatTime(_cue.PreWait);
+        if (_preWaitProgress != null)
+            _preWaitProgress.Value = 100;
 
         _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
         _preWaitSkip.Icon = _activeCueBar.GetThemeIcon("Skip", "AtlasIcons");
         
+        _preWaitPanel.Modulate = Colors.White;
         _preWaitPanel.Visible = true;
 
         _inPreWait = true;
-        _updateTimer.Timeout += PreWaitUpdate;
+        _preWaitFinished = false;
+        HookPreWaitUpdate(true);
         
         // Pause logic
-        _preWaitTimer.Timeout += PreWaitComplete;
+        if (!_preWaitTimeoutHooked)
+        {
+            _preWaitTimer.Timeout += OnPreWaitTimerTimeout;
+            _preWaitTimeoutHooked = true;
+        }
         _preWaitTimer.Start();
     }
 
     private void PreWaitUpdate()
     {
+        if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
         _preWaitTimerLabel.Text = UiUtilities.FormatTime(_preWaitTimer.TimeLeft);
         var preWaitPercentage = (_preWaitTimer.TimeLeft / (float)_cue.PreWait) * 100;
         _preWaitProgress.Value = preWaitPercentage;
@@ -486,50 +742,430 @@ public partial class ActiveCue : GodotObject
 
     private void TogglePreWaitPause()
     {
+        if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
         if (_preWaitTimer.Paused)
-        {
             PreWaitResume();
-        }
         else
-        {
             PreWaitPause();
-        }
     }
 
     private void PreWaitPause()
     {
+        if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
         _preWaitTimer.SetPaused(true);
         _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
     }
 
     private void PreWaitResume()
     {
+        if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
         _preWaitTimer.SetPaused(false);
         _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
     }
-    
-    private async void PreWaitComplete()
+
+    private void OnPreWaitTimerTimeout()
     {
-        _updateTimer.Timeout -= PreWaitUpdate;
-        _preWaitTimer.Timeout -= PreWaitComplete;
-        _preWaitPause.Pressed -= TogglePreWaitPause;
-        if (_preWaitPanel != null && IsInstanceValid(_preWaitPanel))
-            _preWaitPanel.QueueFree();
+        _ = FinishPreWaitAndStartContent();
+    }
+
+    /// <summary>
+    /// Ends pre-wait (timer or skip) and starts content once. Safe against double-call / missing timer hooks.
+    /// </summary>
+    private async Task FinishPreWaitAndStartContent()
+    {
+        if (_preWaitFinished || _isCleaned || _suppressContentCompleted) return;
+        if (!_inPreWait && _contentStarted) return;
+
+        _preWaitFinished = true;
         _inPreWait = false;
+        HookPreWaitUpdate(false);
+
+        if (_preWaitTimer != null && IsInstanceValid(_preWaitTimer))
+        {
+            _preWaitTimer.Stop();
+            if (_preWaitTimeoutHooked)
+            {
+                _preWaitTimer.Timeout -= OnPreWaitTimerTimeout;
+                _preWaitTimeoutHooked = false;
+            }
+        }
+
+        HidePreWaitPanel();
+
+        RaiseContentPhaseStarted();
         await TriggerComponents();
         EnsureAliveOrCleanup();
+    }
+
+    private void HidePreWaitPanel()
+    {
+        if (_preWaitPanel != null && IsInstanceValid(_preWaitPanel))
+        {
+            _preWaitPanel.Visible = false;
+            _preWaitPanel.Modulate = Colors.White;
+        }
+    }
+
+    /// <summary>
+    /// Pre-wait skip: only advances past pre-wait. Does not skip continue/follow.
+    /// If pre-wait is not active yet, marks it skipped for when playback reaches that phase.
+    /// </summary>
+    private void OnPreWaitSkipPressed()
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+
+        // Already past pre-wait / in content.
+        if (_contentStarted && !_inPreWait)
+            return;
+
+        if (_inPreWait)
+        {
+            // Active pre-wait → end it now (content starts; continue/follow already finished).
+            _ = FinishPreWaitAndStartContent();
+            return;
+        }
+
+        // Not in pre-wait yet (still on continue/follow, or pending) → skip pre-wait when we get there.
+        _skipPreWait = true;
+        HidePreWaitPanel();
+        GD.Print($"ActiveCue:OnPreWaitSkipPressed - {_cue.Name}: pre-wait will be skipped");
+    }
+
+    /// <summary>
+    /// GO chain path: head starts immediately; other members wait to be armed (continue/follow rules).
+    /// </summary>
+    private void BeginChainMemberRun()
+    {
+        if (_isCleaned || _chainRunStarted) return;
+        _chainRunStarted = true;
+
+        // Pre-wait strip: inactive until this cue is allowed to run its own pre-wait.
+        ShowInactivePreWaitPreview();
+
+        // Outgoing post-wait strip is not used — next cue shows continue/follow lead-in instead.
+        if (_postWaitPanel != null && IsInstanceValid(_postWaitPanel))
+            _postWaitPanel.Visible = false;
+
+        bool isHead = _incomingMode == FollowType.None;
+        if (isHead)
+        {
+            // Head of the GO: no incoming wait — go straight into pre-wait / content.
+            _incomingArmed = true;
+            HideSequencePanel();
+            _ = StartPlaybackCoreAsync(includePreWait: true);
+            return;
+        }
+
+        // Pending: visible but not counting until predecessor arms us.
+        ShowPendingIncomingUi();
+    }
+
+    private void ShowInactivePreWaitPreview()
+    {
+        if (_preWaitPanel == null || !IsInstanceValid(_preWaitPanel)) return;
+        if (_cue.PreWait <= 1e-9)
+        {
+            _preWaitPanel.Visible = false;
+            return;
+        }
+
+        var preWaitNameLabel = _activeCueBar.GetNodeOrNull<Label>("%PreWaitNameLabel");
+        if (preWaitNameLabel != null)
+            preWaitNameLabel.Text = _cue.Name ?? string.Empty;
+        if (_preWaitTimerLabel != null)
+            _preWaitTimerLabel.Text = UiUtilities.FormatTime(_cue.PreWait);
+        if (_preWaitProgress != null)
+            _preWaitProgress.Value = 100;
+        _preWaitPanel.Modulate = new Color(1f, 1f, 1f, 0.4f);
+        _preWaitPanel.Visible = true;
+        if (_preWaitPause != null)
+            _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        if (_preWaitSkip != null)
+            _preWaitSkip.Icon = _activeCueBar.GetThemeIcon("Skip", "AtlasIcons");
+    }
+
+    private void ShowPendingIncomingUi()
+    {
+        if (_sequencePanel == null || !IsInstanceValid(_sequencePanel)) return;
+
+        bool isFollow = _incomingMode == FollowType.Follow;
+        if (_sequenceLabel != null)
+            _sequenceLabel.Text = isFollow ? "Follow" : "Continue";
+        if (_sequenceNameLabel != null)
+        {
+            _sequenceNameLabel.Text = isFollow
+                ? "Waiting for previous to complete…"
+                : "Waiting to continue…";
+        }
+        if (_sequenceTimerLabel != null)
+        {
+            _sequenceTimerLabel.Text = _incomingWaitDuration > 1e-9
+                ? UiUtilities.FormatTime(_incomingWaitDuration)
+                : "";
+        }
+
+        // Continue: no progress bar — label only. Follow: keep bar for post-wait once armed.
+        if (_sequenceProgress != null)
+        {
+            _sequenceProgress.Value = 100;
+            // Hide fill for continue (label-style); show for follow.
+            _sequenceProgress.Modulate = isFollow ? Colors.White : new Color(1, 1, 1, 0.15f);
+        }
+
+        _sequencePanel.Modulate = new Color(1f, 1f, 1f, 0.45f);
+        _sequencePanel.Visible = true;
+        if (_sequencePause != null)
+            _sequencePause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        if (_sequenceSkip != null)
+            _sequenceSkip.Icon = _activeCueBar.GetThemeIcon("Skip", "AtlasIcons");
+    }
+
+    /// <summary>
+    /// Starts the post-wait after arm (continue label countdown or follow progress bar).
+    /// </summary>
+    private void BeginIncomingPostWait()
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+
+        _inIncomingWait = true;
+        bool isFollow = _incomingMode == FollowType.Follow;
+
+        if (_sequencePanel != null && IsInstanceValid(_sequencePanel))
+        {
+            if (_sequenceLabel != null)
+                _sequenceLabel.Text = isFollow ? "Follow" : "Continue";
+            if (_sequenceNameLabel != null)
+            {
+                // Continue uses a text status instead of a progress bar.
+                _sequenceNameLabel.Text = isFollow
+                    ? (_cue.Name ?? "")
+                    : $"Continuing after {UiUtilities.FormatTime(_incomingWaitDuration)}";
+            }
+            if (_sequenceTimerLabel != null)
+                _sequenceTimerLabel.Text = UiUtilities.FormatTime(_incomingWaitDuration);
+            if (_sequenceProgress != null)
+            {
+                _sequenceProgress.Value = 100;
+                _sequenceProgress.Modulate = isFollow ? Colors.White : new Color(1, 1, 1, 0.12f);
+            }
+            _sequencePanel.Modulate = Colors.White;
+            _sequencePanel.Visible = true;
+        }
+
+        _incomingWaitTimer = new Timer
+        {
+            WaitTime = _incomingWaitDuration,
+            OneShot = true,
+            IgnoreTimeScale = true,
+            Autostart = false
+        };
+        _activeCueBar.AddChild(_incomingWaitTimer);
+        _incomingWaitTimer.Timeout += OnIncomingPostWaitComplete;
+        _incomingWaitTimeoutHooked = true;
+        _incomingWaitTimer.Start();
+        HookIncomingWaitUpdate(true);
+    }
+
+    private void IncomingWaitUpdate()
+    {
+        if (!_inIncomingWait || _incomingWaitTimer == null || !IsInstanceValid(_incomingWaitTimer))
+            return;
+
+        double left = _incomingWaitTimer.TimeLeft;
+        bool isFollow = _incomingMode == FollowType.Follow;
+
+        if (_sequenceTimerLabel != null)
+            _sequenceTimerLabel.Text = UiUtilities.FormatTime(left);
+
+        if (!isFollow && _sequenceNameLabel != null)
+            _sequenceNameLabel.Text = $"Continuing after {UiUtilities.FormatTime(left)}";
+
+        if (isFollow && _sequenceProgress != null && _incomingWaitDuration > 1e-9)
+            _sequenceProgress.Value = (left / _incomingWaitDuration) * 100.0;
+    }
+
+    private void OnIncomingPostWaitComplete()
+    {
+        if (!_inIncomingWait) return;
+        HookIncomingWaitUpdate(false);
+        FreeIncomingWaitTimer();
+        _inIncomingWait = false;
+        HideSequencePanel();
+
+        if (_isCleaned || _suppressContentCompleted) return;
+        // Proceed to this cue's pre-wait (unless pre-wait was already skipped).
+        _ = StartPlaybackCoreAsync(includePreWait: true);
+    }
+
+    /// <summary>
+    /// Continue/follow skip: abandon continue/follow entirely and play this cue now.
+    /// Does not skip this cue's own pre-wait (use the pre-wait skip for that).
+    /// </summary>
+    private void OnSequenceSkipPressed()
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+        if (_contentStarted) return;
+
+        // Head has no continue/follow bar to skip, or we already moved past it into pre-wait alone.
+        if (_incomingMode == FollowType.None) return;
+        if (_incomingArmed && !_inIncomingWait) return;
+
+        GD.Print($"ActiveCue:OnSequenceSkipPressed - {_cue.Name}: skipping continue/follow, playing cue now");
+
+        // Cancel any active continue/follow countdown.
+        if (_inIncomingWait)
+        {
+            HookIncomingWaitUpdate(false);
+            if (_incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
+                _incomingWaitTimer.Stop();
+            FreeIncomingWaitTimer();
+            _inIncomingWait = false;
+        }
+
+        // Independently started — ignore later ArmIncoming from the predecessor.
+        _incomingArmed = true;
+        HideSequencePanel();
+
+        // Play this cue (own pre-wait still applies unless the user also skipped it).
+        _ = StartPlaybackCoreAsync(includePreWait: true);
+    }
+
+    private void OnPostWaitSkipPressed()
+    {
+        // Outgoing post-wait bar unused in chain mode.
+    }
+
+    private void ToggleSchedulePause()
+    {
+        // Pause incoming post-wait and/or media.
+        if (_inIncomingWait && _incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
+        {
+            if (_incomingWaitTimer.Paused)
+            {
+                _incomingWaitTimer.SetPaused(false);
+                if (_sequencePause != null)
+                    _sequencePause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+            }
+            else
+            {
+                _incomingWaitTimer.SetPaused(true);
+                if (_sequencePause != null)
+                    _sequencePause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
+            }
+            return;
+        }
+
+        if (_inPreWait)
+            TogglePreWaitPause();
+        else if (_contentStarted)
+            TogglePauseAll();
+    }
+
+    private void HideSequencePanel()
+    {
+        if (_sequencePanel != null && IsInstanceValid(_sequencePanel))
+        {
+            _sequencePanel.Visible = false;
+            _sequencePanel.Modulate = Colors.White;
+        }
+    }
+
+    private void FreeIncomingWaitTimer()
+    {
+        if (_incomingWaitTimer == null) return;
+        var timer = _incomingWaitTimer;
+        _incomingWaitTimer = null;
+        bool wasHooked = _incomingWaitTimeoutHooked;
+        _incomingWaitTimeoutHooked = false;
+        if (!IsInstanceValid(timer))
+            return;
+        timer.Stop();
+        // Only disconnect if we still believe we are hooked (avoids Godot disconnect errors).
+        if (wasHooked)
+        {
+            try { timer.Timeout -= OnIncomingPostWaitComplete; }
+            catch { /* already disconnected */ }
+        }
+        timer.QueueFree();
+    }
+
+    private void HookIncomingWaitUpdate(bool hook)
+    {
+        if (_updateTimer == null || !IsInstanceValid(_updateTimer))
+        {
+            _incomingWaitUpdateHooked = false;
+            return;
+        }
+        if (hook && !_incomingWaitUpdateHooked)
+        {
+            _updateTimer.Timeout += IncomingWaitUpdate;
+            _incomingWaitUpdateHooked = true;
+        }
+        else if (!hook && _incomingWaitUpdateHooked)
+        {
+            _updateTimer.Timeout -= IncomingWaitUpdate;
+            _incomingWaitUpdateHooked = false;
+        }
+    }
+
+    private void HookPreWaitUpdate(bool hook)
+    {
+        if (_updateTimer == null || !IsInstanceValid(_updateTimer))
+        {
+            _preWaitUpdateHooked = false;
+            return;
+        }
+
+        if (hook && !_preWaitUpdateHooked)
+        {
+            _updateTimer.Timeout += PreWaitUpdate;
+            _preWaitUpdateHooked = true;
+        }
+        else if (!hook && _preWaitUpdateHooked)
+        {
+            _updateTimer.Timeout -= PreWaitUpdate;
+            _preWaitUpdateHooked = false;
+        }
+    }
+
+    private void RaiseContentPhaseStarted()
+    {
+        if (_contentPhaseStartedRaised || _suppressContentCompleted || _isCleaned)
+            return;
+        _contentPhaseStartedRaised = true;
+        try
+        {
+            ContentPhaseStarted?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:RaiseContentPhaseStarted - {_cue?.Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Natural content end: raise ContentCompleted (follow arms next in real time) and cleanup.
+    /// </summary>
+    private void HandleNaturalContentFinished()
+    {
+        if (_isCleaned) return;
+
+        RaiseContentCompleted();
+        ScheduleCleanup();
     }
 
 
     private void UpdateUi()
     {
-        foreach (var panel in _activeAudioComponents.Keys)
+        if (_isCleaned) return;
+
+        // Snapshot keys — dictionary may change if a component completes mid-tick.
+        foreach (var panel in _activeAudioComponents.Keys.ToList())
         {
-            if (IsInstanceValid(panel))
-            {
-                var audioComponent = _componentToAudio[panel];
-                UpdateComponentUiState(panel, audioComponent);
-            }
+            if (!IsInstanceValid(panel)) continue;
+            if (!_componentToAudio.TryGetValue(panel, out var audioComponent) || audioComponent == null)
+                continue;
+            UpdateComponentUiState(panel, audioComponent);
         }
         // Video components are updated via TimeUpdated event for real-time updates
     }
@@ -612,7 +1248,8 @@ public partial class ActiveCue : GodotObject
             timeLabel.Text = UiUtilities.FormatTime(audioComponent.TotalDuration);
             
             typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio2", "AtlasIcons");
-            pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+            // If cue is already paused (global pause during setup), show resume icon.
+            pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
             
             
@@ -623,21 +1260,18 @@ public partial class ActiveCue : GodotObject
             
             pauseButton.Pressed += () => 
             {
+                if (_isCleaned || !IsInstanceValid(componentPanel)) return;
                 if (!_activeAudioComponents.TryGetValue(componentPanel, out var pb) || pb == null)
                     return;
-                bool componentPaused = pb.IsPaused;
-                
-                if (!componentPaused)
-                {
+
+                if (!pb.IsPaused)
                     pb.Pause();
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
-                }
                 else
-                {
-                    GD.Print($"ActiveCue:SetupAudioComponent: Resuming component {componentPanel.Name}");
                     pb.Resume();
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-                }
+
+                // Component-level toggle; refresh this button from playback state.
+                if (IsInstanceValid(pauseButton) && IsInstanceValid(_activeCueBar))
+                    pauseButton.Icon = _activeCueBar.GetThemeIcon(pb.IsPaused ? "Play" : "Pause", "AtlasIcons");
             };
             
             // Stop
@@ -687,9 +1321,7 @@ public partial class ActiveCue : GodotObject
             };
 
             _activeComponentCount++;
-            
-            // Cleanup
-            playback.Completed += () => CallDeferred(nameof(HandleAudioComponentCompleted), componentPanel); // Defer to main thread
+            WireAudioCompleted(playback, componentPanel);
         }
         catch (Exception ex)
         {
@@ -699,6 +1331,39 @@ public partial class ActiveCue : GodotObject
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating audio component for cue {_cue.Name}: {ex.Message}", 2);
         }
+    }
+
+    /// <summary>
+    /// Subscribes to audio completion without capturing a freeable PanelContainer into CallDeferred args.
+    /// </summary>
+    private void WireAudioCompleted(ActiveAudioPlayback playback, PanelContainer componentPanel)
+    {
+        ulong panelId = componentPanel.GetInstanceId();
+        ActiveAudioPlayback.CompletedEventHandler handler = () =>
+        {
+            // Never touch the PanelContainer here — it may already be disposed during Cleanup.
+            Callable.From(() => CompleteAudioByPanelId(panelId)).CallDeferred();
+        };
+        playback.Completed += handler;
+        _audioCompleteHandlers.Add((playback, handler));
+    }
+
+    private void CompleteAudioByPanelId(ulong panelId)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+
+        PanelContainer panel = FindLivePanelKey(_activeAudioComponents.Keys, panelId);
+        if (panel == null)
+        {
+            CheckForCueCompletion();
+            return;
+        }
+
+        _activeAudioComponents.Remove(panel);
+        _componentToAudio.Remove(panel);
+        if (IsInstanceValid(panel))
+            panel.QueueFree();
+        CheckForCueCompletion();
     }
 
     /// <summary>
@@ -747,26 +1412,23 @@ public partial class ActiveCue : GodotObject
             timeLabel.Text = UiUtilities.FormatTime(videoComponent.TotalDuration);
 
             typeIcon.Icon = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
-            pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+            pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
             // Component Logic
             _activeVideoComponents.Add(componentPanel, playback);
             _componentToVideo.Add(componentPanel, videoComponent);
             
-            pauseButton.Pressed += () => {
-                bool componentPaused = playback.IsPaused;
-                if (!componentPaused)
-                {
+            pauseButton.Pressed += () =>
+            {
+                if (_isCleaned || !IsInstanceValid(componentPanel)) return;
+                if (!playback.IsPaused)
                     playback.Pause();
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
-                }
                 else
-                {
-                    GD.Print($"ActiveCue:SetupVideoComponent: Resuming component {componentPanel.Name}");
                     playback.Resume();
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
-                }
+
+                if (IsInstanceValid(pauseButton) && IsInstanceValid(_activeCueBar))
+                    pauseButton.Icon = _activeCueBar.GetThemeIcon(playback.IsPaused ? "Play" : "Pause", "AtlasIcons");
             };
 
             // Stop
@@ -811,12 +1473,16 @@ public partial class ActiveCue : GodotObject
                     timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
                 }
             };
-            playback.TimeUpdated += (time) => CallDeferred(nameof(UpdateVideoUi), time, componentPanel); // Defer to main thread
+            ulong videoPanelId = componentPanel.GetInstanceId();
+            playback.TimeUpdated += time =>
+            {
+                // Capture id only — panel may be freed before deferred UI runs.
+                double t = time;
+                Callable.From(() => UpdateVideoUiByPanelId(t, videoPanelId)).CallDeferred();
+            };
             
             _activeComponentCount++;
-
-            // Cleanup
-            playback.Completed += () => CallDeferred(nameof(HandleVideoComponentCompleted), componentPanel); // Defer to main thread
+            WireVideoCompleted(playback, componentPanel);
         }
         catch (Exception ex)
         {
@@ -826,6 +1492,56 @@ public partial class ActiveCue : GodotObject
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating video component for cue {_cue.Name}: {ex.Message}", 2);
         }
+    }
+
+    /// <summary>
+    /// Subscribes to video completion without capturing a freeable PanelContainer into CallDeferred args.
+    /// </summary>
+    private void WireVideoCompleted(ActiveVideoPlayback playback, PanelContainer componentPanel)
+    {
+        ulong panelId = componentPanel.GetInstanceId();
+        ActiveVideoPlayback.CompletedEventHandler handler = () =>
+        {
+            Callable.From(() => CompleteVideoByPanelId(panelId)).CallDeferred();
+        };
+        playback.Completed += handler;
+        _videoCompleteHandlers.Add((playback, handler));
+    }
+
+    private void CompleteVideoByPanelId(ulong panelId)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+
+        PanelContainer panel = FindLivePanelKey(_activeVideoComponents.Keys, panelId);
+        if (panel == null)
+        {
+            CheckForCueCompletion();
+            return;
+        }
+
+        _activeVideoComponents.Remove(panel);
+        _componentToVideo.Remove(panel);
+        if (IsInstanceValid(panel))
+            panel.QueueFree();
+        CheckForCueCompletion();
+    }
+
+    private void UpdateVideoUiByPanelId(double time, ulong panelId)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+        PanelContainer panel = FindLivePanelKey(_activeVideoComponents.Keys, panelId);
+        if (panel == null) return;
+        UpdateVideoUi(time, panel);
+    }
+
+    private static PanelContainer FindLivePanelKey(IEnumerable<PanelContainer> keys, ulong panelId)
+    {
+        foreach (var key in keys)
+        {
+            if (key != null && IsInstanceValid(key) && key.GetInstanceId() == panelId)
+                return key;
+        }
+        return null;
     }
 
 
@@ -909,9 +1625,12 @@ public partial class ActiveCue : GodotObject
     
     private void UpdateComponentUiState(PanelContainer componentPanel, AudioComponent audioComponent)
     {
+        if (!IsInstanceValid(componentPanel) || audioComponent == null) return;
+        if (!_activeAudioComponents.TryGetValue(componentPanel, out var audioPlayback) || audioPlayback == null)
+            return;
 
-        var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
-        var audioPlayback = _activeAudioComponents[componentPanel];
+        var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
+        if (progressBar == null) return;
         if (audioPlayback.IsStopped || audioPlayback.IsPaused) return;
         //GD.Print($"ActiveCue:UpdateComponentUiState - Current time ms: {audioPlayback.Decoder.CurrentTime}");
         float trackTime = audioPlayback.GetPlaybackTimeMs() / 1000f; // ms to seconds
@@ -942,11 +1661,15 @@ public partial class ActiveCue : GodotObject
 
     private void UpdateVideoUi(double time, PanelContainer componentPanel)
     {
-        if (!IsInstanceValid(componentPanel) || !_activeVideoComponents.ContainsKey(componentPanel) || !_componentToVideo.ContainsKey(componentPanel)) return;
+        if (_isCleaned || !IsInstanceValid(this)) return;
+        if (!IsInstanceValid(componentPanel)) return;
+        if (!_activeVideoComponents.TryGetValue(componentPanel, out var videoPlayback) || videoPlayback == null)
+            return;
+        if (!_componentToVideo.TryGetValue(componentPanel, out var videoComponent) || videoComponent == null)
+            return;
 
-        var videoComponent = _componentToVideo[componentPanel];
-        var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
-        var videoPlayback = _activeVideoComponents[componentPanel];
+        var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
+        if (progressBar == null) return;
         if (videoPlayback.IsStopped || videoPlayback.IsPaused) return;
         float trackTime = (float)time;
         float progressPercentage = ((trackTime - (float)videoComponent.StartTime) / (float)videoPlayback.GetDuration() * 100f);
@@ -996,54 +1719,73 @@ public partial class ActiveCue : GodotObject
         if (propagateToChildren)
         {
             foreach (var child in _childActiveCues.ToList())
-            {
                 child.ResumeAll(true);
-            }
         }
 
         foreach (var playback in _activeAudioComponents.Values)
-        {
-            playback.Resume(); // Resumes if paused
-        }
+            playback.Resume();
 
         foreach (var playback in _activeVideoComponents.Values)
-        {
-            playback.Resume(); // Resumes if paused
-        }
+            playback.Resume();
 
         if (_updateTimer != null && IsInstanceValid(_updateTimer))
             _updateTimer.Start();
-        if (_headPause != null && IsInstanceValid(_headPause))
-            _headPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+
+        // Keep head + component + nested transport icons in sync with playback state.
+        SyncPauseTransportUi();
     }
 
     private void PauseAll(bool propagateToChildren = true)
     {
+        _isPaused = true;
+
         if (propagateToChildren)
         {
             foreach (var child in _childActiveCues.ToList())
-            {
                 child.PauseAll(true);
-            }
         }
 
-        foreach (var playback in _activeAudioComponents)
-        {
-            playback.Value.Pause();
-            if (IsInstanceValid(playback.Key))
-                playback.Key.GetNode<Button>("%ComponentPause").Icon =
-                    playback.Key.GetThemeIcon("Play", "AtlasIcons");
-        }
-        foreach (var playback in _activeVideoComponents)
-        {
-            playback.Value.Pause();
-            if (IsInstanceValid(playback.Key))
-                playback.Key.GetNode<Button>("%ComponentPause").Icon =
-                    playback.Key.GetThemeIcon("Play", "AtlasIcons");
-        }
+        foreach (var playback in _activeAudioComponents.Values)
+            playback.Pause();
+
+        foreach (var playback in _activeVideoComponents.Values)
+            playback.Pause();
+
+        SyncPauseTransportUi();
+    }
+
+    /// <summary>
+    /// Sets head and component pause/play icons from actual pause state.
+    /// Call after any pause/resume path (per-cue, global, nested).
+    /// </summary>
+    private void SyncPauseTransportUi()
+    {
+        if (_isCleaned || _activeCueBar == null || !IsInstanceValid(_activeCueBar))
+            return;
+
+        // Head: Play icon means "currently paused / press to resume".
         if (_headPause != null && IsInstanceValid(_headPause))
-            _headPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
-        _isPaused = true;
+        {
+            _headPause.Icon = _activeCueBar.GetThemeIcon(
+                _isPaused ? "Play" : "Pause", "AtlasIcons");
+        }
+
+        SyncComponentPauseIcons(_activeAudioComponents, p => p != null && p.IsPaused);
+        SyncComponentPauseIcons(_activeVideoComponents, p => p != null && p.IsPaused);
+    }
+
+    private static void SyncComponentPauseIcons<T>(
+        Dictionary<PanelContainer, T> map,
+        Func<T, bool> isPaused)
+    {
+        foreach (var kv in map)
+        {
+            if (!IsInstanceValid(kv.Key) || kv.Value == null) continue;
+            var btn = kv.Key.GetNodeOrNull<Button>("%ComponentPause");
+            if (btn == null) continue;
+            // Component may be paused on its own, or via cue-level pause (IsPaused true on playback).
+            btn.Icon = kv.Key.GetThemeIcon(isPaused(kv.Value) ? "Play" : "Pause", "AtlasIcons");
+        }
     }
     
 
@@ -1060,8 +1802,12 @@ public partial class ActiveCue : GodotObject
         {
             if (_isCleaned) return;
 
-            // Pre-wait / paused: nothing (or no fade) to stop — tear down immediately.
-            if (_inPreWait || _isPaused)
+            // User/panic stop — do not arm continue/follow; cancel unstarted chain peers.
+            _suppressContentCompleted = true;
+            NextInChain?.CancelPendingFromPredecessor();
+
+            // Waiting / paused / not yet playing content — tear down immediately.
+            if (!_contentStarted || _inIncomingWait || _inPreWait || _isPaused)
             {
                 Cleanup();
                 return;
@@ -1134,79 +1880,60 @@ public partial class ActiveCue : GodotObject
     
     private void GlobalPauseAll()
     {
-        if (_inPreWait == true)
+        // Every ActiveCue (including nested group children) receives this signal itself —
+        // do not rely on parent propagation for globals.
+        if (_inIncomingWait && _incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
         {
-            PreWaitPause();
+            _incomingWaitTimer.SetPaused(true);
+            if (_sequencePause != null && _activeCueBar != null)
+                _sequencePause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
         }
-        else PauseAll(false);
+
+        if (_inPreWait)
+            PreWaitPause();
+
+        // Marks _isPaused so components that start later also come up paused, and syncs icons.
+        PauseAll(propagateToChildren: false);
     }
 
     private void GlobalResumeAll()
     {
-        if (_inPreWait == true)
+        if (_inIncomingWait && _incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
         {
+            _incomingWaitTimer.SetPaused(false);
+            if (_sequencePause != null && _activeCueBar != null)
+                _sequencePause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        }
+
+        if (_inPreWait)
             PreWaitResume();
-        }
-        else ResumeAll(false);
+
+        ResumeAll(propagateToChildren: false);
     }
     
     
     
-    private void HandleAudioComponentCompleted(PanelContainer componentPanel)
-    {
-        if (!IsInstanceValid(this) || _isCleaned || !_activeAudioComponents.ContainsKey(componentPanel))
-        {
-            GD.Print("ActiveCue:HandleAudioComponentCompleted - Component already cleaned or invalid");
-            return;
-        }
-
-        _activeAudioComponents.Remove(componentPanel);
-        _componentToAudio.Remove(componentPanel);
-        if (IsInstanceValid(componentPanel))
-            componentPanel.QueueFree();
-        CheckForCueCompletion();
-    }
-
-    private void HandleVideoComponentCompleted(PanelContainer componentPanel)
-    {
-        if (!IsInstanceValid(this) || _isCleaned || !_activeVideoComponents.ContainsKey(componentPanel))
-        {
-            GD.Print("ActiveCue:HandleVideoComponentCompleted - Component already cleaned or invalid");
-            return;
-        }
-
-        _activeVideoComponents.Remove(componentPanel);
-        _componentToVideo.Remove(componentPanel);
-        if (IsInstanceValid(componentPanel))
-            componentPanel.QueueFree();
-        CheckForCueCompletion();
-    }
-
     private void HandleOscComponentCompleted(PanelContainer componentPanel)
     {
-        if (!IsInstanceValid(this) || _isCleaned || !_activeOscComponents.ContainsKey(componentPanel))
-        {
-            GD.Print("ActiveCue:HandleOscComponentCompleted - Component already cleaned or invalid");
-            return;
-        }
-
-        _activeOscComponents.Remove(componentPanel);
-        if (IsInstanceValid(componentPanel))
-            componentPanel.QueueFree();
-        CheckForCueCompletion();
+        RemoveInstantComponent(componentPanel, _activeOscComponents);
     }
 
     private void HandleCueLightComponentCompleted(PanelContainer componentPanel)
     {
-        if (!IsInstanceValid(this) || _isCleaned || !_activeCueLightComponents.ContainsKey(componentPanel))
-        {
-            GD.Print("ActiveCue:HandleCueLightComponentCompleted - Component already cleaned or invalid");
-            return;
-        }
+        RemoveInstantComponent(componentPanel, _activeCueLightComponents);
+    }
 
-        _activeCueLightComponents.Remove(componentPanel);
-        if (IsInstanceValid(componentPanel))
-            componentPanel.QueueFree();
+    /// <summary>
+    /// Removes a short-lived component row (OSC / cue light) and checks cue completion.
+    /// </summary>
+    private void RemoveInstantComponent<T>(PanelContainer componentPanel, Dictionary<PanelContainer, T> map)
+    {
+        if (!IsInstanceValid(this) || _isCleaned) return;
+        if (componentPanel == null || !IsInstanceValid(componentPanel) || !map.ContainsKey(componentPanel))
+            return;
+
+        map.Remove(componentPanel);
+        componentPanel.QueueFree();
         CheckForCueCompletion();
     }
 
@@ -1222,9 +1949,8 @@ public partial class ActiveCue : GodotObject
             _isFinished = true;
             if (_childActiveCues.Count == 0)
             {
-                // Defer so we leave Godot's call lock (component completed handlers)
-                // before Cleanup / Free run.
-                ScheduleCleanup();
+                // Defer finish so we leave Godot's call lock before Cleanup / Free.
+                Callable.From(HandleNaturalContentFinished).CallDeferred();
             }
         }
     }
@@ -1233,8 +1959,28 @@ public partial class ActiveCue : GodotObject
     {
         _childActiveCues.Remove(child);
         if (_childActiveCues.Count == 0 && _isFinished)
+            Callable.From(HandleNaturalContentFinished).CallDeferred();
+    }
+
+    /// <summary>
+    /// Reports natural content completion once. Ignored after stop/panic or for looping media.
+    /// </summary>
+    private void RaiseContentCompleted()
+    {
+        if (_contentCompletedRaised || _suppressContentCompleted || _isCleaned)
+            return;
+        // Looping media never truly completes for sequence purposes.
+        if (_cue != null && _cue.Duration < 0)
+            return;
+
+        _contentCompletedRaised = true;
+        try
         {
-            ScheduleCleanup();
+            ContentCompleted?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:RaiseContentCompleted - {_cue?.Name}: {ex.Message}");
         }
     }
 
@@ -1245,6 +1991,9 @@ public partial class ActiveCue : GodotObject
     private void ScheduleCleanup()
     {
         if (_isCleaned || !IsInstanceValid(this)) return;
+        // Pending chain members stay until armed / cancelled.
+        if (_chainMember != null && !_contentStarted && !_suppressContentCompleted)
+            return;
         Callable.From(Cleanup).CallDeferred();
     }
 
@@ -1276,6 +2025,9 @@ public partial class ActiveCue : GodotObject
             _isPlaying = false;
         }
 
+        // Disconnect completion handlers BEFORE Clean/Stop so they cannot touch freed panels.
+        DisconnectPlaybackCompletionHandlers();
+
         // Hard-stop any remaining playbooks so decoders/fill loops do not leak.
         foreach (var playback in _activeAudioComponents.Values.ToList())
         {
@@ -1298,16 +2050,31 @@ public partial class ActiveCue : GodotObject
         _activeOscComponents.Clear();
         _activeCueLightComponents.Clear();
 
+        HookIncomingWaitUpdate(false);
+        FreeIncomingWaitTimer();
+
         if (_updateTimer != null && IsInstanceValid(_updateTimer))
         {
             _updateTimer.Stop();
             _updateTimer.Timeout -= UpdateUi;
+            HookPreWaitUpdate(false);
             _updateTimer.QueueFree();
+            _updateTimer = null;
         }
         if (_preWaitTimer != null && IsInstanceValid(_preWaitTimer))
+        {
             _preWaitTimer.QueueFree();
+            _preWaitTimer = null;
+        }
         if (_fadeTimer != null && IsInstanceValid(_fadeTimer))
+        {
             _fadeTimer.QueueFree();
+            _fadeTimer = null;
+        }
+
+        // Propagate cancel to unstarted followers if we never completed naturally.
+        if (_suppressContentCompleted)
+            NextInChain?.CancelPendingFromPredecessor();
 
         if (_globalSignals != null)
         {
@@ -1316,10 +2083,9 @@ public partial class ActiveCue : GodotObject
             _globalSignals.ResumeAll -= GlobalResumeAll;
         }
 
-        if (_headPause != null && IsInstanceValid(_headPause))
-            _headPause.Pressed -= TogglePauseAll;
-        if (_headStop != null && IsInstanceValid(_headStop))
-            _headStop.Pressed -= OnHeadStopPressed;
+        // Do not manually disconnect child-bar button handlers (PreWaitPause etc.): rebinding
+        // for the scheduled path makes -= of the original handler throw "nonexistent connection".
+        // QueueFree of the active bar tears down those signals with the nodes.
 
         if (_activeCueBar != null && IsInstanceValid(_activeCueBar))
         {
@@ -1342,6 +2108,40 @@ public partial class ActiveCue : GodotObject
         // Callable.From invokes the C# Free() after the idle frame — reliable for GodotObject.
         if (IsInstanceValid(this))
             Callable.From(FreeDeferred).CallDeferred();
+    }
+
+    /// <summary>
+    /// Detaches Completed handlers so Clean/Stop cannot re-enter UI after free.
+    /// </summary>
+    private void DisconnectPlaybackCompletionHandlers()
+    {
+        foreach (var (playback, handler) in _audioCompleteHandlers)
+        {
+            try
+            {
+                if (playback != null && IsInstanceValid(playback))
+                    playback.Completed -= handler;
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:DisconnectPlaybackCompletionHandlers - Audio: {ex.Message}");
+            }
+        }
+        _audioCompleteHandlers.Clear();
+
+        foreach (var (playback, handler) in _videoCompleteHandlers)
+        {
+            try
+            {
+                if (playback != null && IsInstanceValid(playback))
+                    playback.Completed -= handler;
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:DisconnectPlaybackCompletionHandlers - Video: {ex.Message}");
+            }
+        }
+        _videoCompleteHandlers.Clear();
     }
 
     /// <summary>

@@ -10,13 +10,30 @@ namespace Cue2.Base.Classes.CueTypes;
 
 
 /// <summary>
-/// Enum for cue follow types
+/// How a cue chains to the next cue at the same nesting level (cue sequences).
 /// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item><see cref="None"/> — do not auto-start the next cue.</item>
+/// <item><see cref="Continue"/> — auto-continue: after this cue's pre-wait ends (content phase starts),
+/// the next sibling is armed and waits this cue's <see cref="Cue.PostWait"/> before starting
+/// (post-wait 0 = next starts when content phase starts).</item>
+/// <item><see cref="Follow"/> — auto-follow: when this cue's content completes, the next sibling is armed
+/// and waits this cue's <see cref="Cue.PostWait"/> before starting (post-wait 0 = immediate).</item>
+/// </list>
+/// The next cue is always the next entry at the same nested level (root order or parent <see cref="Cue.ChildCues"/>).
+/// Armed next cues appear in the active list with a continue/follow lead-in timer, then their own pre-wait/content.
+/// </remarks>
 public enum FollowType
 {
-    None,
-    Continue, // Continue will tell the next cue in cuelist to trigger when post-wait has elapsed. 
-    Follow // Follow will tell the next cue in cuelist to trigger at the same time
+    /// <summary>Do not continue — next cue is not started automatically.</summary>
+    None = 0,
+
+    /// <summary>Auto-continue — next sibling armed after pre-wait; then post-wait lead-in on that cue.</summary>
+    Continue = 1,
+
+    /// <summary>Auto-follow — next sibling armed after content completes; then post-wait lead-in on that cue.</summary>
+    Follow = 2
 }
 
 public class Cue : ICue
@@ -120,7 +137,22 @@ public class Cue : ICue
             ColorChanged?.Invoke(value);
         }
     }
-    public FollowType Follow = FollowType.None;
+    private FollowType _follow = FollowType.None;
+
+    /// <summary>
+    /// Continue / follow mode for cue sequences (see <see cref="FollowType"/>).
+    /// </summary>
+    /// <value>One of <see cref="FollowType.None"/>, <see cref="FollowType.Continue"/>, or <see cref="FollowType.Follow"/>.</value>
+    public FollowType Follow
+    {
+        get => _follow;
+        set
+        {
+            if (_follow == value) return;
+            _follow = value;
+            FollowChanged?.Invoke(_follow);
+        }
+    }
     
     /// <summary>
     /// Stored value if it's children are expanded to view.
@@ -175,7 +207,7 @@ public class Cue : ICue
         Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : 0.0;
         TotalDuration = data.ContainsKey("TotalDuration") ? (double)data["TotalDuration"] : 0.0;
         PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : 0.0;
-        Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
+        _follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
         Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : false;
         Color = data.TryGetValue("Color", out var value) ? Color.FromString(value.AsString(), Color) : Color;
 
@@ -447,7 +479,8 @@ public class Cue : ICue
         Duration = data.ContainsKey("Duration") ? (double)data["Duration"] : Duration;
         TotalDuration = data.ContainsKey("TotalDuration") ? (double)data["TotalDuration"] : TotalDuration;
         PostWait = data.ContainsKey("PostWait") ? (double)data["PostWait"] : PostWait;
-        Follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : Follow;
+        // Assign via field then notify once so UI gets a single FollowChanged after full apply.
+        var loadedFollow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : _follow;
         Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : Expanded;
         Color = data.TryGetValue("Color", out var colorVal)
             ? Color.FromString(colorVal.AsString(), Color)
@@ -493,8 +526,76 @@ public class Cue : ICue
             }
         }
 
-        FollowChanged?.Invoke(Follow);
+        _follow = loadedFollow;
+        FollowChanged?.Invoke(_follow);
         ShellBar?.RelationshipChanged();
+    }
+
+    /// <summary>
+    /// Returns the next cue at the same nesting level (next root sibling or next entry in the parent's
+    /// <see cref="ChildCues"/> list). Used by auto-continue / auto-follow sequences.
+    /// </summary>
+    /// <returns>The next sibling cue, or null if this is the last at its level.</returns>
+    public Cue GetNextSiblingCue()
+    {
+        if (ParentId >= 0)
+        {
+            var parent = CueList.FetchCueFromId(ParentId);
+            if (parent == null) return null;
+            int idx = parent.ChildCues.IndexOf(Id);
+            if (idx < 0 || idx + 1 >= parent.ChildCues.Count) return null;
+            return CueList.FetchCueFromId(parent.ChildCues[idx + 1]);
+        }
+
+        // Root level: prefer shell container order (matches visual list).
+        if (ShellBar != null && GodotObject.IsInstanceValid(ShellBar))
+        {
+            var parentNode = ShellBar.GetParent();
+            if (parentNode != null)
+            {
+                int i = ShellBar.GetIndex();
+                for (int j = i + 1; j < parentNode.GetChildCount(); j++)
+                {
+                    if (parentNode.GetChild(j) is ShellBar nextShell && nextShell.CueId >= 0)
+                    {
+                        var next = CueList.FetchCueFromId(nextShell.CueId);
+                        if (next != null) return next;
+                    }
+                }
+                return null;
+            }
+        }
+
+        // Fallback without shells: first top-level cue after this id in CueIndex is unreliable;
+        // walk any root cues that share ParentId == -1 is order-undefined. Return null.
+        return null;
+    }
+
+    /// <summary>
+    /// Walks auto-continue / auto-follow links from this cue and returns the last cue that will play
+    /// as part of the sequence (the first cue with <see cref="FollowType.None"/>, or the last reachable).
+    /// </summary>
+    /// <returns>The terminal cue of the sequence starting at this cue (always at least this cue).</returns>
+    public Cue GetSequenceEndCue()
+    {
+        var current = this;
+        var guard = 0;
+        while (current.Follow != FollowType.None && guard++ < 10000)
+        {
+            var next = current.GetNextSiblingCue();
+            if (next == null) break;
+            current = next;
+        }
+        return current;
+    }
+
+    /// <summary>
+    /// Returns the first cue after this cue's continue/follow sequence (playhead target after GO),
+    /// or null if there is no cue after the sequence at this nesting level.
+    /// </summary>
+    public Cue GetCueAfterSequence()
+    {
+        return GetSequenceEndCue().GetNextSiblingCue();
     }
     
 }
