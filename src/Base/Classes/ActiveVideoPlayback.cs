@@ -30,9 +30,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 {
     private const int FadeUpdateIntervalMs = 16;
     private const long MicrosecondsPerSecond = 1_000_000;
-    private const int AudioTargetBufferMs = 80;
-    private const int AudioLowWaterMs = 40;
+    /// <summary>SDL queue target. Slightly higher than pure-audio cues — embedded audio shares demux with video.</summary>
+    private const int AudioTargetBufferMs = 120;
+    private const int AudioLowWaterMs = 60;
     private const int AudioFillSleepMs = 4;
+    /// <summary>Short cosine fade-in after start/seek to avoid silence→sample discontinuities (pops).</summary>
+    private const int DeclickRampMs = 8;
+    private const int AudioSeekPrefetchMs = 800;
     private const int VideoPrefetchTarget = 6;
     private const int VideoPrefetchLowWater = 3;
     /// <summary>Drop frames if more than this late vs master clock.</summary>
@@ -64,6 +68,16 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private Task _audioFillTask;
     private float[] _audioSrcBuffer;
     private float[] _audioMixBuffer;
+
+    /// <summary>Frames remaining in the post-start/seek de-click ramp (0 = inactive).</summary>
+    private int _declickFramesRemaining;
+    /// <summary>Total frames for the current de-click ramp (fixed when armed).</summary>
+    private int _declickRampTotalFrames;
+    /// <summary>
+    /// When true, the audio fill loop must not Put to SDL (seek/clear in progress).
+    /// Separate from public <see cref="IsSeeking"/>, which is also used for UI scrub preview.
+    /// </summary>
+    private bool _audioFillSuspended;
 
     private CancellationTokenSource _videoPrefetchCts;
     private Task _videoPrefetchTask;
@@ -436,7 +450,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         StartVideoPrefetchLoop();
         // Only drive audio when streams were bound; otherwise wall-clock masters silent video.
         if (_audioDecoder != null && HasBoundAudioStreams)
+        {
+            // Prime the SDL queue before the device can underrun, then start demand fill.
+            ArmDeclickRamp();
+            PrefillAudioStreams();
             StartAudioFillLoop();
+        }
 
         // Present first frame immediately so output isn't blank for a tick
         PresentCatchUpFrames();
@@ -519,12 +538,21 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (!IsPaused || IsStopped) return;
             if (_pausedAtUs > 0)
             {
+                // Seek while still paused so the fill loop stays held; prime after unpause.
                 SeekInternal(_pausedAtUs, restartClock: true);
                 _pausedAtUs = 0;
             }
             IsPaused = false;
             _wallClock.Restart();
         }
+
+        // Streams were cleared on pause; re-prime before the fill loop can underrun.
+        if (_audioDecoder != null && HasBoundAudioStreams)
+        {
+            ArmDeclickRamp();
+            PrefillAudioStreams();
+        }
+
         GD.Print("ActiveVideoPlayback:Resume");
     }
 
@@ -536,14 +564,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         if (_endTimeUs < long.MaxValue)
             us = Math.Min(us, _endTimeUs);
 
-        lock (_lock)
-        {
-            IsSeeking = true;
-        }
         SeekInternal(us, restartClock: !IsPaused && _isPlaying);
         lock (_lock)
         {
-            IsSeeking = false;
             if (IsPaused)
                 _pausedAtUs = us;
         }
@@ -551,27 +574,54 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     private void SeekInternal(long timestampUs, bool restartClock)
     {
-        if (DeviceStreams != null)
+        // Hold the fill loop so it cannot PutAudioStreamData across a Clear (stale PCM after seek).
+        // Do not use public IsSeeking here — that flag is also held for the whole UI scrub drag.
+        lock (_lock)
         {
-            foreach (var stream in DeviceStreams.Values)
-                SDL.ClearAudioStream(stream);
+            _audioFillSuspended = true;
         }
 
-        _videoDecoder?.Seek(timestampUs);
-        _videoDecoder?.Prefetch(VideoPrefetchTarget);
-
-        if (_audioDecoder != null)
+        try
         {
-            _audioDecoder.FlushBuffers();
-            _audioDecoder.Seek(timestampUs);
-            _audioDecoder.Prefetch(400);
+            if (DeviceStreams != null)
+            {
+                foreach (var stream in DeviceStreams.Values)
+                    SDL.ClearAudioStream(stream);
+            }
+
+            _videoDecoder?.Seek(timestampUs);
+            _videoDecoder?.Prefetch(VideoPrefetchTarget);
+
+            if (_audioDecoder != null)
+            {
+                _audioDecoder.FlushBuffers();
+                _audioDecoder.Seek(timestampUs);
+                _audioDecoder.Prefetch(AudioSeekPrefetchMs);
+
+                // When audible, re-prime the device queue so resume is continuous (no underrun click).
+                bool shouldPrime;
+                lock (_lock)
+                    shouldPrime = _isPlaying && !IsPaused && HasBoundAudioStreams;
+                if (shouldPrime)
+                {
+                    ArmDeclickRamp();
+                    PrefillAudioStreams();
+                }
+            }
+
+            if (restartClock)
+            {
+                _wallMediaOriginUs = timestampUs;
+                if (_isPlaying && !IsPaused)
+                    _wallClock.Restart();
+            }
         }
-
-        if (restartClock)
+        finally
         {
-            _wallMediaOriginUs = timestampUs;
-            if (_isPlaying && !IsPaused)
-                _wallClock.Restart();
+            lock (_lock)
+            {
+                _audioFillSuspended = false;
+            }
         }
     }
 
@@ -657,9 +707,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         {
             while (!token.IsCancellationRequested)
             {
-                bool paused;
-                lock (_lock) paused = IsPaused || IsStopped || _isExiting;
-                if (paused)
+                bool hold;
+                lock (_lock) hold = IsPaused || IsStopped || _isExiting || _audioFillSuspended;
+                if (hold)
                 {
                     Thread.Sleep(AudioFillSleepMs);
                     continue;
@@ -713,6 +763,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                     continue;
                 }
 
+                // Discard if a seek started during Read — stale PCM must not hit the cleared stream.
+                lock (_lock)
+                {
+                    if (IsPaused || IsStopped || _isExiting || _audioFillSuspended)
+                        continue;
+                }
+
                 PushMixedAudioFrames(frames);
             }
         }
@@ -734,6 +791,92 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         return SourceChannels;
     }
 
+    /// <summary>
+    /// Arms an ~8 ms raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// </summary>
+    private void ArmDeclickRamp()
+    {
+        if (SourceSampleRate <= 0)
+        {
+            _declickFramesRemaining = 0;
+            _declickRampTotalFrames = 0;
+            return;
+        }
+
+        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * DeclickRampMs / 1000);
+        _declickFramesRemaining = _declickRampTotalFrames;
+    }
+
+    /// <summary>
+    /// Applies the active de-click gain curve to interleaved float samples (in-place).
+    /// Shared across devices for one Push so all streams stay phase-aligned on the ramp.
+    /// </summary>
+    private void ApplyDeclickRamp(Span<float> interleaved, int frames, int channels)
+    {
+        if (_declickFramesRemaining <= 0 || frames <= 0 || channels <= 0 || _declickRampTotalFrames <= 0)
+            return;
+
+        int total = _declickRampTotalFrames;
+        for (int f = 0; f < frames && _declickFramesRemaining > 0; f++)
+        {
+            int progressed = total - _declickFramesRemaining;
+            float t = (progressed + 1) / (float)total;
+            if (t > 1f) t = 1f;
+            // Raised cosine: smooth 0→1 with zero slope at endpoints (better than linear for clicks).
+            float gain = 0.5f * (1f - MathF.Cos(MathF.PI * t));
+            int baseIdx = f * channels;
+            for (int c = 0; c < channels; c++)
+                interleaved[baseIdx + c] *= gain;
+            _declickFramesRemaining--;
+        }
+    }
+
+    /// <summary>
+    /// Fills each bound SDL stream up to <see cref="AudioTargetBufferMs"/> before play/after seek.
+    /// Prevents the device from consuming an empty queue (primary underrun click source).
+    /// </summary>
+    private void PrefillAudioStreams()
+    {
+        if (_audioDecoder == null || DeviceStreams == null || DeviceStreams.Count == 0)
+            return;
+        if (_audioSrcBuffer == null || SourceSampleRate <= 0 || SourceChannels <= 0)
+            return;
+
+        // Cap work: ~target buffer / chunk size iterations; enough for one full prime.
+        const int maxIterations = 48;
+        for (int iter = 0; iter < maxIterations; iter++)
+        {
+            int maxNeedFrames = 0;
+            foreach (var kv in DeviceStreams)
+            {
+                long queued = SDL.GetAudioStreamQueued(kv.Value);
+                int outCh = GetStreamChannels(kv.Key);
+                int bpf = outCh * sizeof(float);
+                if (bpf <= 0) continue;
+                long target = SourceSampleRate * AudioTargetBufferMs / 1000L * bpf;
+                if (queued < target)
+                {
+                    int need = (int)Math.Max(1, (target - queued) / bpf);
+                    if (need > maxNeedFrames) maxNeedFrames = need;
+                }
+            }
+
+            if (maxNeedFrames == 0)
+                break;
+
+            if (_audioDecoder.PositionUs >= _endTimeUs)
+                break;
+
+            int maxFrames = _audioSrcBuffer.Length / SourceChannels;
+            int framesToRead = Math.Min(maxNeedFrames, maxFrames);
+            int frames = _audioDecoder.Read(_audioSrcBuffer.AsSpan(), framesToRead);
+            if (frames <= 0)
+                break;
+
+            PushMixedAudioFrames(frames);
+        }
+    }
+
     private unsafe void PushMixedAudioFrames(int frames)
     {
         if (DeviceStreams == null || _isExiting) return;
@@ -742,6 +885,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         lock (_lock) masterVol = _volume;
         float componentVol = (float)_videoComponent.Volume;
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
+
+        // Snapshot de-click state so multi-device push uses the same ramp positions.
+        int declickRemainSnapshot = _declickFramesRemaining;
+        int declickTotalSnapshot = _declickRampTotalFrames;
 
         foreach (var kv in DeviceStreams)
         {
@@ -764,12 +911,21 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 deviceName,
                 isDirect);
 
+            // Restore ramp counters per device so each stream gets the same envelope.
+            _declickFramesRemaining = declickRemainSnapshot;
+            _declickRampTotalFrames = declickTotalSnapshot;
+            ApplyDeclickRamp(_audioMixBuffer.AsSpan(0, outSamples), frames, outCh);
+
             int byteCount = outSamples * sizeof(float);
             fixed (float* p = _audioMixBuffer)
             {
                 SDL.PutAudioStreamData(kv.Value, (IntPtr)p, byteCount);
             }
         }
+
+        // Advance de-click once for the whole multi-device write (all devices already applied it).
+        if (declickRemainSnapshot > 0)
+            _declickFramesRemaining = Math.Max(0, declickRemainSnapshot - frames);
     }
 
     /// <summary>

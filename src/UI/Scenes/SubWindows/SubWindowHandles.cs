@@ -89,28 +89,9 @@ public partial class SubWindowHandles : Control
 
 	private void OnHeaderHandleGuiInput(InputEvent @event)
 	{
-		if (@event is not InputEventMouseButton mouseEvent)
-			return;
-
-		if (mouseEvent.DoubleClick && mouseEvent.ButtonIndex == MouseButton.Left)
-		{
-			var window = ResolveHostWindow();
-			if (window == null)
-				return;
-
-			// Flush cached windowed size before maximize (Settings debounce may still be pending).
-			if (window is SettingsWindow settings)
-				settings.FlushGeometryBeforeModeChange();
-
-			UiUtilities.ToggleMaximize(window);
-
-			// Persist maximized flag for Settings session cache immediately.
-			if (window is SettingsWindow settingsAfter)
-				settingsAfter.PersistGeometryNow();
-			return;
-		}
-
-		if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
+		// Sub-windows intentionally do not maximize/fullscreen on header double-click
+		// (main window chrome still does via MainWindowHandles).
+		if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
 			StartDrag();
 	}
 

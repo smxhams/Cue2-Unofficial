@@ -21,10 +21,12 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 {
-    private const int TargetBufferMs = 80;
-    private const int LowWaterMs = 40;
+    private const int TargetBufferMs = 100;
+    private const int LowWaterMs = 50;
     private const int FillLoopSleepMs = 4;
     private const int PrefetchMs = 800;
+    /// <summary>Short raised-cosine fade-in after start/seek to suppress silence→sample pops.</summary>
+    private const int DeclickRampMs = 8;
 
     /// <summary>Pull-based audio source decoder.</summary>
     public AudioSourceDecoder Decoder { get; private set; }
@@ -65,6 +67,16 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
     private float[] _srcBuffer;
     private float[] _mixBuffer;
+
+    /// <summary>Frames remaining in the post-start/seek de-click ramp (0 = inactive).</summary>
+    private int _declickFramesRemaining;
+    /// <summary>Total frames for the current de-click ramp (fixed when armed).</summary>
+    private int _declickRampTotalFrames;
+    /// <summary>
+    /// When true, the fill loop must not Put to SDL (seek/clear in progress).
+    /// Separate from public <see cref="IsSeeking"/> (UI scrub preview holds that for the whole drag).
+    /// </summary>
+    private bool _fillSuspended;
 
     [Signal] public delegate void CompletedEventHandler();
 
@@ -180,6 +192,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         }
         else
         {
+            ArmDeclickRamp();
+            PrefillStreams();
             StartFillLoop();
             GD.Print("ActiveAudioPlayback:Play - Fill loop started");
         }
@@ -226,9 +240,9 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         {
             while (!token.IsCancellationRequested)
             {
-                bool paused;
-                lock (_lock) paused = IsPaused || IsStopped;
-                if (paused)
+                bool hold;
+                lock (_lock) hold = IsPaused || IsStopped || _fillSuspended;
+                if (hold)
                 {
                     Thread.Sleep(FillLoopSleepMs);
                     continue;
@@ -298,7 +312,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
                 lock (_lock)
                 {
-                    if (IsPaused || IsStopped) continue;
+                    if (IsPaused || IsStopped || _fillSuspended) continue;
                 }
 
                 // Decode outside playback lock to avoid blocking Pause/Seek
@@ -315,6 +329,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                         Thread.Sleep(FillLoopSleepMs);
                     }
                     continue;
+                }
+
+                // Discard if seek/pause started during Read — stale PCM must not hit a cleared stream.
+                lock (_lock)
+                {
+                    if (IsPaused || IsStopped || _fillSuspended) continue;
                 }
 
                 _framesDelivered += frames;
@@ -344,6 +364,89 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         return SourceChannels;
     }
 
+    /// <summary>
+    /// Arms an ~8 ms raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// </summary>
+    private void ArmDeclickRamp()
+    {
+        if (SourceSampleRate <= 0)
+        {
+            _declickFramesRemaining = 0;
+            _declickRampTotalFrames = 0;
+            return;
+        }
+
+        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * DeclickRampMs / 1000);
+        _declickFramesRemaining = _declickRampTotalFrames;
+    }
+
+    /// <summary>
+    /// Applies the active de-click gain curve to interleaved float samples (in-place).
+    /// </summary>
+    private void ApplyDeclickRamp(Span<float> interleaved, int frames, int channels)
+    {
+        if (_declickFramesRemaining <= 0 || frames <= 0 || channels <= 0 || _declickRampTotalFrames <= 0)
+            return;
+
+        int total = _declickRampTotalFrames;
+        for (int f = 0; f < frames && _declickFramesRemaining > 0; f++)
+        {
+            int progressed = total - _declickFramesRemaining;
+            float t = (progressed + 1) / (float)total;
+            if (t > 1f) t = 1f;
+            float gain = 0.5f * (1f - MathF.Cos(MathF.PI * t));
+            int baseIdx = f * channels;
+            for (int c = 0; c < channels; c++)
+                interleaved[baseIdx + c] *= gain;
+            _declickFramesRemaining--;
+        }
+    }
+
+    /// <summary>
+    /// Fills each bound SDL stream up to <see cref="TargetBufferMs"/> before play/after seek.
+    /// </summary>
+    private void PrefillStreams()
+    {
+        if (Decoder == null || DeviceStreams == null || DeviceStreams.Count == 0)
+            return;
+        if (_srcBuffer == null || SourceSampleRate <= 0 || SourceChannels <= 0)
+            return;
+
+        const int maxIterations = 48;
+        for (int iter = 0; iter < maxIterations; iter++)
+        {
+            int maxNeedFrames = 0;
+            foreach (var kv in DeviceStreams)
+            {
+                long queued = SDL.GetAudioStreamQueued(kv.Value);
+                int outCh = GetStreamChannels(kv.Key);
+                int bpf = outCh * sizeof(float);
+                if (bpf <= 0) continue;
+                long target = SourceSampleRate * TargetBufferMs / 1000L * bpf;
+                if (queued < target)
+                {
+                    int need = (int)Math.Max(1, (target - queued) / bpf);
+                    if (need > maxNeedFrames) maxNeedFrames = need;
+                }
+            }
+
+            if (maxNeedFrames == 0)
+                break;
+
+            if (Decoder.PositionUs >= _endTimeUs)
+                break;
+
+            int maxFrames = _srcBuffer.Length / SourceChannels;
+            int framesToRead = Math.Min(maxNeedFrames, maxFrames);
+            int frames = Decoder.Read(_srcBuffer.AsSpan(), framesToRead);
+            if (frames <= 0)
+                break;
+
+            _framesDelivered += frames;
+            PushMixedFrames(frames);
+        }
+    }
+
     private unsafe void PushMixedFrames(int frames)
     {
         if (DeviceStreams == null) return;
@@ -352,6 +455,9 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         lock (_lock) masterVol = _volume;
         float componentVol = (float)_audioComponent.Volume;
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
+
+        int declickRemainSnapshot = _declickFramesRemaining;
+        int declickTotalSnapshot = _declickRampTotalFrames;
 
         foreach (var kv in DeviceStreams)
         {
@@ -375,12 +481,19 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 deviceName,
                 isDirect);
 
+            _declickFramesRemaining = declickRemainSnapshot;
+            _declickRampTotalFrames = declickTotalSnapshot;
+            ApplyDeclickRamp(_mixBuffer.AsSpan(0, outSamples), frames, outCh);
+
             int byteCount = outSamples * sizeof(float);
             fixed (float* p = _mixBuffer)
             {
                 SDL.PutAudioStreamData(kv.Value, (IntPtr)p, byteCount);
             }
         }
+
+        if (declickRemainSnapshot > 0)
+            _declickFramesRemaining = Math.Max(0, declickRemainSnapshot - frames);
     }
 
     private void HandleSegmentEnd()
@@ -395,18 +508,38 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             {
                 _currentPlayCount++;
                 GD.Print($"ActiveAudioPlayback:HandleSegmentEnd - Loop/play {_currentPlayCount}/{EffectivePlayCount}");
+                _fillSuspended = true;
+            }
+            else
+            {
+                // Mark finishing so fill loop stops re-entering (IsStopped set in Clean)
+                _completedEmitted = true;
+                scheduleComplete = true;
+            }
+        }
+
+        if (!scheduleComplete)
+        {
+            // Loop path: seek + re-prime outside lock; hold fill via _fillSuspended.
+            try
+            {
+                if (DeviceStreams != null)
+                {
+                    foreach (var stream in DeviceStreams.Values)
+                        SDL.ClearAudioStream(stream);
+                }
                 Decoder.Seek(_startTimeUs);
                 Decoder.Prefetch(PrefetchMs);
                 _framesDelivered = 0;
-                return;
+                ArmDeclickRamp();
+                PrefillStreams();
             }
-
-            // Mark finishing so fill loop stops re-entering (IsStopped set in Clean)
-            _completedEmitted = true;
-            scheduleComplete = true;
+            finally
+            {
+                lock (_lock) _fillSuspended = false;
+            }
+            return;
         }
-
-        if (!scheduleComplete) return;
 
         try { _fillCts?.Cancel(); } catch { /* ignore */ }
 
@@ -456,14 +589,31 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         lock (_lock)
         {
             if (!IsPaused || IsStopped) return;
+            _fillSuspended = true;
+        }
+
+        try
+        {
             if (_pausedAtUs > 0)
             {
                 Decoder.Seek(_pausedAtUs);
                 Decoder.Prefetch(PrefetchMs / 2);
                 _pausedAtUs = 0;
             }
-            IsPaused = false;
+
+            // Streams were cleared on pause; re-prime before fill can underrun.
+            ArmDeclickRamp();
+            PrefillStreams();
         }
+        finally
+        {
+            lock (_lock)
+            {
+                IsPaused = false;
+                _fillSuspended = false;
+            }
+        }
+
         GD.Print("ActiveAudioPlayback:Resume - Resumed");
     }
 
@@ -545,6 +695,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         float endVol = 1.0f;
         Stopwatch timer = Stopwatch.StartNew();
         SetVolume(0f);
+        // Volume fade-in already starts at 0; still prime the queue to avoid underrun pops mid-fade.
+        PrefillStreams();
         StartFillLoop();
 
         try
@@ -689,7 +841,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             lock (_lock)
             {
                 wasPaused = IsPaused;
-                IsSeeking = true;
+                _fillSuspended = true;
                 IsPaused = true;
             }
 
@@ -708,10 +860,18 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             _framesDelivered = 0;
             _pausedAtUs = clamped;
 
+            // Re-prime when seeking during active play so the device never sees an empty queue.
+            bool resumeAfter = !wasPaused && !IsStopped;
+            if (resumeAfter)
+            {
+                ArmDeclickRamp();
+                PrefillStreams();
+            }
+
             lock (_lock)
             {
-                IsSeeking = false;
-                if (!wasPaused && !IsStopped)
+                _fillSuspended = false;
+                if (resumeAfter)
                 {
                     IsPaused = false;
                     _pausedAtUs = 0;
@@ -723,7 +883,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         catch (Exception ex)
         {
             GD.PrintErr($"ActiveAudioPlayback:Seek - {ex.Message}");
-            lock (_lock) IsSeeking = false;
+            lock (_lock) _fillSuspended = false;
         }
     }
 
