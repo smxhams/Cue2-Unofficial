@@ -43,20 +43,29 @@ public partial class ShellSelection : Node
         var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
         var allShellBars = GetAllShellBarsInOrder(cueContainer);
 
+        if (SelectedCues.Count == 0 || pressedCue?.ShellBar == null)
+            return;
+
         var startShell = SelectedCues.Last().ShellBar;
+        if (startShell == null) return;
+
         int startIndex = allShellBars.IndexOf(startShell);
         int pressedIndex = allShellBars.IndexOf(pressedCue.ShellBar);
+        if (startIndex < 0 || pressedIndex < 0) return;
+
         int start = Math.Min(startIndex, pressedIndex);
         int end = Math.Max(startIndex, pressedIndex);
+        // Expand selection silently — only emit ShellFocused once for the pressed cue.
+        // (Per-cue AddSelection would flood async audio/video inspectors mid multi-select.)
         for (int i = start; i <= end; i++)
         {
             var sb = allShellBars[i];
             int cueId = sb.Get("CueId").AsInt32();
             Cue cue = CueList.FetchCueFromId(cueId);
-            if (!SelectedCues.Contains(cue))
-            {
-                AddSelection(cue);
-            }
+            if (cue == null || SelectedCues.Contains(cue))
+                continue;
+            cue.ShellBar?.Select();
+            SelectedCues.Add(cue);
         }
         _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), pressedCue.Id);
     }

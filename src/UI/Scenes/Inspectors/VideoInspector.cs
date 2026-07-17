@@ -22,6 +22,12 @@ public partial class VideoInspector : Control
 	
 	private Cue _focusedCue;
 	private VideoComponent _focusedVideoComponent;
+
+	/// <summary>
+	/// Bumped on every <see cref="ShellSelected"/> so overlapping async work from rapid multi-select
+	/// abandons after awaits. Video inspector always tracks the last focused cue only (not multi-edit).
+	/// </summary>
+	private int _shellSelectGeneration;
 	
 	// Ui Nodes
 	private Label _infoLabel;
@@ -425,8 +431,13 @@ public partial class VideoInspector : Control
 		InspectorMediaUrlStyle.Apply(_fileUrl, _fileUrlMissingStyle, missing, tooltip);
 	}
 
+	/// <summary>
+	/// Loads the last focused cue into the video inspector (multi-edit is shell-inspector only).
+	/// </summary>
 	private async void ShellSelected(int cueId)
 	{
+		int gen = ++_shellSelectGeneration;
+
 		if (cueId < 0)
 		{
 			_focusedCue = null;
@@ -476,9 +487,13 @@ public partial class VideoInspector : Control
 		if (_focusedVideoComponent.Metadata == null)
 		{
 			var refreshedMeta = await _mediaEngine.GetVideoFileMetadataAsync(file);
+			if (gen != _shellSelectGeneration) return;
+			if (_focusedVideoComponent == null) return;
 			_focusedVideoComponent.Metadata = refreshedMeta;
 			GD.Print("VideoInspector:ShellSelected - Refreshed metadata from file");
 		}
+
+		if (gen != _shellSelectGeneration) return;
 
 		UpdateVideoUiFields(file);
 
@@ -497,6 +512,7 @@ public partial class VideoInspector : Control
 		}
 
 		await RefreshAudioUiState();
+		if (gen != _shellSelectGeneration || _focusedCue == null) return;
 
 		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
 		ApplyFileUrlMissingStyleFromHealth();
@@ -1664,6 +1680,10 @@ public partial class VideoInspector : Control
 	/// </summary>
 	private async void BuildRoutingMatrix()
 	{
+		if (_routingMatrixGrid == null)
+			return;
+
+		int gen = _shellSelectGeneration;
 		foreach (var child in _routingMatrixGrid.GetChildren())
 		{
 			child.QueueFree();
@@ -1672,11 +1692,22 @@ public partial class VideoInspector : Control
 		if (_focusedVideoComponent == null || !_focusedVideoComponent.HasAudio || !_focusedVideoComponent.UseAudio)
 		{
 			GD.Print($"VideoInspector:BuildRoutingMatrix - No focused video component, no audio, or audio not enabled");
-			_routingContainer.Visible = false;
+			if (_routingContainer != null)
+				_routingContainer.Visible = false;
 			return;
 		}
 
 		await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
+
+		if (gen != _shellSelectGeneration || _focusedVideoComponent == null)
+			return;
+		if (_focusedVideoComponent.Metadata == null)
+		{
+			GD.Print("VideoInspector:BuildRoutingMatrix - Metadata not ready; skipping matrix.");
+			if (_routingContainer != null)
+				_routingContainer.Visible = false;
+			return;
+		}
 
 		GD.Print($"BUILDING ROUTING MATRIX");
 		

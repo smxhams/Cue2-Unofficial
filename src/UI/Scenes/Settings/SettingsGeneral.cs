@@ -5,7 +5,7 @@ using AppSettings = Cue2.Base.Classes.Settings;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// General settings panel: UI scale, Go button scale, stop fade-out, and media backup.
+/// General settings panel: UI scale, Go button scale, stop fade-out, media backup, and multi-edit.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
 /// Values are stored with the showfile via <see cref="AppSettings"/>.
 /// </summary>
@@ -27,6 +27,9 @@ public partial class SettingsGeneral : ScrollContainer
 
     private CheckBox _mediaBackupCheckBox;
     private Button _mediaBackupResetButton;
+
+    private CheckBox _multiEditCheckBox;
+    private Button _multiEditResetButton;
 
     /// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
     private bool _isSyncingUi;
@@ -79,6 +82,16 @@ public partial class SettingsGeneral : ScrollContainer
         _mediaBackupResetButton = GetNode<Button>("%MediaBackupResetButton");
         _mediaBackupResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
         _mediaBackupResetButton.Pressed += OnMediaBackupResetPressed;
+
+        _multiEditCheckBox = GetNodeOrNull<CheckBox>("%MultiEditCheckBox");
+        if (_multiEditCheckBox != null)
+            _multiEditCheckBox.Toggled += OnMultiEditToggled;
+        _multiEditResetButton = GetNodeOrNull<Button>("%MultiEditResetButton");
+        if (_multiEditResetButton != null)
+        {
+            _multiEditResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+            _multiEditResetButton.Pressed += OnMultiEditResetPressed;
+        }
 
         // Only re-sync this form when a *settings* history entry was undone/redone —
         // not on cue undos (that re-wrote the spin box and polluted history / looked like
@@ -143,6 +156,7 @@ public partial class SettingsGeneral : ScrollContainer
 
             _stopFadeSpinBox?.SetValueNoSignal(_globalData.Settings.StopFadeDuration);
             _mediaBackupCheckBox?.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
+            _multiEditCheckBox?.SetPressedNoSignal(_globalData.Settings.MultiEditEnabled);
 
             UpdateAllResetButtons();
         }
@@ -158,6 +172,7 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateGoScaleResetButton();
         UpdateStopFadeResetButton();
         UpdateMediaBackupResetButton();
+        UpdateMultiEditResetButton();
     }
 
     // ── UI Scale ──────────────────────────────────────────────────────────
@@ -405,6 +420,54 @@ public partial class SettingsGeneral : ScrollContainer
         {
             string defaultText = AppSettings.DefaultMediaBackupEnabled ? "Enabled" : "Disabled";
             _mediaBackupResetButton.TooltipText = $"Reset to default: {defaultText}";
+        }
+    }
+
+    // ── Multi-edit ────────────────────────────────────────────────────────
+
+    private void OnMultiEditToggled(bool enabled)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        if (_globalData.Settings.MultiEditEnabled == enabled)
+        {
+            UpdateMultiEditResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change multi-edit setting", null, "MultiEditEnabled");
+        _globalData.Settings.MultiEditEnabled = enabled;
+        // Refresh shell inspector if open so multi/single mode tracks the toggle immediately.
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+        UpdateMultiEditResetButton();
+    }
+
+    private void OnMultiEditResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_globalData.Settings.MultiEditEnabled == AppSettings.DefaultMultiEditEnabled)
+        {
+            SyncSettings();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Reset multi-edit setting", null, "MultiEditEnabled");
+        _globalData.Settings.MultiEditEnabled = AppSettings.DefaultMultiEditEnabled;
+        SyncSettings();
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+    }
+
+    private void UpdateMultiEditResetButton()
+    {
+        if (_multiEditResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = _globalData.Settings.MultiEditEnabled == AppSettings.DefaultMultiEditEnabled;
+        _multiEditResetButton.Visible = !atDefault;
+        if (!atDefault)
+        {
+            string defaultText = AppSettings.DefaultMultiEditEnabled ? "Enabled" : "Disabled";
+            _multiEditResetButton.TooltipText = $"Reset to default: {defaultText}";
         }
     }
 }

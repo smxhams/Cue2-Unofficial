@@ -27,6 +27,12 @@ public partial class AudioInspector : Control
     private Cue _focusedCue;
     private AudioComponent _focusedAudioComponent;
     private MediaEngine _mediaEngine;
+
+    /// <summary>
+    /// Bumped on every <see cref="ShellSelected"/> so overlapping async work from rapid multi-select
+    /// abandons after awaits. Audio inspector always tracks the last focused cue only (not multi-edit).
+    /// </summary>
+    private int _shellSelectGeneration;
     
     // Ui Nodes
     private Label _infoLabel;
@@ -631,6 +637,10 @@ public partial class AudioInspector : Control
     /// </summary>
     private async void BuildRoutingMatrix()
     {
+        if (_routingMatrixGrid == null)
+            return;
+
+        int gen = _shellSelectGeneration;
         foreach (var child in _routingMatrixGrid.GetChildren())
         {
             child.QueueFree();
@@ -639,12 +649,23 @@ public partial class AudioInspector : Control
         if (_focusedAudioComponent == null)
         {
             GD.Print($"AudioInspector:BuildRoutingMatrix - No focused audio component");
-            _routingContainer.Visible = false;
+            if (_routingContainer != null)
+                _routingContainer.Visible = false;
             return;
         }
         
         await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
-        
+
+        // Selection may have changed while waiting (multi-select focus flood).
+        if (gen != _shellSelectGeneration || _focusedAudioComponent == null)
+            return;
+        if (_focusedAudioComponent.Metadata == null)
+        {
+            GD.Print("AudioInspector:BuildRoutingMatrix - Metadata not ready; skipping matrix.");
+            if (_routingContainer != null)
+                _routingContainer.Visible = false;
+            return;
+        }
         
         // Get ins and outs data
         var inputChannels = _focusedAudioComponent.Metadata.Channels;
@@ -914,10 +935,13 @@ public partial class AudioInspector : Control
 
     /// <summary>
     /// Called when a cue shell is selected. Updates UI based on presence of AudioComponent.
+    /// Always uses the last focused cue only (multi-edit is shell-inspector only).
     /// </summary>
     /// <param name="cueId">The ID of the selected cue.</param>
     private async void ShellSelected(int cueId)
     {
+        int gen = ++_shellSelectGeneration;
+
         if (cueId < 0)
         {
             _focusedCue = null;
@@ -974,9 +998,13 @@ public partial class AudioInspector : Control
         if (_focusedAudioComponent.Metadata == null)
         {
             var refreshedMeta = await _mediaEngine.GetAudioFileMetadataAsync(file);
+            if (gen != _shellSelectGeneration) return;
+            if (_focusedAudioComponent == null) return;
             _focusedAudioComponent.Metadata = refreshedMeta;
             GD.Print("AudioInspector:ShellSelected - Refreshed metadata from file.");
         }
+
+        if (gen != _shellSelectGeneration) return;
         
         UpdateAudioUiFields(file);
         
@@ -995,14 +1023,17 @@ public partial class AudioInspector : Control
             GD.Print("AudioInspector:ShellSelected - No waveform found");
             try
             {
-                _focusedAudioComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
-                if (_focusedAudioComponent.WaveformData.Length == 0)
+                var wave = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                if (gen != _shellSelectGeneration || _focusedAudioComponent == null) return;
+                _focusedAudioComponent.WaveformData = wave;
+                if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
                 {
                     _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
                 }
             }
             catch (Exception ex)
             {
+                if (gen != _shellSelectGeneration) return;
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Error generating waveform: {ex.Message}", 2);
             }
         }
@@ -1010,7 +1041,10 @@ public partial class AudioInspector : Control
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Using cached waveform for {_focusedAudioComponent.AudioFile}", 0);
         }
+
+        if (gen != _shellSelectGeneration) return;
         await DrawWaveform();
+        if (gen != _shellSelectGeneration || _focusedCue == null) return;
 
         // Validate media path for this cue (shell X + URL styling)
         GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);

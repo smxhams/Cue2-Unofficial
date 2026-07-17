@@ -237,3 +237,50 @@ theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
 theme_override_font_sizes/font_size = 11
 text = "Copy media into show folder (Audio/Video/Images)."
 vertical_alignment = 1
+
+[node name="HSeparator4" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="EditingHeader" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="EditingLabel" type="Label" parent="VBoxContainer/EditingHeader"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Editing"
+
+[node name="MultiEditRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="MultiEditLabel" type="Label" parent="VBoxContainer/MultiEditRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Multi-edit cues"
+vertical_alignment = 1
+tooltip_text = "When enabled and multiple cues are selected changes apply to every selected cue. When disabled, only the last-focused cue is edited."
+
+[node name="MultiEditCheckBox" type="CheckBox" parent="VBoxContainer/MultiEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Enabled"
+tooltip_text = "When enabled and multiple cues are selected changes apply to every selected cue. When disabled, only the last-focused cue is edited."
+
+[node name="MultiEditResetButton" type="Button" parent="VBoxContainer/MultiEditRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+tooltip_text = "Reset to default"
+
+[node name="MultiEditHint" type="Label" parent="VBoxContainer/MultiEditRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "Edit multiple selected cues from Shell Inspector."
+vertical_alignment = 1

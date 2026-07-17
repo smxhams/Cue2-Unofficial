@@ -34,6 +34,9 @@ public partial class Settings : Node
     /// <summary>Default for copying used media into the show folder (Audio/Video/Images).</summary>
     public const bool DefaultMediaBackupEnabled = true;
 
+    /// <summary>Default for multi-edit of shell properties when multiple cues are selected.</summary>
+    public const bool DefaultMultiEditEnabled = true;
+
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
     /// <summary>System default pre-wait in seconds for newly created cues.</summary>
@@ -70,6 +73,13 @@ public partial class Settings : Node
     /// Persisted with the showfile.
     /// </summary>
     public bool MediaBackupEnabled = DefaultMediaBackupEnabled;
+
+    /// <summary>
+    /// When true and multiple cues are selected, the Shell Inspector enters multi-edit mode
+    /// (blank fields; edits apply to every selected cue). When false, only the last-focused
+    /// cue is shown/edited. Persisted with the showfile.
+    /// </summary>
+    public bool MultiEditEnabled = DefaultMultiEditEnabled;
 
     // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
 
@@ -209,6 +219,7 @@ public partial class Settings : Node
         WaveformResolution = DefaultWaveformResolution;
         StopFadeDuration = DefaultStopFadeDuration;
         MediaBackupEnabled = DefaultMediaBackupEnabled;
+        MultiEditEnabled = DefaultMultiEditEnabled;
         VerbosePrint = true;
 
         // Cue shell defaults for newly created cues
@@ -262,6 +273,7 @@ public partial class Settings : Node
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
+        saveTable.Add("MultiEditEnabled", MultiEditEnabled);
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -333,6 +345,9 @@ public partial class Settings : Node
         MediaBackupEnabled = settingsData.TryGetValue("MediaBackupEnabled", out value)
             ? value.AsBool()
             : DefaultMediaBackupEnabled;
+        MultiEditEnabled = settingsData.TryGetValue("MultiEditEnabled", out value)
+            ? value.AsBool()
+            : DefaultMultiEditEnabled;
 
         // Cue shell defaults (older shows without this key keep system defaults)
         if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
@@ -452,6 +467,8 @@ public partial class Settings : Node
             StopFadeDuration = value.AsSingle();
         if (TryGetSettingsValue(settingsData, "MediaBackupEnabled", out value))
             MediaBackupEnabled = ReadBoolVariant(value);
+        if (TryGetSettingsValue(settingsData, "MultiEditEnabled", out value))
+            MultiEditEnabled = ReadBoolVariant(value);
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
             && value.VariantType == Variant.Type.Dictionary)
@@ -572,6 +589,9 @@ public partial class Settings : Node
             case "MediaBackupEnabled":
                 // Store as int for stable JSON round-trip across Godot versions.
                 value = MediaBackupEnabled ? 1 : 0;
+                return true;
+            case "MultiEditEnabled":
+                value = MultiEditEnabled ? 1 : 0;
                 return true;
             default:
                 value = default;
