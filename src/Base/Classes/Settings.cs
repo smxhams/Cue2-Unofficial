@@ -423,7 +423,14 @@ public partial class Settings : Node
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
         }
 
-        // InputMap is not part of document history / show settings anymore.
+        // InputMap is stored in user prefs (not the showfile) but still participates in
+        // session undo/redo via HistoryManager with the "InputMap" slice key.
+        if (TryGetSettingsValue(settingsData, "InputMap", out var inputMapData) && _globalData != null)
+        {
+            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
+            // Keep user:// bindings aligned with the restored live map.
+            _globalData.UserDataManager?.PersistLiveInputMap();
+        }
     }
 
     /// <summary>
@@ -431,7 +438,7 @@ public partial class Settings : Node
     /// (no full GetData) so history does not depend on displays/OSC/etc. serialization.
     /// When <paramref name="keys"/> is null or empty, returns a full <see cref="GetData"/> snapshot.
     /// </summary>
-    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "AudioPatch").</param>
+    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "InputMap", "AudioPatch").</param>
     /// <returns>Dictionary suitable for history storage (caller should deep-clone if needed).</returns>
     public Dictionary CaptureHistorySlice(params string[] keys)
     {
@@ -442,10 +449,13 @@ public partial class Settings : Node
         foreach (var key in keys)
         {
             if (string.IsNullOrEmpty(key)) continue;
-            if (key == "InputMap")
-                continue; // User prefs — not document history
             if (TryCaptureScalarHistoryKey(key, out var value))
                 slice[key] = value;
+            else if (key == "InputMap" && _globalData != null)
+            {
+                // Live InputMap snapshot for undo (persisted to user prefs, not the showfile).
+                slice[key] = _globalData.GetCustomInputBindings();
+            }
             else if (key == "AudioPatch")
             {
                 var patchTable = new Dictionary();

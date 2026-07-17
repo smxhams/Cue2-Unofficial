@@ -154,8 +154,10 @@ public partial class CueList : Control
 		if (_expandAllButton != null)
 			_expandAllButton.CustomMinimumSize = new Vector2(ShellColumnLayout.CollapseWidth, 18);
 
+		// Color strip + 1px nest gap so Number columns line up with shell rows.
 		if (_headerColorPad != null)
-			_headerColorPad.CustomMinimumSize = new Vector2(ShellColumnLayout.ColorWidth, 15);
+			_headerColorPad.CustomMinimumSize = new Vector2(
+				ShellColumnLayout.ColorWidth + ShellColumnLayout.ColorNestGap, 15);
 		if (_headerIssuePad != null)
 			_headerIssuePad.CustomMinimumSize = new Vector2(ShellColumnLayout.IssueWidth, 15);
 
@@ -1197,9 +1199,41 @@ public partial class CueList : Control
 	/// Shows the floating reorder preview and enables mouse tracking in _Input.
 	/// </summary>
 	/// <param name="shellbar">The ShellBar that initiated the drag (via its drag button).</param>
+	/// <summary>
+	/// True while a drag-reorder session is active (drop indicator visible).
+	/// </summary>
+	public bool IsReordering => _reorderController != null && _reorderController.IsActive;
+
 	public void StartReorder(ShellBar shellbar)
 	{
+		// Drop blue hover wash for the session; reorder indicator owns highlight.
+		ClearAllShellHoverChrome();
 		_reorderController.Start(shellbar);
+	}
+
+	/// <summary>
+	/// Clears hover chrome on every shell so reorder does not inherit a stuck hover wash.
+	/// </summary>
+	internal void ClearAllShellHoverChrome()
+	{
+		if (_cueContainer == null)
+			return;
+		ClearShellHoverRecursive(_cueContainer);
+	}
+
+	private static void ClearShellHoverRecursive(VBoxContainer container)
+	{
+		if (container == null)
+			return;
+		foreach (var child in container.GetChildren())
+		{
+			if (child is ShellBar shell)
+			{
+				shell.ClearHoverChrome();
+				if (shell.ShellChildContainer != null)
+					ClearShellHoverRecursive(shell.ShellChildContainer);
+			}
+		}
 	}
 	
 	public override void _Input(InputEvent @event)
@@ -1218,6 +1252,23 @@ public partial class CueList : Control
 	private void CleanupReorder(bool keepChanges)
 	{
 		_reorderController?.Cancel();
+	}
+
+	/// <summary>
+	/// Deferred grabber unstick after reorder ends (called from <see cref="CueReorder"/>).
+	/// Ensures BaseButton pressed state is cleared after the mouse-up event finishes.
+	/// </summary>
+	/// <param name="draggedCueId">Cue that initiated the drag, or -1.</param>
+	public void DeferredReleaseReorderGrabbers(int draggedCueId)
+	{
+		if (draggedCueId >= 0)
+			FetchCueFromId(draggedCueId)?.ShellBar?.ReleaseDragGrabber();
+
+		if (ShellSelection.SelectedCues == null)
+			return;
+
+		foreach (var cue in ShellSelection.SelectedCues)
+			cue?.ShellBar?.ReleaseDragGrabber();
 	}
 
 	/// <summary>

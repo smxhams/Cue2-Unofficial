@@ -29,6 +29,7 @@ internal sealed class CueReorder(
     public void Start(ShellBar shellbar)
     {
         if (IsActive) return;
+        if (shellbar == null || !GodotObject.IsInstanceValid(shellbar)) return;
 
         if (!shellbar.Selected)
         {
@@ -46,6 +47,9 @@ internal sealed class CueReorder(
         PrepareReorderPreviewLabels();
 
         reorderCueControl.Visible = true;
+        // Floating preview must not steal mouse from list/grabbers (Ignore = 2 in scene;
+        // enforce here in case the packed scene was edited).
+        reorderCueControl.MouseFilter = Control.MouseFilterEnum.Ignore;
         IsActive = true;
         DraggedCueId = shellbar.CueId;
         ResetDropFlags();
@@ -65,16 +69,19 @@ internal sealed class CueReorder(
             UpdateDropTarget(eventMouseMotion.GlobalPosition.Y);
         }
 
-        // Left release = commit
+        // Left release = commit. Do NOT SetInputAsHandled here: grabber start uses GuiInput
+        // press only; marking release handled was part of the stuck-button problem.
         if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && !mb.Pressed)
         {
             Commit();
+            return;
         }
 
         // Cancel support (ESC or right-click)
         if (@event is InputEventKey keyEvent && keyEvent.Pressed && keyEvent.Keycode == Key.Escape)
         {
             Cancel();
+            return;
         }
         if (@event is InputEventMouseButton rmb && rmb.ButtonIndex == MouseButton.Right && rmb.Pressed)
         {
@@ -257,8 +264,9 @@ internal sealed class CueReorder(
             }
         }
 
-        // Compute final target
-        var (targetContainer, rawInsertIndex, newParentId, isMakeChild) = DetermineReorderTarget();
+        // Compute final target container / parent (index resolved after detach — see below).
+        var (targetContainer, _, newParentId, isMakeChild) = DetermineReorderTarget();
+        var targetShell = MouseOverShellBar;
 
         // Detach all to-move shells
         foreach (var sb in toMove)
@@ -275,13 +283,9 @@ internal sealed class CueReorder(
             cue.ParentId = -1;
         }
 
-        // Re-compute insert index
-        int insertIndex = Math.Clamp(rawInsertIndex, 0, Math.Max(0, targetContainer.GetChildCount()));
-
-        if (DropAtEndAsTopLevel)
-        {
-            insertIndex = targetContainer.GetChildCount();
-        }
+        // Resolve insert index AFTER detach so removing earlier siblings does not shift the target.
+        // Above = target's current index; Below = one past the target (classic list insert).
+        int insertIndex = ResolveInsertIndexAfterDetach(targetContainer, targetShell, isMakeChild);
 
         // Insert the moved items
         foreach (var sb in toMove)
@@ -360,17 +364,47 @@ internal sealed class CueReorder(
             child.QueueFree();
         }
 
+        int draggedId = DraggedCueId;
+
         IsActive = false;
         reorderCueControl.Visible = false;
         MouseOverShellBar = null;
         ResetDropFlags();
         DraggedCueId = -1;
 
+        // Drop any hover wash that thrash-accumulated during the drag.
+        owner.ClearAllShellHoverChrome();
+
+        // Unstick grabber(s): mouse-up landed on the floating reorder UI, not DragBar
+        // (keep_pressed_outside leaves BaseButton pressed until a real ButtonUp).
+        ReleaseStuckDragGrabbers(draggedId);
+        // One more frame after Godot finishes this input path.
+        owner.CallDeferred(nameof(CueList.DeferredReleaseReorderGrabbers), draggedId);
+
         if (!keepChanges)
         {
             // Shells were already detached in Commit if we got that far; 
             // for pure cancel, they should still be in original positions.
         }
+    }
+
+    /// <summary>
+    /// Forces reorder grabber buttons out of the pressed state after a drag session.
+    /// </summary>
+    /// <param name="draggedCueId">Primary dragged cue id, or -1.</param>
+    private void ReleaseStuckDragGrabbers(int draggedCueId)
+    {
+        if (draggedCueId >= 0)
+        {
+            var dragged = CueList.FetchCueFromId(draggedCueId);
+            dragged?.ShellBar?.ReleaseDragGrabber();
+        }
+
+        if (ShellSelection.SelectedCues == null)
+            return;
+
+        foreach (var cue in ShellSelection.SelectedCues)
+            cue?.ShellBar?.ReleaseDragGrabber();
     }
 
     public void ResetDropFlags()
@@ -402,12 +436,12 @@ internal sealed class CueReorder(
     {
         if (DropAtEndAsTopLevel)
         {
-            return (_cueContainer: cueContainer, cueContainer.GetChildCount(), -1, false);
+            return (cueContainer, cueContainer.GetChildCount(), -1, false);
         }
 
         var targetShell = MouseOverShellBar;
         if (targetShell == null)
-            return (_cueContainer: cueContainer, 0, -1, false);
+            return (cueContainer, 0, -1, false);
 
         VBoxContainer container = cueContainer;
         int newPid = -1;
@@ -426,8 +460,38 @@ internal sealed class CueReorder(
             newPid = targetParent?.Id ?? -1;
         }
 
+        // Index is finalized in ResolveInsertIndexAfterDetach (above vs below).
         int idx = targetShell.GetIndex();
+        if (InsertBelow)
+            idx += 1;
         return (container, idx, newPid, makeChild);
+    }
+
+    /// <summary>
+    /// Computes the child index for the drop after moved shells have been removed from the tree.
+    /// Must run post-detach so removing an earlier sibling does not leave "above" off-by-one.
+    /// </summary>
+    private int ResolveInsertIndexAfterDetach(VBoxContainer targetContainer, ShellBar targetShell, bool isMakeChild)
+    {
+        if (targetContainer == null)
+            return 0;
+
+        if (DropAtEndAsTopLevel || isMakeChild)
+            return targetContainer.GetChildCount();
+
+        // Target still lives in the destination container for above/below drops.
+        if (targetShell != null
+            && GodotObject.IsInstanceValid(targetShell)
+            && targetShell.GetParent() == targetContainer)
+        {
+            int targetIdx = targetShell.GetIndex();
+            int idx = InsertBelow ? targetIdx + 1 : targetIdx;
+            return Math.Clamp(idx, 0, targetContainer.GetChildCount());
+        }
+
+        // Fallback if the hover target was also moved (should not happen for valid drops).
+        int fallback = targetContainer.GetChildCount();
+        return Math.Clamp(fallback, 0, targetContainer.GetChildCount());
     }
 
     private bool WouldCreateCycle(Cue movingCue, int prospectiveParentId)

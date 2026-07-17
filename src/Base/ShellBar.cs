@@ -83,7 +83,10 @@ public partial class ShellBar : PanelContainer
 		MouseEntered += OnMouseEntered;
 		MouseExited += OnMouseExited;
 		
-		_dragButton.ButtonDown += DragPressed;
+		// GuiInput + AcceptEvent: do not use ButtonDown. Reorder commits on global mouse-up
+		// in CueList._Input (before GUI), which left BaseButton latched with keep_pressed_outside
+		// and required a second click on the same grabber.
+		_dragButton.GuiInput += OnDragBarGuiInput;
 		
 		_collapseButton.Pressed += CollapsedPressed;
 		_cueNumLineEdit.GuiInput += OnCueNumGuiInput;
@@ -138,14 +141,28 @@ public partial class ShellBar : PanelContainer
 			_groupPanel.MouseFilter = MouseFilterEnum.Ignore;
 		}
 
-		// Full-width column: RootVBox → RowHBox (Leading | Trailing) + ShellChildContainer.
-		// TrailingHBox is fixed-width and non-expanding so times stay right-aligned at every depth.
-		var rootVBox = GetNodeOrNull<VBoxContainer>("RootVBox");
-		if (rootVBox != null)
+		// Structure:
+		//   OuterHBox
+		//     ColorPanel          ← full shell height (row + nested children)
+		//     ContentVBox
+		//       RowHBox (Leading | Trailing)
+		//       ShellChildContainer
+		// ColorPanel is a sibling of ContentVBox so it spans expanded groups as a nest visual.
+		// ColorNestGap (1px) sits between parent and child colour strips when nested.
+		var outerHBox = GetNodeOrNull<HBoxContainer>("OuterHBox");
+		if (outerHBox != null)
 		{
-			rootVBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-			rootVBox.SizeFlagsVertical = SizeFlags.ExpandFill;
-			rootVBox.AddThemeConstantOverride("separation", 0);
+			outerHBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+			outerHBox.SizeFlagsVertical = SizeFlags.ExpandFill;
+			outerHBox.AddThemeConstantOverride("separation", ShellColumnLayout.ColorNestGap);
+		}
+
+		var contentVBox = GetNodeOrNull<VBoxContainer>("OuterHBox/ContentVBox");
+		if (contentVBox != null)
+		{
+			contentVBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+			contentVBox.SizeFlagsVertical = SizeFlags.ExpandFill;
+			contentVBox.AddThemeConstantOverride("separation", 0);
 		}
 
 		if (_rowHBox != null)
@@ -173,11 +190,13 @@ public partial class ShellBar : PanelContainer
 		if (ShellChildContainer != null)
 		{
 			ShellChildContainer.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+			// Zero gap so parent colour strip reads continuous through nested children.
 			ShellChildContainer.AddThemeConstantOverride("separation", 0);
 		}
 
 		// Nested shells must fill parent width (not shrink to content).
 		SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		SizeFlagsVertical = SizeFlags.Fill;
 
 		if (_cueNameLineEdit != null)
 			_cueNameLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -191,6 +210,7 @@ public partial class ShellBar : PanelContainer
 
 	/// <summary>
 	/// Restores the reorder grabber icon and hit target (readable on dark rows).
+	/// Grabber is visual-only for press state: start is handled in <see cref="OnDragBarGuiInput"/>.
 	/// </summary>
 	private void ApplyDragGrabberStyle()
 	{
@@ -198,6 +218,9 @@ public partial class ShellBar : PanelContainer
 
 		_dragButton.Visible = true;
 		_dragButton.Disabled = false;
+		_dragButton.ToggleMode = false;
+		_dragButton.KeepPressedOutside = false;
+		_dragButton.FocusMode = FocusModeEnum.None;
 		_dragButton.MouseFilter = MouseFilterEnum.Stop;
 		_dragButton.MouseDefaultCursorShape = Control.CursorShape.Drag;
 		_dragButton.Flat = true;
@@ -214,6 +237,10 @@ public partial class ShellBar : PanelContainer
 		var icon = GetThemeIcon("Rearrange", "AtlasIcons");
 		if (icon != null)
 			_dragButton.Icon = icon;
+
+		// Ensure no latched press from a previous session.
+		_dragButton.SetPressedNoSignal(false);
+		_dragButton.ButtonPressed = false;
 	}
 
 	/// <summary>
@@ -297,7 +324,8 @@ public partial class ShellBar : PanelContainer
 
 	/// <summary>
 	/// Applies shared column widths from <see cref="ShellColumnLayout"/> to this row.
-	/// Layout: [Leading: Color|Drag|Issue|Indent|Collapse|Num|Name(expand)] | [Trailing: Pre|Dur|Post|Follow].
+	/// Color strip lives in OuterHBox (full shell height including nested children).
+	/// Row layout: [Leading: Drag|Issue|Indent|Collapse|Num|Name(expand)] | [Trailing: Pre|Dur|Post|Follow].
 	/// Trailing is fixed-width and non-expanding so nest indent never shifts time columns.
 	/// </summary>
 	public void ApplyColumnLayout()
@@ -311,13 +339,8 @@ public partial class ShellBar : PanelContainer
 		float ctrlH = ShellColumnLayout.RowControlHeight;
 		int sep = ShellColumnLayout.RowSeparation;
 
-		if (_colorPanel != null)
-		{
-			_colorPanel.CustomMinimumSize = new Vector2(ShellColumnLayout.ColorWidth, 0);
-			_colorPanel.SizeFlagsHorizontal = SizeFlags.Fill;
-			_colorPanel.SizeFlagsVertical = SizeFlags.ExpandFill;
-			_colorPanel.MouseFilter = MouseFilterEnum.Ignore;
-		}
+		// Full-height nest indicator: beside ContentVBox, not inside the cue row.
+		ConfigureColorPanelLayout();
 		if (_dragButton != null)
 		{
 			_dragButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, ctrlH);
@@ -397,6 +420,31 @@ public partial class ShellBar : PanelContainer
 		SizeFlagsHorizontal = SizeFlags.ExpandFill;
 
 		ApplyTreeIndent();
+	}
+
+	/// <summary>
+	/// Ensures ColorPanel is a full-height left strip (row + nested ShellChildContainer).
+	/// </summary>
+	private void ConfigureColorPanelLayout()
+	{
+		if (_colorPanel == null)
+			return;
+
+		_colorPanel.CustomMinimumSize = new Vector2(ShellColumnLayout.ColorWidth, 0);
+		_colorPanel.SizeFlagsHorizontal = SizeFlags.Fill;
+		_colorPanel.SizeFlagsVertical = SizeFlags.ExpandFill;
+		_colorPanel.MouseFilter = MouseFilterEnum.Ignore;
+
+		// Continuous vertical strip: no rounded corners or content inset on the bar itself.
+		if (_colorBarStyle != null)
+		{
+			_colorBarStyle.ContentMarginLeft = 0;
+			_colorBarStyle.ContentMarginRight = 0;
+			_colorBarStyle.ContentMarginTop = 0;
+			_colorBarStyle.ContentMarginBottom = 0;
+			_colorBarStyle.SetCornerRadiusAll(0);
+			_colorBarStyle.AntiAliasing = false;
+		}
 	}
 
 	/// <summary>
@@ -616,8 +664,10 @@ public partial class ShellBar : PanelContainer
 		_cueNameLineEdit.Text = cue.Name;
 		RefreshTimesFromCue();
 		_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
-		_colorBarStyle.BgColor = _cue.Color;
+		if (_colorBarStyle != null)
+			_colorBarStyle.BgColor = _cue.Color;
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
+		ConfigureColorPanelLayout();
 		UpdateFollowMode(cue.Follow);
 		// Initialize collapse/expand UI based on children (SetCue path)
 		UpdateCollapseUI();
@@ -925,6 +975,7 @@ public partial class ShellBar : PanelContainer
 		if (_colorBarStyle == null) return;
 		_colorBarStyle.BgColor = _cue.Color;
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
+		ConfigureColorPanelLayout();
 		// Shell body wash follows cue colour.
 		RefreshShellChrome();
 	}
@@ -999,6 +1050,14 @@ public partial class ShellBar : PanelContainer
 
 	private void OnMouseEntered()
 	{
+		// During reorder the drop indicator owns highlight; mouse enter/exit also
+		// thrash between the floating preview and shells (blue hover flicker).
+		if (IsReorderActive())
+		{
+			ClearHoverChrome();
+			return;
+		}
+
 		_hovered = true;
 		if (!Selected)
 			RefreshShellChrome();
@@ -1006,6 +1065,26 @@ public partial class ShellBar : PanelContainer
 	
 	private void OnMouseExited()
 	{
+		if (!_hovered)
+			return;
+		_hovered = false;
+		if (!Selected)
+			RefreshShellChrome();
+	}
+
+	/// <summary>
+	/// True while the cuelist drag-reorder session is active.
+	/// </summary>
+	private bool IsReorderActive() =>
+		_globalData?.Cuelist?.IsReordering == true;
+
+	/// <summary>
+	/// Clears hover chrome without affecting selection. Used when reorder starts/ends.
+	/// </summary>
+	public void ClearHoverChrome()
+	{
+		if (!_hovered)
+			return;
 		_hovered = false;
 		if (!Selected)
 			RefreshShellChrome();
@@ -1105,9 +1184,11 @@ public partial class ShellBar : PanelContainer
 
 		Color cueColor = _cue != null ? _cue.Color : new Color(0.4f, 0.4f, 0.4f);
 		bool even = (_zebraIndex % 2) == 0;
+		// Hover wash is suppressed while reordering (drop indicator is the visual guide).
+		bool showHover = _hovered && !IsReorderActive();
 		var state = Selected
 			? GlobalStyles.ShellChromeState.Selected
-			: (_hovered ? GlobalStyles.ShellChromeState.Hover : GlobalStyles.ShellChromeState.Normal);
+			: (showHover ? GlobalStyles.ShellChromeState.Hover : GlobalStyles.ShellChromeState.Normal);
 
 		_panelStyle.BgColor = GlobalStyles.ShellBackgroundFor(cueColor, even, state);
 		// Nested shells: no side border (avoids extra inset); root keeps state border colour.
@@ -1119,8 +1200,39 @@ public partial class ShellBar : PanelContainer
 	
 
 	// Re-ordering functions
-	private void DragPressed()
+
+	/// <summary>
+	/// Starts reorder on left-press. Accepts the event so BaseButton does not latch pressed;
+	/// mouse-up is owned by <see cref="CueReorder"/> via CueList._Input.
+	/// </summary>
+	private void OnDragBarGuiInput(InputEvent @event)
 	{
+		if (@event is not InputEventMouseButton mb)
+			return;
+		if (mb.ButtonIndex != MouseButton.Left || !mb.Pressed)
+			return;
+
+		// Prevent BaseButton internal press-attempt (would stick if mouse-up is handled globally).
+		AcceptEvent();
+		_dragButton?.SetPressedNoSignal(false);
+
+		if (_globalData?.Cuelist == null)
+			return;
 		_globalData.Cuelist.StartReorder(this);
+	}
+
+	/// <summary>
+	/// Clears any residual pressed/focus state on the reorder grabber after a drag session.
+	/// </summary>
+	public void ReleaseDragGrabber()
+	{
+		if (_dragButton == null || !IsInstanceValid(_dragButton))
+			return;
+
+		_dragButton.KeepPressedOutside = false;
+		_dragButton.SetPressedNoSignal(false);
+		_dragButton.ButtonPressed = false;
+		if (_dragButton.HasFocus())
+			_dragButton.ReleaseFocus();
 	}
 }

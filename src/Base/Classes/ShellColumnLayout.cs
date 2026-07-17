@@ -17,6 +17,12 @@ public static class ShellColumnLayout
 	/// <summary>Left color strip width.</summary>
 	public const float ColorWidth = 3f;
 
+	/// <summary>
+	/// Horizontal gap between a shell's color strip and its content (and thus between
+	/// stacked parent/child color strips when nested).
+	/// </summary>
+	public const int ColorNestGap = 1;
+
 	/// <summary>Drag handle column.</summary>
 	public const float DragWidth = 18f;
 
@@ -96,11 +102,11 @@ public static class ShellColumnLayout
 	}
 
 	/// <summary>
-	/// Width of fixed left chrome before tree indent (color + drag + issue + separations).
+	/// Width of fixed left chrome before tree indent (color + nest gap + drag + issue + separations).
 	/// Color, drag, and issue always stay flush left on every row.
 	/// </summary>
 	public static float FixedLeftChromeWidth =>
-		ColorWidth + RowSeparation
+		ColorWidth + ColorNestGap
 		+ DragWidth + RowSeparation
 		+ IssueWidth + RowSeparation;
 

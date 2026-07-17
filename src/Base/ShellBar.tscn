@@ -8,6 +8,15 @@
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_o55rx"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_34bmx"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.4, 0.4, 0.4, 1)
+corner_radius_top_left = 0
+corner_radius_top_right = 0
+corner_radius_bottom_right = 0
+corner_radius_bottom_left = 0
 
 [node name="ShellBar" type="PanelContainer"]
 clip_contents = false
@@ -15,7 +24,7 @@ custom_minimum_size = Vector2(0, 24)
 offset_right = 497.0
 offset_bottom = 28.0
 size_flags_horizontal = 3
-size_flags_vertical = 1
+size_flags_vertical = 0
 focus_mode = 1
 theme = ExtResource("1_o55rx")
 script = ExtResource("1_34bmx")
@@ -36,30 +45,13 @@ size_flags_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxEmpty_o55rx")
 
-[node name="RootVBox" type="VBoxContainer" parent="."]
+[node name="OuterHBox" type="HBoxContainer" parent="."]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 0
+theme_override_constants/separation = 1
 
-[node name="RowHBox" type="HBoxContainer" parent="RootVBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 24)
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 0
-theme_override_constants/separation = 2
-alignment = 0
-
-[node name="LeadingHBox" type="HBoxContainer" parent="RootVBox/RowHBox"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 4
-theme_override_constants/separation = 2
-alignment = 1
-
-[node name="ColorPanel" type="Panel" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="ColorPanel" type="Panel" parent="OuterHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(3, 0)
 layout_mode = 2
@@ -68,7 +60,30 @@ size_flags_vertical = 3
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_34bmx")
 
-[node name="DragBar" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="ContentVBox" type="VBoxContainer" parent="OuterHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="RowHBox" type="HBoxContainer" parent="OuterHBox/ContentVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 2
+alignment = 0
+
+[node name="LeadingHBox" type="HBoxContainer" parent="OuterHBox/ContentVBox/RowHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="DragBar" type="Button" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(18, 20)
 layout_mode = 2
@@ -80,13 +95,13 @@ theme_override_colors/icon_normal_color = Color(0.72, 0.78, 0.82, 0.95)
 theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
 theme_override_constants/icon_max_width = 14
 theme_override_font_sizes/font_size = 10
-keep_pressed_outside = true
+keep_pressed_outside = false
 flat = true
 icon_alignment = 1
 vertical_icon_alignment = 1
 expand_icon = true
 
-[node name="IssueIndicator" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="IssueIndicator" type="Button" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(14, 20)
 layout_mode = 2
@@ -103,7 +118,7 @@ icon_alignment = 1
 vertical_icon_alignment = 1
 expand_icon = true
 
-[node name="TreeIndent" type="Control" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="TreeIndent" type="Control" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
@@ -111,7 +126,7 @@ size_flags_horizontal = 0
 size_flags_vertical = 4
 mouse_filter = 2
 
-[node name="CollapseButton" type="Button" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="CollapseButton" type="Button" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(18, 20)
 layout_mode = 2
@@ -125,7 +140,7 @@ icon_alignment = 1
 vertical_icon_alignment = 1
 expand_icon = true
 
-[node name="CueNumLineEdit" type="LineEdit" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="CueNumLineEdit" type="LineEdit" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 20)
 layout_mode = 2
@@ -137,7 +152,7 @@ mouse_default_cursor_shape = 0
 theme_override_font_sizes/font_size = 10
 max_length = 5
 
-[node name="CueNameLineEdit" type="LineEdit" parent="RootVBox/RowHBox/LeadingHBox"]
+[node name="CueNameLineEdit" type="LineEdit" parent="OuterHBox/ContentVBox/RowHBox/LeadingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 20)
 layout_mode = 2
@@ -150,7 +165,7 @@ theme_override_font_sizes/font_size = 10
 placeholder_text = "New Shell"
 max_length = 50
 
-[node name="TrailingHBox" type="HBoxContainer" parent="RootVBox/RowHBox"]
+[node name="TrailingHBox" type="HBoxContainer" parent="OuterHBox/ContentVBox/RowHBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -158,7 +173,7 @@ size_flags_vertical = 4
 theme_override_constants/separation = 2
 alignment = 1
 
-[node name="PreWaitLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
+[node name="PreWaitLineEdit" type="LineEdit" parent="OuterHBox/ContentVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 20)
 layout_mode = 2
@@ -167,7 +182,7 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 10
 select_all_on_focus = true
 
-[node name="DurationLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
+[node name="DurationLineEdit" type="LineEdit" parent="OuterHBox/ContentVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 20)
 layout_mode = 2
@@ -178,7 +193,7 @@ mouse_default_cursor_shape = 0
 theme_override_font_sizes/font_size = 10
 editable = false
 
-[node name="PostWaitLineEdit" type="LineEdit" parent="RootVBox/RowHBox/TrailingHBox"]
+[node name="PostWaitLineEdit" type="LineEdit" parent="OuterHBox/ContentVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 20)
 layout_mode = 2
@@ -187,7 +202,7 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 10
 select_all_on_focus = true
 
-[node name="FollowButton" type="Button" parent="RootVBox/RowHBox/TrailingHBox"]
+[node name="FollowButton" type="Button" parent="OuterHBox/ContentVBox/RowHBox/TrailingHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(34, 20)
 layout_mode = 2
@@ -201,7 +216,7 @@ focus_mode = 0
 flat = true
 alignment = 1
 
-[node name="ShellChildContainer" type="VBoxContainer" parent="RootVBox"]
+[node name="ShellChildContainer" type="VBoxContainer" parent="OuterHBox/ContentVBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

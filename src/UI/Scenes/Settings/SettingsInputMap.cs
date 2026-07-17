@@ -15,6 +15,7 @@ public partial class SettingsInputMap : ScrollContainer
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
+    private HistoryManager _historyManager;
 
     private VBoxContainer _inputsContainer;
     private PackedScene _inputActionCardScene;
@@ -41,6 +42,7 @@ public partial class SettingsInputMap : ScrollContainer
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
+        _historyManager = _globalData?.HistoryManager;
 
         _inputsContainer = GetNode<VBoxContainer>("%InputsContainer");
 
@@ -53,6 +55,8 @@ public partial class SettingsInputMap : ScrollContainer
         }
 
         VisibilityChanged += OnVisibilityChanged;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
 
         // Initial populate if already visible (e.g. opened directly)
         if (IsVisibleInTree())
@@ -64,6 +68,8 @@ public partial class SettingsInputMap : ScrollContainer
     public override void _ExitTree()
     {
         VisibilityChanged -= OnVisibilityChanged;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
         base._ExitTree();
     }
 
@@ -76,6 +82,36 @@ public partial class SettingsInputMap : ScrollContainer
         else
         {
             ClearCards();
+        }
+    }
+
+    /// <summary>
+    /// After settings-scoped undo/redo that may restore InputMap, refresh binding labels.
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Settings)
+            return;
+        if (!IsInstanceValid(this) || !Visible)
+            return;
+
+        // Cancel any in-progress rebind — the live map may have changed under us.
+        if (_activeListeningCard != null && IsInstanceValid(_activeListeningCard))
+            _activeListeningCard.CancelListening();
+        _activeListeningCard = null;
+
+        RefreshAllCardDisplays();
+    }
+
+    /// <summary>
+    /// Re-reads live InputMap into each action card without rebuilding the accordion tree.
+    /// </summary>
+    private void RefreshAllCardDisplays()
+    {
+        foreach (var kvp in _cardsByAction)
+        {
+            if (kvp.Value != null && IsInstanceValid(kvp.Value))
+                kvp.Value.RefreshDisplay();
         }
     }
 

@@ -295,6 +295,9 @@ public partial class SettingsCanvasEditor : Control
         _subViewportContainer.MouseFilter = MouseFilterEnum.Stop;
         _scrollContainer.Resized += OnStageResized;
 
+        // Start input-off; enabled only while this panel is the visible settings page.
+        SetProcessInput(IsVisibleInTree());
+
         if (IsVisibleInTree())
             CallDeferred(nameof(EnsureStageInitialized));
 
@@ -363,6 +366,11 @@ public partial class SettingsCanvasEditor : Control
 
         if (IsVisibleInTree())
         {
+            // Only process stage mouse/keyboard while this panel is the active settings page.
+            // Hidden panels stay in the tree and share the right-side layout rect — without
+            // this, _Input keeps hit-testing and mutates canvas while other menus are open.
+            SetProcessInput(true);
+
             // Heavy init only when user actually opens Canvas Editor (not every Settings open).
             CallDeferred(nameof(EnsureStageInitialized));
             CallDeferred(nameof(RefreshStageView));
@@ -372,6 +380,36 @@ public partial class SettingsCanvasEditor : Control
                 CallDeferred(nameof(RefreshAfterHistoryRestore));
             }
         }
+        else
+        {
+            SetProcessInput(false);
+            CancelStageInteractionOnHide();
+        }
+    }
+
+    /// <summary>
+    /// Ends pan/drag and resets cursor when leaving the canvas editor so no further model
+    /// updates or DisplaysManager logs fire while another settings panel is visible.
+    /// </summary>
+    private void CancelStageInteractionOnHide()
+    {
+        if (_isDraggingCanvas)
+        {
+            // Commit the drag cleanly (history already recorded at StartDrag) rather than
+            // leaving half-applied geometry without a DisplaysManager update.
+            EndCanvasInteraction();
+        }
+
+        _isPanning = false;
+        _isDraggingCanvas = false;
+        _dragMode = DragMode.None;
+        if (!string.IsNullOrEmpty(_activeDragCoalesceKey))
+        {
+            _historyManager?.EndCoalesceSession(_activeDragCoalesceKey);
+            _activeDragCoalesceKey = null;
+        }
+
+        MouseDefaultCursorShape = CursorShape.Arrow;
     }
 
     private void OnWindowSizeChanged()
@@ -603,6 +641,10 @@ public partial class SettingsCanvasEditor : Control
 
     public override void _Input(InputEvent @event)
     {
+        // Hidden settings pages remain in the scene tree; never handle stage input off-page.
+        if (!IsVisibleInTree() || !_stageInitialized)
+            return;
+
         bool overStage = IsMouseOverStage();
 
         if (@event is InputEventMouseButton mouseEvent)
@@ -662,7 +704,13 @@ public partial class SettingsCanvasEditor : Control
 
     private bool IsMouseOverStage()
     {
+        // GetGlobalRect still reports the last layout box while Hidden — other settings
+        // panels occupy the same right-side area, so visibility must be checked first.
+        if (!IsVisibleInTree())
+            return false;
         if (_scrollContainer == null || !IsInstanceValid(_scrollContainer))
+            return false;
+        if (!_scrollContainer.IsVisibleInTree())
             return false;
         return _scrollContainer.GetGlobalRect().HasPoint(GetViewport().GetMousePosition());
     }
