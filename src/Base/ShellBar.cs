@@ -1201,7 +1201,7 @@ public partial class ShellBar : PanelContainer
 		EnsurePanelStyle();
 		ApplyPanelMetricsForDepth();
 
-		Color cueColor = _cue != null ? _cue.Color : new Color(0.4f, 0.4f, 0.4f);
+		Color cueColor = _cue != null ? _cue.Color : Colors.Black;
 		bool even = (_zebraIndex % 2) == 0;
 		// Hover wash is suppressed while reordering (drop indicator is the visual guide).
 		bool showHover = _hovered && !IsReorderActive();

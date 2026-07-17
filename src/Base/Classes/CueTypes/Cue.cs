@@ -222,7 +222,7 @@ public class Cue : ICue
         Id = _nextId++;
         _name = "New cue number " + Id.ToString();
         _cueNum = Id.ToString();
-        Color = new Color(0.4f, 0.4f, 0.4f, 1.0f);
+        Color = new Color(0f, 0f, 0f, 1.0f);
     }
     
     

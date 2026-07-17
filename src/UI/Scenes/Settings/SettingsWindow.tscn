@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" uid="uid://ceydom3514ip" path="res://src/UI/Scenes/Settings/SettingsCanvasEditor.tscn" id="10_cxve1"]
 [ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn" id="11_51xpo"]
 [ext_resource type="PackedScene" uid="uid://i5x3q04qutpg" path="res://src/UI/Scenes/Settings/SettingsCue2Prefs.tscn" id="11_giu5g"]
+[ext_resource type="PackedScene" uid="uid://frcr4kkc1rrl" path="res://src/UI/Scenes/Settings/SettingsCueDefaults.tscn" id="12_cuedef"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -250,6 +251,10 @@ layout_mode = 2
 [node name="SettingsCue2Prefs" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=238426694 instance=ExtResource("11_giu5g")]
 unique_name_in_owner = true
 visible = false
+layout_mode = 2
+
+[node name="SettingsCueDefaults" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=1372115871 instance=ExtResource("12_cuedef")]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="DropMenuFilter" type="PanelContainer" parent="Control" unique_id=791895030]

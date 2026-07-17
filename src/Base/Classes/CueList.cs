@@ -314,13 +314,14 @@ public partial class CueList : Control
 
 	/// <summary>
 	/// Creates a default new cue and adds it to the cuelist (wired to Add button / signal).
+	/// Shell properties come from show-scoped <see cref="Settings"/> cue defaults.
 	/// </summary>
 	public void CreateCue()
 	{
 		_globalData?.HistoryManager?.RecordCuelistChange("Create cue");
-		var newCue = new Cue(); // Create a cue with default values
+		var newCue = new Cue();
+		_globalData?.Settings?.ApplyShellDefaults(newCue);
 		AddCue(newCue);
-
 	}
 
 	private void _syncHotkeys()
@@ -382,8 +383,9 @@ public partial class CueList : Control
 			}
 		}
 
-		// Create the wrapping group cue
+		// Create the wrapping group cue (shell defaults, then override display name)
 		var groupCue = new Cue();
+		_globalData?.Settings?.ApplyShellDefaults(groupCue);
 		groupCue.Name = $"Group ({toGroup.Count} cues)";
 		groupCue.CueNum = groupCue.Id.ToString();
 
@@ -478,8 +480,9 @@ public partial class CueList : Control
 
 		if (asGroup && files.Length > 1)
 		{
-			// Create a wrapper group cue first
+			// Create a wrapper group cue first (shell defaults, then override display name)
 			groupCue = new Cue();
+			_globalData?.Settings?.ApplyShellDefaults(groupCue);
 			groupCue.Name = $"Group ({files.Length} files)";
 			groupCue.CueNum = groupCue.Id.ToString();
 
@@ -501,6 +504,7 @@ public partial class CueList : Control
 			if (!File.Exists(filePath)) continue;
 
 			var cue = new Cue();
+			_globalData?.Settings?.ApplyShellDefaults(cue);
 			string baseName = Path.GetFileNameWithoutExtension(filePath);
 			cue.Name = string.IsNullOrWhiteSpace(baseName) ? $"Cue {cue.Id}" : baseName;
 			cue.CueNum = cue.Id.ToString();

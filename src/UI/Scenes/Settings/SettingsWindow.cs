@@ -433,6 +433,7 @@ public partial class SettingsWindow : Window
 			"Cue Lights" => "CueLights",
 			"OSC Connections" => "SettingsOscConnections",
 			"OSC Listener" => "SettingsOscListen",
+			"Cue Defaults" => "SettingsCueDefaults",
 			"Cue2 Preferences" => "SettingsCue2Prefs",
 			_ => null
 		};
@@ -478,16 +479,16 @@ public partial class SettingsWindow : Window
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);
 		tiArtNet.SetText(0, "Art-Net");
 
-		// Cue defaults
+		// Cue defaults (shell defaults applied to newly created cues)
 		TreeItem tiDefaults = _setTree.CreateItem(root);
-		tiDefaults.SetText(0, "Defaults");
-		tiDefaults.SetTooltipText(0, "Set default behaviors and paramaters across shells and cues universaly.");
-		TreeItem tiAudioCueDafaults = _setTree.CreateItem(tiDefaults);
-		tiAudioCueDafaults.SetText(0, "Audio Cues");
-		tiAudioCueDafaults.SetTooltipText(0, "Set defaults for audio cues.");
+		tiDefaults.SetText(0, "Cue Defaults");
+		tiDefaults.SetTooltipText(0, "Default shell properties for newly created cues (pre-wait, colour, arming, etc.).");
+		TreeItem tiAudioCueDefaults = _setTree.CreateItem(tiDefaults);
+		tiAudioCueDefaults.SetText(0, "Audio Cues");
+		tiAudioCueDefaults.SetTooltipText(0, "Set defaults for audio cues (coming soon).");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiVideoCueDefaults.SetText(0, "Video Defaults");
-		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues.");
+		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues (coming soon).");
 
 		// App preferences (user:// — not stored in the showfile)
 		TreeItem tiCue2Preferences = _setTree.CreateItem(root);

@@ -1,5 +1,6 @@
 using System.Linq;
 using Cue2.Base.Classes.Connections;
+using Cue2.Base.Classes.CueTypes;
 using Cue2.Shared;
 using Godot;
 using Godot.Collections;
@@ -33,6 +34,26 @@ public partial class Settings : Node
     /// <summary>Default for copying used media into the show folder (Audio/Video/Images).</summary>
     public const bool DefaultMediaBackupEnabled = true;
 
+    // ── Cue shell defaults (system factory values) ─────────────────────────
+
+    /// <summary>System default pre-wait in seconds for newly created cues.</summary>
+    public const double SystemDefaultCuePreWait = 0.0;
+
+    /// <summary>System default post-wait in seconds for newly created cues.</summary>
+    public const double SystemDefaultCuePostWait = 0.0;
+
+    /// <summary>System default continue mode for newly created cues.</summary>
+    public const FollowType SystemDefaultCueFollow = FollowType.None;
+
+    /// <summary>System default shell colour for newly created cues.</summary>
+    public static readonly Color SystemDefaultCueColor = new Color(0f, 0f, 0f, 1.0f);
+
+    /// <summary>System default armed state for newly created cues.</summary>
+    public const bool SystemDefaultCueArmed = true;
+
+    /// <summary>System default skip-if-disarmed for newly created cues.</summary>
+    public const bool SystemDefaultCueSkipIfDisarmed = false;
+
     public float UiScale = DefaultUiScale;
     public float GoScale = DefaultGoScale;
     public int WaveformResolution = DefaultWaveformResolution;
@@ -49,6 +70,26 @@ public partial class Settings : Node
     /// Persisted with the showfile.
     /// </summary>
     public bool MediaBackupEnabled = DefaultMediaBackupEnabled;
+
+    // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
+
+    /// <summary>Default pre-wait (seconds) applied when a new cue is created.</summary>
+    public double CueDefaultPreWait = SystemDefaultCuePreWait;
+
+    /// <summary>Default post-wait (seconds) applied when a new cue is created.</summary>
+    public double CueDefaultPostWait = SystemDefaultCuePostWait;
+
+    /// <summary>Default continue mode applied when a new cue is created.</summary>
+    public FollowType CueDefaultFollow = SystemDefaultCueFollow;
+
+    /// <summary>Default shell colour applied when a new cue is created.</summary>
+    public Color CueDefaultColor = SystemDefaultCueColor;
+
+    /// <summary>Default armed state applied when a new cue is created.</summary>
+    public bool CueDefaultArmed = SystemDefaultCueArmed;
+
+    /// <summary>Default skip-if-disarmed applied when a new cue is created.</summary>
+    public bool CueDefaultSkipIfDisarmed = SystemDefaultCueSkipIfDisarmed;
 
     public bool VerbosePrint = true;
     
@@ -170,6 +211,9 @@ public partial class Settings : Node
         MediaBackupEnabled = DefaultMediaBackupEnabled;
         VerbosePrint = true;
 
+        // Cue shell defaults for newly created cues
+        ResetCueDefaultsToSystem();
+
         // Cue light appearance defaults
         CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
         CueLightGoColour = new Color(0f, 1f, 0f, 1f);
@@ -218,6 +262,9 @@ public partial class Settings : Node
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
+
+        // Cue shell defaults (show-scoped)
+        saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
         
         // Cuelights
         saveTable.Add("CueLightIdleColour", CueLightIdleColour.ToHtml());
@@ -286,6 +333,12 @@ public partial class Settings : Node
         MediaBackupEnabled = settingsData.TryGetValue("MediaBackupEnabled", out value)
             ? value.AsBool()
             : DefaultMediaBackupEnabled;
+
+        // Cue shell defaults (older shows without this key keep system defaults)
+        if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
+            ApplyCueDefaultsFromDict(value.AsGodotDictionary());
+        else
+            ResetCueDefaultsToSystem();
         
         CueLightIdleColour = settingsData.TryGetValue("CueLightIdleColour", out value) ? Color.FromString(value.AsString(), CueLightIdleColour) : CueLightIdleColour;
         CueLightGoColour = settingsData.TryGetValue("CueLightGoColour", out value) ? Color.FromString(value.AsString(), CueLightGoColour) : CueLightGoColour;
@@ -400,6 +453,12 @@ public partial class Settings : Node
         if (TryGetSettingsValue(settingsData, "MediaBackupEnabled", out value))
             MediaBackupEnabled = ReadBoolVariant(value);
 
+        if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
+            && value.VariantType == Variant.Type.Dictionary)
+        {
+            ApplyCueDefaultsFromDict(value.AsGodotDictionary());
+        }
+
         if (settingsData.TryGetValue("CueLightIdleColour", out value))
             CueLightIdleColour = Color.FromString(value.AsString(), CueLightIdleColour);
         if (settingsData.TryGetValue("CueLightGoColour", out value))
@@ -476,6 +535,10 @@ public partial class Settings : Node
                     ? _displaysManager.GetData()
                     : new Dictionary();
             }
+            else if (key == "CueDefaults")
+            {
+                slice[key] = CaptureCueDefaultsDict();
+            }
             else
             {
                 // Fallback for other complex keys (CueLights, OscListen, …)
@@ -514,6 +577,91 @@ public partial class Settings : Node
                 value = default;
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Resets all cue shell defaults to system factory values.
+    /// </summary>
+    public void ResetCueDefaultsToSystem()
+    {
+        CueDefaultPreWait = SystemDefaultCuePreWait;
+        CueDefaultPostWait = SystemDefaultCuePostWait;
+        CueDefaultFollow = SystemDefaultCueFollow;
+        CueDefaultColor = SystemDefaultCueColor;
+        CueDefaultArmed = SystemDefaultCueArmed;
+        CueDefaultSkipIfDisarmed = SystemDefaultCueSkipIfDisarmed;
+    }
+
+    /// <summary>
+    /// Applies the show's cue shell defaults to a newly constructed cue.
+    /// Does not change id, name, number, parent/children, or components.
+    /// </summary>
+    /// <param name="cue">Cue instance to configure (typically just constructed).</param>
+    public void ApplyShellDefaults(Cue cue)
+    {
+        if (cue == null) return;
+        cue.PreWait = CueDefaultPreWait;
+        cue.PostWait = CueDefaultPostWait;
+        cue.Follow = CueDefaultFollow;
+        cue.Color = CueDefaultColor;
+        cue.Armed = CueDefaultArmed;
+        cue.SkipIfDisarmed = CueDefaultSkipIfDisarmed;
+    }
+
+    /// <summary>
+    /// Serializes the cue shell defaults block for showfile / history.
+    /// </summary>
+    public Dictionary CaptureCueDefaultsDict()
+    {
+        return new Dictionary
+        {
+            ["PreWait"] = CueDefaultPreWait,
+            ["PostWait"] = CueDefaultPostWait,
+            ["Follow"] = (int)CueDefaultFollow,
+            ["Color"] = CueDefaultColor.ToHtml(true),
+            ["Armed"] = CueDefaultArmed ? 1 : 0,
+            ["SkipIfDisarmed"] = CueDefaultSkipIfDisarmed ? 1 : 0
+        };
+    }
+
+    /// <summary>
+    /// Loads cue shell defaults from a dictionary (showfile or history slice).
+    /// Missing keys keep their current values.
+    /// </summary>
+    /// <param name="data">Dictionary with PreWait, PostWait, Follow, Color, Armed, SkipIfDisarmed.</param>
+    public void ApplyCueDefaultsFromDict(Dictionary data)
+    {
+        if (data == null) return;
+
+        if (TryGetSettingsValue(data, "PreWait", out var v))
+            CueDefaultPreWait = v.AsDouble();
+        if (TryGetSettingsValue(data, "PostWait", out v))
+            CueDefaultPostWait = v.AsDouble();
+        if (TryGetSettingsValue(data, "Follow", out v))
+        {
+            int followInt = v.AsInt32();
+            if (followInt is >= 0 and <= 2)
+                CueDefaultFollow = (FollowType)followInt;
+        }
+        if (TryGetSettingsValue(data, "Color", out v))
+            CueDefaultColor = Color.FromString(v.AsString(), CueDefaultColor);
+        if (TryGetSettingsValue(data, "Armed", out v))
+            CueDefaultArmed = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "SkipIfDisarmed", out v))
+            CueDefaultSkipIfDisarmed = ReadBoolVariant(v);
+    }
+
+    /// <summary>
+    /// Returns true when every cue shell default matches the system factory value.
+    /// </summary>
+    public bool AreCueDefaultsAtSystem()
+    {
+        return Mathf.IsEqualApprox((float)CueDefaultPreWait, (float)SystemDefaultCuePreWait)
+               && Mathf.IsEqualApprox((float)CueDefaultPostWait, (float)SystemDefaultCuePostWait)
+               && CueDefaultFollow == SystemDefaultCueFollow
+               && CueDefaultColor.IsEqualApprox(SystemDefaultCueColor)
+               && CueDefaultArmed == SystemDefaultCueArmed
+               && CueDefaultSkipIfDisarmed == SystemDefaultCueSkipIfDisarmed;
     }
 
     /// <summary>
