@@ -429,6 +429,141 @@ public partial class UiUtilities : Node
         window.Position = new Vector2I((int)offsetX, (int)offsetY);
     }
 
+    /// <summary>
+    /// True when the window fills the screen via maximize or any fullscreen mode.
+    /// </summary>
+    /// <param name="window">Window to inspect.</param>
+    /// <returns>True if maximized or fullscreen; false if null/invalid or windowed.</returns>
+    public static bool IsWindowFillScreen(Window window)
+    {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return false;
 
+        return window.Mode is Window.ModeEnum.Maximized
+            or Window.ModeEnum.Fullscreen
+            or Window.ModeEnum.ExclusiveFullscreen;
+    }
 
+    /// <summary>
+    /// Leaves maximized/fullscreen before interactive drag or edge-resize.
+    /// </summary>
+    /// <remarks>
+    /// Borderless windows that remain maximized while the OS changes their frame size
+    /// end up in a hybrid state: still "maximized" while no longer full-screen, which
+    /// breaks layout/content scaling until the next full mode toggle. Always call this
+    /// before <see cref="DisplayServer.WindowStartResize"/> or <see cref="DisplayServer.WindowStartDrag"/>.
+    /// Prefer applying a known normal size/position so restore is not full-monitor sized.
+    /// </remarks>
+    /// <param name="window">Target window.</param>
+    /// <param name="restoreSize">Optional normal size to apply after leaving fill-screen mode.</param>
+    /// <param name="restorePosition">Optional global position to apply after leaving fill-screen mode.</param>
+    /// <returns>True if the mode was changed to windowed.</returns>
+    public static bool EnsureWindowedForInteraction(
+        Window window,
+        Vector2I? restoreSize = null,
+        Vector2I? restorePosition = null)
+    {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return false;
+
+        if (!IsWindowFillScreen(window))
+            return false;
+
+        // Leave fill-screen first so subsequent Size/Position apply as true windowed geometry.
+        window.Mode = Window.ModeEnum.Windowed;
+
+        if (restoreSize is Vector2I size && size.X > 0 && size.Y > 0)
+            window.Size = size;
+
+        if (restorePosition is Vector2I pos)
+            window.Position = pos;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles between maximized and windowed. Uses <see cref="Window.ModeEnum.Maximized"/>
+    /// (not Fullscreen) so borderless chrome and a normal restore rect are preserved.
+    /// </summary>
+    /// <param name="window">Target window.</param>
+    public static void ToggleMaximize(Window window)
+    {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return;
+
+        if (IsWindowFillScreen(window))
+            window.Mode = Window.ModeEnum.Windowed;
+        else
+            window.Mode = Window.ModeEnum.Maximized;
+    }
+
+    /// <summary>
+    /// Computes absolute window position from a display-relative position on the given screen,
+    /// clamped so the window stays at least partially visible.
+    /// </summary>
+    /// <param name="screenIndex">DisplayServer screen index.</param>
+    /// <param name="relativePosition">Position relative to that screen's top-left.</param>
+    /// <param name="minVisibleWidth">Minimum horizontal overlap kept on-screen.</param>
+    /// <param name="minVisibleHeight">Minimum vertical overlap kept on-screen.</param>
+    /// <returns>Clamped global position.</returns>
+    public static Vector2I ClampWindowPositionToScreen(
+        int screenIndex,
+        Vector2I relativePosition,
+        int minVisibleWidth = 200,
+        int minVisibleHeight = 80)
+    {
+        int count = DisplayServer.GetScreenCount();
+        if (count <= 0)
+            return relativePosition;
+
+        screenIndex = Mathf.Clamp(screenIndex, 0, count - 1);
+        Vector2I screenPos = DisplayServer.ScreenGetPosition(screenIndex);
+        Vector2I screenSize = DisplayServer.ScreenGetSize(screenIndex);
+        Vector2I absPos = screenPos + relativePosition;
+
+        absPos.X = Mathf.Clamp(absPos.X, screenPos.X, screenPos.X + screenSize.X - minVisibleWidth);
+        absPos.Y = Mathf.Clamp(absPos.Y, screenPos.Y, screenPos.Y + screenSize.Y - minVisibleHeight);
+        return absPos;
+    }
+
+    /// <summary>
+    /// Finds the screen index whose bounds contain <paramref name="point"/>, or 0 if none.
+    /// </summary>
+    public static int FindScreenAtPoint(Vector2I point)
+    {
+        int count = DisplayServer.GetScreenCount();
+        for (int i = 0; i < count; i++)
+        {
+            Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            if (new Rect2I(sPos, sSize).HasPoint(point))
+                return i;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Converts a global window position to coordinates relative to the screen that contains
+    /// the top-left (or the window center as fallback).
+    /// </summary>
+    public static Vector2I ToScreenRelativePosition(Vector2I globalPos, Vector2I windowSize)
+    {
+        int count = DisplayServer.GetScreenCount();
+        for (int i = 0; i < count; i++)
+        {
+            Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            Rect2I screenRect = new Rect2I(sPos, sSize);
+
+            if (screenRect.HasPoint(globalPos))
+                return globalPos - sPos;
+
+            Vector2I center = globalPos + (windowSize / 2);
+            if (screenRect.HasPoint(center))
+                return globalPos - sPos;
+        }
+
+        return globalPos;
+    }
 }

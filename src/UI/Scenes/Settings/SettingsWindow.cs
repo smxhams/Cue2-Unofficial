@@ -139,39 +139,64 @@ public partial class SettingsWindow : Window
 	/// </summary>
 	private void ApplySessionRelativePosition()
 	{
-		Vector2I mousePos = DisplayServer.MouseGetPosition();
-		int targetScreenIdx = 0;
-		Vector2I targetScreenPos = Vector2I.Zero;
-		int numScreens = DisplayServer.GetScreenCount();
-		for (int i = 0; i < numScreens; i++)
-		{
-			Vector2I sPos = DisplayServer.ScreenGetPosition(i);
-			Vector2I scrSize = DisplayServer.ScreenGetSize(i);
-			Rect2I screenRect = new Rect2I(sPos, scrSize);
-			if (screenRect.HasPoint(mousePos))
-			{
-				targetScreenIdx = i;
-				targetScreenPos = sPos;
-				break;
-			}
-		}
-
-		Vector2I targetPos = targetScreenPos + _sessionRelativePosition;
-
-		// Clamp so the window is at least partially visible on the target display
-		Vector2I targetMonitorSize = DisplayServer.ScreenGetSize(targetScreenIdx);
-		targetPos.X = Mathf.Clamp(targetPos.X, targetScreenPos.X, targetScreenPos.X + targetMonitorSize.X - 200);
-		targetPos.Y = Mathf.Clamp(targetPos.Y, targetScreenPos.Y, targetScreenPos.Y + targetMonitorSize.Y - 80);
-
-		Position = targetPos;
+		int targetScreenIdx = UiUtilities.FindScreenAtPoint(DisplayServer.MouseGetPosition());
+		Position = UiUtilities.ClampWindowPositionToScreen(targetScreenIdx, _sessionRelativePosition);
 	}
 
 	private void OnWindowSizeChanged()
 	{
-		if (Mode != ModeEnum.Maximized)
+		if (UiUtilities.IsWindowFillScreen(this))
 		{
-			_resizeSaveTimer?.Start();
+			// Persist maximized flag without overwriting last normal size.
+			SaveCurrentWindowState();
+			return;
 		}
+
+		_resizeSaveTimer?.Start();
+	}
+
+	/// <summary>
+	/// Flushes pending geometry so maximize does not lose the latest windowed size
+	/// (debounce timer may not have fired yet). Only writes size when currently windowed.
+	/// </summary>
+	public void FlushGeometryBeforeModeChange()
+	{
+		_resizeSaveTimer?.Stop();
+		if (!UiUtilities.IsWindowFillScreen(this))
+			SaveCurrentWindowState();
+	}
+
+	/// <summary>
+	/// Stops debounce and persists current size/position/mode (including maximized flag).
+	/// </summary>
+	public void PersistGeometryNow()
+	{
+		_resizeSaveTimer?.Stop();
+		SaveCurrentWindowState();
+	}
+
+	/// <summary>
+	/// Leaves maximized/fullscreen and re-applies the session-cached normal size/position.
+	/// Called by <see cref="SubWindows.SubWindowHandles"/> before interactive drag/resize.
+	/// </summary>
+	public void RestoreNormalGeometryForInteraction()
+	{
+		if (!UiUtilities.IsWindowFillScreen(this))
+			return;
+
+		Mode = ModeEnum.Windowed;
+
+		if (_sessionSize.X >= MinWindowSize.X && _sessionSize.Y >= MinWindowSize.Y)
+		{
+			Size = _sessionSize;
+			int screen = CurrentScreen;
+			if (screen < 0)
+				screen = UiUtilities.FindScreenAtPoint(DisplayServer.MouseGetPosition());
+			Position = UiUtilities.ClampWindowPositionToScreen(screen, _sessionRelativePosition);
+		}
+
+		SaveCurrentWindowState();
+		_lastKnownPosition = Position;
 	}
 
 	/// <summary>
@@ -179,14 +204,14 @@ public partial class SettingsWindow : Window
 	/// </summary>
 	public override void _Process(double delta)
 	{
-		if (Mode != ModeEnum.Maximized)
+		if (UiUtilities.IsWindowFillScreen(this))
+			return;
+
+		Vector2I currentPos = Position;
+		if (currentPos != _lastKnownPosition)
 		{
-			Vector2I currentPos = Position;
-			if (currentPos != _lastKnownPosition)
-			{
-				_lastKnownPosition = currentPos;
-				_resizeSaveTimer?.Start();
-			}
+			_lastKnownPosition = currentPos;
+			_resizeSaveTimer?.Start();
 		}
 	}
 
@@ -196,35 +221,12 @@ public partial class SettingsWindow : Window
 	/// </summary>
 	private void SaveCurrentWindowState()
 	{
-		bool isMax = Mode == ModeEnum.Maximized;
+		bool isMax = UiUtilities.IsWindowFillScreen(this);
 		Vector2I size = Size;
 		Vector2I globalPos = Position;
-		Vector2I relPos = globalPos;
-
-		if (!isMax)
-		{
-			int screenCount = DisplayServer.GetScreenCount();
-			for (int i = 0; i < screenCount; i++)
-			{
-				Vector2I sPos = DisplayServer.ScreenGetPosition(i);
-				Vector2I sSize = DisplayServer.ScreenGetSize(i);
-				Rect2I screenRect = new Rect2I(sPos, sSize);
-
-				if (screenRect.HasPoint(globalPos))
-				{
-					relPos = globalPos - sPos;
-					break;
-				}
-
-				// Check window center as fallback
-				Vector2I center = globalPos + (size / 2);
-				if (screenRect.HasPoint(center))
-				{
-					relPos = globalPos - sPos;
-					break;
-				}
-			}
-		}
+		Vector2I relPos = isMax
+			? globalPos
+			: UiUtilities.ToScreenRelativePosition(globalPos, size);
 
 		// Session cache is the source of truth for re-opens within this process.
 		_sessionMaximized = isMax;

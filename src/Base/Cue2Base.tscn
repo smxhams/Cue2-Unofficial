@@ -324,5 +324,4 @@ filters = PackedStringArray("*C2; Cue2 Session Data")
 use_native_dialog = true
 script = ExtResource("14_5gc0s")
 
-[connection signal="gui_input" from="MainWindowHandles/HeaderHandle" to="MainWindowHandles" method="_on_drag_bar_gui_input"]
 [connection signal="file_selected" from="FileDialog" to="FileDialog" method="_on_file_selected"]

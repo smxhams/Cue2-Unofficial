@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Cue2.Base;
 using Cue2.Shared;
 using Cue2.UI.Scenes.SubWindows;
+using Cue2.UI.Utilities;
 using SettingsWindow = Cue2.UI.Scenes.Settings.SettingsWindow;
 
 namespace Cue2.UI.Scenes;
@@ -735,20 +736,30 @@ public partial class MainTitleBarUI : Control
     
     private void OnWindowMinimizeButtonPressed()
     {
-        DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized, GetWindow().GetWindowId());
+        var window = GetWindow();
+        if (window != null && GodotObject.IsInstanceValid(window))
+            window.Mode = Window.ModeEnum.Minimized;
     }
+
+    /// <summary>
+    /// Toggles maximized (not exclusive fullscreen). Fullscreen was incorrect for this
+    /// control: it does not match double-click maximize and leaves a broken restore path
+    /// when the user later edge-resizes the borderless window.
+    /// </summary>
     private void OnWindowExpandButtonPressed()
     {
-        var windowNumber = GetWindow().GetWindowId();
-        if (DisplayServer.WindowGetMode() != DisplayServer.WindowMode.Fullscreen){
-            GD.Print("Maximise");
-            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Fullscreen, windowNumber);
+        // Prefer MainWindowHandles so normal geometry is flushed before maximize.
+        if (GetParent() is MainWindowHandles handles)
+        {
+            handles.ToggleMaximizeFromChrome();
+            return;
         }
-        else {
-            GD.Print("Minimise");
-            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed, windowNumber);
-            //DisplayServer.WindowSetSize(new Vector2I(600,400), window_number);
-        }
+
+        var window = GetWindow();
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return;
+
+        UiUtilities.ToggleMaximize(window);
     }
     private void OnExitButtonPressed()
     {
