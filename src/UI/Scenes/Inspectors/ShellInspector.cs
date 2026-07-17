@@ -31,6 +31,8 @@ public partial class ShellInspector : Control
 	private LineEdit _postWaitInput;
 	private OptionButton _followOption;
 	private ColorPickerButton _colorPicker;
+	private CheckBox _armedCheckBox;
+	private CheckBox _skipIfDisarmedCheckBox;
 	private Button _deleteCueButton;
 
 	/// <summary>
@@ -57,6 +59,8 @@ public partial class ShellInspector : Control
 		_postWaitInput = GetNode<LineEdit>("%PostWaitInput");
 		_followOption = GetNode<OptionButton>("%FollowOption");
 		_colorPicker = GetNode<ColorPickerButton>("%ColourPickerButton");
+		_armedCheckBox = GetNodeOrNull<CheckBox>("%ArmedCheckBox");
+		_skipIfDisarmedCheckBox = GetNodeOrNull<CheckBox>("%SkipIfDisarmedCheckBox");
 		_deleteCueButton = GetNodeOrNull<Button>("%DeleteCueButton");
 		
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
@@ -74,6 +78,11 @@ public partial class ShellInspector : Control
 		_preWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _preWaitInput);
 		_postWaitInput.TextSubmitted += (string newText) => TimeFieldSubmitted(newText, _postWaitInput);
 		_followOption.ItemSelected += FollowOptionItemSelected;
+
+		if (_armedCheckBox != null)
+			_armedCheckBox.Toggled += OnArmedToggled;
+		if (_skipIfDisarmedCheckBox != null)
+			_skipIfDisarmedCheckBox.Toggled += OnSkipIfDisarmedToggled;
 
 		if (_deleteCueButton != null)
 		{
@@ -274,6 +283,11 @@ public partial class ShellInspector : Control
 
 			if (_colorPicker != null)
 				_colorPicker.Color = _focusedCue.Color;
+
+			if (_armedCheckBox != null)
+				_armedCheckBox.ButtonPressed = _focusedCue.Armed;
+			if (_skipIfDisarmedCheckBox != null)
+				_skipIfDisarmedCheckBox.ButtonPressed = _focusedCue.SkipIfDisarmed;
 		}
 		finally
 		{
@@ -366,6 +380,33 @@ public partial class ShellInspector : Control
 		if (_focusedCue.Color.IsEqualApprox(_colorPicker.Color)) return;
 		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue color");
 		_focusedCue.Color = _colorPicker.Color;
+	}
+
+	/// <summary>
+	/// Toggles cue armed state (disarmed cues do not play on GO).
+	/// </summary>
+	private void OnArmedToggled(bool pressed)
+	{
+		if (_isRefreshingUi || _focusedCue == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		if (_focusedCue.Armed == pressed) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, pressed ? "Arm cue" : "Disarm cue");
+		_focusedCue.Armed = pressed;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
+	}
+
+	/// <summary>
+	/// Toggles whether a disarmed cue is bypassed when the playhead advances after GO.
+	/// </summary>
+	private void OnSkipIfDisarmedToggled(bool pressed)
+	{
+		if (_isRefreshingUi || _focusedCue == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		if (_focusedCue.SkipIfDisarmed == pressed) return;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
+			pressed ? "Enable skip if disarmed" : "Disable skip if disarmed");
+		_focusedCue.SkipIfDisarmed = pressed;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
 	}
 
 	// Handling the updating of fields

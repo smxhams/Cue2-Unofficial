@@ -158,6 +158,48 @@ public class Cue : ICue
     /// Stored value if it's children are expanded to view.
     /// </summary>
     public bool Expanded { get; set; } = false;
+
+    private bool _armed = true;
+
+    /// <summary>
+    /// Whether this cue is armed for playback. When false, GO does not play content
+    /// and advances the playhead to the next cue instead.
+    /// </summary>
+    /// <value>Default is <c>true</c> (armed).</value>
+    public bool Armed
+    {
+        get => _armed;
+        set
+        {
+            if (_armed == value) return;
+            _armed = value;
+            ArmedChanged?.Invoke(_armed);
+        }
+    }
+
+    private bool _skipIfDisarmed;
+
+    /// <summary>
+    /// When true and <see cref="Armed"/> is false, advancing the playhead after a prior GO
+    /// bypasses this cue and selects the next eligible cue instead of standing on it.
+    /// </summary>
+    /// <value>Default is <c>false</c> (disarmed cues still receive playhead selection).</value>
+    public bool SkipIfDisarmed
+    {
+        get => _skipIfDisarmed;
+        set
+        {
+            if (_skipIfDisarmed == value) return;
+            _skipIfDisarmed = value;
+            SkipIfDisarmedChanged?.Invoke(_skipIfDisarmed);
+        }
+    }
+
+    /// <summary>
+    /// True when this cue should be bypassed when advancing the playhead after GO
+    /// (disarmed with <see cref="SkipIfDisarmed"/>).
+    /// </summary>
+    public bool ShouldSkipOnPlayhead => !Armed && SkipIfDisarmed;
     
     // Events
     public event Action<string> NameChanged;
@@ -168,6 +210,8 @@ public class Cue : ICue
     public event Action<double> PostWaitChanged;
     public event Action<Color> ColorChanged;
     public event Action<FollowType> FollowChanged;
+    public event Action<bool> ArmedChanged;
+    public event Action<bool> SkipIfDisarmedChanged;
 
     
     
@@ -210,6 +254,9 @@ public class Cue : ICue
         _follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
         Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : false;
         Color = data.TryGetValue("Color", out var value) ? Color.FromString(value.AsString(), Color) : Color;
+        // Missing keys (legacy saves) default to armed / not skip.
+        _armed = data.TryGetValue("Armed", out var armedVal) ? armedVal.AsBool() : true;
+        _skipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal) && skipVal.AsBool();
 
         
         if (data.ContainsKey("Components"))
@@ -429,6 +476,8 @@ public class Cue : ICue
         dict.Add("Follow", (int)Follow);
         dict.Add("Expanded", Expanded);
         dict.Add("Color", Color.ToHtml());
+        dict.Add("Armed", Armed);
+        dict.Add("SkipIfDisarmed", SkipIfDisarmed);
 
         var compData = new Array();
         foreach (var comp in Components)
@@ -485,6 +534,11 @@ public class Cue : ICue
         Color = data.TryGetValue("Color", out var colorVal)
             ? Color.FromString(colorVal.AsString(), Color)
             : Color;
+        // Assign via properties so ShellBar / inspector listeners refresh after undo.
+        Armed = data.TryGetValue("Armed", out var armedVal) ? armedVal.AsBool() : Armed;
+        SkipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal)
+            ? skipVal.AsBool()
+            : SkipIfDisarmed;
 
         Components.Clear();
         if (data.ContainsKey("Components"))
@@ -596,6 +650,21 @@ public class Cue : ICue
     public Cue GetCueAfterSequence()
     {
         return GetSequenceEndCue().GetNextSiblingCue();
+    }
+
+    /// <summary>
+    /// Walks forward from <paramref name="start"/> (inclusive) past cues that should be bypassed
+    /// when advancing the playhead (<see cref="ShouldSkipOnPlayhead"/>).
+    /// </summary>
+    /// <param name="start">First candidate cue, or null.</param>
+    /// <returns>The first cue that should receive the playhead, or null if none remain.</returns>
+    public static Cue ResolvePlayheadTarget(Cue start)
+    {
+        var current = start;
+        var guard = 0;
+        while (current != null && current.ShouldSkipOnPlayhead && guard++ < 10000)
+            current = current.GetNextSiblingCue();
+        return current;
     }
     
 }

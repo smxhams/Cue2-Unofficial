@@ -148,6 +148,40 @@ Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Contin
 Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
 focus_mode = 0
 
+[node name="HSeparatorArmed" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ArmedSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+
+[node name="ArmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Armed:"
+
+[node name="ArmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "When unchecked (disarmed), GO does not play this cue and advances to the next cue instead."
+button_pressed = true
+text = "Armed"
+focus_mode = 0
+
+[node name="SkipIfDisarmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Skip if disarmed:"
+
+[node name="SkipIfDisarmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it."
+text = "Skip if disarmed"
+focus_mode = 0
+
 [node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1607308950]
 layout_mode = 2
 theme_override_constants/separation = 16

@@ -450,6 +450,17 @@ public partial class ActiveCue : GodotObject
         _incomingArmed = true;
         HideSequencePanel();
 
+        // Disarmed: no content, children, or components. Still raise phase events so
+        // continue/follow chains arm the next member without playing this cue.
+        if (_cue != null && !_cue.Armed)
+        {
+            GD.Print($"ActiveCue:StartPlaybackCoreAsync - {_cue.Name}: disarmed, skipping playback");
+            _isFinished = true;
+            RaiseContentPhaseStarted();
+            HandleNaturalContentFinished();
+            return;
+        }
+
         foreach (var childId in _cue.ChildCues)
         {
             var child = CueList.FetchCueFromId(childId);

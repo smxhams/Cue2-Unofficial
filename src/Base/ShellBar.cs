@@ -305,6 +305,8 @@ public partial class ShellBar : PanelContainer
 			_cue.PreWaitChanged -= UpdatePreWait;
 			_cue.PostWaitChanged -= UpdatePostWait;
 			_cue.FollowChanged -= UpdateFollowMode;
+			_cue.ArmedChanged -= OnArmedVisualChanged;
+			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
 			_cue = null;
 		}
 		// Drop duplicated theme StyleBox so it is not retained after node free
@@ -509,7 +511,10 @@ public partial class ShellBar : PanelContainer
 	private void OnUpdateShellBar(int cueId)
 	{
 		if (_cue != null && _cue.Id == cueId)
+		{
 			RefreshTimesFromCue();
+			QueueRedraw();
+		}
 	}
 
 	private void OnCueMediaHealthChanged(int cueId, bool hasIssue, string message)
@@ -650,6 +655,8 @@ public partial class ShellBar : PanelContainer
 			_cue.PreWaitChanged -= UpdatePreWait;
 			_cue.PostWaitChanged -= UpdatePostWait;
 			_cue.FollowChanged -= UpdateFollowMode;
+			_cue.ArmedChanged -= OnArmedVisualChanged;
+			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
 		}
 		_cue = cue;
 		_cue.NameChanged += UpdateName;
@@ -660,6 +667,8 @@ public partial class ShellBar : PanelContainer
 		_cue.PreWaitChanged += UpdatePreWait;
 		_cue.PostWaitChanged += UpdatePostWait;
 		_cue.FollowChanged += UpdateFollowMode;
+		_cue.ArmedChanged += OnArmedVisualChanged;
+		_cue.SkipIfDisarmedChanged += OnArmedVisualChanged;
 		_cueNumLineEdit.Text = cue.CueNum;
 		_cueNameLineEdit.Text = cue.Name;
 		RefreshTimesFromCue();
@@ -674,11 +683,20 @@ public partial class ShellBar : PanelContainer
 		RefreshIssueIndicatorFromService();
 		ApplyTreeIndent();
 		RefreshShellChrome();
+		QueueRedraw();
 
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;
 		_isEditingCueNum = false;
 		_isEditingName = false;
+	}
+
+	/// <summary>
+	/// Redraws disarmed hatch when armed / skip-if-disarmed flags change.
+	/// </summary>
+	private void OnArmedVisualChanged(bool _)
+	{
+		QueueRedraw();
 	}
 
 	/// <summary>
@@ -725,6 +743,7 @@ public partial class ShellBar : PanelContainer
 		UpdateFollowMode(_cue.Follow);
 		UpdateCollapseUI();
 		RefreshIssueIndicatorFromService();
+		RefreshShellChrome();
 	}
 
 	private static string FormatDurationField(double seconds)
@@ -1196,8 +1215,119 @@ public partial class ShellBar : PanelContainer
 			? new Color(0, 0, 0, 0)
 			: GlobalStyles.ShellBorderFor(state);
 		AddThemeStyleboxOverride("panel", _panelStyle);
+		// Hatch overlay is drawn in _Draw; keep it in sync with chrome refreshes.
+		QueueRedraw();
 	}
-	
+
+	/// <summary>
+	/// Draws disarmed hatch behind shell text: one diagonal direction when disarmed,
+	/// both directions (X hatch) when also skip-if-disarmed. Limited to the main row
+	/// (not nested child shells under an expanded group).
+	/// </summary>
+	public override void _Draw()
+	{
+		base._Draw();
+		if (_cue == null || _cue.Armed)
+			return;
+
+		float rowH = ShellColumnLayout.RowMinHeight;
+		if (_rowHBox != null && _rowHBox.Size.Y > 1f)
+			rowH = _rowHBox.Size.Y;
+
+		float width = Size.X;
+		if (width < 2f || rowH < 2f)
+			return;
+
+		// Subtle lines so text stays readable over the hatch.
+		var lineColor = new Color(0.85f, 0.9f, 0.95f, 0.18f);
+		const float lineWidth = 1.25f;
+		const float spacing = 10f;
+
+		// Primary diagonal set (top-left → bottom-right).
+		DrawDiagonalHatch(width, rowH, spacing, lineColor, lineWidth, forward: true);
+
+		// Second set completes X hatch when skip-if-disarmed is enabled.
+		if (_cue.SkipIfDisarmed)
+			DrawDiagonalHatch(width, rowH, spacing, lineColor, lineWidth, forward: false);
+	}
+
+	/// <summary>
+	/// Draws parallel diagonal lines across a row-sized rectangle at the top of this shell.
+	/// </summary>
+	/// <param name="width">Row width in local coordinates.</param>
+	/// <param name="height">Row height in local coordinates.</param>
+	/// <param name="spacing">Distance between parallel hatch lines.</param>
+	/// <param name="color">Line colour.</param>
+	/// <param name="lineWidth">Stroke width.</param>
+	/// <param name="forward">True for \ direction; false for / direction.</param>
+	private void DrawDiagonalHatch(float width, float height, float spacing, Color color, float lineWidth, bool forward)
+	{
+		// Offset range covers full rectangle with parallel diagonals.
+		float start = -height;
+		float end = width + height;
+		for (float offset = start; offset <= end; offset += spacing)
+		{
+			Vector2 a;
+			Vector2 b;
+			if (forward)
+			{
+				// Line family: y - x = c  →  points (offset, 0) through (offset+height, height)
+				a = new Vector2(offset, 0f);
+				b = new Vector2(offset + height, height);
+			}
+			else
+			{
+				// Line family: y + x = c
+				a = new Vector2(offset, 0f);
+				b = new Vector2(offset - height, height);
+			}
+
+			if (!ClipLineToRect(ref a, ref b, width, height))
+				continue;
+			DrawLine(a, b, color, lineWidth, antialiased: true);
+		}
+	}
+
+	/// <summary>
+	/// Liang–Barsky style clip of a line segment to the [0,width]×[0,height] rect.
+	/// </summary>
+	/// <returns>False if the segment lies entirely outside the rect.</returns>
+	private static bool ClipLineToRect(ref Vector2 a, ref Vector2 b, float width, float height)
+	{
+		float x0 = a.X, y0 = a.Y, x1 = b.X, y1 = b.Y;
+		float dx = x1 - x0;
+		float dy = y1 - y0;
+		float t0 = 0f;
+		float t1 = 1f;
+
+		// p/q edges: left, right, bottom, top
+		if (!ClipEdge(-dx, x0, ref t0, ref t1)) return false;
+		if (!ClipEdge(dx, width - x0, ref t0, ref t1)) return false;
+		if (!ClipEdge(-dy, y0, ref t0, ref t1)) return false;
+		if (!ClipEdge(dy, height - y0, ref t0, ref t1)) return false;
+
+		a = new Vector2(x0 + t0 * dx, y0 + t0 * dy);
+		b = new Vector2(x0 + t1 * dx, y0 + t1 * dy);
+		return true;
+	}
+
+	private static bool ClipEdge(float p, float q, ref float t0, ref float t1)
+	{
+		if (System.Math.Abs(p) < 1e-8f)
+			return q >= 0f;
+		float r = q / p;
+		if (p < 0f)
+		{
+			if (r > t1) return false;
+			if (r > t0) t0 = r;
+		}
+		else
+		{
+			if (r < t0) return false;
+			if (r < t1) t1 = r;
+		}
+		return true;
+	}
 
 	// Re-ordering functions
 

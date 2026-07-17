@@ -58,8 +58,9 @@ public partial class CueCommandExectutor : Node
     }
 
     /// <summary>
-    /// GO: pre-spawn the entire continue/follow chain for each selected cue, wire event-driven
+    /// GO: pre-spawn the entire continue/follow chain for each selected armed cue, wire event-driven
     /// arming (continue at content-phase start, follow at real content complete), advance playhead.
+    /// Disarmed cues do not play; selection moves to the next eligible cue.
     /// </summary>
     public void GoCommand()
     {
@@ -70,21 +71,55 @@ public partial class CueCommandExectutor : Node
         }
 
         var selected = ShellSelection.SelectedCues.ToList();
-        foreach (var cue1 in selected)
-            ActivateSequenceFrom((Cue)cue1);
+        foreach (var cue in selected)
+        {
+            if (!cue.Armed)
+            {
+                GD.Print($"CueCommandExecutor:GoCommand - Skipping disarmed cue {cue.Name} (id={cue.Id})");
+                continue;
+            }
 
-        AdvancePlayheadAfterSequences(selected);
+            ActivateSequenceFrom(cue);
+        }
+
+        AdvancePlayheadAfterGo(selected);
     }
 
-    private void AdvancePlayheadAfterSequences(List<Cue> startedCues)
+    /// <summary>
+    /// Advances selection after GO: after a played sequence, or past a disarmed cue that was GO'd.
+    /// Cues with <see cref="Cue.ShouldSkipOnPlayhead"/> are walked over.
+    /// </summary>
+    /// <param name="selectedCues">Cues that were selected when GO was pressed (order preserved).</param>
+    private void AdvancePlayheadAfterGo(List<Cue> selectedCues)
     {
-        if (startedCues == null || startedCues.Count == 0) return;
+        if (selectedCues == null || selectedCues.Count == 0) return;
 
-        var primary = startedCues[startedCues.Count - 1];
+        var primary = selectedCues[selectedCues.Count - 1];
         if (primary == null) return;
 
-        var after = primary.GetCueAfterSequence();
-        var target = after ?? primary.GetSequenceEndCue();
+        Cue target;
+        if (primary.Armed)
+        {
+            // Played (or chain head): stand on first cue after the sequence, skipping bypass targets.
+            var after = primary.GetCueAfterSequence();
+            if (after == null)
+            {
+                // No cue after sequence — stay on sequence end (existing behaviour).
+                target = primary.GetSequenceEndCue();
+            }
+            else
+            {
+                target = Cue.ResolvePlayheadTarget(after) ?? primary.GetSequenceEndCue();
+            }
+        }
+        else
+        {
+            // Disarmed GO: do not play; move to next eligible sibling.
+            target = Cue.ResolvePlayheadTarget(primary.GetNextSiblingCue());
+            if (target == null)
+                return; // Nothing after — leave selection on the disarmed cue.
+        }
+
         if (target == null) return;
 
         if (ShellSelection.SelectedCues.Count == 1 && ShellSelection.SelectedCues[0] == target)
