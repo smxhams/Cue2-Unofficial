@@ -18,6 +18,7 @@
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/UI/Scenes/SubWindows/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/UI/Scenes/SubWindows/OpenDialog.cs" id="14_5gc0s"]
+[ext_resource type="Script" path="res://src/UI/Scenes/Inspectors/InspectorTabsController.cs" id="15_insp_tabs"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e2apv"]
 draw_center = false
@@ -132,6 +133,7 @@ size_flags_vertical = 3
 current_tab = 1
 drag_to_rearrange_enabled = true
 tab_focus_mode = 0
+script = ExtResource("15_insp_tabs")
 
 [node name="Library" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1755330176 instance=ExtResource("7_ht2vi")]
 visible = false
