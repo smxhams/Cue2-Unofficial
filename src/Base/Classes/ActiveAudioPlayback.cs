@@ -178,7 +178,11 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     /// <summary>
     /// Starts the demand-driven fill loop (optionally with fade-in).
     /// </summary>
-    public async void Play()
+    /// <param name="fadeInDuration">
+    /// Fade-in seconds for this start. When null, uses <see cref="AudioComponent.FadeInDuration"/>.
+    /// When 0, starts at full volume (declick ramp only).
+    /// </param>
+    public async void Play(double? fadeInDuration = null)
     {
         lock (_lock)
         {
@@ -186,9 +190,10 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             _hasStarted = true;
         }
 
-        if (_audioComponent.FadeInDuration > 0)
+        double fadeIn = fadeInDuration ?? _audioComponent.FadeInDuration;
+        if (fadeIn > 1e-9)
         {
-            await FadeInAsync(_audioComponent.FadeInDuration);
+            await FadeInAsync(fadeIn);
         }
         else
         {

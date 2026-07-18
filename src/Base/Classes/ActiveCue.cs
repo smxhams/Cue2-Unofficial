@@ -80,6 +80,7 @@ public partial class ActiveCue : GodotObject
     private readonly Dictionary<PanelContainer, VideoComponent> _componentToVideo = new();
     private readonly Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new();
     private readonly Dictionary<PanelContainer, OscComponent> _activeOscComponents = new();
+    private readonly Dictionary<PanelContainer, ControlComponent> _activeControlComponents = new();
 
     /// <summary>Keeps handler refs so we can disconnect before freeing UI (avoids disposed-panel callbacks).</summary>
     private readonly List<(ActiveAudioPlayback Playback, ActiveAudioPlayback.CompletedEventHandler Handler)> _audioCompleteHandlers = new();
@@ -91,6 +92,186 @@ public partial class ActiveCue : GodotObject
     /// The cue this active instance is playing.
     /// </summary>
     public Cue Cue => _cue;
+
+    /// <summary>
+    /// Yields this active cue and all nested child active cues.
+    /// </summary>
+    /// <returns>Self and descendants currently tracked.</returns>
+    public IEnumerable<ActiveCue> EnumerateSelfAndDescendants()
+    {
+        yield return this;
+        foreach (var child in _childActiveCues.ToList())
+        {
+            if (child == null || !IsInstanceValid(child)) continue;
+            foreach (var nested in child.EnumerateSelfAndDescendants())
+                yield return nested;
+        }
+    }
+
+    /// <summary>
+    /// Optional fade-in override from a control GO (seconds). When set, media starts with this fade
+    /// instead of (or as) the component's own fade-in for this activation.
+    /// </summary>
+    private double? _controlFadeInDuration;
+
+    /// <summary>
+    /// Sets a control-GO fade-in duration for this active instance (head of a control GO).
+    /// </summary>
+    /// <param name="seconds">Fade-in length; values ≤ 0 clear the override.</param>
+    public void SetControlFadeInDuration(double seconds)
+    {
+        if (seconds <= 1e-9)
+        {
+            _controlFadeInDuration = null;
+            return;
+        }
+
+        _controlFadeInDuration = seconds;
+    }
+
+    /// <summary>
+    /// Seeks all active audio/video components on this cue.
+    /// </summary>
+    /// <param name="timeSeconds">Absolute media time, or relative offset when <paramref name="relative"/> is true.</param>
+    /// <param name="relative">When true, offset from each component's current playback position.</param>
+    public void RequestSeek(double timeSeconds, bool relative)
+    {
+        if (_isCleaned) return;
+
+        foreach (var playback in _activeAudioComponents.Values.ToList())
+        {
+            if (playback == null) continue;
+            try
+            {
+                double current = playback.GetPlaybackTimeMs() / 1000.0;
+                double target = relative ? current + timeSeconds : timeSeconds;
+                if (target < 0) target = 0;
+                playback.Seek((long)(target * 1_000_000.0));
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:RequestSeek - Audio seek failed on {_cue?.Name}: {ex.Message}");
+            }
+        }
+
+        foreach (var playback in _activeVideoComponents.Values.ToList())
+        {
+            if (playback == null) continue;
+            try
+            {
+                double current = playback.GetPlaybackTimeSeconds();
+                double target = relative ? current + timeSeconds : timeSeconds;
+                if (target < 0) target = 0;
+                playback.Seek(target);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:RequestSeek - Video seek failed on {_cue?.Name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pauses transport for this active cue (media + children). Used by control components.
+    /// </summary>
+    public void RequestPause()
+    {
+        if (_isCleaned) return;
+
+        if (_inIncomingWait && _incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
+        {
+            _incomingWaitTimer.SetPaused(true);
+            if (_sequencePause != null && _activeCueBar != null)
+                _sequencePause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
+        }
+
+        if (_inPreWait)
+            PreWaitPause();
+
+        PauseAll(propagateToChildren: true);
+    }
+
+    /// <summary>
+    /// Resumes transport for this active cue (media + children). Used by control components.
+    /// </summary>
+    public void RequestResume()
+    {
+        if (_isCleaned) return;
+
+        if (_inIncomingWait && _incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
+        {
+            _incomingWaitTimer.SetPaused(false);
+            if (_sequencePause != null && _activeCueBar != null)
+                _sequencePause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        }
+
+        if (_inPreWait)
+            PreWaitResume();
+
+        ResumeAll(propagateToChildren: true);
+    }
+
+    /// <summary>
+    /// Starts this cue's content immediately, bypassing continue/follow lead-in and pre-wait.
+    /// </summary>
+    /// <remarks>
+    /// Used by the <see cref="ControlAction.StartNow"/> control component.
+    /// No-op if content is already running (past pre-wait). Does not start a cue that
+    /// is not already present in the active list (use GO for that).
+    /// <para>
+    /// Safe to call while a prior control GO is still in setup: sets <c>_skipPreWait</c> so
+    /// the in-flight <see cref="StartPlaybackCoreAsync"/> skips pre-wait when it reaches that step.
+    /// </para>
+    /// </remarks>
+    public void RequestStartNow()
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+
+        GD.Print($"ActiveCue:RequestStartNow - {_cue?.Name}: skipping waits, starting content");
+
+        // Cancel any continue/follow countdown or pending lead-in UI.
+        if (_inIncomingWait)
+        {
+            HookIncomingWaitUpdate(false);
+            if (_incomingWaitTimer != null && IsInstanceValid(_incomingWaitTimer))
+                _incomingWaitTimer.Stop();
+            FreeIncomingWaitTimer();
+            _inIncomingWait = false;
+        }
+
+        // Ignore later ArmIncoming from a predecessor; we are starting independently.
+        _incomingArmed = true;
+        _skipPreWait = true;
+        HideSequencePanel();
+
+        // Active pre-wait → jump straight into content.
+        if (_inPreWait)
+        {
+            _ = FinishPreWaitAndStartContent();
+            return;
+        }
+
+        // Not started yet: start core without pre-wait (or race-safe with an incoming StartAsync).
+        if (!_contentStarted)
+        {
+            if (_chainMember != null && !_chainRunStarted)
+                _chainRunStarted = true;
+            _ = StartPlaybackCoreAsync(includePreWait: false);
+            return;
+        }
+
+        // Setup already running (e.g. loading media before PreWait): _skipPreWait is set so
+        // StartPlaybackCoreAsync will skip pre-wait when it reaches that decision.
+        // Already playing content → nothing to skip.
+        if (_isPlaying || _preWaitFinished)
+        {
+            GD.Print($"ActiveCue:RequestStartNow - {_cue?.Name}: already in content, ignoring");
+        }
+        else
+        {
+            GD.Print($"ActiveCue:RequestStartNow - {_cue?.Name}: setup in progress, pre-wait will be skipped");
+        }
+    }
 
     /// <summary>
     /// Re-applies expand/stretch/opacity on live video TextureRects for a video component.
@@ -376,7 +557,11 @@ public partial class ActiveCue : GodotObject
     /// <summary>
     /// Starts the cue playback asynchronously, setting up UI and triggering components.
     /// </summary>
-    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <returns>
+    /// A task that completes when this cue has entered pre-wait or started content
+    /// (or shown as pending for non-head chain members). Awaited by control GO so
+    /// subsequent control actions (e.g. Start Now) see a live active instance.
+    /// </returns>
     public async Task StartAsync()
     {
         if (_isPlaying || _contentStarted) return;
@@ -390,7 +575,7 @@ public partial class ActiveCue : GodotObject
         if (_chainMember != null)
         {
             if (_chainRunStarted) return;
-            BeginChainMemberRun();
+            await BeginChainMemberRunAsync();
             return;
         }
 
@@ -446,6 +631,8 @@ public partial class ActiveCue : GodotObject
     private async Task StartPlaybackCoreAsync(bool includePreWait)
     {
         if (_isCleaned || _suppressContentCompleted) return;
+        // Prevent double-entry (e.g. control Start Now racing StartAsync / GO).
+        if (_contentStarted) return;
         _contentStarted = true;
         _incomingArmed = true;
         HideSequencePanel();
@@ -524,7 +711,8 @@ public partial class ActiveCue : GodotObject
             _activeAudioComponents.Count > 0 ||
             _activeVideoComponents.Count > 0 ||
             _activeOscComponents.Count > 0 ||
-            _activeCueLightComponents.Count > 0;
+            _activeCueLightComponents.Count > 0 ||
+            _activeControlComponents.Count > 0;
 
         if (!hasActive)
         {
@@ -536,30 +724,36 @@ public partial class ActiveCue : GodotObject
 
     private async Task TriggerComponents()
     {
-        var tasks = new List<Task>();
+        // Media / OSC / cue-light kick off in parallel as we walk the list.
+        // Control components await in list order so GO can finish before Start Now, etc.
+        var parallel = new List<Task>();
 
         foreach (var comp in _cue.Components)
         {
             if (comp is AudioComponent audioComp)
             {
-                tasks.Add(TriggerAudioComponent(audioComp));
+                parallel.Add(TriggerAudioComponent(audioComp));
             }
             else if (comp is VideoComponent videoComp)
             {
-                tasks.Add(TriggerVideoComponent(videoComp));
+                parallel.Add(TriggerVideoComponent(videoComp));
             }
             else if (comp is CueLightComponent cueLightComp)
             {
-                tasks.Add(TriggerCueLightComponent(cueLightComp));
+                parallel.Add(TriggerCueLightComponent(cueLightComp));
             }
             else if (comp is OscComponent oscComp)
             {
-                tasks.Add(TriggerOscComponent(oscComp));
+                parallel.Add(TriggerOscComponent(oscComp));
             }
-            // Add other component types (e.g., OSC) as implemented
+            else if (comp is ControlComponent controlComp)
+            {
+                await TriggerControlComponent(controlComp);
+            }
         }
 
-        await Task.WhenAll(tasks);
+        if (parallel.Count > 0)
+            await Task.WhenAll(parallel);
     }
 
     private async Task TriggerAudioComponent(AudioComponent audioComp)
@@ -589,7 +783,9 @@ public partial class ActiveCue : GodotObject
                 return;
             }
 
-            playback.Play();
+            // Control GO fade-in override wins when set; otherwise component FadeInDuration.
+            double fadeIn = _controlFadeInDuration ?? audioComp.FadeInDuration;
+            playback.Play(fadeIn);
             // Honour cue-level pause (e.g. global pause while this component was still setting up).
             if (_isPaused)
                 playback.Pause();
@@ -640,7 +836,14 @@ public partial class ActiveCue : GodotObject
                     $"Video in {_cue.Name} has no audio output assigned; playing video silently.", 1);
             }
 
-            await playback.PlayAsync();
+            // Control GO fade-in override wins when set; otherwise component FadeInDuration.
+            // FadeInAsync starts playback then ramps volume/opacity; PlayAsync is the zero-fade path.
+            double fadeIn = _controlFadeInDuration ?? videoComp.FadeInDuration;
+            if (fadeIn > 1e-9)
+                await playback.FadeInAsync(fadeIn);
+            else
+                await playback.PlayAsync();
+
             if (_isPaused)
                 playback.Pause();
             SyncPauseTransportUi();
@@ -698,6 +901,31 @@ public partial class ActiveCue : GodotObject
             {
                 HandleOscComponentCompleted(panel);
             }
+        }
+    }
+
+    private async Task TriggerControlComponent(ControlComponent comp)
+    {
+        try
+        {
+            GlobalData gd = null;
+            if (Engine.GetMainLoop() is SceneTree st)
+                gd = st.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
+
+            float sessionStopFade = gd?.Settings?.StopFadeDuration ?? 0f;
+            await comp.ExecuteAsync(gd?.CueCommandExectutor, _cue?.Id ?? -1, sessionStopFade);
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:TriggerControlComponent - {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Control trigger failed in {_cue.Name}: {ex.Message}", 2);
+        }
+        finally
+        {
+            var panel = _activeControlComponents.FirstOrDefault(kv => kv.Value == comp).Key;
+            if (panel != null)
+                HandleControlComponentCompleted(panel);
         }
     }
 
@@ -845,7 +1073,11 @@ public partial class ActiveCue : GodotObject
     /// <summary>
     /// GO chain path: head starts immediately; other members wait to be armed (continue/follow rules).
     /// </summary>
-    private void BeginChainMemberRun()
+    /// <returns>
+    /// Completes when the head has entered pre-wait or started content, or when a non-head
+    /// member has shown its pending UI.
+    /// </returns>
+    private async Task BeginChainMemberRunAsync()
     {
         if (_isCleaned || _chainRunStarted) return;
         _chainRunStarted = true;
@@ -863,7 +1095,8 @@ public partial class ActiveCue : GodotObject
             // Head of the GO: no incoming wait — go straight into pre-wait / content.
             _incomingArmed = true;
             HideSequencePanel();
-            _ = StartPlaybackCoreAsync(includePreWait: true);
+            // Await so control GO can finish before a following Start Now / Pause / etc.
+            await StartPlaybackCoreAsync(includePreWait: true);
             return;
         }
 
@@ -1203,6 +1436,10 @@ public partial class ActiveCue : GodotObject
             else if (component is OscComponent oscComponent)
             {
                 tasks.Add(SetupOscComponent(oscComponent));
+            }
+            else if (component is ControlComponent controlComponent)
+            {
+                tasks.Add(SetupControlComponent(controlComponent));
             }
         }
         await Task.WhenAll(tasks);
@@ -1620,6 +1857,52 @@ public partial class ActiveCue : GodotObject
         return Task.CompletedTask;
     }
 
+    private Task SetupControlComponent(ControlComponent controlComponent)
+    {
+        try
+        {
+            PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+            _componentContainer.AddChild(componentPanel);
+
+            controlComponent.ResolveTargetIfNeeded();
+            string targetLabel = controlComponent.TargetCueId >= 0
+                ? $"#{controlComponent.TargetCueNum} (id {controlComponent.TargetCueId})"
+                : "(no target)";
+            componentPanel.GetNode<Label>("%ComponentLabel").Text =
+                $"{ControlComponent.GetActionDisplayName(controlComponent.Action)} → {targetLabel}";
+
+            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            componentPanel.GetNode<Button>("%ComponentPause").QueueFree();
+            var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
+
+            string iconName = controlComponent.Action switch
+            {
+                ControlAction.Go => "Play",
+                ControlAction.Pause => "Pause",
+                ControlAction.Stop => "Stop",
+                ControlAction.Resume => "Play",
+                ControlAction.StartNow => "Skip",
+                _ => "Play"
+            };
+            typeIcon.Icon = _activeCueBar.GetThemeIcon(iconName, "AtlasIcons");
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+
+            _activeControlComponents.Add(componentPanel, controlComponent);
+            _activeComponentCount++;
+
+            stopButton.Pressed += () => HandleControlComponentCompleted(componentPanel);
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"ActiveCue:SetupControlComponent - Exception: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error setting up control component for cue {_cue.Name}: {ex.Message}", 2);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private async Task StopComponent(PanelContainer componentPanel)
     {
         if (!_activeAudioComponents.TryGetValue(componentPanel, out var playback))
@@ -1642,7 +1925,14 @@ public partial class ActiveCue : GodotObject
 
         var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
         if (progressBar == null) return;
-        if (audioPlayback.IsStopped || audioPlayback.IsPaused) return;
+        if (audioPlayback.IsStopped) return;
+
+        // Fade overlay updates even while paused (e.g. mid fade-in/out).
+        UpdateComponentFadeProgress(componentPanel, audioPlayback.IsFadingIn, audioPlayback.IsFadingOut,
+            audioPlayback.CurrentVolume);
+
+        if (audioPlayback.IsPaused) return;
+
         //GD.Print($"ActiveCue:UpdateComponentUiState - Current time ms: {audioPlayback.Decoder.CurrentTime}");
         float trackTime = audioPlayback.GetPlaybackTimeMs() / 1000f; // ms to seconds
         float progressPercentage = ((trackTime - (float)audioComponent.StartTime) / (float)audioComponent.Duration) * 100f;
@@ -1652,20 +1942,6 @@ public partial class ActiveCue : GodotObject
             timeLabel.Text = UiUtilities.FormatTime(trackTime);
             progressBar.Value = progressPercentage;
         }
-
-
-        // Update fade-out progress
-        var fadeProgress = componentPanel.GetNode<ProgressBar>("%ComponentFadeProgress");
-        if (audioPlayback.IsFadingOut)
-        {
-            fadeProgress.Visible = true;
-            fadeProgress.Value = (1 - audioPlayback.CurrentVolume) * 100;
-        }
-        else
-        {
-            fadeProgress.Visible = false;
-        }
-
     }
 
 
@@ -1681,7 +1957,13 @@ public partial class ActiveCue : GodotObject
 
         var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
         if (progressBar == null) return;
-        if (videoPlayback.IsStopped || videoPlayback.IsPaused) return;
+        if (videoPlayback.IsStopped) return;
+
+        UpdateComponentFadeProgress(componentPanel, videoPlayback.IsFadingIn, videoPlayback.IsFadingOut,
+            videoPlayback.CurrentVolume);
+
+        if (videoPlayback.IsPaused) return;
+
         float trackTime = (float)time;
         float progressPercentage = ((trackTime - (float)videoComponent.StartTime) / (float)videoPlayback.GetDuration() * 100f);
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
@@ -1690,13 +1972,31 @@ public partial class ActiveCue : GodotObject
             timeLabel.Text = UiUtilities.FormatTime(trackTime);
             progressBar.Value = progressPercentage;
         }
+    }
 
-        // Update fade-out progress
-        var fadeProgress = componentPanel.GetNode<ProgressBar>("%ComponentFadeProgress");
-        if (videoPlayback.IsFadingOut)
+    /// <summary>
+    /// Shows/hides the vertical component fade overlay and sets its fill from current volume.
+    /// </summary>
+    /// <param name="componentPanel">Component progress row.</param>
+    /// <param name="fadingIn">True while fade-in is active.</param>
+    /// <param name="fadingOut">True while fade-out is active.</param>
+    /// <param name="currentVolume">Playback volume in [0, 1].</param>
+    private static void UpdateComponentFadeProgress(
+        PanelContainer componentPanel,
+        bool fadingIn,
+        bool fadingOut,
+        float currentVolume)
+    {
+        if (componentPanel == null || !IsInstanceValid(componentPanel)) return;
+
+        var fadeProgress = componentPanel.GetNodeOrNull<ProgressBar>("%ComponentFadeProgress");
+        if (fadeProgress == null) return;
+
+        if (fadingIn || fadingOut)
         {
             fadeProgress.Visible = true;
-            fadeProgress.Value = (1 - videoPlayback.CurrentVolume) * 100;
+            // Remaining "unfaded" cover: full at silent, empty at full volume.
+            fadeProgress.Value = (1f - Mathf.Clamp(currentVolume, 0f, 1f)) * 100f;
         }
         else
         {
@@ -1802,11 +2102,16 @@ public partial class ActiveCue : GodotObject
 
     /// <summary>
     /// Stops all playback for this cue.
-    /// First call: fade-out using <see cref="Settings.StopFadeDuration"/> (0 = immediate).
+    /// First call: fade-out using <paramref name="fadeDurationOverride"/> or
+    /// <see cref="Settings.StopFadeDuration"/> (0 = immediate).
     /// Second call while still fading: hard-stop immediately.
     /// </summary>
     /// <param name="propagateToChildren">Whether to stop child cues as well.</param>
-    public async void StopAll(bool propagateToChildren = true)
+    /// <param name="fadeDurationOverride">
+    /// Optional fade seconds for this stop (e.g. from a control component).
+    /// When null, uses the session stop-fade setting. When 0, stops immediately.
+    /// </param>
+    public async void StopAll(bool propagateToChildren = true, double? fadeDurationOverride = null)
     {
         bool hardStop;
         lock (_lock)
@@ -1829,17 +2134,18 @@ public partial class ActiveCue : GodotObject
             _isStopFading = true;
         }
 
-        // Stop child cues if propagating
+        // Stop child cues if propagating (same fade override).
         if (propagateToChildren)
         {
             foreach (var child in _childActiveCues.ToList())
             {
-                child.StopAll(true);
+                child.StopAll(true, fadeDurationOverride);
             }
         }
 
-        // Settings fade; second press or zero duration forces immediate stop.
-        double fadeDuration = hardStop ? 0.0 : Math.Max(0.0, _settings.StopFadeDuration);
+        // Override or session fade; second press or zero duration forces immediate stop.
+        double baseFade = fadeDurationOverride ?? _settings.StopFadeDuration;
+        double fadeDuration = hardStop ? 0.0 : Math.Max(0.0, baseFade);
 
         var tasks = new List<Task>();
         foreach (var audioComp in _activeAudioComponents.Values.ToList())
@@ -1851,7 +2157,7 @@ public partial class ActiveCue : GodotObject
             tasks.Add(videoComp.Stop(fadeDuration));
         }
 
-        // Instant components (OSC / cue light) have no async stop — clear them now.
+        // Instant components (OSC / cue light / control) have no async stop — clear them now.
         foreach (var panel in _activeOscComponents.Keys.ToList())
         {
             HandleOscComponentCompleted(panel);
@@ -1859,6 +2165,10 @@ public partial class ActiveCue : GodotObject
         foreach (var panel in _activeCueLightComponents.Keys.ToList())
         {
             HandleCueLightComponentCompleted(panel);
+        }
+        foreach (var panel in _activeControlComponents.Keys.ToList())
+        {
+            HandleControlComponentCompleted(panel);
         }
 
         if (tasks.Count == 0)
@@ -1934,8 +2244,13 @@ public partial class ActiveCue : GodotObject
         RemoveInstantComponent(componentPanel, _activeCueLightComponents);
     }
 
+    private void HandleControlComponentCompleted(PanelContainer componentPanel)
+    {
+        RemoveInstantComponent(componentPanel, _activeControlComponents);
+    }
+
     /// <summary>
-    /// Removes a short-lived component row (OSC / cue light) and checks cue completion.
+    /// Removes a short-lived component row (OSC / cue light / control) and checks cue completion.
     /// </summary>
     private void RemoveInstantComponent<T>(PanelContainer componentPanel, Dictionary<PanelContainer, T> map)
     {
@@ -1955,7 +2270,8 @@ public partial class ActiveCue : GodotObject
         if (_activeAudioComponents.Count == 0 
             && _activeVideoComponents.Count == 0 
             && _activeOscComponents.Count == 0
-            && _activeCueLightComponents.Count == 0)
+            && _activeCueLightComponents.Count == 0
+            && _activeControlComponents.Count == 0)
         {
             _isFinished = true;
             if (_childActiveCues.Count == 0)
@@ -2060,6 +2376,7 @@ public partial class ActiveCue : GodotObject
         _componentToVideo.Clear();
         _activeOscComponents.Clear();
         _activeCueLightComponents.Clear();
+        _activeControlComponents.Clear();
 
         HookIncomingWaitUpdate(false);
         FreeIncomingWaitTimer();

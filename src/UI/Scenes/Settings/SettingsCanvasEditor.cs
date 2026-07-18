@@ -39,6 +39,7 @@ public partial class SettingsCanvasEditor : Control
 
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private Callable _layerGeometryChangedCallable;
     private HistoryManager _historyManager;
     private Canvas _canvas;
     private DisplaysManager _displaysManager;
@@ -267,6 +268,8 @@ public partial class SettingsCanvasEditor : Control
 
         _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), Callable.From(OnDisplaysChanged));
         _globalSignals.Connect(nameof(GlobalSignals.CanvasSizeChanged), Callable.From<Vector2I>(OnCanvasSizeChanged));
+        _layerGeometryChangedCallable = Callable.From<int>(OnLayerGeometryChanged);
+        _globalSignals.Connect(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable);
 
         if (_historyManager != null)
             _historyManager.HistoryRestored += OnHistoryRestored;
@@ -2705,6 +2708,12 @@ public partial class SettingsCanvasEditor : Control
             _scrollContainer.Resized -= OnStageResized;
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
+        if (_globalSignals != null && GodotObject.IsInstanceValid(_globalSignals) &&
+            _layerGeometryChangedCallable.Target != null &&
+            _globalSignals.IsConnected(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable))
+        {
+            _globalSignals.Disconnect(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable);
+        }
     }
 
     /// <summary>
@@ -2829,6 +2838,31 @@ public partial class SettingsCanvasEditor : Control
         // Keep canvas size labels in sync (New Session / load)
         if (_canvas != null)
             OnCanvasSizeChanged(_canvas.CanvasSize);
+    }
+
+    /// <summary>
+    /// Lightweight follow of live layer geometry (e.g. Translate Layer control while this editor is open).
+    /// Avoids a full tree rebuild every animation frame.
+    /// </summary>
+    /// <param name="layerId">Layer that changed size and/or canvas position.</param>
+    private void OnLayerGeometryChanged(int layerId)
+    {
+        if (_historyManager != null && _historyManager.IsRestoring)
+            return;
+
+        // Not shown — no stage work; next open rebuilds from model via DisplaysChanged / dirty flag.
+        if (!_stageInitialized || !IsVisibleInTree())
+            return;
+
+        // User is dragging on stage — don't fight the gizmo with external updates mid-gesture.
+        if (_isDraggingCanvas)
+            return;
+
+        UpdateCanvasGizmos();
+
+        // Keep the right-hand property fields live when this layer is selected.
+        if (_selectionKind == SelectionKind.Layer && _selectedLayerId == layerId)
+            LoadLayerProps();
     }
 
     private void OnCanvasSizeChanged(Vector2I newSize)

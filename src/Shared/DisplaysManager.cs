@@ -590,6 +590,32 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Applies layer size and/or canvas position without logging (for animated control fades).
+    /// Emits <see cref="GlobalSignals.LayerGeometryChanged"/> so open canvas editors can follow.
+    /// </summary>
+    /// <param name="layerId">Layer identity.</param>
+    /// <param name="position">New canvas position, or null to leave unchanged.</param>
+    /// <param name="size">New size, or null to leave unchanged.</param>
+    public void ApplyLayerGeometryLive(int layerId, Vector2I? position, Vector2I? size)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer == null) return;
+
+        if (position.HasValue)
+            layer.CanvasPosition = position.Value;
+        if (size.HasValue)
+        {
+            var s = size.Value;
+            // Keep size positive so display rects remain valid.
+            layer.Size = new Vector2I(Math.Max(1, s.X), Math.Max(1, s.Y));
+        }
+
+        UpdateLayerTestPatterns(layerId);
+        UpdateLayerDisplayRectsOnOutputs(layerId);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.LayerGeometryChanged), layerId);
+    }
+
+    /// <summary>
     /// Pushes layer geometry to active video (and other) display rects on all outputs.
     /// </summary>
     private void UpdateLayerDisplayRectsOnOutputs(int layerId)

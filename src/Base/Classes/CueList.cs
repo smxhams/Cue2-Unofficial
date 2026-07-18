@@ -1046,6 +1046,7 @@ public partial class CueList : Control
 					"Network" => new NetworkComponent(),
 					"CueLight" => new CueLightComponent(),
 					"OscComponent" => new OscComponent(),
+					"Control" => new ControlComponent(),
 					_ => null
 				};
 				if (newComp == null) continue;
@@ -1183,6 +1184,26 @@ public partial class CueList : Control
 		if (CueIndex == null) return null;
 		CueIndex.TryGetValue(id, out Cue cue);
 		return cue;
+	}
+
+	/// <summary>
+	/// Retrieves the first cue whose <see cref="Cue.CueNum"/> matches <paramref name="cueNum"/> (exact, case-sensitive).
+	/// </summary>
+	/// <param name="cueNum">User-facing cue number string.</param>
+	/// <returns>The matching cue, or null if none / empty input.</returns>
+	public static Cue FetchCueFromCueNum(string cueNum)
+	{
+		if (string.IsNullOrWhiteSpace(cueNum) || CueIndex == null)
+			return null;
+
+		string needle = cueNum.Trim();
+		foreach (var cue in CueIndex.Values)
+		{
+			if (cue != null && string.Equals(cue.CueNum, needle, StringComparison.Ordinal))
+				return cue;
+		}
+
+		return null;
 	}
 	
 

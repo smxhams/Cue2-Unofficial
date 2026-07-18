@@ -114,6 +114,13 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void DisplaysChangedEventHandler();
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
 
+	/// <summary>
+	/// Fired when a single target layer's size or canvas position changes
+	/// (e.g. Translate Layer control animation). Lighter than <see cref="DisplaysChanged"/>.
+	/// </summary>
+	/// <param name="layerId">Layer that was updated.</param>
+	[Signal] public delegate void LayerGeometryChangedEventHandler(int layerId);
+
 	// Media backup (show-local file copies)
 	/// <summary>
 	/// Fired when media backup progress changes.

@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" uid="uid://d6ybxbmxkpib" path="res://src/UI/Scenes/Inspectors/VideoInspector.tscn" id="9_ht2vi"]
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
 [ext_resource type="Script" uid="uid://b54ov4k1klk3j" path="res://src/UI/Scenes/Inspectors/VideoInspector.cs" id="10_ht2vi"]
+[ext_resource type="PackedScene" uid="uid://dyosfip3iclit" path="res://src/UI/Scenes/Inspectors/ControlInspector.tscn" id="11_ctrl"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/UI/Scenes/SubWindows/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/UI/Scenes/SubWindows/OpenDialog.cs" id="14_5gc0s"]
@@ -161,11 +162,10 @@ layout_mode = 2
 tooltip_text = "Network commands"
 metadata/_tab_index = 5
 
-[node name="Control" type="MarginContainer" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=245796318]
+[node name="Control" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=245796318 instance=ExtResource("11_ctrl")]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
-tooltip_text = "Control commands to itself or other cues."
-metadata/_tab_index = 6
 
 [node name="Footer" parent="MarginContainer/BoxContainer" unique_id=149458541 instance=ExtResource("8_jn5cm")]
 layout_mode = 2

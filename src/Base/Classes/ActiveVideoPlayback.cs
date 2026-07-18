@@ -556,6 +556,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         GD.Print("ActiveVideoPlayback:Resume");
     }
 
+    /// <summary>
+    /// Current media playback position in seconds (master clock).
+    /// </summary>
+    public double GetPlaybackTimeSeconds() =>
+        GetMasterClockUs() / (double)MicrosecondsPerSecond;
+
     /// <summary>Seeks both video and audio to the same media time (seconds).</summary>
     public void Seek(double timeSeconds)
     {
@@ -995,10 +1001,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         float startVol = 0f;
         float endVol = 1.0f;
-        float startAlpha = _fadeAlpha;
+        // Start fully faded so volume + visual opacity both ramp up.
+        _fadeAlpha = 0f;
+        float startAlpha = 0f;
         Stopwatch timer = Stopwatch.StartNew();
         SetVolume(0f);
         await PlayAsync();
+        ApplyOpacityModulate();
 
         try
         {
@@ -1007,12 +1016,14 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, endVol, t));
                 _fadeAlpha = Mathf.Lerp(startAlpha, 1.0f, t);
+                ApplyOpacityModulate();
                 await Task.Delay(FadeUpdateIntervalMs, _fadeCts.Token);
             }
             if (!_fadeCts.Token.IsCancellationRequested)
             {
                 SetVolume(endVol);
                 _fadeAlpha = 1.0f;
+                ApplyOpacityModulate();
             }
         }
         catch (OperationCanceledException) { }

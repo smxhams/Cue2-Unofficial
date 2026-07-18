@@ -275,20 +275,27 @@ public partial class UiUtilities : Node
                 throw new FormatException("Invalid numeric format after parsing.");
             }
 
-            if (db <= -60f)
-            {
-                GD.Print($"UiUtilities:DbToLinear - Parsed dB {db} from '{dbInput}' is below threshold; returning 0.");
-                return 0f;
-            }
-
-            GD.Print(Mathf.Pow(10f, db / 20f));
-            return Mathf.Pow(10f, db / 20f);
+            return DbToLinear(db);
         }
         catch (Exception ex)
         {
             GD.Print($"UiUtilities:DbToLinear - Invalid input '{dbInput}': {ex.Message}; returning 0.");
             return -1f;
         }
+    }
+
+    /// <summary>
+    /// Converts a dB value to linear volume (0…1). Clamps to the practical −60…0 dB UI range.
+    /// </summary>
+    /// <param name="db">Decibels (0 = full, −60 or lower = silence).</param>
+    /// <returns>Linear volume in 0…1.</returns>
+    public static float DbToLinear(float db)
+    {
+        if (db <= -60f)
+            return 0f;
+        if (db > 0f)
+            db = 0f;
+        return Mathf.Pow(10f, db / 20f);
     }
     
     /// <summary>

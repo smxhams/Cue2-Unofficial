@@ -283,6 +283,7 @@ public class Cue : ICue
                     "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
+                    "Control" => new ControlComponent(),
                     _ => null
                 };
                 if (comp != null)
@@ -373,6 +374,15 @@ public class Cue : ICue
     public OscComponent[] GetOscComponents()
     {
         return Components.OfType<OscComponent>().ToArray();
+    }
+
+    /// <summary>
+    /// Returns all control components on this cue.
+    /// </summary>
+    /// <returns>Array of <see cref="ControlComponent"/> instances (may be empty).</returns>
+    public ControlComponent[] GetControlComponents()
+    {
+        return Components.OfType<ControlComponent>().ToArray();
     }
 
     public double CalculateTotalDuration()
@@ -565,6 +575,7 @@ public class Cue : ICue
                     "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
+                    "Control" => new ControlComponent(),
                     _ => null
                 };
                 if (comp == null) continue;
