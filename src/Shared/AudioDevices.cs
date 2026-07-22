@@ -228,6 +228,41 @@ public partial class AudioDevices : Node
 	    
     }
 
+    /// <summary>
+    /// Returns the human-readable name of the current system default playback device, if known.
+    /// </summary>
+    /// <returns>
+    /// The physical device name as reported by SDL, or <c>null</c> when SDL cannot resolve a default
+    /// or the name is empty.
+    /// </returns>
+    /// <remarks>
+    /// Uses <see cref="SDL.AudioDeviceDefaultPlayback"/>. The default can change at any time at the OS
+    /// level; this is a snapshot for session setup (e.g. routing a new Default Patch). Prefer matching
+    /// the returned name against <see cref="GetAvailableAudioDeviceNames"/> before opening.
+    /// </remarks>
+    public string GetSystemDefaultPlaybackDeviceName()
+    {
+	    try
+	    {
+		    string name = SDL.GetAudioDeviceName(SDL.AudioDeviceDefaultPlayback);
+		    if (string.IsNullOrWhiteSpace(name))
+		    {
+			    GD.Print("AudioDevices:GetSystemDefaultPlaybackDeviceName - SDL returned empty default playback name.");
+			    return null;
+		    }
+
+		    GD.Print($"AudioDevices:GetSystemDefaultPlaybackDeviceName - System default playback: '{name}'");
+		    return name;
+	    }
+	    catch (Exception ex)
+	    {
+		    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			    $"Error resolving system default playback device: {ex.Message}", 1);
+		    GD.PrintErr("AudioDevices:GetSystemDefaultPlaybackDeviceName - " + ex.Message);
+		    return null;
+	    }
+    }
+
     public Godot.Collections.Array<string> GetOpenAudioDevicesNames()
     {
 	    var deviceNames = new Godot.Collections.Array<string>();

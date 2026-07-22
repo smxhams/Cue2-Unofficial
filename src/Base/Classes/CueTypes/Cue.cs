@@ -307,6 +307,15 @@ public class Cue : ICue
     }
     
     // Methods to add components dynamically
+    /// <summary>
+    /// Adds an audio component to this cue.
+    /// </summary>
+    /// <param name="audioFile">Path to the audio media file (show-relative or absolute).</param>
+    /// <param name="patch">
+    /// Optional output patch. When null, the show's preferred patch is used
+    /// (typically "Default Patch" on a new session).
+    /// </param>
+    /// <returns>The new or existing audio component.</returns>
     public AudioComponent AddAudioComponent(string audioFile, AudioOutputPatch patch = null)
     {
         if (Components.FirstOrDefault(c => c.Type == "Audio") is AudioComponent existing)
@@ -314,7 +323,14 @@ public class Cue : ICue
             GD.Print($"Cue:AddAudioComponent - Audio component already exists in cue {Id}. Returning existing.");
             return existing;
         }
-        var audioComp = new AudioComponent { AudioFile = audioFile, Patch = patch };
+
+        patch ??= ResolvePreferredAudioPatch();
+        var audioComp = new AudioComponent
+        {
+            AudioFile = audioFile,
+            Patch = patch,
+            PatchId = patch?.Id ?? -1
+        };
         Components.Add(audioComp);
         return audioComp;
     }
@@ -329,6 +345,15 @@ public class Cue : ICue
         return Components.FirstOrDefault(c => c.Type == "Video", defaultValue:null) as VideoComponent;
     }
 
+    /// <summary>
+    /// Adds a video component to this cue.
+    /// </summary>
+    /// <param name="videoFile">Path to the video/image media file (show-relative or absolute).</param>
+    /// <returns>The new or existing video component.</returns>
+    /// <remarks>
+    /// Assigns the first available target layer and the show's preferred audio output patch
+    /// (Default Patch when present) so new media cues are playable without extra setup.
+    /// </remarks>
     public VideoComponent AddVideoComponent(string videoFile)
     {
         if (Components.FirstOrDefault(c => c.Type == "Video") is VideoComponent existing)
@@ -341,9 +366,38 @@ public class Cue : ICue
         // user can still choose "No Output" (-1) in the inspector.
         if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
             videoComp.TargetLayerId = DisplaysManager.Layers[0].LayerId;
+
+        // Prefer Default Patch (or first available) for embedded audio, matching audio cues.
+        var preferredPatch = ResolvePreferredAudioPatch();
+        if (preferredPatch != null)
+        {
+            videoComp.Patch = preferredPatch;
+            videoComp.PatchId = preferredPatch.Id;
+        }
+
         //videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
         Components.Add(videoComp);
         return videoComp;
+    }
+
+    /// <summary>
+    /// Resolves the show's preferred audio output patch via GlobalData/Settings.
+    /// </summary>
+    /// <returns>Preferred patch, or null when none exist or GlobalData is unavailable.</returns>
+    private static AudioOutputPatch ResolvePreferredAudioPatch()
+    {
+        try
+        {
+            if (Engine.GetMainLoop() is not SceneTree tree)
+                return null;
+            var settings = tree.Root?.GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
+            return settings?.GetPreferredAudioOutputPatch();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"Cue:ResolvePreferredAudioPatch - {ex.Message}");
+            return null;
+        }
     }
 
     public void AddNetworkComponent(/* params */)

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Cue2.Base.Classes.Connections;
 using Cue2.Base.Classes.CueTypes;
@@ -36,6 +37,9 @@ public partial class Settings : Node
 
     /// <summary>Default for multi-edit of shell properties when multiple cues are selected.</summary>
     public const bool DefaultMultiEditEnabled = true;
+
+    /// <summary>Default for selecting a newly created cue after Add / drop.</summary>
+    public const bool DefaultSelectNewCues = true;
 
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
@@ -81,6 +85,12 @@ public partial class Settings : Node
     /// </summary>
     public bool MultiEditEnabled = DefaultMultiEditEnabled;
 
+    /// <summary>
+    /// When true, newly created cues (Add Cue, media drop) become the selection/focus.
+    /// When false, selection is left unchanged. Persisted with the showfile.
+    /// </summary>
+    public bool SelectNewCues = DefaultSelectNewCues;
+
     // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
 
     /// <summary>Default pre-wait (seconds) applied when a new cue is created.</summary>
@@ -112,12 +122,19 @@ public partial class Settings : Node
     public byte CueLightBrightness = 50;
     
     
+    /// <summary>Factory name for the audio output patch created on new sessions.</summary>
+    public const string DefaultAudioPatchName = "Default Patch";
+
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
+
+        // First launch / empty show: ensure a Default Patch exists (same as DisplaysManager defaults).
+        // Deferred so AudioDevices autoload _Ready and SDL device enumeration are fully available.
+        CallDeferred(nameof(EnsureDefaultAudioPatch));
     }
 
     public override void _ExitTree()
@@ -157,6 +174,130 @@ public partial class Settings : Node
         var newPatch = new AudioOutputPatch();
         _audioOutputPatches.Add(newPatch.Id, newPatch);
         return newPatch;
+    }
+
+    /// <summary>
+    /// Creates the session "Default Patch", optionally routing the current system default playback device.
+    /// </summary>
+    /// <returns>The newly created patch.</returns>
+    /// <remarks>
+    /// Stereo patch channels Left/Right are 1:1 mapped to device outputs 0/1 when available.
+    /// On mono devices both channels route to output 0. If the system default cannot be resolved
+    /// or opened, the patch is still created empty so the user can assign a device later.
+    /// </remarks>
+    public AudioOutputPatch CreateDefaultAudioPatch()
+    {
+        var patch = new AudioOutputPatch(DefaultAudioPatchName);
+        _audioOutputPatches.Add(patch.Id, patch);
+
+        TryRouteSystemDefaultDevice(patch);
+
+        GD.Print($"Settings:CreateDefaultAudioPatch - Created '{patch.Name}' (id={patch.Id}), " +
+                 $"devices={patch.OutputDevices.Count}");
+        return patch;
+    }
+
+    /// <summary>
+    /// Ensures at least one audio output patch exists by creating <see cref="DefaultAudioPatchName"/> when empty.
+    /// </summary>
+    /// <remarks>
+    /// Used on first launch and after resets. Does nothing when patches already exist (loaded show, etc.).
+    /// </remarks>
+    public void EnsureDefaultAudioPatch()
+    {
+        if (_audioOutputPatches.Count > 0)
+            return;
+
+        CreateDefaultAudioPatch();
+        GD.Print("Settings:EnsureDefaultAudioPatch - No patches present; created Default Patch.");
+    }
+
+    /// <summary>
+    /// Returns the preferred audio output patch for newly created media cues.
+    /// </summary>
+    /// <returns>
+    /// Patch named <see cref="DefaultAudioPatchName"/> when present; otherwise the lowest-id patch;
+    /// or <c>null</c> when no patches exist.
+    /// </returns>
+    public AudioOutputPatch GetPreferredAudioOutputPatch()
+    {
+        if (_audioOutputPatches.Count == 0)
+            return null;
+
+        foreach (var patch in _audioOutputPatches.Values)
+        {
+            if (patch != null && GodotObject.IsInstanceValid(patch) &&
+                string.Equals(patch.Name, DefaultAudioPatchName, StringComparison.Ordinal))
+            {
+                return patch;
+            }
+        }
+
+        return _audioOutputPatches
+            .OrderBy(kv => kv.Key)
+            .Select(kv => kv.Value)
+            .FirstOrDefault(p => p != null && GodotObject.IsInstanceValid(p));
+    }
+
+    /// <summary>
+    /// Opens the system default playback device (if any) and wires it into <paramref name="patch"/>
+    /// with a simple stereo default route.
+    /// </summary>
+    private void TryRouteSystemDefaultDevice(AudioOutputPatch patch)
+    {
+        if (patch == null || _audioDevices == null)
+            return;
+
+        string deviceName = _audioDevices.GetSystemDefaultPlaybackDeviceName();
+        if (string.IsNullOrEmpty(deviceName))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "Default Patch created without a system output device (none detected).", 1);
+            return;
+        }
+
+        // Prefer a name that appears in the current playback enumeration so open-by-name succeeds.
+        var available = _audioDevices.GetAvailableAudioDeviceNames();
+        if (available != null && available.Count > 0 &&
+            !available.Contains(deviceName, StringComparer.Ordinal))
+        {
+            // Case-insensitive match (Windows device names can vary slightly).
+            var match = available.FirstOrDefault(n =>
+                string.Equals(n, deviceName, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+                deviceName = match;
+            else
+            {
+                GD.Print($"Settings:TryRouteSystemDefaultDevice - Default name '{deviceName}' " +
+                         "not in available list; attempting open anyway.");
+            }
+        }
+
+        var device = _audioDevices.OpenAudioDevice(deviceName, out string error);
+        if (device == null)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Default Patch: could not open system output '{deviceName}': {error}", 1);
+            return;
+        }
+
+        int outputCount = Math.Max(1, device.Channels);
+        patch.AddDeviceOutputs(deviceName, outputCount);
+
+        // Default stereo channels (constructor order: Left=0, Right=1).
+        var channelIds = patch.Channels.Keys.OrderBy(k => k).ToList();
+        if (channelIds.Count > 0 && outputCount > 0)
+            patch.SetRouting(deviceName, 0, channelIds[0], true);
+
+        if (channelIds.Count > 1)
+        {
+            // Stereo device: Right → output 1. Mono: fold Right onto output 0.
+            int rightOut = outputCount > 1 ? 1 : 0;
+            patch.SetRouting(deviceName, rightOut, channelIds[1], true);
+        }
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            $"Default Patch routed to system output: {deviceName}", 0);
     }
     
     public AudioOutputPatch GetPatch(int patchId) => _audioOutputPatches[patchId];
@@ -199,9 +340,12 @@ public partial class Settings : Node
     /// Resets all show/session settings to factory defaults (New Session / before Open).
     /// </summary>
     /// <remarks>
-    /// Clears audio patches, displays (canvas/layers/screens), cue lights, OSC listen/connections,
-    /// and general scalars. Does <b>not</b> reset Input Map — that lives in user preferences.
-    /// Emits scale/display signals so live UI can resync.
+    /// Clears audio patches then seeds a <see cref="DefaultAudioPatchName"/> (system playback
+    /// device when available). Also resets displays (canvas/layers/screens), cue lights,
+    /// OSC listen/connections, and general scalars. Does <b>not</b> reset Input Map — that
+    /// lives in user preferences. Emits scale/display signals so live UI can resync.
+    /// When used as the wipe step before Open, <see cref="LoadSettings"/> replaces the seeded
+    /// Default Patch with the showfile's patch table.
     /// </remarks>
     public void ResetSettings()
     {
@@ -213,6 +357,9 @@ public partial class Settings : Node
         }
         _audioOutputPatches.Clear();
 
+        // Seed a Default Patch (system playback device when available) so new cues can play out.
+        CreateDefaultAudioPatch();
+
         // General show scalars
         UiScale = DefaultUiScale;
         GoScale = DefaultGoScale;
@@ -220,6 +367,7 @@ public partial class Settings : Node
         StopFadeDuration = DefaultStopFadeDuration;
         MediaBackupEnabled = DefaultMediaBackupEnabled;
         MultiEditEnabled = DefaultMultiEditEnabled;
+        SelectNewCues = DefaultSelectNewCues;
         VerbosePrint = true;
 
         // Cue shell defaults for newly created cues
@@ -274,6 +422,7 @@ public partial class Settings : Node
         saveTable.Add("StopFadeDuration", StopFadeDuration);
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
         saveTable.Add("MultiEditEnabled", MultiEditEnabled);
+        saveTable.Add("SelectNewCues", SelectNewCues);
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -313,12 +462,26 @@ public partial class Settings : Node
         if (settingsData.TryGetValue("AudioPatch", out var patchs))
         {
             GD.Print($"Settings:LoadSettings - Loading AudioPatches");
+            // Replace any session-seeded Default Patch from ResetSettings so open/load is authoritative.
+            foreach (var existing in _audioOutputPatches.Values.ToList())
+            {
+                if (existing != null && GodotObject.IsInstanceValid(existing))
+                    existing.Free();
+            }
+            _audioOutputPatches.Clear();
+
             foreach (var patch in (Dictionary)patchs)
             {
                 var patchAsDict = patch.Value.AsGodotDictionary();
                 var patchObj = AudioOutputPatch.FromData(patchAsDict);
-                _globalData.Settings.AddPatch(patchObj);
+                if (patchObj != null)
+                    AddPatch(patchObj);
+                else
+                    GD.PrintErr("Settings:LoadSettings - Failed to deserialize an audio output patch.");
             }
+
+            // Older showfiles with an empty patch table still get a usable Default Patch.
+            EnsureDefaultAudioPatch();
         }
         
         if (settingsData.TryGetValue("Displays", out var displays))
@@ -348,6 +511,10 @@ public partial class Settings : Node
         MultiEditEnabled = settingsData.TryGetValue("MultiEditEnabled", out value)
             ? value.AsBool()
             : DefaultMultiEditEnabled;
+        // Default true for older shows that predate this setting
+        SelectNewCues = settingsData.TryGetValue("SelectNewCues", out value)
+            ? value.AsBool()
+            : DefaultSelectNewCues;
 
         // Cue shell defaults (older shows without this key keep system defaults)
         if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
@@ -469,6 +636,8 @@ public partial class Settings : Node
             MediaBackupEnabled = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "MultiEditEnabled", out value))
             MultiEditEnabled = ReadBoolVariant(value);
+        if (TryGetSettingsValue(settingsData, "SelectNewCues", out value))
+            SelectNewCues = ReadBoolVariant(value);
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
             && value.VariantType == Variant.Type.Dictionary)
@@ -592,6 +761,9 @@ public partial class Settings : Node
                 return true;
             case "MultiEditEnabled":
                 value = MultiEditEnabled ? 1 : 0;
+                return true;
+            case "SelectNewCues":
+                value = SelectNewCues ? 1 : 0;
                 return true;
             default:
                 value = default;

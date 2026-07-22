@@ -470,6 +470,15 @@ public partial class AudioInspector : Control
     {
         if (_outputOptionButton == null || _focusedAudioComponent == null) return;
 
+        // Keep PatchId aligned with the live Patch reference (drop/create assigns both; relink/history may not).
+        if (_focusedAudioComponent.Patch != null && GodotObject.IsInstanceValid(_focusedAudioComponent.Patch)
+            && _focusedAudioComponent.PatchId != _focusedAudioComponent.Patch.Id)
+        {
+            _focusedAudioComponent.PatchId = _focusedAudioComponent.Patch.Id;
+        }
+
+        int assignedPatchId = _focusedAudioComponent.Patch?.Id ?? _focusedAudioComponent.PatchId;
+
         // Block ItemSelected while rebuilding the list (Select would re-enter OutputOptionSelected).
         _outputOptionButton.SetBlockSignals(true);
         try
@@ -490,7 +499,7 @@ public partial class AudioInspector : Control
                 _outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
                 int idx = _outputOptionButton.GetItemCount() - 1;
                 _outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
-                if (patch.Value.Id == _focusedAudioComponent.PatchId)
+                if (patch.Value.Id == assignedPatchId)
                     selectedIndex = idx;
             }
 
@@ -510,11 +519,11 @@ public partial class AudioInspector : Control
                 _outputOptionButton.AddItem($"!!! Missing output: {_focusedAudioComponent.DirectOutput}");
                 selectedIndex = _outputOptionButton.GetItemCount() - 1;
             }
-            if (selectedIndex == 0 && _focusedAudioComponent.PatchId >= 0
+            if (selectedIndex == 0 && assignedPatchId >= 0
                 && (_focusedAudioComponent.Patch != null
-                    || !_globalData.Settings.GetAudioOutputPatches().ContainsKey(_focusedAudioComponent.PatchId)))
+                    || !_globalData.Settings.GetAudioOutputPatches().ContainsKey(assignedPatchId)))
             {
-                string name = _focusedAudioComponent.Patch?.Name ?? $"id {_focusedAudioComponent.PatchId}";
+                string name = _focusedAudioComponent.Patch?.Name ?? $"id {assignedPatchId}";
                 _outputOptionButton.AddItem($"!!! Missing patch: {name}");
                 selectedIndex = _outputOptionButton.GetItemCount() - 1;
             }
@@ -674,11 +683,25 @@ public partial class AudioInspector : Control
         int outputChannels;
         List<string> outputLabels = new List<string>();
         
-        // Audio Output Patch
-        if (_focusedAudioComponent.PatchId != -1)
+        // Prefer live Patch reference, then PatchId (default patch on create sets both).
+        if (_focusedAudioComponent.Patch != null && GodotObject.IsInstanceValid(_focusedAudioComponent.Patch)
+            && _focusedAudioComponent.PatchId != _focusedAudioComponent.Patch.Id)
         {
+            _focusedAudioComponent.PatchId = _focusedAudioComponent.Patch.Id;
+        }
+
+        // Audio Output Patch
+        if (_focusedAudioComponent.PatchId != -1 || _focusedAudioComponent.Patch != null)
+        {
+            AudioOutputPatch patch = _focusedAudioComponent.Patch;
+            if (patch == null || !GodotObject.IsInstanceValid(patch))
+            {
+                _globalData.Settings.GetAudioOutputPatches()
+                    .TryGetValue(_focusedAudioComponent.PatchId, out patch);
+            }
+
             // Check if selected patch exists, if not clean the audio component of it.
-            if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedAudioComponent.PatchId, out var patch))
+            if (patch == null || !GodotObject.IsInstanceValid(patch))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:BuildRoutingMatrix - Patch ID {_focusedAudioComponent.PatchId} not found, resetting output", 2);
                 _focusedAudioComponent.Patch = null;
@@ -688,6 +711,9 @@ public partial class AudioInspector : Control
                 _routingContainer.Visible = false;
                 return;
             }
+
+            _focusedAudioComponent.Patch = patch;
+            _focusedAudioComponent.PatchId = patch.Id;
             outputChannels = patch.Channels.Count;
             outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
         }
@@ -957,11 +983,16 @@ public partial class AudioInspector : Control
 
         // Only skip a full reload when we still hold a valid component reference on the same cue.
         // After undo/redo, ApplyFromData replaces component instances — early-out would leave a stale ref.
+        // Still refresh output routing UI: a second ShellFocused (same cue) often hits this path while
+        // the first async ShellSelected was cancelled via generation — without this, the dropdown
+        // stays on "No output" even though the component already has a Default Patch assigned.
         if (_focusedCue != null && _focusedCue.Id == cueId
             && _focusedAudioComponent != null
             && _focusedCue.Components.Contains(_focusedAudioComponent))
         {
             UpdateAudioUiFields(_focusedAudioComponent.AudioFile ?? string.Empty);
+            PopulateOutputOptions();
+            BuildRoutingMatrix();
             return;
         }
         _focusedCue = CueList.FetchCueFromId(cueId);

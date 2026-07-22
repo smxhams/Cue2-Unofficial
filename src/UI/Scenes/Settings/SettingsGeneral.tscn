@@ -284,3 +284,39 @@ theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
 theme_override_font_sizes/font_size = 11
 text = "Edit multiple selected cues from Shell Inspector."
 vertical_alignment = 1
+
+[node name="SelectNewCuesRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="SelectNewCuesLabel" type="Label" parent="VBoxContainer/SelectNewCuesRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Select new cues"
+vertical_alignment = 1
+tooltip_text = "When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged."
+
+[node name="SelectNewCuesCheckBox" type="CheckBox" parent="VBoxContainer/SelectNewCuesRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+button_pressed = true
+text = "Enabled"
+tooltip_text = "When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged."
+
+[node name="SelectNewCuesResetButton" type="Button" parent="VBoxContainer/SelectNewCuesRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+tooltip_text = "Reset to default"
+
+[node name="SelectNewCuesHint" type="Label" parent="VBoxContainer/SelectNewCuesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "Focus newly created cues in the cuelist."
+vertical_alignment = 1

@@ -5,7 +5,7 @@ using AppSettings = Cue2.Base.Classes.Settings;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// General settings panel: UI scale, Go button scale, stop fade-out, media backup, and multi-edit.
+/// General settings panel: UI scale, Go button scale, stop fade-out, media backup, multi-edit, and select-new-cues.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
 /// Values are stored with the showfile via <see cref="AppSettings"/>.
 /// </summary>
@@ -30,6 +30,9 @@ public partial class SettingsGeneral : ScrollContainer
 
     private CheckBox _multiEditCheckBox;
     private Button _multiEditResetButton;
+
+    private CheckBox _selectNewCuesCheckBox;
+    private Button _selectNewCuesResetButton;
 
     /// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
     private bool _isSyncingUi;
@@ -91,6 +94,16 @@ public partial class SettingsGeneral : ScrollContainer
         {
             _multiEditResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
             _multiEditResetButton.Pressed += OnMultiEditResetPressed;
+        }
+
+        _selectNewCuesCheckBox = GetNodeOrNull<CheckBox>("%SelectNewCuesCheckBox");
+        if (_selectNewCuesCheckBox != null)
+            _selectNewCuesCheckBox.Toggled += OnSelectNewCuesToggled;
+        _selectNewCuesResetButton = GetNodeOrNull<Button>("%SelectNewCuesResetButton");
+        if (_selectNewCuesResetButton != null)
+        {
+            _selectNewCuesResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+            _selectNewCuesResetButton.Pressed += OnSelectNewCuesResetPressed;
         }
 
         // Only re-sync this form when a *settings* history entry was undone/redone —
@@ -157,6 +170,7 @@ public partial class SettingsGeneral : ScrollContainer
             _stopFadeSpinBox?.SetValueNoSignal(_globalData.Settings.StopFadeDuration);
             _mediaBackupCheckBox?.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
             _multiEditCheckBox?.SetPressedNoSignal(_globalData.Settings.MultiEditEnabled);
+            _selectNewCuesCheckBox?.SetPressedNoSignal(_globalData.Settings.SelectNewCues);
 
             UpdateAllResetButtons();
         }
@@ -173,6 +187,7 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateStopFadeResetButton();
         UpdateMediaBackupResetButton();
         UpdateMultiEditResetButton();
+        UpdateSelectNewCuesResetButton();
     }
 
     // ── UI Scale ──────────────────────────────────────────────────────────
@@ -468,6 +483,51 @@ public partial class SettingsGeneral : ScrollContainer
         {
             string defaultText = AppSettings.DefaultMultiEditEnabled ? "Enabled" : "Disabled";
             _multiEditResetButton.TooltipText = $"Reset to default: {defaultText}";
+        }
+    }
+
+    // ── Select new cues ───────────────────────────────────────────────────
+
+    private void OnSelectNewCuesToggled(bool enabled)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        if (_globalData.Settings.SelectNewCues == enabled)
+        {
+            UpdateSelectNewCuesResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change select new cues setting", null, "SelectNewCues");
+        _globalData.Settings.SelectNewCues = enabled;
+        UpdateSelectNewCuesResetButton();
+    }
+
+    private void OnSelectNewCuesResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_globalData.Settings.SelectNewCues == AppSettings.DefaultSelectNewCues)
+        {
+            SyncSettings();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Reset select new cues setting", null, "SelectNewCues");
+        _globalData.Settings.SelectNewCues = AppSettings.DefaultSelectNewCues;
+        SyncSettings();
+    }
+
+    private void UpdateSelectNewCuesResetButton()
+    {
+        if (_selectNewCuesResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = _globalData.Settings.SelectNewCues == AppSettings.DefaultSelectNewCues;
+        _selectNewCuesResetButton.Visible = !atDefault;
+        if (!atDefault)
+        {
+            string defaultText = AppSettings.DefaultSelectNewCues ? "Enabled" : "Disabled";
+            _selectNewCuesResetButton.TooltipText = $"Reset to default: {defaultText}";
         }
     }
 }

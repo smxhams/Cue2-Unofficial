@@ -1626,6 +1626,15 @@ public partial class VideoInspector : Control
 	{
 		if (_outputOptionButton == null || _focusedVideoComponent == null) return;
 
+		// Keep PatchId aligned with the live Patch reference (create/drop assigns both).
+		if (_focusedVideoComponent.Patch != null && GodotObject.IsInstanceValid(_focusedVideoComponent.Patch)
+		    && _focusedVideoComponent.PatchId != _focusedVideoComponent.Patch.Id)
+		{
+			_focusedVideoComponent.PatchId = _focusedVideoComponent.Patch.Id;
+		}
+
+		int assignedPatchId = _focusedVideoComponent.Patch?.Id ?? _focusedVideoComponent.PatchId;
+
 		_outputOptionButton.SetBlockSignals(true);
 		try
 		{
@@ -1641,7 +1650,7 @@ public partial class VideoInspector : Control
 				_outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
 				int idx = _outputOptionButton.GetItemCount() - 1;
 				_outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
-				if (patch.Value.Id == _focusedVideoComponent.PatchId)
+				if (patch.Value.Id == assignedPatchId)
 					selectedIndex = idx;
 			}
 
@@ -1661,9 +1670,10 @@ public partial class VideoInspector : Control
 				_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
 				selectedIndex = _outputOptionButton.GetItemCount() - 1;
 			}
-			if (selectedIndex == 0 && _focusedVideoComponent.PatchId >= 0)
+			if (selectedIndex == 0 && assignedPatchId >= 0)
 			{
-				_outputOptionButton.AddItem($"!!! Missing patch: ID {_focusedVideoComponent.PatchId}");
+				string name = _focusedVideoComponent.Patch?.Name ?? $"ID {assignedPatchId}";
+				_outputOptionButton.AddItem($"!!! Missing patch: {name}");
 				selectedIndex = _outputOptionButton.GetItemCount() - 1;
 			}
 
@@ -1718,11 +1728,25 @@ public partial class VideoInspector : Control
 		int outputChannels;
 		List<string> outputLabels = new List<string>();
 
+		// Prefer live Patch reference, then PatchId (default patch on create sets both).
+		if (_focusedVideoComponent.Patch != null && GodotObject.IsInstanceValid(_focusedVideoComponent.Patch)
+		    && _focusedVideoComponent.PatchId != _focusedVideoComponent.Patch.Id)
+		{
+			_focusedVideoComponent.PatchId = _focusedVideoComponent.Patch.Id;
+		}
+
         // Audio Output Patch
-        if (_focusedVideoComponent.PatchId != -1)
+        if (_focusedVideoComponent.PatchId != -1 || _focusedVideoComponent.Patch != null)
         {
+            AudioOutputPatch patch = _focusedVideoComponent.Patch;
+            if (patch == null || !GodotObject.IsInstanceValid(patch))
+            {
+	            _globalData.Settings.GetAudioOutputPatches()
+		            .TryGetValue(_focusedVideoComponent.PatchId, out patch);
+            }
+
             // Check if selected patch exists, if not clean the video component of it.
-            if (!_globalData.Settings.GetAudioOutputPatches().TryGetValue(_focusedVideoComponent.PatchId, out var patch))
+            if (patch == null || !GodotObject.IsInstanceValid(patch))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
                 _focusedVideoComponent.Patch = null;
@@ -1732,6 +1756,9 @@ public partial class VideoInspector : Control
                 _routingContainer.Visible = false;
                 return;
             }
+
+            _focusedVideoComponent.Patch = patch;
+            _focusedVideoComponent.PatchId = patch.Id;
             outputChannels = patch.Channels.Count;
             outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
         }

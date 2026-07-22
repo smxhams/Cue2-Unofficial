@@ -315,6 +315,7 @@ public partial class CueList : Control
 	/// <summary>
 	/// Creates a default new cue and adds it to the cuelist (wired to Add button / signal).
 	/// Shell properties come from show-scoped <see cref="Settings"/> cue defaults.
+	/// When <see cref="Settings.SelectNewCues"/> is enabled, the new cue becomes the selection.
 	/// </summary>
 	public void CreateCue()
 	{
@@ -322,6 +323,26 @@ public partial class CueList : Control
 		var newCue = new Cue();
 		_globalData?.Settings?.ApplyShellDefaults(newCue);
 		AddCue(newCue);
+		MaybeSelectNewCue(newCue);
+	}
+
+	/// <summary>
+	/// Selects and focuses <paramref name="cue"/> when the show setting
+	/// <see cref="Settings.SelectNewCues"/> is enabled; otherwise leaves selection unchanged.
+	/// </summary>
+	/// <param name="cue">Cue that was just created.</param>
+	/// <remarks>
+	/// <see cref="ShellSelection.SelectIndividualShell"/> already emits <c>ShellFocused</c>
+	/// via <see cref="ShellSelection.AddSelection"/> — do not emit it again, or audio/video
+	/// inspectors can cancel their first async load (generation bump) and skip
+	/// <c>PopulateOutputOptions</c>, leaving the Output dropdown on "No output".
+	/// </remarks>
+	private void MaybeSelectNewCue(Cue cue)
+	{
+		if (cue == null) return;
+		if (_globalData?.Settings?.SelectNewCues != true) return;
+
+		_globalData.ShellSelection?.SelectIndividualShell(cue);
 	}
 
 	private void _syncHotkeys()
@@ -557,13 +578,9 @@ public partial class CueList : Control
 			return;
 		}
 
-		// Select the first newly created cue (or the group if we made one)
+		// Optionally select the first newly created cue (or the group if we made one)
 		var cueToFocus = groupCue ?? newCues.FirstOrDefault();
-		if (cueToFocus != null)
-		{
-			_globalData?.ShellSelection?.SelectIndividualShell(cueToFocus);
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), cueToFocus.Id);
-		}
+		MaybeSelectNewCue(cueToFocus);
 
 		// Recalculate durations for affected area (simple: recalc the new ones + parents)
 		foreach (var c in newCues)
@@ -762,9 +779,6 @@ public partial class CueList : Control
 		CreateNewShell(cue);
 		CueIndex.Add(cue.Id, cue);
 		NotifyTotalCuesChanged();
-		// Will make new cues focused
-		//FocusCue(cue); //Read select shell when finished
-
 	}
 
 	/// <summary>
