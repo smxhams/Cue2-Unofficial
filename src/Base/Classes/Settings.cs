@@ -392,6 +392,9 @@ public partial class Settings : Node
         GetNodeOrNull<OscListen>("/root/OscListen")?.ResetToDefaults();
         GetNodeOrNull<OscConnections>("/root/OscConnections")?.ClearAll();
 
+        // MIDI session inputs
+        GetNodeOrNull<MidiManager>("/root/MidiManager")?.ResetToDefaults();
+
         // Notify live UI (settings general, GO scale, etc.)
         _globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
@@ -440,7 +443,16 @@ public partial class Settings : Node
         // Osc Connections
         saveTable.Add("OscConnections", GetNode<OscConnections>("/root/OscConnections").GetData());
 
-        // Input Map is stored in user:// via UserDataManager (not in the showfile).
+        // MIDI session (enabled + session input device list)
+        var midi = GetNodeOrNull<MidiManager>("/root/MidiManager");
+        if (midi != null)
+        {
+            saveTable.Add("Midi", midi.GetData());
+            // Project-action MIDI bindings (Go, Save, …) — show-scoped, separate undo slice.
+            saveTable.Add("MidiInputMap", midi.GetInputMapBindingsData());
+        }
+
+        // Keyboard Input Map is stored in user:// via UserDataManager (not in the showfile).
         
         return saveTable;
     }
@@ -542,6 +554,20 @@ public partial class Settings : Node
             GD.Print($"Settings:LoadSettings - Loading OscConnections");
             var oscConnectionsAsDict = oscConnections.AsGodotDictionary();
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
+        }
+
+        if (settingsData.TryGetValue("Midi", out var midiData) && midiData.VariantType == Variant.Type.Dictionary)
+        {
+            GD.Print("Settings:LoadSettings - Loading Midi");
+            GetNodeOrNull<MidiManager>("/root/MidiManager")?.LoadFromData(midiData.AsGodotDictionary());
+        }
+
+        if (settingsData.TryGetValue("MidiInputMap", out var midiInputMap) &&
+            midiInputMap.VariantType == Variant.Type.Dictionary)
+        {
+            GD.Print("Settings:LoadSettings - Loading MidiInputMap");
+            GetNodeOrNull<MidiManager>("/root/MidiManager")
+                ?.LoadInputMapBindingsData(midiInputMap.AsGodotDictionary());
         }
 
         // Legacy showfiles may still contain "InputMap" — ignore; bindings are user preferences.
@@ -668,6 +694,19 @@ public partial class Settings : Node
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
         }
 
+        if (TryGetSettingsValue(settingsData, "Midi", out var midiSlice)
+            && midiSlice.VariantType == Variant.Type.Dictionary)
+        {
+            GetNodeOrNull<MidiManager>("/root/MidiManager")?.LoadFromData(midiSlice.AsGodotDictionary());
+        }
+
+        if (TryGetSettingsValue(settingsData, "MidiInputMap", out var midiInputMapSlice)
+            && midiInputMapSlice.VariantType == Variant.Type.Dictionary)
+        {
+            GetNodeOrNull<MidiManager>("/root/MidiManager")
+                ?.LoadInputMapBindingsData(midiInputMapSlice.AsGodotDictionary());
+        }
+
         // InputMap is stored in user prefs (not the showfile) but still participates in
         // session undo/redo via HistoryManager with the "InputMap" slice key.
         if (TryGetSettingsValue(settingsData, "InputMap", out var inputMapData) && _globalData != null)
@@ -724,6 +763,16 @@ public partial class Settings : Node
             else if (key == "CueDefaults")
             {
                 slice[key] = CaptureCueDefaultsDict();
+            }
+            else if (key == "Midi")
+            {
+                var midi = GetNodeOrNull<MidiManager>("/root/MidiManager");
+                slice[key] = midi != null ? midi.GetData() : new Dictionary();
+            }
+            else if (key == "MidiInputMap")
+            {
+                var midi = GetNodeOrNull<MidiManager>("/root/MidiManager");
+                slice[key] = midi != null ? midi.GetInputMapBindingsData() : new Dictionary();
             }
             else
             {

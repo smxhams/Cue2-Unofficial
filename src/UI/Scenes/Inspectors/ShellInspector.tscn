@@ -148,39 +148,39 @@ Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Contin
 Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
 focus_mode = 0
 
-[node name="HSeparatorArmed" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="HSeparatorArmed" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1362657741]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="ArmedSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ArmedSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=2008075599]
 layout_mode = 2
 
-[node name="ArmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ArmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1190050071]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Armed:"
 
-[node name="ArmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="ArmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1136285070]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 tooltip_text = "When unchecked (disarmed), GO does not play this cue and advances to the next cue instead."
+focus_mode = 0
 button_pressed = true
 text = "Armed"
-focus_mode = 0
 
-[node name="SkipIfDisarmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="SkipIfDisarmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=528501857]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Skip if disarmed:"
 
-[node name="SkipIfDisarmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="SkipIfDisarmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=995786737]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
 tooltip_text = "When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it."
-text = "Skip if disarmed"
 focus_mode = 0
+text = "Skip if disarmed"
 
 [node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1607308950]
 layout_mode = 2
@@ -201,23 +201,181 @@ theme_override_constants/icon_max_width = 14
 text = "Delete Cue"
 expand_icon = true
 
-[node name="DeleteButtonTrail" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer"]
+[node name="DeleteButtonTrail" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1809849642]
 layout_mode = 2
 
 [node name="Triggers" type="VBoxContainer" parent="." unique_id=1335561062]
 clip_contents = true
 layout_mode = 0
-offset_left = 400.0
+offset_left = 350.0
 offset_top = 4.0
-offset_right = 700.0
-offset_bottom = 304.0
+offset_right = 620.0
+offset_bottom = 380.0
+theme_override_constants/separation = 6
 
-[node name="Label" type="Label" parent="Triggers" unique_id=1612944111]
+[node name="TriggersHeader" type="Label" parent="Triggers" unique_id=1612944111]
 layout_mode = 2
-text = "A cheeky trigger section"
+text = "Triggers"
 
-[node name="Label2" type="Label" parent="Triggers" unique_id=1429318585]
+[node name="HotkeyRow" type="HBoxContainer" parent="Triggers" unique_id=1429318585]
 layout_mode = 2
-text = "
-Anyone wanna hotkey?
-Or maybe some time code"
+theme_override_constants/separation = 4
+
+[node name="HotkeyEnabledCheckBox" type="CheckBox" parent="Triggers/HotkeyRow" unique_id=449910776]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "When checked and a key is bound, pressing the hotkey triggers this cue (GO)."
+focus_mode = 0
+text = "Hotkey"
+
+[node name="HotkeyBindingButton" type="Button" parent="Triggers/HotkeyRow" unique_id=832099194]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Click to set hotkey. Esc cancels."
+focus_mode = 0
+theme_override_font_sizes/font_size = 10
+text = "None"
+text_overrun_behavior = 1
+clip_text = true
+
+[node name="HotkeyResetButton" type="Button" parent="Triggers/HotkeyRow" unique_id=1512495216]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default (no hotkey)"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
+[node name="ClockRow" type="HBoxContainer" parent="Triggers"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ClockEnabledCheckBox" type="CheckBox" parent="Triggers/ClockRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "When checked and a time is set, this cue GO's when local real-world time reaches that time of day on selected weekdays."
+focus_mode = 0
+text = "Clock"
+
+[node name="ClockTimeInput" type="LineEdit" parent="Triggers/ClockRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none."
+placeholder_text = "HH:mm:ss"
+theme_override_font_sizes/font_size = 10
+
+[node name="ClockDaysButton" type="Button" parent="Triggers/ClockRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Choose which weekdays the clock trigger may fire."
+focus_mode = 0
+theme_override_font_sizes/font_size = 10
+text = "Every day"
+clip_text = true
+text_overrun_behavior = 1
+
+[node name="ClockResetButton" type="Button" parent="Triggers/ClockRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default (no clock)"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
+[node name="MidiRow" type="HBoxContainer" parent="Triggers"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="MidiEnabledCheckBox" type="CheckBox" parent="Triggers/MidiRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "When checked and a MIDI pattern is set, matching MIDI input GO's this cue."
+focus_mode = 0
+text = "MIDI"
+
+[node name="MidiCaptureButton" type="Button" parent="Triggers/MidiRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+tooltip_text = "Capture the next MIDI message as this cue's trigger. Esc or click again cancels."
+focus_mode = 0
+theme_override_font_sizes/font_size = 10
+text = "Capture"
+
+[node name="MidiResetButton" type="Button" parent="Triggers/MidiRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default (no MIDI trigger)"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
+[node name="MidiFieldsRow" type="HBoxContainer" parent="Triggers"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="MidiTypeOption" type="OptionButton" parent="Triggers/MidiFieldsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "MIDI message type to match."
+focus_mode = 0
+theme_override_font_sizes/font_size = 10
+
+[node name="MidiChannelSpin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+tooltip_text = "MIDI channel 1–16. Set to 0 for any channel."
+focus_mode = 0
+min_value = 0.0
+max_value = 16.0
+rounded = true
+prefix = "ch"
+theme_override_font_sizes/font_size = 10
+
+[node name="MidiData1Spin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(52, 0)
+layout_mode = 2
+tooltip_text = "Note number, CC number, or program (0–127)."
+focus_mode = 0
+min_value = 0.0
+max_value = 127.0
+rounded = true
+theme_override_font_sizes/font_size = 10
+
+[node name="MidiMatchValueCheck" type="CheckBox" parent="Triggers/MidiFieldsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "When checked, velocity / CC value must match exactly."
+focus_mode = 0
+text = "Val"
+theme_override_font_sizes/font_size = 10
+
+[node name="MidiData2Spin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+tooltip_text = "Velocity or CC value (0–127). Only used when Val is checked."
+focus_mode = 0
+min_value = 0.0
+max_value = 127.0
+rounded = true
+theme_override_font_sizes/font_size = 10

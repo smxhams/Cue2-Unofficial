@@ -1,6 +1,6 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1784674990
-AGENTS.md::TextFile::-1::1784264537::0::1::::<><><>0<>0<><>::
+::res://::1784755754
+AGENTS.md::TextFile::-1::1784676532::0::1::::<><><>0<>0<><>::
 export_presets.cfg::TextFile::-1::1784173240::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::8597863507468381028::1764449554::1765135075::1::::<><><>0<>0<>80d061c72c249930f878cc40380df297<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 README.md::TextFile::-1::1783299166::0::1::::<><><>0<>0<><>::
@@ -123,12 +123,12 @@ ActiveVideoPlayback.cs::CSharpScript::45345226016531640::1784349844::0::1::::<>N
 AudioFileMetadata.cs::CSharpScript::8559262123915468989::1783289765::0::1::::<><><>0<>0<><>::
 AudioOutputPatch.cs::CSharpScript::8759237685733553493::1784070269::0::1::::<>Object<><>0<>0<><>::
 Canvas.cs::CSharpScript::2062328623190078110::1764449554::0::1::::<><><>0<>0<><>::
-CueList.cs::CSharpScript::3873147453304376545::1784324953::0::1::::<>Control<><>0<>0<><>::
+CueList.cs::CSharpScript::3873147453304376545::1784676903::0::1::::<>Control<><>0<>0<><>::
 CuePatch.cs::CSharpScript::4637230464141836879::1784066064::0::1::::<><><>0<>0<><>::
 CuePlaySchedule.cs::CSharpScript::2804161125343794069::1784241561::0::1::::<><><>0<>0<><>::
 CueReorder.cs::CSharpScript::507408630430185403::1784261512::0::1::::<><><>0<>0<><>::
 IAudioPlayback.cs::CSharpScript::1699728015628010498::1783549573::0::1::::<><><>0<>0<><>::
-Settings.cs::CSharpScript::394974176764252106::1784264434::0::1::::<>Node<><>0<>0<><>::
+Settings.cs::CSharpScript::394974176764252106::1784676481::0::1::::<>Node<><>0<>0<><>::
 ShellColumnLayout.cs::CSharpScript::2263630305645866629::1784261605::0::1::::<><><>0<>0<><>::
 ShellSelection.cs::CSharpScript::5331747436567085945::1784264883::0::1::::<>Node<><>0<>0<><>::
 VideoFileMetadata.cs::CSharpScript::295705225554600001::1764449554::0::1::::<><><>0<>0<><>::
@@ -142,7 +142,7 @@ OscListen.cs::CSharpScript::414331499218454256::1784091574::0::1::::<>Node<><>0<
 ::res://src/Base/Classes/CueTypes/::1784325504
 AudioComponent.cs::CSharpScript::1412146281864083926::1784065078::0::1::::<><><>0<>0<><>::
 ControlComponent.cs::CSharpScript::616002929302072000::1784350400::0::1::::<><><>0<>0<><>::
-Cue.cs::CSharpScript::3639028604513860391::1784324953::0::1::::<><><>0<>0<><>::
+Cue.cs::CSharpScript::3639028604513860391::1784676181::0::1::::<><><>0<>0<><>::
 CueLightComponent.cs::CSharpScript::8489904256279940453::1764449554::0::1::::<><><>0<>0<><>::
 ICue.cs::CSharpScript::996752497635676688::1764736685::0::1::::<><><>0<>0<><>::
 ICueComponent.cs::CSharpScript::4343116087747824550::1764449554::0::1::::<><><>0<>0<><>::
@@ -173,7 +173,7 @@ launcher.tscn::PackedScene::4200433581996456708::1764449554::0::1::::<><><>0<>0<
 LauncherHandles.cs::CSharpScript::3194261988031518947::1764449554::0::1::::<>Control<><>0<>0<><>::
 LaunchManager.cs::CSharpScript::3231900013676203672::1764449554::0::1::::<>Control<><>0<>0<><>::
 ::res://src/Shared/::1784088950
-AudioDevices.cs::CSharpScript::3123637818016137637::1784088255::0::1::::<>Node<><>0<>0<><>::
+AudioDevices.cs::CSharpScript::3123637818016137637::1784676167::0::1::::<>Node<><>0<>0<><>::
 CueLightManager.cs::CSharpScript::9051166078888758983::1784091574::0::1::::<>Node<><>0<>0<><>::
 CueResourceUsage.cs::CSharpScript::674326897905839971::1784087827::0::1::::<><><>0<>0<><>::
 DisplaysManager.cs::CSharpScript::7330541336050863412::1784351164::0::1::::<>Node<><>0<>0<><>::
@@ -234,7 +234,7 @@ MainWindowHandles.cs::CSharpScript::3488116525762392925::1784265620::0::1::::<>C
 VideoPreviewer.cs::CSharpScript::1978525193993915919::1783986692::0::1::::<>Control<><>0<>0<><>::
 VideoPreviewer.tscn::PackedScene::124300630208277026::1764449554::0::1::::<><><>0<>0<><>::uid://3goayevjdix0::::res://src/UI/Scenes/VideoPreviewer.cs<>uid://c33ls3l1g8yrd::::res://src/Base/VideoTextureRectMaterial.tres
 ::res://src/UI/Scenes/Inspectors/::1784359565
-AudioInspector.cs::CSharpScript::5089219995392580636::1784264909::0::1::::<>Control<><>0<>0<><>::
+AudioInspector.cs::CSharpScript::5089219995392580636::1784676903::0::1::::<>Control<><>0<>0<><>::
 AudioInspector.tscn::PackedScene::6697115257703811982::1783989078::0::1::::<><><>0<>0<><>::uid://ceriyergi0tea::::res://src/UI/Scenes/Inspectors/AudioInspector.cs
 ConnectionInspector.cs::CSharpScript::2830206734610059741::1784063283::0::1::::<>Control<><>0<>0<><>::
 ConnectionInspector.tscn::PackedScene::435974686133864657::1764449554::0::1::::<><><>0<>0<><>::uid://bgk8ddxgx7asj::::res://src/UI/Scenes/Inspectors/ConnectionInspector.cs<>uid://cfl3cwoqby4lo::::res://src/UI/Scenes/Inspectors/CueLightConnectionCard.tscn<>uid://cst0ttvboq673::::res://src/UI/Scenes/Inspectors/InspectorOscConnectionCard.tscn
@@ -251,7 +251,7 @@ ShellInspector.cs::CSharpScript::3916774331450071921::1784265223::0::1::::<>Cont
 ShellInspector.tscn::PackedScene::5678176440438140633::1784262218::0::1::::<><><>0<>0<><>::uid://bv2kx3l0vphuf::::res://src/UI/Scenes/Inspectors/ShellInspector.cs
 TimelineInspector.cs::CSharpScript::2139558655374914194::1784065468::0::1::::<>Control<><>0<>0<><>::
 TimelineInspector.tscn::PackedScene::5744484940818581364::1764449554::0::1::::<><><>0<>0<><>::uid://5qohosm0xcfy::::res://src/UI/Scenes/Inspectors/TimelineInspector.cs
-VideoInspector.cs::CSharpScript::4552842027092866977::1784264909::0::1::::<>Control<><>0<>0<><>::
+VideoInspector.cs::CSharpScript::4552842027092866977::1784676918::0::1::::<>Control<><>0<>0<><>::
 VideoInspector.tscn::PackedScene::276022445068479437::1783989078::0::1::::<><><>0<>0<><>::uid://b1hhiqmg2m3c::::res://src/UI/Scenes/VideoPreviewer.tscn
 ::res://src/UI/Scenes/Popups/::1784089595
 FileDropPopup.cs::CSharpScript::7374513890656352713::1784089936::0::1::::<>Window<><>0<>0<><>::
@@ -271,8 +271,8 @@ SettingsCueDefaults.cs::CSharpScript::7064923911969755352::1784263858::0::1::::<
 SettingsCueDefaults.tscn::PackedScene::386191971574361665::1784264194::0::1::::<><><>0<>0<><>::uid://c7wki86db4u05::::res://src/UI/Scenes/Settings/SettingsCueDefaults.cs
 SettingsCueLights.cs::CSharpScript::3866270580814670503::1784091608::0::1::::<>ScrollContainer<><>0<>0<><>::
 SettingsCueLights.tscn::PackedScene::879507882852331644::1764449554::0::1::::<><><>0<>0<><>::uid://bvc3582nv4vjj::::res://src/UI/Scenes/Settings/SettingsCueLights.cs
-SettingsGeneral.cs::CSharpScript::3038811565116862052::1784264450::0::1::::<>ScrollContainer<><>0<>0<><>::
-SettingsGeneral.tscn::PackedScene::6968338133154022627::1784265223::0::1::::<><><>0<>0<><>::uid://bjka1uto8v7i3::::res://src/UI/Scenes/Settings/SettingsGeneral.cs
+SettingsGeneral.cs::CSharpScript::3038811565116862052::1784676516::0::1::::<>ScrollContainer<><>0<>0<><>::
+SettingsGeneral.tscn::PackedScene::6968338133154022627::1784676516::0::1::::<><><>0<>0<><>::uid://bjka1uto8v7i3::::res://src/UI/Scenes/Settings/SettingsGeneral.cs
 SettingsInputMap.cs::CSharpScript::6219043729736637370::1784260369::0::1::::<>ScrollContainer<><>0<>0<><>::
 SettingsInputMap.tscn::PackedScene::1098691827551533865::1784069918::0::1::::<><><>0<>0<><>::uid://cuus0hko7u34q::::res://src/UI/Scenes/Settings/SettingsInputMap.cs
 SettingsOscConnectionCard.cs::CSharpScript::5851482297531907379::1764450475::0::1::::<>HBoxContainer<><>0<>0<><>::

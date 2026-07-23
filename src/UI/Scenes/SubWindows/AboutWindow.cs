@@ -64,6 +64,7 @@ public partial class AboutWindow : Window
             { "FFmpeg.AutoGen v8.0.0", (FfmpegLicenseAutogen, "https://github.com/Ruslan-B/FFmpeg.AutoGen/blob/8.0/LICENSE.txt") },
             { "FFmpeg (native libraries)", (FfmpegNativeLicense, "https://ffmpeg.org/legal.html") },
             { "Godot v4.5.1", (GodotLicense, "https://github.com/godotengine/godot/blob/master/LICENSE.txt") },
+            { "Melanchall.DryWetMidi v8.0.3", (DryWetMidiLicense, "https://github.com/melanchall/drywetmidi/blob/master/LICENSE") },
             { "SDL3-CS v3.3.2.1", (Sdl3CsLicense, "https://github.com/edwardgushchin/SDL3-CS/blob/master/LICENSE") },
             { "Rug.Osc v1.2.5", (RugOscLicense, "https://bitbucket.org/rugcode/rug.osc/wiki/License") }
         };
@@ -239,4 +240,33 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED ""AS IS"", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.";
+
+    private const string DryWetMidiLicense = @"Melanchall.DryWetMidi v8.0.3 : MIT License
+
+Copyright (c) 2018 Maxim Dobroselsky
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the ""Software""), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED ""AS IS"", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+This product uses Melanchall.DryWetMidi for MIDI file and device I/O, including
+the bundled native libraries (Melanchall_DryWetMidi_Native*) loaded from
+res://bin/ for platform-specific MIDI device access.
+
+Project: https://github.com/melanchall/drywetmidi
+NuGet: https://www.nuget.org/packages/Melanchall.DryWetMidi/";
 }

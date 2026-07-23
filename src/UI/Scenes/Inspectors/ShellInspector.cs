@@ -42,6 +42,45 @@ public partial class ShellInspector : Control
 	private CheckBox _skipIfDisarmedCheckBox;
 	private Button _deleteCueButton;
 
+	// Hotkey trigger UI
+	private CheckBox _hotkeyEnabledCheckBox;
+	private Button _hotkeyBindingButton;
+	private Button _hotkeyResetButton;
+	private bool _isListeningForHotkey;
+
+	// Clock trigger UI
+	private CheckBox _clockEnabledCheckBox;
+	private LineEdit _clockTimeInput;
+	private Button _clockDaysButton;
+	private Button _clockResetButton;
+	private PopupPanel _clockDaysPopup;
+	/// <summary>Day checkboxes in Mon–Sun display order, paired with <see cref="DayOfWeek"/>.</summary>
+	private readonly (CheckBox Box, DayOfWeek Day)[] _clockDayChecks = new (CheckBox, DayOfWeek)[7];
+
+	/// <summary>Mon–Sun display order for day pickers (not calendar Sunday-first).</summary>
+	private static readonly (DayOfWeek Day, string Label)[] ClockDaysDisplayOrder =
+	{
+		(DayOfWeek.Monday, "Monday"),
+		(DayOfWeek.Tuesday, "Tuesday"),
+		(DayOfWeek.Wednesday, "Wednesday"),
+		(DayOfWeek.Thursday, "Thursday"),
+		(DayOfWeek.Friday, "Friday"),
+		(DayOfWeek.Saturday, "Saturday"),
+		(DayOfWeek.Sunday, "Sunday"),
+	};
+
+	// MIDI trigger UI
+	private CheckBox _midiEnabledCheckBox;
+	private Button _midiCaptureButton;
+	private Button _midiResetButton;
+	private OptionButton _midiTypeOption;
+	private SpinBox _midiChannelSpin;
+	private SpinBox _midiData1Spin;
+	private CheckBox _midiMatchValueCheck;
+	private SpinBox _midiData2Spin;
+	private MidiManager _midiManager;
+	private bool _isCapturingMidi;
+
 	/// <summary>
 	/// True while UI is being pushed from the model (undo/redo, sync). Prevents TextChanged handlers
 	/// from writing back into the model / recording history.
@@ -73,6 +112,27 @@ public partial class ShellInspector : Control
 		_skipIfDisarmedCheckBox = GetNodeOrNull<CheckBox>("%SkipIfDisarmedCheckBox");
 		_deleteCueButton = GetNodeOrNull<Button>("%DeleteCueButton");
 
+		_hotkeyEnabledCheckBox = GetNodeOrNull<CheckBox>("%HotkeyEnabledCheckBox");
+		_hotkeyBindingButton = GetNodeOrNull<Button>("%HotkeyBindingButton");
+		_hotkeyResetButton = GetNodeOrNull<Button>("%HotkeyResetButton");
+
+		_clockEnabledCheckBox = GetNodeOrNull<CheckBox>("%ClockEnabledCheckBox");
+		_clockTimeInput = GetNodeOrNull<LineEdit>("%ClockTimeInput");
+		_clockDaysButton = GetNodeOrNull<Button>("%ClockDaysButton");
+		_clockResetButton = GetNodeOrNull<Button>("%ClockResetButton");
+		BuildClockDaysPopup();
+
+		_midiEnabledCheckBox = GetNodeOrNull<CheckBox>("%MidiEnabledCheckBox");
+		_midiCaptureButton = GetNodeOrNull<Button>("%MidiCaptureButton");
+		_midiResetButton = GetNodeOrNull<Button>("%MidiResetButton");
+		_midiTypeOption = GetNodeOrNull<OptionButton>("%MidiTypeOption");
+		_midiChannelSpin = GetNodeOrNull<SpinBox>("%MidiChannelSpin");
+		_midiData1Spin = GetNodeOrNull<SpinBox>("%MidiData1Spin");
+		_midiMatchValueCheck = GetNodeOrNull<CheckBox>("%MidiMatchValueCheck");
+		_midiData2Spin = GetNodeOrNull<SpinBox>("%MidiData2Spin");
+		_midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
+		EnsureMidiTypeOptions();
+
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
 
 		_cueNum.TextChanged += OnCueNumTextChanged;
@@ -93,6 +153,79 @@ public partial class ShellInspector : Control
 			_armedCheckBox.Toggled += OnArmedToggled;
 		if (_skipIfDisarmedCheckBox != null)
 			_skipIfDisarmedCheckBox.Toggled += OnSkipIfDisarmedToggled;
+
+		if (_hotkeyEnabledCheckBox != null)
+			_hotkeyEnabledCheckBox.Toggled += OnHotkeyEnabledToggled;
+		if (_hotkeyBindingButton != null)
+			_hotkeyBindingButton.Pressed += OnHotkeyBindingButtonPressed;
+		if (_hotkeyResetButton != null)
+		{
+			_hotkeyResetButton.Pressed += OnHotkeyResetPressed;
+			try
+			{
+				_hotkeyResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+				_hotkeyResetButton.ExpandIcon = true;
+			}
+			catch
+			{
+				/* icon optional */
+			}
+		}
+
+		if (_clockEnabledCheckBox != null)
+			_clockEnabledCheckBox.Toggled += OnClockEnabledToggled;
+		if (_clockTimeInput != null)
+		{
+			_clockTimeInput.TextSubmitted += OnClockTimeSubmitted;
+			_clockTimeInput.FocusExited += OnClockTimeFocusExited;
+		}
+		if (_clockDaysButton != null)
+			_clockDaysButton.Pressed += OnClockDaysButtonPressed;
+
+		if (_clockResetButton != null)
+		{
+			_clockResetButton.Pressed += OnClockResetPressed;
+			try
+			{
+				_clockResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+				_clockResetButton.ExpandIcon = true;
+			}
+			catch
+			{
+				/* icon optional */
+			}
+		}
+
+		if (_midiEnabledCheckBox != null)
+			_midiEnabledCheckBox.Toggled += OnMidiEnabledToggled;
+		if (_midiCaptureButton != null)
+			_midiCaptureButton.Pressed += OnMidiCapturePressed;
+		if (_midiResetButton != null)
+		{
+			_midiResetButton.Pressed += OnMidiResetPressed;
+			try
+			{
+				_midiResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+				_midiResetButton.ExpandIcon = true;
+			}
+			catch
+			{
+				/* icon optional */
+			}
+		}
+		if (_midiTypeOption != null)
+			_midiTypeOption.ItemSelected += OnMidiTypeSelected;
+		if (_midiChannelSpin != null)
+			_midiChannelSpin.ValueChanged += OnMidiChannelChanged;
+		if (_midiData1Spin != null)
+			_midiData1Spin.ValueChanged += OnMidiData1Changed;
+		if (_midiMatchValueCheck != null)
+			_midiMatchValueCheck.Toggled += OnMidiMatchValueToggled;
+		if (_midiData2Spin != null)
+			_midiData2Spin.ValueChanged += OnMidiData2Changed;
+
+		if (_midiManager != null)
+			_midiManager.MidiCaptured += OnMidiCaptured;
 
 		if (_deleteCueButton != null)
 		{
@@ -118,6 +251,14 @@ public partial class ShellInspector : Control
 
 	public override void _ExitTree()
 	{
+		if (_isListeningForHotkey)
+			CancelHotkeyListening();
+		if (_isCapturingMidi)
+			CancelMidiCapture();
+
+		if (_midiManager != null)
+			_midiManager.MidiCaptured -= OnMidiCaptured;
+
 		if (_globalSignals != null)
 		{
 			_globalSignals.ShellFocused -= ShellSelected;
@@ -173,6 +314,12 @@ public partial class ShellInspector : Control
 		// cueId < 0 = selection cleared (e.g. after delete)
 		if (cueId < 0)
 		{
+			if (_isListeningForHotkey)
+				CancelHotkeyListening();
+			if (_isCapturingMidi)
+				CancelMidiCapture();
+			if (_clockDaysPopup != null && _clockDaysPopup.Visible)
+				_clockDaysPopup.Hide();
 			DetachFocusedCueEvents();
 			_focusedCue = null;
 			_focusedCueId = -1;
@@ -335,6 +482,60 @@ public partial class ShellInspector : Control
 
 			if (_skipIfDisarmedCheckBox != null)
 				_skipIfDisarmedCheckBox.SetPressedNoSignal(false);
+
+			if (_isListeningForHotkey)
+				CancelHotkeyListening();
+
+			if (_hotkeyEnabledCheckBox != null)
+				_hotkeyEnabledCheckBox.SetPressedNoSignal(false);
+
+			if (_hotkeyBindingButton != null)
+				_hotkeyBindingButton.Text = MultiPlaceholder;
+
+			if (_hotkeyResetButton != null)
+				_hotkeyResetButton.Visible = false;
+
+			if (_clockEnabledCheckBox != null)
+				_clockEnabledCheckBox.SetPressedNoSignal(false);
+
+			if (_clockTimeInput != null)
+			{
+				_clockTimeInput.Text = "";
+				_clockTimeInput.PlaceholderText = MultiPlaceholder;
+			}
+
+			if (_clockDaysButton != null)
+				_clockDaysButton.Text = MultiPlaceholder;
+
+			if (_clockDaysPopup != null && _clockDaysPopup.Visible)
+				_clockDaysPopup.Hide();
+
+			if (_clockResetButton != null)
+				_clockResetButton.Visible = false;
+
+			if (_isCapturingMidi)
+				CancelMidiCapture();
+
+			if (_midiEnabledCheckBox != null)
+				_midiEnabledCheckBox.SetPressedNoSignal(false);
+			if (_midiCaptureButton != null)
+				_midiCaptureButton.Text = "Capture";
+			if (_midiResetButton != null)
+				_midiResetButton.Visible = false;
+			if (_midiTypeOption != null)
+			{
+				_midiTypeOption.SetBlockSignals(true);
+				_midiTypeOption.Selected = -1;
+				_midiTypeOption.SetBlockSignals(false);
+			}
+			if (_midiChannelSpin != null)
+				_midiChannelSpin.SetValueNoSignal(0);
+			if (_midiData1Spin != null)
+				_midiData1Spin.SetValueNoSignal(0);
+			if (_midiMatchValueCheck != null)
+				_midiMatchValueCheck.SetPressedNoSignal(false);
+			if (_midiData2Spin != null)
+				_midiData2Spin.SetValueNoSignal(0);
 		}
 		finally
 		{
@@ -357,6 +558,8 @@ public partial class ShellInspector : Control
 			_postWaitInput.PlaceholderText = "";
 		if (_durationValue != null)
 			_durationValue.PlaceholderText = "";
+		if (_clockTimeInput != null)
+			_clockTimeInput.PlaceholderText = "HH:mm:ss";
 		SyncDeleteHotkeyTooltip();
 	}
 
@@ -522,6 +725,10 @@ public partial class ShellInspector : Control
 				_armedCheckBox.SetPressedNoSignal(_focusedCue.Armed);
 			if (_skipIfDisarmedCheckBox != null)
 				_skipIfDisarmedCheckBox.SetPressedNoSignal(_focusedCue.SkipIfDisarmed);
+
+			RefreshHotkeyUi();
+			RefreshClockUi();
+			RefreshMidiUi();
 		}
 		finally
 		{
@@ -763,4 +970,999 @@ public partial class ShellInspector : Control
 		foreach (var cue in targets)
 			cue.Name = data;
 	}
+
+	// ── Hotkey trigger UI ───────────────────────────────────────────────────
+
+	/// <summary>
+	/// Pushes hotkey enable / binding / reset-button state from the focused cue (single-edit).
+	/// Does not cancel an in-progress listen unless the cue changed via a full field refresh path.
+	/// </summary>
+	private void RefreshHotkeyUi()
+	{
+		if (_isMultiEdit) return;
+
+		if (_hotkeyEnabledCheckBox != null)
+			_hotkeyEnabledCheckBox.SetPressedNoSignal(_focusedCue?.HotkeyEnabled == true);
+
+		if (_hotkeyBindingButton != null && !_isListeningForHotkey)
+		{
+			if (_focusedCue == null || !_focusedCue.HasHotkey)
+				_hotkeyBindingButton.Text = "None";
+			else
+				_hotkeyBindingButton.Text = _focusedCue.GetHotkeyDisplay();
+		}
+
+		if (_hotkeyResetButton != null)
+		{
+			bool nonDefault = _focusedCue != null && _focusedCue.IsHotkeyNonDefault;
+			_hotkeyResetButton.Visible = nonDefault;
+			if (nonDefault)
+				_hotkeyResetButton.TooltipText = "Reset to default (no hotkey)";
+		}
+	}
+
+	/// <summary>
+	/// Toggles whether the cue hotkey is active for edit target(s).
+	/// </summary>
+	private void OnHotkeyEnabledToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].HotkeyEnabled == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable cue hotkey" : "Disable cue hotkey",
+			pressed ? "Multi-edit enable cue hotkey" : "Multi-edit disable cue hotkey");
+
+		foreach (var cue in targets)
+		{
+			if (cue.HotkeyEnabled == pressed) continue;
+			cue.HotkeyEnabled = pressed;
+		}
+
+		if (!_isMultiEdit)
+			RefreshHotkeyUi();
+		else if (_hotkeyResetButton != null)
+			_hotkeyResetButton.Visible = targets.Exists(c => c.IsHotkeyNonDefault);
+	}
+
+	private void OnHotkeyBindingButtonPressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (_isListeningForHotkey)
+		{
+			CancelHotkeyListening();
+			return;
+		}
+
+		StartHotkeyListening();
+	}
+
+	private void OnHotkeyResetPressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		// Skip no-op when already default.
+		if (!_isMultiEdit && targets.Count == 1 && !targets[0].IsHotkeyNonDefault)
+			return;
+
+		if (_isListeningForHotkey)
+			CancelHotkeyListening();
+
+		RecordHistoryBeforeEdit("Reset cue hotkey", "Multi-edit reset cue hotkey");
+		foreach (var cue in targets)
+			cue.ResetHotkeyToDefault();
+
+		if (!_isMultiEdit)
+			RefreshHotkeyUi();
+		else if (_hotkeyBindingButton != null)
+			_hotkeyBindingButton.Text = MultiPlaceholder;
+
+		if (_hotkeyEnabledCheckBox != null)
+			_hotkeyEnabledCheckBox.SetPressedNoSignal(false);
+		if (_hotkeyResetButton != null)
+			_hotkeyResetButton.Visible = false;
+
+		GD.Print("ShellInspector:OnHotkeyResetPressed - Reset cue hotkey to default (none).");
+	}
+
+	private void StartHotkeyListening()
+	{
+		_isListeningForHotkey = true;
+		if (_hotkeyBindingButton != null)
+			_hotkeyBindingButton.Text = "Press key... (Esc cancels)";
+		// Pause global input action listener while capturing (same coordination as InputActionCard).
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusEntered));
+		GD.Print("ShellInspector:StartHotkeyListening - Listening for cue hotkey");
+	}
+
+	/// <summary>
+	/// Cancels an in-progress hotkey rebind, if any.
+	/// </summary>
+	private void CancelHotkeyListening()
+	{
+		if (!_isListeningForHotkey) return;
+		_isListeningForHotkey = false;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
+
+		if (_isMultiEdit)
+		{
+			if (_hotkeyBindingButton != null)
+				_hotkeyBindingButton.Text = MultiPlaceholder;
+		}
+		else
+		{
+			RefreshHotkeyUi();
+		}
+
+		GD.Print("ShellInspector:CancelHotkeyListening - Cancelled cue hotkey listen");
+	}
+
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		// Esc cancels MIDI capture even when not hotkey-listening.
+		if (_isCapturingMidi &&
+		    @event is InputEventKey escKey && escKey.Pressed && escKey.Keycode == Key.Escape)
+		{
+			CancelMidiCapture();
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		if (!_isListeningForHotkey) return;
+		if (@event is not InputEventKey keyEvent || !keyEvent.Pressed) return;
+		if (IsModifierOnlyKey(keyEvent.Keycode)) return;
+
+		if (keyEvent.Keycode == Key.Escape)
+		{
+			CancelHotkeyListening();
+			GetViewport().SetInputAsHandled();
+			return;
+		}
+
+		GetViewport().SetInputAsHandled();
+
+		// Reject combos already used by app InputMap actions.
+		string conflict = GlobalData.FindConflictingInputAction(null, keyEvent);
+		if (!string.IsNullOrEmpty(conflict))
+		{
+			string combo = GlobalData.FormatInputEvent(keyEvent);
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Hotkey '{combo}' is already used by '{conflict}'", (int)LogType.Warning);
+			GD.Print($"ShellInspector:_UnhandledInput - Rejected '{combo}'; used by '{conflict}'");
+			if (_hotkeyBindingButton != null)
+				_hotkeyBindingButton.Text = "Press key... (Esc cancels)";
+			return;
+		}
+
+		ApplyHotkeyBinding(keyEvent);
+		_isListeningForHotkey = false;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
+
+		if (!_isMultiEdit)
+			RefreshHotkeyUi();
+		else
+		{
+			if (_hotkeyBindingButton != null)
+				_hotkeyBindingButton.Text = GlobalData.FormatInputEvent(keyEvent);
+			if (_hotkeyEnabledCheckBox != null)
+				_hotkeyEnabledCheckBox.SetPressedNoSignal(true);
+			if (_hotkeyResetButton != null)
+				_hotkeyResetButton.Visible = true;
+		}
+
+		GD.Print($"ShellInspector:_UnhandledInput - Set cue hotkey to {GlobalData.FormatInputEvent(keyEvent)}");
+	}
+
+	/// <summary>
+	/// Applies a captured key binding to edit target(s) and enables the hotkey.
+	/// </summary>
+	private void ApplyHotkeyBinding(InputEventKey keyEvent)
+	{
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		RecordHistoryBeforeEdit("Set cue hotkey", "Multi-edit set cue hotkey");
+		foreach (var cue in targets)
+		{
+			cue.SetHotkey(keyEvent);
+			// Binding a key implies the user wants it active.
+			if (!cue.HotkeyEnabled)
+				cue.HotkeyEnabled = true;
+		}
+	}
+
+	private static bool IsModifierOnlyKey(Key keycode)
+	{
+		return keycode is Key.Ctrl or Key.Shift or Key.Alt or Key.Meta;
+	}
+
+	// ── Clock trigger UI ────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Builds the weekday popup panel with checkboxes (opened from the Days button).
+	/// </summary>
+	private void BuildClockDaysPopup()
+	{
+		_clockDaysPopup = new PopupPanel
+		{
+			Name = "ClockDaysPopup",
+			// Transparent enough that the panel style shows; content padded below.
+		};
+		AddChild(_clockDaysPopup);
+
+		var margin = new MarginContainer();
+		margin.AddThemeConstantOverride("margin_left", 8);
+		margin.AddThemeConstantOverride("margin_top", 6);
+		margin.AddThemeConstantOverride("margin_right", 8);
+		margin.AddThemeConstantOverride("margin_bottom", 6);
+		_clockDaysPopup.AddChild(margin);
+
+		var vbox = new VBoxContainer();
+		vbox.AddThemeConstantOverride("separation", 2);
+		margin.AddChild(vbox);
+
+		var title = new Label
+		{
+			Text = "Active days",
+			HorizontalAlignment = HorizontalAlignment.Left,
+		};
+		title.AddThemeFontSizeOverride("font_size", 10);
+		vbox.AddChild(title);
+
+		for (int i = 0; i < ClockDaysDisplayOrder.Length; i++)
+		{
+			var (day, label) = ClockDaysDisplayOrder[i];
+			var box = new CheckBox
+			{
+				Text = label,
+				ButtonPressed = true,
+				FocusMode = FocusModeEnum.None,
+			};
+			box.AddThemeFontSizeOverride("font_size", 11);
+			var capturedDay = day;
+			box.Toggled += pressed => OnClockDayToggled(capturedDay, pressed);
+			vbox.AddChild(box);
+			_clockDayChecks[i] = (box, day);
+		}
+
+		// Keep popup open while toggling; hide when focus leaves the popup area.
+		_clockDaysPopup.PopupHide += OnClockDaysPopupHide;
+	}
+
+	/// <summary>
+	/// Opens the weekday multi-select popup under the Days button.
+	/// </summary>
+	private void OnClockDaysButtonPressed()
+	{
+		if (_clockDaysPopup == null || _clockDaysButton == null) return;
+
+		if (_clockDaysPopup.Visible)
+		{
+			_clockDaysPopup.Hide();
+			return;
+		}
+
+		// Sync checkbox state from current edit targets before showing.
+		SyncClockDayCheckboxesFromModel();
+
+		// Measure content, then place directly under the button in *screen* coordinates.
+		// With embed_subwindows=false, PopupPanel.Popup uses absolute screen coords — not viewport.
+		_clockDaysPopup.ResetSize();
+		var size = _clockDaysPopup.GetContentsMinimumSize();
+		int width = Math.Max((int)Math.Ceiling(size.X), 120);
+		int height = Math.Max((int)Math.Ceiling(size.Y), 10);
+
+		// Local → screen transform accounts for window position, UI scale, and parent offsets.
+		var screenXform = _clockDaysButton.GetScreenTransform();
+		Vector2 buttonTopLeft = screenXform.Origin;
+		Vector2 buttonBottomLeft = screenXform * new Vector2(0f, _clockDaysButton.Size.Y);
+		var screenPos = new Vector2I(
+			(int)Math.Round(buttonTopLeft.X),
+			(int)Math.Round(buttonBottomLeft.Y) + 2);
+
+		_clockDaysPopup.Popup(new Rect2I(screenPos, new Vector2I(width, height)));
+	}
+
+	private void OnClockDaysPopupHide()
+	{
+		// Refresh summary label when the picker closes.
+		if (!_isMultiEdit)
+			RefreshClockDaysButtonLabel();
+		else if (_clockDaysButton != null)
+			_clockDaysButton.Text = MultiPlaceholder;
+	}
+
+	/// <summary>
+	/// Pushes day checkbox pressed state from the focused cue (or every-day default).
+	/// </summary>
+	private void SyncClockDayCheckboxesFromModel()
+	{
+		_isRefreshingUi = true;
+		try
+		{
+			foreach (var (box, day) in _clockDayChecks)
+			{
+				if (box == null) continue;
+				bool on;
+				if (_isMultiEdit)
+				{
+					// Multi: show intersection? Prefer focused/last if available, else all on.
+					on = _focusedCue?.IsClockDayEnabled(day) ?? true;
+				}
+				else
+				{
+					on = _focusedCue == null || _focusedCue.IsClockDayEnabled(day);
+					if (_focusedCue == null)
+						on = true;
+				}
+				box.SetPressedNoSignal(on);
+			}
+		}
+		finally
+		{
+			_isRefreshingUi = false;
+		}
+	}
+
+	/// <summary>
+	/// Updates the Days button caption from the focused cue's weekday mask.
+	/// </summary>
+	private void RefreshClockDaysButtonLabel()
+	{
+		if (_clockDaysButton == null) return;
+		if (_isMultiEdit)
+		{
+			_clockDaysButton.Text = MultiPlaceholder;
+			return;
+		}
+
+		byte mask = _focusedCue?.ClockDaysMask ?? Cue.ClockDaysAll;
+		_clockDaysButton.Text = FormatClockDaysSummary(mask);
+		_clockDaysButton.TooltipText = "Choose which weekdays the clock trigger may fire.\nCurrent: " +
+		                               FormatClockDaysSummary(mask);
+	}
+
+	/// <summary>
+	/// Compact label for a weekday mask (e.g. "Every day", "Weekdays", "Mon, Fri").
+	/// </summary>
+	private static string FormatClockDaysSummary(byte mask)
+	{
+		mask = (byte)(mask & Cue.ClockDaysAll);
+		if (mask == Cue.ClockDaysAll)
+			return "Every day";
+		if (mask == 0)
+			return "No days";
+
+		// Mon–Fri bits (DayOfWeek Mon=1 … Fri=5) => 0b0111110 = 0x3E
+		const byte weekdays = (1 << (int)DayOfWeek.Monday) |
+		                      (1 << (int)DayOfWeek.Tuesday) |
+		                      (1 << (int)DayOfWeek.Wednesday) |
+		                      (1 << (int)DayOfWeek.Thursday) |
+		                      (1 << (int)DayOfWeek.Friday);
+		// Sat+Sun => 0b1000001 = 0x41
+		const byte weekend = (1 << (int)DayOfWeek.Saturday) | (1 << (int)DayOfWeek.Sunday);
+
+		if (mask == weekdays)
+			return "Weekdays";
+		if (mask == weekend)
+			return "Weekend";
+
+		var parts = new List<string>();
+		foreach (var (day, label) in ClockDaysDisplayOrder)
+		{
+			if ((mask & (1 << (int)day)) == 0) continue;
+			// Three-letter abbreviations keep the button compact.
+			parts.Add(label.Substring(0, 3));
+		}
+		return string.Join(", ", parts);
+	}
+
+	/// <summary>
+	/// Pushes clock enable / time / days / reset-button state from the focused cue (single-edit).
+	/// </summary>
+	private void RefreshClockUi()
+	{
+		if (_isMultiEdit) return;
+
+		if (_clockEnabledCheckBox != null)
+			_clockEnabledCheckBox.SetPressedNoSignal(_focusedCue?.ClockEnabled == true);
+
+		if (_clockTimeInput != null && !_clockTimeInput.HasFocus())
+		{
+			if (_focusedCue == null || !_focusedCue.HasClockTime)
+				_clockTimeInput.Text = "";
+			else
+				_clockTimeInput.Text = _focusedCue.GetClockDisplay();
+		}
+
+		// Keep popup checkboxes in sync if open; always refresh the summary button.
+		if (_clockDaysPopup != null && _clockDaysPopup.Visible)
+			SyncClockDayCheckboxesFromModel();
+		RefreshClockDaysButtonLabel();
+
+		if (_clockResetButton != null)
+		{
+			bool nonDefault = _focusedCue != null && _focusedCue.IsClockNonDefault;
+			_clockResetButton.Visible = nonDefault;
+			if (nonDefault)
+				_clockResetButton.TooltipText = "Reset to default (no clock, every day)";
+		}
+	}
+
+	/// <summary>
+	/// Toggles one weekday for the clock trigger on edit target(s).
+	/// </summary>
+	private void OnClockDayToggled(DayOfWeek day, bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].IsClockDayEnabled(day) == pressed)
+			return;
+
+		string dayName = day.ToString();
+		RecordHistoryBeforeEdit(
+			pressed ? $"Enable clock on {dayName}" : $"Disable clock on {dayName}",
+			pressed ? $"Multi-edit enable clock on {dayName}" : $"Multi-edit disable clock on {dayName}");
+
+		foreach (var cue in targets)
+		{
+			if (cue.IsClockDayEnabled(day) == pressed) continue;
+			cue.SetClockDayEnabled(day, pressed);
+		}
+
+		// Live-update the button caption while the popup stays open.
+		if (!_isMultiEdit)
+			RefreshClockDaysButtonLabel();
+		else if (_clockDaysButton != null)
+			_clockDaysButton.Text = FormatClockDaysSummary(
+				targets.Count > 0 ? targets[0].ClockDaysMask : Cue.ClockDaysAll);
+
+		if (_clockResetButton != null)
+		{
+			if (!_isMultiEdit)
+				_clockResetButton.Visible = _focusedCue != null && _focusedCue.IsClockNonDefault;
+			else
+				_clockResetButton.Visible = targets.Exists(c => c.IsClockNonDefault);
+		}
+	}
+
+	/// <summary>
+	/// Toggles whether the wall-clock trigger is active for edit target(s).
+	/// </summary>
+	private void OnClockEnabledToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].ClockEnabled == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable cue clock" : "Disable cue clock",
+			pressed ? "Multi-edit enable cue clock" : "Multi-edit disable cue clock");
+
+		foreach (var cue in targets)
+		{
+			if (cue.ClockEnabled == pressed) continue;
+			cue.ClockEnabled = pressed;
+		}
+
+		if (!_isMultiEdit)
+			RefreshClockUi();
+		else if (_clockResetButton != null)
+			_clockResetButton.Visible = targets.Exists(c => c.IsClockNonDefault);
+	}
+
+	private void OnClockTimeSubmitted(string text)
+	{
+		CommitClockTime(text);
+		_clockTimeInput?.ReleaseFocus();
+	}
+
+	private void OnClockTimeFocusExited()
+	{
+		if (_isRefreshingUi) return;
+		if (_clockTimeInput == null) return;
+		// Commit whatever is in the field when focus leaves (including empty = clear).
+		CommitClockTime(_clockTimeInput.Text);
+	}
+
+	/// <summary>
+	/// Parses and applies wall-clock time to edit target(s). Empty input clears the clock time.
+	/// </summary>
+	private void CommitClockTime(string text)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!UiUtilities.TryParseClockTime(text, out TimeSpan timeOfDay, out string display))
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Invalid clock time: \"{text}\". Use HH:mm or HH:mm:ss (optional AM/PM).", (int)LogType.Warning);
+			// Restore previous display without mutating model.
+			if (!_isMultiEdit)
+				RefreshClockUi();
+			return;
+		}
+
+		bool clearing = string.IsNullOrEmpty(display);
+
+		// Skip no-op for single edit.
+		if (!_isMultiEdit && targets.Count == 1)
+		{
+			var cue = targets[0];
+			if (clearing && !cue.HasClockTime)
+			{
+				if (_clockTimeInput != null) _clockTimeInput.Text = "";
+				return;
+			}
+			if (!clearing && cue.HasClockTime && cue.ClockTimeOfDay == timeOfDay)
+			{
+				if (_clockTimeInput != null) _clockTimeInput.Text = display;
+				return;
+			}
+		}
+
+		if (clearing)
+		{
+			RecordHistoryBeforeEdit("Clear cue clock time", "Multi-edit clear cue clock time");
+			foreach (var cue in targets)
+			{
+				if (!cue.HasClockTime) continue;
+				cue.ClearClockTime();
+			}
+			if (_clockTimeInput != null) _clockTimeInput.Text = "";
+		}
+		else
+		{
+			RecordHistoryBeforeEdit("Set cue clock time", "Multi-edit set cue clock time");
+			foreach (var cue in targets)
+			{
+				cue.SetClockTime(timeOfDay);
+				// Setting a time implies the user wants it active.
+				if (!cue.ClockEnabled)
+					cue.ClockEnabled = true;
+			}
+			if (_clockTimeInput != null) _clockTimeInput.Text = display;
+			if (_clockEnabledCheckBox != null)
+				_clockEnabledCheckBox.SetPressedNoSignal(true);
+		}
+
+		if (!_isMultiEdit)
+			RefreshClockUi();
+		else if (_clockResetButton != null)
+			_clockResetButton.Visible = targets.Exists(c => c.IsClockNonDefault);
+
+		GD.Print(clearing
+			? "ShellInspector:CommitClockTime - Cleared cue clock time"
+			: $"ShellInspector:CommitClockTime - Set cue clock to {display}");
+	}
+
+	private void OnClockResetPressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && !targets[0].IsClockNonDefault)
+			return;
+
+		if (_clockDaysPopup != null && _clockDaysPopup.Visible)
+			_clockDaysPopup.Hide();
+
+		RecordHistoryBeforeEdit("Reset cue clock", "Multi-edit reset cue clock");
+		foreach (var cue in targets)
+			cue.ResetClockToDefault();
+
+		if (_clockEnabledCheckBox != null)
+			_clockEnabledCheckBox.SetPressedNoSignal(false);
+		if (_clockTimeInput != null)
+			_clockTimeInput.Text = "";
+		if (_clockDaysButton != null)
+			_clockDaysButton.Text = "Every day";
+		if (_clockResetButton != null)
+			_clockResetButton.Visible = false;
+
+		if (!_isMultiEdit)
+			RefreshClockUi();
+
+		GD.Print("ShellInspector:OnClockResetPressed - Reset cue clock to default (none, every day).");
+	}
+
+	// ── MIDI trigger UI ─────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Ensures the MIDI message-type OptionButton has Note On / Off / CC / Program entries.
+	/// </summary>
+	private void EnsureMidiTypeOptions()
+	{
+		if (_midiTypeOption == null) return;
+		if (_midiTypeOption.ItemCount > 0) return;
+
+		_midiTypeOption.Clear();
+		AddMidiTypeOption(MidiTriggerMessageType.NoteOn, "Note On");
+		AddMidiTypeOption(MidiTriggerMessageType.NoteOff, "Note Off");
+		AddMidiTypeOption(MidiTriggerMessageType.ControlChange, "CC");
+		AddMidiTypeOption(MidiTriggerMessageType.ProgramChange, "Program");
+	}
+
+	private void AddMidiTypeOption(MidiTriggerMessageType type, string label)
+	{
+		int index = _midiTypeOption.ItemCount;
+		_midiTypeOption.AddItem(label);
+		_midiTypeOption.SetItemMetadata(index, (int)type);
+	}
+
+	/// <summary>
+	/// Pushes MIDI enable / fields / capture / reset state from the focused cue (single-edit).
+	/// </summary>
+	private void RefreshMidiUi()
+	{
+		if (_isMultiEdit) return;
+
+		EnsureMidiTypeOptions();
+
+		if (_midiEnabledCheckBox != null)
+			_midiEnabledCheckBox.SetPressedNoSignal(_focusedCue?.MidiTriggerEnabled == true);
+
+		if (_midiTypeOption != null && _focusedCue != null)
+		{
+			int typeVal = (int)_focusedCue.MidiMessageType;
+			for (int i = 0; i < _midiTypeOption.ItemCount; i++)
+			{
+				if (_midiTypeOption.GetItemMetadata(i).AsInt32() == typeVal)
+				{
+					_midiTypeOption.SetBlockSignals(true);
+					_midiTypeOption.Selected = i;
+					_midiTypeOption.SetBlockSignals(false);
+					break;
+				}
+			}
+		}
+
+		if (_midiChannelSpin != null)
+			_midiChannelSpin.SetValueNoSignal(_focusedCue?.MidiChannel ?? 0);
+		if (_midiData1Spin != null)
+			_midiData1Spin.SetValueNoSignal(_focusedCue?.MidiData1 ?? 0);
+		if (_midiMatchValueCheck != null)
+			_midiMatchValueCheck.SetPressedNoSignal(_focusedCue?.MidiMatchValue == true);
+		if (_midiData2Spin != null)
+		{
+			_midiData2Spin.SetValueNoSignal(_focusedCue?.MidiData2 ?? 0);
+			_midiData2Spin.Editable = _focusedCue?.MidiMatchValue == true;
+		}
+
+		UpdateMidiData1Prefix();
+
+		if (_midiCaptureButton != null && !_isCapturingMidi)
+			_midiCaptureButton.Text = "Capture";
+
+		if (_midiResetButton != null)
+		{
+			bool nonDefault = _focusedCue != null && _focusedCue.IsMidiTriggerNonDefault;
+			_midiResetButton.Visible = nonDefault;
+			if (nonDefault)
+				_midiResetButton.TooltipText = "Reset to default (no MIDI trigger)";
+		}
+	}
+
+	/// <summary>
+	/// Updates the Data1 spin prefix based on message type (n / cc / p).
+	/// </summary>
+	private void UpdateMidiData1Prefix()
+	{
+		if (_midiData1Spin == null) return;
+		var type = GetSelectedMidiType();
+		_midiData1Spin.Prefix = type switch
+		{
+			MidiTriggerMessageType.ControlChange => "cc",
+			MidiTriggerMessageType.ProgramChange => "p",
+			_ => "n"
+		};
+	}
+
+	private MidiTriggerMessageType GetSelectedMidiType()
+	{
+		if (_midiTypeOption == null || _midiTypeOption.Selected < 0)
+			return MidiTriggerMessageType.NoteOn;
+		return (MidiTriggerMessageType)_midiTypeOption.GetItemMetadata(_midiTypeOption.Selected).AsInt32();
+	}
+
+	private void OnMidiEnabledToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].MidiTriggerEnabled == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable cue MIDI trigger" : "Disable cue MIDI trigger",
+			pressed ? "Multi-edit enable cue MIDI" : "Multi-edit disable cue MIDI");
+
+		foreach (var cue in targets)
+		{
+			if (cue.MidiTriggerEnabled == pressed) continue;
+			cue.MidiTriggerEnabled = pressed;
+		}
+
+		if (!_isMultiEdit)
+			RefreshMidiUi();
+		else if (_midiResetButton != null)
+			_midiResetButton.Visible = targets.Exists(c => c.IsMidiTriggerNonDefault);
+	}
+
+	private void OnMidiCapturePressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (_isCapturingMidi)
+		{
+			CancelMidiCapture();
+			return;
+		}
+
+		if (_midiManager == null)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"MIDI capture unavailable: MidiManager not found.", (int)LogType.Warning);
+			return;
+		}
+
+		if (!_midiManager.MidiEnabled || _midiManager.OpenInputCount == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"MIDI capture: enable MIDI and open at least one session input in Settings → MIDI.",
+				(int)LogType.Warning);
+			return;
+		}
+
+		_isCapturingMidi = true;
+		if (_midiCaptureButton != null)
+			_midiCaptureButton.Text = "Waiting…";
+		_midiManager.StartCapture();
+		GD.Print("ShellInspector:OnMidiCapturePressed - Capture armed");
+	}
+
+	/// <summary>
+	/// Cancels MIDI capture mode (local flag + MidiManager).
+	/// </summary>
+	private void CancelMidiCapture()
+	{
+		if (!_isCapturingMidi && _midiManager?.IsCapturing != true) return;
+		_isCapturingMidi = false;
+		_midiManager?.CancelCapture();
+		if (_midiCaptureButton != null)
+			_midiCaptureButton.Text = "Capture";
+		GD.Print("ShellInspector:CancelMidiCapture - Cancelled");
+	}
+
+	/// <summary>
+	/// Applies a captured MIDI message from <see cref="MidiManager.MidiCaptured"/>.
+	/// </summary>
+	private void OnMidiCaptured(string deviceName, int messageType, int channel, int data1, int data2)
+	{
+		if (!_isCapturingMidi) return;
+		_isCapturingMidi = false;
+		if (_midiCaptureButton != null)
+			_midiCaptureButton.Text = "Capture";
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var type = (MidiTriggerMessageType)messageType;
+		// Capture matches type+channel+number; velocity optional (off by default — more useful for notes).
+		bool matchValue = type == MidiTriggerMessageType.ControlChange;
+
+		RecordHistoryBeforeEdit("Capture cue MIDI trigger", "Multi-edit capture cue MIDI");
+		foreach (var cue in targets)
+		{
+			cue.SetMidiTrigger(type, channel, data1, data2, matchValue, deviceFilter: null);
+			if (!cue.MidiTriggerEnabled)
+				cue.MidiTriggerEnabled = true;
+		}
+
+		if (!_isMultiEdit)
+			RefreshMidiUi();
+		else
+		{
+			if (_midiEnabledCheckBox != null)
+				_midiEnabledCheckBox.SetPressedNoSignal(true);
+			if (_midiResetButton != null)
+				_midiResetButton.Visible = true;
+			// Best-effort field push for multi-edit after capture.
+			_isRefreshingUi = true;
+			try
+			{
+				EnsureMidiTypeOptions();
+				if (_midiTypeOption != null)
+				{
+					for (int i = 0; i < _midiTypeOption.ItemCount; i++)
+					{
+						if (_midiTypeOption.GetItemMetadata(i).AsInt32() == messageType)
+						{
+							_midiTypeOption.Selected = i;
+							break;
+						}
+					}
+				}
+				_midiChannelSpin?.SetValueNoSignal(channel);
+				_midiData1Spin?.SetValueNoSignal(data1);
+				_midiMatchValueCheck?.SetPressedNoSignal(matchValue);
+				_midiData2Spin?.SetValueNoSignal(data2);
+				if (_midiData2Spin != null)
+					_midiData2Spin.Editable = matchValue;
+				UpdateMidiData1Prefix();
+			}
+			finally
+			{
+				_isRefreshingUi = false;
+			}
+		}
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"MIDI capture: {type} ch={channel} d1={data1} d2={data2}" +
+			(string.IsNullOrEmpty(deviceName) ? "" : $" from {deviceName}"),
+			(int)LogType.Info);
+	}
+
+	private void OnMidiResetPressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && !targets[0].IsMidiTriggerNonDefault)
+			return;
+
+		if (_isCapturingMidi)
+			CancelMidiCapture();
+
+		RecordHistoryBeforeEdit("Reset cue MIDI trigger", "Multi-edit reset cue MIDI");
+		foreach (var cue in targets)
+			cue.ResetMidiTriggerToDefault();
+
+		if (_midiEnabledCheckBox != null)
+			_midiEnabledCheckBox.SetPressedNoSignal(false);
+		if (_midiResetButton != null)
+			_midiResetButton.Visible = false;
+
+		if (!_isMultiEdit)
+			RefreshMidiUi();
+		else
+		{
+			_midiChannelSpin?.SetValueNoSignal(0);
+			_midiData1Spin?.SetValueNoSignal(0);
+			_midiData2Spin?.SetValueNoSignal(0);
+			_midiMatchValueCheck?.SetPressedNoSignal(false);
+		}
+
+		GD.Print("ShellInspector:OnMidiResetPressed - Reset cue MIDI trigger to default.");
+	}
+
+	/// <summary>
+	/// Commits current MIDI field values from the inspector into the model.
+	/// </summary>
+	private void CommitMidiFieldsFromUi()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		var type = GetSelectedMidiType();
+		int channel = _midiChannelSpin != null ? (int)_midiChannelSpin.Value : 0;
+		int data1 = _midiData1Spin != null ? (int)_midiData1Spin.Value : 0;
+		int data2 = _midiData2Spin != null ? (int)_midiData2Spin.Value : 0;
+		bool matchValue = _midiMatchValueCheck != null && _midiMatchValueCheck.ButtonPressed;
+
+		// Skip no-op single edit.
+		if (!_isMultiEdit && targets.Count == 1)
+		{
+			var cue = targets[0];
+			if (cue.HasMidiTrigger &&
+			    cue.MidiMessageType == type &&
+			    cue.MidiChannel == channel &&
+			    cue.MidiData1 == data1 &&
+			    cue.MidiData2 == data2 &&
+			    cue.MidiMatchValue == matchValue)
+			{
+				return;
+			}
+		}
+
+		RecordHistoryBeforeEdit("Edit cue MIDI trigger", "Multi-edit cue MIDI trigger");
+		foreach (var cue in targets)
+		{
+			cue.SetMidiTrigger(type, channel, data1, data2, matchValue, cue.MidiDeviceFilter);
+			// Editing fields implies the user wants a pattern present; do not auto-enable
+			// (enable is explicit via checkbox / capture).
+		}
+
+		if (!_isMultiEdit)
+			RefreshMidiUi();
+		else if (_midiResetButton != null)
+			_midiResetButton.Visible = targets.Exists(c => c.IsMidiTriggerNonDefault);
+	}
+
+	private void OnMidiTypeSelected(long index)
+	{
+		if (_isRefreshingUi) return;
+		UpdateMidiData1Prefix();
+		// Program change has no value match.
+		if (GetSelectedMidiType() == MidiTriggerMessageType.ProgramChange)
+		{
+			if (_midiMatchValueCheck != null)
+				_midiMatchValueCheck.SetPressedNoSignal(false);
+			if (_midiData2Spin != null)
+				_midiData2Spin.Editable = false;
+		}
+		CommitMidiFieldsFromUi();
+	}
+
+	private void OnMidiChannelChanged(double value)
+	{
+		if (_isRefreshingUi) return;
+		CommitMidiFieldsFromUi();
+	}
+
+	private void OnMidiData1Changed(double value)
+	{
+		if (_isRefreshingUi) return;
+		CommitMidiFieldsFromUi();
+	}
+
+	private void OnMidiData2Changed(double value)
+	{
+		if (_isRefreshingUi) return;
+		CommitMidiFieldsFromUi();
+	}
+
+	private void OnMidiMatchValueToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_midiData2Spin != null)
+			_midiData2Spin.Editable = pressed;
+		CommitMidiFieldsFromUi();
+	}
 }
+

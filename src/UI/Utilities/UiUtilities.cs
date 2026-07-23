@@ -223,6 +223,86 @@ public partial class UiUtilities : Node
         }
         return labeled;
     }
+
+    /// <summary>
+    /// Parses a wall-clock time of day for cue clock triggers.
+    /// </summary>
+    /// <param name="input">User text (e.g. "14:30", "14:30:00", "2:30 PM", "2:30:00 pm").</param>
+    /// <param name="timeOfDay">Out: parsed local time of day.</param>
+    /// <param name="display">Out: normalized <c>HH:mm:ss</c> display, or empty on failure / empty input.</param>
+    /// <returns>
+    /// <c>true</c> when input is empty (means clear) or successfully parsed;
+    /// <c>false</c> when input is non-empty but invalid.
+    /// </returns>
+    /// <remarks>
+    /// Empty/whitespace input is treated as "clear" (success with <see cref="TimeSpan.Zero"/> and empty display).
+    /// 12-hour times without AM/PM are rejected when the hour is 1–12 ambiguous? No — bare 1–12 without meridiem
+    /// is treated as 24h if hour ≤ 23 (so "2:30" = 02:30). Prefer AM/PM when using 12h.
+    /// </remarks>
+    public static bool TryParseClockTime(string input, out TimeSpan timeOfDay, out string display)
+    {
+        timeOfDay = TimeSpan.Zero;
+        display = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(input))
+            return true; // clear
+
+        string raw = input.Trim();
+        bool pm = false;
+        bool am = false;
+        string upper = raw.ToUpperInvariant();
+        if (upper.EndsWith("PM") || upper.EndsWith("P.M.") || upper.EndsWith("P.M"))
+        {
+            pm = true;
+            raw = Regex.Replace(raw, @"\s*[Pp]\.?[Mm]\.?\s*$", "").Trim();
+        }
+        else if (upper.EndsWith("AM") || upper.EndsWith("A.M.") || upper.EndsWith("A.M"))
+        {
+            am = true;
+            raw = Regex.Replace(raw, @"\s*[Aa]\.?[Mm]\.?\s*$", "").Trim();
+        }
+
+        // Allow H:M, H:M:S, H:M:S.ms — also H.M via dots as separators is not supported; use colons.
+        if (!Regex.IsMatch(raw, @"^\d{1,2}:\d{1,2}(:\d{1,2}(\.\d+)?)?$"))
+        {
+            // Also accept plain "HHMM" or "HHMMSS"? Keep strict for clarity.
+            GD.Print($"UiUtilities:TryParseClockTime - Invalid clock format '{input}'");
+            return false;
+        }
+
+        var parts = raw.Split(':');
+        if (!int.TryParse(parts[0], out int hour) ||
+            !int.TryParse(parts[1], out int minute))
+            return false;
+
+        int second = 0;
+        if (parts.Length >= 3)
+        {
+            // Allow fractional seconds but store whole seconds for display.
+            if (!double.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double secFrac))
+                return false;
+            second = (int)Math.Floor(secFrac);
+            if (second < 0 || second > 59) return false;
+        }
+
+        if (minute < 0 || minute > 59) return false;
+
+        if (am || pm)
+        {
+            if (hour < 1 || hour > 12) return false;
+            if (hour == 12) hour = 0;
+            if (pm) hour += 12;
+        }
+        else
+        {
+            if (hour < 0 || hour > 23) return false;
+        }
+
+        timeOfDay = new TimeSpan(hour, minute, second);
+        display = Cue.FormatClockTimeOfDay(timeOfDay);
+        return true;
+    }
     
     /// <summary>
     /// Converts a linear volume (0.0f to 1.0f) to decibels (dB).

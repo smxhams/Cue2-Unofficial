@@ -41,6 +41,7 @@ MediaHealthService="*res://src/Shared/MediaHealthService.cs"
 AudioDevices="*res://src/Shared/AudioDevices.cs"
 OscListen="*res://src/Base/Classes/Connections/OscListen.cs"
 OscConnections="*res://src/Base/Classes/Connections/OscConnections.cs"
+MidiManager="*res://src/Shared/MidiManager.cs"
 
 [display]
 

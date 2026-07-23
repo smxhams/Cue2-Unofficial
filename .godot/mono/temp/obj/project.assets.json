@@ -50,6 +50,22 @@
           }
         }
       },
+      "Melanchall.DryWetMidi/8.0.3": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.0/Melanchall.DryWetMidi.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Melanchall.DryWetMidi.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "build/Melanchall.DryWetMidi.targets": {}
+        }
+      },
       "Rug.Osc/1.2.5": {
         "type": "package",
         "compile": {
@@ -170,6 +186,27 @@
         "lib/net8.0/GodotSharpEditor.xml"
       ]
     },
+    "Melanchall.DryWetMidi/8.0.3": {
+      "sha512": "U+Ubol4MhieY2xgZGqcI8H2F/4HWzWKq8/WPHd1SXS7WXaHyEWMnj56vtxKOJFM5FLbj+NOUny5+X2KAzI0YUg==",
+      "type": "package",
+      "path": "melanchall.drywetmidi/8.0.3",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "build/Melanchall.DryWetMidi.targets",
+        "build/Melanchall_DryWetMidi_Native32.dll",
+        "build/Melanchall_DryWetMidi_Native64.dll",
+        "build/Melanchall_DryWetMidi_Native64.dylib",
+        "icon.png",
+        "lib/net45/Melanchall.DryWetMidi.dll",
+        "lib/net45/Melanchall.DryWetMidi.xml",
+        "lib/netstandard2.0/Melanchall.DryWetMidi.dll",
+        "lib/netstandard2.0/Melanchall.DryWetMidi.xml",
+        "melanchall.drywetmidi.8.0.3.nupkg.sha512",
+        "melanchall.drywetmidi.nuspec"
+      ]
+    },
     "Rug.Osc/1.2.5": {
       "sha512": "nbujIPTk+QO90qv+U9E5reGFEBDpu8c4I65dkVxR4/xBL+WXUzUjvfBm5mEmtRRqFeoqfK7VLje+FEdz/FmoTg==",
       "type": "package",
@@ -243,6 +280,7 @@
       "Godot.SourceGenerators >= 4.6.1",
       "GodotSharp >= 4.6.1",
       "GodotSharpEditor >= 4.6.1",
+      "Melanchall.DryWetMidi >= 8.0.3",
       "Rug.Osc >= 1.2.5",
       "SDL3-CS >= 3.4.2",
       "SDL3-CS.Native >= 3.4.2"
@@ -308,6 +346,10 @@
             "target": "Package",
             "version": "[4.6.1, )",
             "autoReferenced": true
+          },
+          "Melanchall.DryWetMidi": {
+            "target": "Package",
+            "version": "[8.0.3, )"
           },
           "Rug.Osc": {
             "target": "Package",

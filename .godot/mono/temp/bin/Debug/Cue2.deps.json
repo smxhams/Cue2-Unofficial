@@ -12,6 +12,7 @@
           "Godot.SourceGenerators": "4.6.1",
           "GodotSharp": "4.6.1",
           "GodotSharpEditor": "4.6.1",
+          "Melanchall.DryWetMidi": "8.0.3",
           "Rug.Osc": "1.2.5",
           "SDL3-CS": "3.4.2",
           "SDL3-CS.Native": "3.4.2"
@@ -45,6 +46,14 @@
           "lib/net8.0/GodotSharpEditor.dll": {
             "assemblyVersion": "4.6.1.0",
             "fileVersion": "4.6.1.0"
+          }
+        }
+      },
+      "Melanchall.DryWetMidi/8.0.3": {
+        "runtime": {
+          "lib/netstandard2.0/Melanchall.DryWetMidi.dll": {
+            "assemblyVersion": "8.0.3.0",
+            "fileVersion": "8.0.3.0"
           }
         }
       },
@@ -139,6 +148,13 @@
       "sha512": "sha512-WtUHTHUegXO3OwHXa2pW2a6UIBV3TcVui2lbQ6eQt4RuKSZwuzNGdBy3GYIDJ3pkqJZEjqvM9zA32ARxhUygTQ==",
       "path": "godotsharpeditor/4.6.1",
       "hashPath": "godotsharpeditor.4.6.1.nupkg.sha512"
+    },
+    "Melanchall.DryWetMidi/8.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-U+Ubol4MhieY2xgZGqcI8H2F/4HWzWKq8/WPHd1SXS7WXaHyEWMnj56vtxKOJFM5FLbj+NOUny5+X2KAzI0YUg==",
+      "path": "melanchall.drywetmidi/8.0.3",
+      "hashPath": "melanchall.drywetmidi.8.0.3.nupkg.sha512"
     },
     "Rug.Osc/1.2.5": {
       "type": "package",

@@ -435,6 +435,8 @@ public partial class SettingsWindow : Window
 			"Cue Lights" => "CueLights",
 			"OSC Connections" => "SettingsOscConnections",
 			"OSC Listener" => "SettingsOscListen",
+			"MIDI" => "SettingsMidi",
+			"MIDI Input Map" => "SettingsMidiInputMap",
 			"Cue Defaults" => "SettingsCueDefaults",
 			"Cue2 Preferences" => "SettingsCue2Prefs",
 			_ => null
@@ -476,6 +478,12 @@ public partial class SettingsWindow : Window
 		TreeItem tiOscListener = _setTree.CreateItem(tiConnections);
 		tiOscListener.SetText(0, "OSC Listener");
 		tiOscListener.SetTooltipText(0, "Settings for received OSC messages");
+		TreeItem tiMidi = _setTree.CreateItem(tiConnections);
+		tiMidi.SetText(0, "MIDI");
+		tiMidi.SetTooltipText(0, "MIDI input devices and live monitor");
+		TreeItem tiMidiInputMap = _setTree.CreateItem(tiMidi);
+		tiMidiInputMap.SetText(0, "MIDI Input Map");
+		tiMidiInputMap.SetTooltipText(0, "Assign MIDI controls to app actions (Go, Save, Undo, …)");
 		TreeItem tiNetworkConnection = _setTree.CreateItem(tiConnections);
 		tiNetworkConnection.SetText(0, "Network Connection");
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);

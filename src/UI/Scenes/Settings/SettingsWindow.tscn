@@ -13,6 +13,8 @@
 [ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Scenes/SubWindows/SubWindowHandles.tscn" id="11_51xpo"]
 [ext_resource type="PackedScene" uid="uid://i5x3q04qutpg" path="res://src/UI/Scenes/Settings/SettingsCue2Prefs.tscn" id="11_giu5g"]
 [ext_resource type="PackedScene" uid="uid://frcr4kkc1rrl" path="res://src/UI/Scenes/Settings/SettingsCueDefaults.tscn" id="12_cuedef"]
+[ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidi.tscn" id="13_midi"]
+[ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidiInputMap.tscn" id="14_midi_map"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -185,6 +187,16 @@ visible = false
 layout_mode = 2
 
 [node name="SettingsOscListen" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=508370765 instance=ExtResource("5_1s07i")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsMidi" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("13_midi")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsMidiInputMap" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("14_midi_map")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

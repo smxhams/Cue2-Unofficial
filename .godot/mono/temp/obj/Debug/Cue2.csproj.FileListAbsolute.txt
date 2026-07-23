@@ -82,3 +82,7 @@ C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\refint\Cue2.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.pdb
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\Cue2.genruntimeconfig.cache
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\obj\Debug\ref\Cue2.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native32.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native64.dll
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native64.dylib
+C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall.DryWetMidi.dll
