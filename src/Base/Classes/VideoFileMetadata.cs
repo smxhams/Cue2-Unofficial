@@ -1,8 +1,10 @@
+using System.Collections.Generic;
+
 namespace Cue2.Base.Classes;
 
 /// <summary>
 /// Simple POCO for video file metadata extracted via FFmpeg.
-/// Supports duration (seconds), width, height, frame rate, codec/format string, and audio metadata if present.
+/// Supports duration (seconds), width, height, frame rate, codec/format string, audio metadata, and subtitle tracks.
 /// </summary>
 public class VideoFileMetadata
 {
@@ -35,4 +37,23 @@ public class VideoFileMetadata
 
     /// <summary>Audio codec name if audio is present (e.g., "aac", "mp3"; empty if no audio).</summary>
     public string AudioCodec { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Subtitle / closed-caption streams found in the container (may be empty).
+    /// </summary>
+    public List<SubtitleTrackInfo> SubtitleTracks { get; set; } = new();
+
+    /// <summary>True when at least one text-based subtitle track is available.</summary>
+    public bool HasTextSubtitles =>
+        SubtitleTracks != null && SubtitleTracks.Exists(t => t != null && t.IsTextBased);
+
+    /// <summary>
+    /// Returns the first text-based subtitle track, or null.
+    /// </summary>
+    public SubtitleTrackInfo GetDefaultTextSubtitleTrack()
+    {
+        if (SubtitleTracks == null)
+            return null;
+        return SubtitleTracks.Find(t => t != null && t.IsTextBased);
+    }
 }

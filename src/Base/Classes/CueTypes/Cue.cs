@@ -489,6 +489,7 @@ public class Cue : ICue
                 {
                     "Audio" => new AudioComponent(),
                     "Video" => new VideoComponent(),
+                    "Text" => new TextComponent(),
                     "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
@@ -553,6 +554,39 @@ public class Cue : ICue
     public VideoComponent GetVideoComponent()
     {
         return Components.FirstOrDefault(c => c.Type == "Video", defaultValue:null) as VideoComponent;
+    }
+
+    /// <summary>
+    /// Returns the text overlay component on this cue, if any.
+    /// </summary>
+    /// <returns>The text component, or null.</returns>
+    public TextComponent GetTextComponent()
+    {
+        return Components.FirstOrDefault(c => c.Type == "Text", defaultValue: null) as TextComponent;
+    }
+
+    /// <summary>
+    /// Adds a text overlay component to this cue (one per cue).
+    /// </summary>
+    /// <returns>The new or existing text component.</returns>
+    /// <remarks>
+    /// Defaults: first available target layer, empty content, duration 0 (until stopped),
+    /// centered white text at size 48.
+    /// </remarks>
+    public TextComponent AddTextComponent()
+    {
+        if (Components.FirstOrDefault(c => c.Type == "Text") is TextComponent existing)
+        {
+            GD.Print($"Cue:AddTextComponent - Text component already exists in cue {Id}. Returning existing.");
+            return existing;
+        }
+
+        var textComp = new TextComponent();
+        if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
+            textComp.TargetLayerId = DisplaysManager.Layers[0].LayerId;
+        textComp.RecalculateDuration();
+        Components.Add(textComp);
+        return textComp;
     }
 
     /// <summary>
@@ -696,6 +730,25 @@ public class Cue : ICue
                 }
                 var componentDuration = video.TotalDuration;
                 if (contentsDuration < componentDuration) contentsDuration = componentDuration;
+            }
+            else if (component.Type == "Text")
+            {
+                var text = (TextComponent)component;
+                // When video closed captions drive this text component, timing follows video —
+                // do not treat text hold-until-stopped as infinite shell duration.
+                var videoForCc = GetVideoComponent();
+                if (videoForCc != null && videoForCc.UseSubtitles && !videoForCc.IsImage)
+                    continue;
+
+                text.RecalculateDuration();
+                // Duration 0 = until stopped (infinite for shell timing).
+                if (text.TotalDuration < 0)
+                {
+                    contentsDuration = -1;
+                    break;
+                }
+                if (contentsDuration < text.TotalDuration)
+                    contentsDuration = text.TotalDuration;
             }
         }
 
@@ -1418,6 +1471,7 @@ public class Cue : ICue
                 {
                     "Audio" => new AudioComponent(),
                     "Video" => new VideoComponent(),
+                    "Text" => new TextComponent(),
                     "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),

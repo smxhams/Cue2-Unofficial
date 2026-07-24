@@ -24,6 +24,7 @@ public partial class InspectorTabsController : TabContainer
 	{
 		"Audio",
 		"Video",
+		"Text",
 		"Connection",
 		"Control",
 		"Network"
@@ -216,6 +217,9 @@ public partial class InspectorTabsController : TabContainer
 					break;
 				case "Video":
 					flags.Add("Video");
+					break;
+				case "Text":
+					flags.Add("Text");
 					break;
 				case "Network":
 					flags.Add("Network");

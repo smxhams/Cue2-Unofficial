@@ -14,11 +14,12 @@
 [ext_resource type="PackedScene" uid="uid://d6ybxbmxkpib" path="res://src/UI/Scenes/Inspectors/VideoInspector.tscn" id="9_ht2vi"]
 [ext_resource type="PackedScene" uid="uid://cn3w3e20ljw3m" path="res://src/UI/Scenes/Inspectors/TimelineInspector.tscn" id="9_r56tl"]
 [ext_resource type="Script" uid="uid://b54ov4k1klk3j" path="res://src/UI/Scenes/Inspectors/VideoInspector.cs" id="10_ht2vi"]
+[ext_resource type="PackedScene" uid="uid://c8textinsp001" path="res://src/UI/Scenes/Inspectors/TextInspector.tscn" id="10_text"]
 [ext_resource type="PackedScene" uid="uid://dyosfip3iclit" path="res://src/UI/Scenes/Inspectors/ControlInspector.tscn" id="11_ctrl"]
 [ext_resource type="Script" uid="uid://vrjj42fn2k2a" path="res://src/UI/Scenes/SubWindows/FileDialogue.cs" id="12_6nwf4"]
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/UI/Scenes/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/UI/Scenes/SubWindows/OpenDialog.cs" id="14_5gc0s"]
-[ext_resource type="Script" path="res://src/UI/Scenes/Inspectors/InspectorTabsController.cs" id="15_insp_tabs"]
+[ext_resource type="Script" uid="uid://dt1xvmnrr6u75" path="res://src/UI/Scenes/Inspectors/InspectorTabsController.cs" id="15_insp_tabs"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e2apv"]
 draw_center = false
@@ -148,6 +149,11 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("10_ht2vi")
+
+[node name="Text" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1649765971 instance=ExtResource("10_text")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
 
 [node name="Timeline" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=2102696013 instance=ExtResource("9_r56tl")]
 visible = false

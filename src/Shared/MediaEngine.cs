@@ -703,7 +703,57 @@ public partial class MediaEngine : Node
                         metadata.AudioCodec = audioCodec != null ? ffmpeg.avcodec_get_name(audioCodec->id) : "unknown";
                     }
 
-                    GD.Print("MediaEngine:GetVideoFileMetadataAsync - Metadata extracted successfully.");
+                    // Subtitle / closed-caption streams (embedded)
+                    metadata.SubtitleTracks = new System.Collections.Generic.List<SubtitleTrackInfo>();
+                    var streamTypeCounts = new System.Collections.Generic.Dictionary<string, int>();
+                    for (uint i = 0; i < formatCtx->nb_streams; i++)
+                    {
+                        AVStream* subStream = formatCtx->streams[i];
+                        var codecType = subStream->codecpar->codec_type;
+                        string typeKey = codecType.ToString();
+                        streamTypeCounts[typeKey] = streamTypeCounts.TryGetValue(typeKey, out int c) ? c + 1 : 1;
+
+                        // Include SUBTITLE streams and caption-disposition / known CC data streams.
+                        bool isSubtitleType = codecType == AVMediaType.AVMEDIA_TYPE_SUBTITLE;
+                        bool hasCaptionDisposition =
+                            (subStream->disposition & ffmpeg.AV_DISPOSITION_CAPTIONS) != 0
+                            || (subStream->disposition & ffmpeg.AV_DISPOSITION_DESCRIPTIONS) != 0;
+                        AVCodecID subCodecId = subStream->codecpar->codec_id;
+                        string codecName = ffmpeg.avcodec_get_name(subCodecId) ?? "unknown";
+                        bool knownCcCodec =
+                            Cue2.Shared.Decoders.SubtitleSourceDecoder.IsTextBasedCodecId(subCodecId)
+                            || Cue2.Shared.Decoders.SubtitleSourceDecoder.IsTextBasedCodecName(codecName);
+
+                        if (!isSubtitleType && !(hasCaptionDisposition && knownCcCodec)
+                            && !(codecType == AVMediaType.AVMEDIA_TYPE_DATA && knownCcCodec))
+                            continue;
+
+                        string language = ReadStreamMetadataTag(subStream, "language");
+                        string title = ReadStreamMetadataTag(subStream, "title");
+                        bool isText = knownCcCodec
+                                      || (isSubtitleType && !IsLikelyBitmapSubtitleCodec(subCodecId, codecName));
+
+                        metadata.SubtitleTracks.Add(new SubtitleTrackInfo
+                        {
+                            StreamIndex = (int)i,
+                            Codec = codecName,
+                            Language = language,
+                            Title = title,
+                            IsTextBased = isText,
+                            ExternalFilePath = string.Empty
+                        });
+                    }
+
+                    // Sidecar subtitle files next to the media (video.srt, video.en.vtt, …)
+                    foreach (var sidecar in FindSidecarSubtitleTracks(path))
+                        metadata.SubtitleTracks.Add(sidecar);
+
+                    string typeSummary = string.Join(", ",
+                        System.Linq.Enumerable.Select(streamTypeCounts, kv => $"{kv.Key}={kv.Value}"));
+                    GD.Print(
+                        $"MediaEngine:GetVideoFileMetadataAsync - Metadata extracted successfully. " +
+                        $"streams=[{typeSummary}] subtitles={metadata.SubtitleTracks.Count} " +
+                        $"text={metadata.HasTextSubtitles}");
                     return metadata;
                 }
                 catch (Exception ex)
@@ -782,6 +832,113 @@ public partial class MediaEngine : Node
     }
 
     /// <summary>
+    /// Reads a string tag from an FFmpeg stream's metadata dictionary.
+    /// </summary>
+    private static unsafe string ReadStreamMetadataTag(AVStream* stream, string key)
+    {
+        if (stream == null || string.IsNullOrEmpty(key))
+            return string.Empty;
+
+        AVDictionaryEntry* entry = ffmpeg.av_dict_get(stream->metadata, key, null, 0);
+        if (entry == null || entry->value == null)
+            return string.Empty;
+
+        return Marshal.PtrToStringUTF8((IntPtr)entry->value) ?? string.Empty;
+    }
+
+    private static readonly string[] SidecarSubtitleExtensions =
+    {
+        ".srt", ".vtt", ".webvtt", ".ass", ".ssa", ".sub", ".sbv", ".lrc", ".ttml", ".dfxp"
+    };
+
+    /// <summary>
+    /// Finds external subtitle files next to a media path (same base name, common extensions).
+    /// </summary>
+    private static System.Collections.Generic.List<SubtitleTrackInfo> FindSidecarSubtitleTracks(string mediaPath)
+    {
+        var list = new System.Collections.Generic.List<SubtitleTrackInfo>();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(mediaPath) || !File.Exists(mediaPath))
+                return list;
+
+            string dir = Path.GetDirectoryName(mediaPath);
+            string baseName = Path.GetFileNameWithoutExtension(mediaPath);
+            if (string.IsNullOrEmpty(dir) || string.IsNullOrEmpty(baseName))
+                return list;
+
+            foreach (string file in Directory.EnumerateFiles(dir, baseName + "*"))
+            {
+                string ext = Path.GetExtension(file);
+                if (string.IsNullOrEmpty(ext))
+                    continue;
+                bool match = false;
+                foreach (string allowed in SidecarSubtitleExtensions)
+                {
+                    if (ext.Equals(allowed, StringComparison.OrdinalIgnoreCase))
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match)
+                    continue;
+
+                // Avoid listing the media file itself if it somehow matches.
+                if (string.Equals(file, mediaPath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string codec = ext.TrimStart('.').ToLowerInvariant();
+                if (codec == "webvtt")
+                    codec = "vtt";
+
+                // Language guess: video.en.srt → "en"
+                string lang = string.Empty;
+                string nameOnly = Path.GetFileNameWithoutExtension(file);
+                if (nameOnly.Length > baseName.Length + 1
+                    && nameOnly.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                {
+                    string suffix = nameOnly.Substring(baseName.Length).TrimStart('.', '_', '-');
+                    if (suffix.Length >= 2 && suffix.Length <= 8)
+                        lang = suffix;
+                }
+
+                list.Add(new SubtitleTrackInfo
+                {
+                    // Synthetic negative index for external tracks (unique per path hash).
+                    StreamIndex = -1000 - list.Count,
+                    Codec = codec,
+                    Language = lang,
+                    Title = Path.GetFileName(file),
+                    IsTextBased = true,
+                    ExternalFilePath = file
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"MediaEngine:FindSidecarSubtitleTracks - {ex.Message}");
+        }
+
+        return list;
+    }
+
+    private static bool IsLikelyBitmapSubtitleCodec(AVCodecID codecId, string codecName)
+    {
+        string c = (codecName ?? string.Empty).ToLowerInvariant();
+        if (c.Contains("pgs") || c.Contains("dvd") || c.Contains("dvb") || c.Contains("xsub")
+            || c.Contains("vobsub") || c.Contains("hdmv"))
+            return true;
+
+        // Compare by name so we don't hard-depend on every enum member existing.
+        string idName = codecId.ToString();
+        return idName.Contains("PGS", StringComparison.OrdinalIgnoreCase)
+               || idName.Contains("DVD_SUBTITLE", StringComparison.OrdinalIgnoreCase)
+               || idName.Contains("DVB_SUBTITLE", StringComparison.OrdinalIgnoreCase)
+               || idName.Contains("XSUB", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Retrieves a human-readable error message from an FFmpeg return code.
     /// </summary>
     /// <param name="ret">The FFmpeg error code (negative value).</param>
@@ -795,7 +952,4 @@ public partial class MediaEngine : Node
             return Marshal.PtrToStringAnsi((IntPtr)buf) ?? "Unknown error";
         }
     }
-    
-
-
 }

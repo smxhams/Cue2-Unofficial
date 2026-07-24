@@ -58,6 +58,12 @@ public partial class VideoInspector : Control
 	private LineEdit _offsetXLineEdit;
 	private LineEdit _offsetYLineEdit;
 
+	// Closed captions / subtitles → Text component link
+	private HBoxContainer _subtitleRow;
+	private CheckBox _useSubtitlesCheck;
+	private OptionButton _subtitleTrackOption;
+	private Button _addTextForCcButton;
+
 	// Video Preview
 	private Button _previewCollapseButton;
 	private HBoxContainer _previewContainer;
@@ -218,6 +224,7 @@ public partial class VideoInspector : Control
 		_offsetYLineEdit  = GetNode<LineEdit>("%OffsetYLineEdit");
 
 		PopulateTextureLayoutOptions();
+		BuildSubtitleUi();
 		
 		// Video Previewer
 		_previewCollapseButton = GetNode<Button>("%PreviewCollapseButton");
@@ -237,6 +244,62 @@ public partial class VideoInspector : Control
 		_waveformCollapseButton  = GetNode<Button>("%WaveformCollapseButton");
 		_waveformAccordian =   GetNode<VBoxContainer>("%WaveformAccordian");
 		_volumeInput = GetNode<LineEdit>("%VolumeInput");
+	}
+
+	/// <summary>
+	/// Builds the closed-caption row (link to Text component + track picker) under Target Layer.
+	/// </summary>
+	private void BuildSubtitleUi()
+	{
+		if (_inspectorContent == null || _targetLayerOptionButton == null)
+			return;
+
+		var targetRow = _targetLayerOptionButton.GetParent() as Control;
+		if (targetRow == null)
+			return;
+
+		_subtitleRow = new HBoxContainer
+		{
+			Name = "SubtitleRow",
+			Visible = false
+		};
+		_subtitleRow.AddThemeConstantOverride("separation", 8);
+
+		var ccLabel = new Label { Text = "Captions:" };
+		_subtitleRow.AddChild(ccLabel);
+
+		_useSubtitlesCheck = new CheckBox
+		{
+			Text = "Link to Text",
+			TooltipText =
+				"When enabled, the cue’s Text component shows this file’s closed captions during playback. " +
+				"Requires a Text component on the same cue (use + Text if missing)."
+		};
+		_useSubtitlesCheck.Toggled += OnUseSubtitlesToggled;
+		_subtitleRow.AddChild(_useSubtitlesCheck);
+
+		_subtitleTrackOption = new OptionButton
+		{
+			CustomMinimumSize = new Vector2(180, 0),
+			SizeFlagsHorizontal = SizeFlags.ExpandFill,
+			TooltipText = "Subtitle / closed-caption track to display.",
+			FitToLongestItem = false,
+			ClipText = true
+		};
+		_subtitleTrackOption.ItemSelected += OnSubtitleTrackSelected;
+		_subtitleRow.AddChild(_subtitleTrackOption);
+
+		_addTextForCcButton = new Button
+		{
+			Text = "+ Text",
+			TooltipText = "Add a Text component to this cue for closed captions.",
+			Visible = false
+		};
+		_addTextForCcButton.Pressed += OnAddTextForCcPressed;
+		_subtitleRow.AddChild(_addTextForCcButton);
+
+		_inspectorContent.AddChild(_subtitleRow);
+		_inspectorContent.MoveChild(_subtitleRow, targetRow.GetIndex() + 1);
 	}
 
 	/// <summary>
@@ -500,12 +563,32 @@ public partial class VideoInspector : Control
 			_deleteVideoComponentButton.Visible = true;
 		var file = _focusedVideoComponent.VideoFile;
 		
-		if (_focusedVideoComponent.Metadata == null)
+		// Always re-probe when metadata is missing, or when subtitle tracks were never scanned
+		// (older sessions saved Metadata without SubtitleTracks).
+		bool needsMetaProbe = _focusedVideoComponent.Metadata == null
+		                      || (!_focusedVideoComponent.IsImage
+		                          && (_focusedVideoComponent.Metadata.SubtitleTracks == null
+		                              || _focusedVideoComponent.Metadata.SubtitleTracks.Count == 0));
+		if (needsMetaProbe && !string.IsNullOrWhiteSpace(file))
 		{
 			var refreshedMeta = await _mediaEngine.GetVideoFileMetadataAsync(file);
 			if (gen != _shellSelectGeneration) return;
 			if (_focusedVideoComponent == null) return;
-			_focusedVideoComponent.Metadata = refreshedMeta;
+
+			// Merge: keep existing duration/size if probe failed partially, but always take subtitles.
+			if (refreshedMeta != null)
+			{
+				if (_focusedVideoComponent.Metadata == null)
+				{
+					_focusedVideoComponent.Metadata = refreshedMeta;
+				}
+				else
+				{
+					// Prefer fresh probe for subtitle discovery; keep other fields from probe too.
+					_focusedVideoComponent.Metadata = refreshedMeta;
+				}
+			}
+
 			if (_focusedVideoComponent.IsImage)
 			{
 				_focusedVideoComponent.HasAudio = false;
@@ -513,10 +596,12 @@ public partial class VideoInspector : Control
 			}
 			else
 			{
-				_focusedVideoComponent.HasAudio = refreshedMeta?.AudioChannels > 0;
+				_focusedVideoComponent.HasAudio = _focusedVideoComponent.Metadata?.AudioChannels > 0;
 			}
 			_focusedVideoComponent.RecalculateDuration();
-			GD.Print("VideoInspector:ShellSelected - Refreshed metadata from file");
+			GD.Print(
+				$"VideoInspector:ShellSelected - Refreshed metadata from file " +
+				$"(subs={_focusedVideoComponent.Metadata?.SubtitleTracks?.Count ?? 0})");
 		}
 
 		if (gen != _shellSelectGeneration) return;
@@ -979,9 +1064,25 @@ public partial class VideoInspector : Control
 				{
 					metadataText += "\nNo Audio";
 				}
+
+				int subCount = meta.SubtitleTracks?.Count ?? 0;
+				int textSubCount = meta.SubtitleTracks?.Count(t => t != null && t.IsTextBased) ?? 0;
+				if (subCount > 0)
+					metadataText += $"\nSubtitles: {subCount} track(s) ({textSubCount} text)";
+				else
+					metadataText += "\nNo Subtitles";
 			}
 			_fileUrl.TooltipText = metadataText;
+			if (_fileMetadataLabel != null)
+			{
+				int textSubs = meta.SubtitleTracks?.Count(t => t != null && t.IsTextBased) ?? 0;
+				_fileMetadataLabel.Text = textSubs > 0
+					? $"{meta.Width}x{meta.Height} · {meta.Codec} · CC×{textSubs}"
+					: $"{meta.Width}x{meta.Height} · {meta.Codec}";
+			}
 		}
+
+		RefreshSubtitleUi();
 		
 		// Update scale and offset
 		_scaleWidthLineEdit.Text = _focusedVideoComponent.ScaledWidth.ToString();
@@ -1001,6 +1102,161 @@ public partial class VideoInspector : Control
 		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
 		var volumeDb = UiUtilities.LinearToDb((float)volume);
 		_volumeInput.Text = $"{volumeDb}dB";
+	}
+
+	/// <summary>
+	/// Shows or hides caption controls based on available text subtitle tracks.
+	/// </summary>
+	private void RefreshSubtitleUi()
+	{
+		if (_subtitleRow == null)
+		{
+			GD.PrintErr("VideoInspector:RefreshSubtitleUi - Subtitle row was not built.");
+			return;
+		}
+
+		if (_focusedVideoComponent == null)
+		{
+			_subtitleRow.Visible = false;
+			return;
+		}
+
+		bool isImage = _focusedVideoComponent.IsImage;
+		var tracks = _focusedVideoComponent.Metadata?.SubtitleTracks;
+		int totalSubs = tracks?.Count ?? 0;
+		int textSubs = tracks?.Count(t => t != null && t.IsTextBased) ?? 0;
+		bool hasText = !isImage && textSubs > 0;
+		_subtitleRow.Visible = hasText;
+
+		GD.Print(
+			$"VideoInspector:RefreshSubtitleUi - visible={hasText} totalSubs={totalSubs} textSubs={textSubs} " +
+			$"use={_focusedVideoComponent.UseSubtitles}");
+
+		if (!hasText)
+		{
+			// Keep model consistent when file has no text tracks.
+			if (_focusedVideoComponent.UseSubtitles)
+				_focusedVideoComponent.UseSubtitles = false;
+			return;
+		}
+
+		_useSubtitlesCheck?.SetPressedNoSignal(_focusedVideoComponent.UseSubtitles);
+
+		if (_subtitleTrackOption != null)
+		{
+			_subtitleTrackOption.SetBlockSignals(true);
+			try
+			{
+				_subtitleTrackOption.Clear();
+				int selected = 0;
+				int i = 0;
+				foreach (var track in tracks)
+				{
+					if (track == null || !track.IsTextBased)
+						continue;
+					_subtitleTrackOption.AddItem(track.DisplayName);
+					int idx = _subtitleTrackOption.ItemCount - 1;
+					_subtitleTrackOption.SetItemMetadata(idx, track.StreamIndex);
+					if (track.StreamIndex == _focusedVideoComponent.SubtitleStreamIndex
+					    || (_focusedVideoComponent.SubtitleStreamIndex < 0 && i == 0))
+						selected = idx;
+					i++;
+				}
+
+				if (_subtitleTrackOption.ItemCount == 0)
+				{
+					_subtitleRow.Visible = false;
+					return;
+				}
+
+				_subtitleTrackOption.Selected = selected;
+				// Persist resolved stream if still default -1
+				if (_focusedVideoComponent.SubtitleStreamIndex < 0)
+					_focusedVideoComponent.SubtitleStreamIndex =
+						(int)_subtitleTrackOption.GetItemMetadata(selected);
+			}
+			finally
+			{
+				_subtitleTrackOption.SetBlockSignals(false);
+			}
+
+			_subtitleTrackOption.Disabled = !_focusedVideoComponent.UseSubtitles;
+		}
+
+		bool hasTextComp = _focusedCue != null && _focusedCue.GetTextComponent() != null;
+		if (_addTextForCcButton != null)
+		{
+			_addTextForCcButton.Visible = _focusedVideoComponent.UseSubtitles && !hasTextComp;
+		}
+	}
+
+	private void OnUseSubtitlesToggled(bool pressed)
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null)
+			return;
+		if (_globalData?.HistoryManager?.IsRestoring == true)
+			return;
+		if (_focusedVideoComponent.UseSubtitles == pressed)
+			return;
+
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video closed captions");
+		_focusedVideoComponent.UseSubtitles = pressed;
+
+		if (pressed)
+		{
+			// Ensure a stream index is chosen.
+			if (_focusedVideoComponent.SubtitleStreamIndex < 0)
+			{
+				var first = _focusedVideoComponent.Metadata?.GetDefaultTextSubtitleTrack();
+				if (first != null)
+					_focusedVideoComponent.SubtitleStreamIndex = first.StreamIndex;
+			}
+
+			if (_focusedCue.GetTextComponent() == null)
+			{
+				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add text for closed captions");
+				var text = _focusedCue.AddTextComponent();
+				// CC slave timing: hold until video stops.
+				text.Duration = 0;
+				text.RecalculateDuration();
+				_focusedCue.CalculateTotalDuration();
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+			}
+		}
+
+		_focusedCue.CalculateTotalDuration();
+		RefreshSubtitleUi();
+	}
+
+	private void OnSubtitleTrackSelected(long index)
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null || _subtitleTrackOption == null)
+			return;
+		if (_globalData?.HistoryManager?.IsRestoring == true)
+			return;
+
+		int streamIndex = (int)_subtitleTrackOption.GetItemMetadata((int)index);
+		if (_focusedVideoComponent.SubtitleStreamIndex == streamIndex)
+			return;
+
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit subtitle track");
+		_focusedVideoComponent.SubtitleStreamIndex = streamIndex;
+	}
+
+	private void OnAddTextForCcPressed()
+	{
+		if (_focusedCue == null || _focusedCue.GetTextComponent() != null)
+			return;
+		if (_globalData?.HistoryManager?.IsRestoring == true)
+			return;
+
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add text for closed captions");
+		var text = _focusedCue.AddTextComponent();
+		text.Duration = 0;
+		text.RecalculateDuration();
+		_focusedCue.CalculateTotalDuration();
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+		RefreshSubtitleUi();
 	}
 
 	/// <summary>

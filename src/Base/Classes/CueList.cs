@@ -1242,6 +1242,7 @@ public partial class CueList : Control
 				{
 					"Audio" => new AudioComponent(),
 					"Video" => new VideoComponent(),
+					"Text" => new TextComponent(),
 					"Network" => new NetworkComponent(),
 					"CueLight" => new CueLightComponent(),
 					"OscComponent" => new OscComponent(),

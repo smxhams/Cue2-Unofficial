@@ -45,6 +45,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private const long PresentEarlyToleranceUs = 8_000;
 
     private VideoSourceDecoder _videoDecoder;
+    private SubtitleSourceDecoder _subtitleDecoder;
+    private ActiveTextPlayback _linkedTextPlayback;
+    private string _lastSubtitleText = string.Empty;
     private ImageTexture _godotTexture;
     private Image _godotImage;
     private byte[] _displayRgba;
@@ -223,6 +226,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         if (!_videoComponent.IsImage && !_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
             _endTimeUs = _videoDecoder.Info.DurationUs;
 
+        await TryLoadSubtitlesAsync(mediaPath);
+
         if (_startTimeUs > 0)
             _videoDecoder.Seek(_startTimeUs);
         _videoDecoder.Prefetch(VideoPrefetchTarget);
@@ -339,6 +344,17 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     /// </summary>
     public bool UsesVideoComponent(VideoComponent component) =>
         component != null && ReferenceEquals(_videoComponent, component);
+
+    /// <summary>
+    /// Links a text playback so closed captions update its live text during presentation.
+    /// </summary>
+    /// <param name="textPlayback">Active text playback on the same cue, or null to unlink.</param>
+    public void SetLinkedTextPlayback(ActiveTextPlayback textPlayback)
+    {
+        _linkedTextPlayback = textPlayback;
+        if (textPlayback != null)
+            textPlayback.IsSubtitleSlave = true;
+    }
 
     private void ApplyOpacityModulate()
     {
@@ -502,6 +518,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         long masterUs = GetMasterClockUs();
         EmitSignal(SignalName.TimeUpdated, masterUs / (double)MicrosecondsPerSecond);
+        UpdateLinkedSubtitles(masterUs);
 
         if (masterUs >= _endTimeUs)
         {
@@ -1261,8 +1278,94 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     /// <summary>
     /// Drops decoder, display, and mix buffers so large arrays become collectible.
     /// </summary>
+    private async Task TryLoadSubtitlesAsync(string mediaPath)
+    {
+        try
+        {
+            _subtitleDecoder?.Dispose();
+            _subtitleDecoder = null;
+            _lastSubtitleText = string.Empty;
+
+            if (_videoComponent == null || _videoComponent.IsImage || !_videoComponent.UseSubtitles)
+                return;
+
+            var track = _videoComponent.ResolveSubtitleTrack();
+            if (track == null)
+            {
+                GD.Print("ActiveVideoPlayback:TryLoadSubtitlesAsync - No text subtitle track selected.");
+                return;
+            }
+
+            var decoder = new SubtitleSourceDecoder();
+            if (track.IsExternal)
+            {
+                await decoder.LoadExternalAsync(track.ExternalFilePath);
+            }
+            else
+            {
+                await decoder.LoadAsync(mediaPath, track.StreamIndex);
+            }
+
+            if (!decoder.IsLoaded || decoder.CueCount == 0)
+            {
+                decoder.Dispose();
+                GD.PrintErr(
+                    $"ActiveVideoPlayback:TryLoadSubtitlesAsync - No cues loaded " +
+                    $"(stream={track.StreamIndex}, external={track.ExternalFilePath}).");
+                return;
+            }
+
+            _subtitleDecoder = decoder;
+            GD.Print(
+                $"ActiveVideoPlayback:TryLoadSubtitlesAsync - Loaded {decoder.CueCount} cues " +
+                $"from {(track.IsExternal ? track.ExternalFilePath : $"stream {track.StreamIndex}")}.");
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveVideoPlayback:TryLoadSubtitlesAsync - {ex.Message}");
+            try { _subtitleDecoder?.Dispose(); } catch { /* ignore */ }
+            _subtitleDecoder = null;
+        }
+    }
+
+    private void UpdateLinkedSubtitles(long masterUs)
+    {
+        if (_linkedTextPlayback == null || _subtitleDecoder == null || !_subtitleDecoder.IsLoaded)
+            return;
+        if (!IsInstanceValid(_linkedTextPlayback))
+        {
+            _linkedTextPlayback = null;
+            return;
+        }
+
+        string text = _subtitleDecoder.GetTextAtUs(masterUs) ?? string.Empty;
+        if (string.Equals(text, _lastSubtitleText, StringComparison.Ordinal))
+            return;
+
+        _lastSubtitleText = text;
+        _linkedTextPlayback.SetLiveTextOverride(text);
+    }
+
+    private void ClearLinkedSubtitles()
+    {
+        _lastSubtitleText = string.Empty;
+        try
+        {
+            if (_linkedTextPlayback != null && IsInstanceValid(_linkedTextPlayback))
+                _linkedTextPlayback.ClearLiveTextOverride();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     private void ReleaseMediaBuffers()
     {
+        ClearLinkedSubtitles();
+        try { _subtitleDecoder?.Dispose(); } catch { /* ignore */ }
+        _subtitleDecoder = null;
+
         try { _audioDecoder?.Dispose(); } catch { /* ignore */ }
         _audioDecoder = null;
         try { _videoDecoder?.Dispose(); } catch { /* ignore */ }

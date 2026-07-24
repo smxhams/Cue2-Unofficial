@@ -271,10 +271,52 @@ public class VideoComponent : ICueComponent
     public double FadeOutDuration { get; set; } = 0.0; // In seconds
 
     /// <summary>
+    /// When true and a text-based subtitle track is available, drive the cue's
+    /// <see cref="TextComponent"/> with timed closed captions during playback.
+    /// </summary>
+    public bool UseSubtitles { get; set; }
+
+    /// <summary>
+    /// FFmpeg stream index of the selected subtitle track. <c>-1</c> = first text track
+    /// (or none if no text subtitles exist).
+    /// </summary>
+    public int SubtitleStreamIndex { get; set; } = -1;
+
+    /// <summary>
     /// Full metadata from file (duration, width, height, frame rate, codec, format).
     /// Set via inspector on load; used for UI/display and playback routing.
     /// </summary>
     public VideoFileMetadata Metadata { get; set; } = null;
+
+    /// <summary>
+    /// True when metadata lists at least one text-based subtitle track.
+    /// </summary>
+    public bool HasTextSubtitles => Metadata?.HasTextSubtitles == true;
+
+    /// <summary>
+    /// Resolves the effective subtitle stream index for playback, or -1 if none.
+    /// Prefer <see cref="ResolveSubtitleTrack"/> when external sidecars may be used.
+    /// </summary>
+    public int ResolveSubtitleStreamIndex() => ResolveSubtitleTrack()?.StreamIndex ?? -1;
+
+    /// <summary>
+    /// Resolves the selected text subtitle track (embedded or sidecar), or null.
+    /// </summary>
+    public SubtitleTrackInfo ResolveSubtitleTrack()
+    {
+        if (Metadata?.SubtitleTracks == null || Metadata.SubtitleTracks.Count == 0)
+            return null;
+
+        // Match explicit selection (including synthetic negative indices for sidecars).
+        foreach (var t in Metadata.SubtitleTracks)
+        {
+            if (t != null && t.IsTextBased && t.StreamIndex == SubtitleStreamIndex)
+                return t;
+        }
+
+        // SubtitleStreamIndex unmatched / default → first text track.
+        return Metadata.GetDefaultTextSubtitleTrack();
+    }
     
     
     public Godot.Collections.Dictionary GetData()
@@ -300,6 +342,8 @@ public class VideoComponent : ICueComponent
         data.Add("OffsetY", OffsetY);
         data.Add("HasAudio", HasAudio);
         data.Add("UseAudio", UseAudio);
+        data.Add("UseSubtitles", UseSubtitles);
+        data.Add("SubtitleStreamIndex", SubtitleStreamIndex);
         data.Add("PatchId", Patch?.Id ?? PatchId); // Reference patch by ID; fall back to stored PatchId
         data.Add("DirectOutput", DirectOutput ?? string.Empty);
         if (Routing != null)
@@ -322,6 +366,24 @@ public class VideoComponent : ICueComponent
             metaDict.Add("AudioSampleRate", Metadata.AudioSampleRate);
             metaDict.Add("AudioBitDepth", Metadata.AudioBitDepth);
             metaDict.Add("AudioCodec", Metadata.AudioCodec);
+            if (Metadata.SubtitleTracks != null && Metadata.SubtitleTracks.Count > 0)
+            {
+                var tracks = new Godot.Collections.Array();
+                foreach (var t in Metadata.SubtitleTracks)
+                {
+                    if (t == null) continue;
+                    tracks.Add(new Dictionary
+                    {
+                        { "StreamIndex", t.StreamIndex },
+                        { "Codec", t.Codec ?? string.Empty },
+                        { "Language", t.Language ?? string.Empty },
+                        { "Title", t.Title ?? string.Empty },
+                        { "IsTextBased", t.IsTextBased },
+                        { "ExternalFilePath", t.ExternalFilePath ?? string.Empty },
+                    });
+                }
+                metaDict.Add("SubtitleTracks", tracks);
+            }
             data.Add("Metadata", metaDict);
         }
 
@@ -359,6 +421,10 @@ public class VideoComponent : ICueComponent
         OffsetY = data.ContainsKey("OffsetY") ? data["OffsetY"].AsInt32() : 0;
         HasAudio = data.ContainsKey("HasAudio") ? data["HasAudio"].AsBool() : false;
         UseAudio = data.ContainsKey("UseAudio") ? data["UseAudio"].AsBool() : true;
+        UseSubtitles = data.ContainsKey("UseSubtitles") && data["UseSubtitles"].AsBool();
+        SubtitleStreamIndex = data.ContainsKey("SubtitleStreamIndex")
+            ? data["SubtitleStreamIndex"].AsInt32()
+            : -1;
         PatchId = data.ContainsKey("PatchId") ? data["PatchId"].AsInt32() : -1;
         DirectOutput = data.ContainsKey("DirectOutput") ? data["DirectOutput"].AsString() : null;
 
@@ -384,12 +450,48 @@ public class VideoComponent : ICueComponent
             Metadata.AudioSampleRate = metaDict.ContainsKey("AudioSampleRate") ? (int)metaDict["AudioSampleRate"] : 0;
             Metadata.AudioBitDepth = metaDict.ContainsKey("AudioBitDepth") ? (int)metaDict["AudioBitDepth"] : 0;
             Metadata.AudioCodec = metaDict.ContainsKey("AudioCodec") ? (string)metaDict["AudioCodec"] : string.Empty;
+            Metadata.SubtitleTracks = LoadSubtitleTracksFromMeta(metaDict);
         }
         else
         {
             GD.Print("VideoComponent:LoadFromData - No metadata in save data; will extract on next load.");
             Metadata = null;
         }
+    }
+
+    private static System.Collections.Generic.List<SubtitleTrackInfo> LoadSubtitleTracksFromMeta(Dictionary metaDict)
+    {
+        var list = new System.Collections.Generic.List<SubtitleTrackInfo>();
+        if (metaDict == null || !metaDict.ContainsKey("SubtitleTracks"))
+            return list;
+
+        try
+        {
+            var tracks = metaDict["SubtitleTracks"].AsGodotArray();
+            foreach (var item in tracks)
+            {
+                if (item.VariantType != Variant.Type.Dictionary)
+                    continue;
+                var d = item.AsGodotDictionary();
+                list.Add(new SubtitleTrackInfo
+                {
+                    StreamIndex = d.ContainsKey("StreamIndex") ? d["StreamIndex"].AsInt32() : -1,
+                    Codec = d.ContainsKey("Codec") ? d["Codec"].AsString() : string.Empty,
+                    Language = d.ContainsKey("Language") ? d["Language"].AsString() : string.Empty,
+                    Title = d.ContainsKey("Title") ? d["Title"].AsString() : string.Empty,
+                    IsTextBased = !d.ContainsKey("IsTextBased") || d["IsTextBased"].AsBool(),
+                    ExternalFilePath = d.ContainsKey("ExternalFilePath")
+                        ? d["ExternalFilePath"].AsString()
+                        : string.Empty,
+                });
+            }
+        }
+        catch (System.Exception ex)
+        {
+            GD.PrintErr($"VideoComponent:LoadSubtitleTracksFromMeta - {ex.Message}");
+        }
+
+        return list;
     }
 
     /// <summary>

@@ -78,6 +78,8 @@ public partial class ActiveCue : GodotObject
     private readonly Dictionary<PanelContainer, AudioComponent> _componentToAudio = new();
     private readonly Dictionary<PanelContainer, ActiveVideoPlayback> _activeVideoComponents = new();
     private readonly Dictionary<PanelContainer, VideoComponent> _componentToVideo = new();
+    private readonly Dictionary<PanelContainer, ActiveTextPlayback> _activeTextComponents = new();
+    private readonly Dictionary<PanelContainer, TextComponent> _componentToText = new();
     private readonly Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new();
     private readonly Dictionary<PanelContainer, OscComponent> _activeOscComponents = new();
     private readonly Dictionary<PanelContainer, MidiOutputComponent> _activeMidiOutputComponents = new();
@@ -86,6 +88,7 @@ public partial class ActiveCue : GodotObject
     /// <summary>Keeps handler refs so we can disconnect before freeing UI (avoids disposed-panel callbacks).</summary>
     private readonly List<(ActiveAudioPlayback Playback, ActiveAudioPlayback.CompletedEventHandler Handler)> _audioCompleteHandlers = new();
     private readonly List<(ActiveVideoPlayback Playback, ActiveVideoPlayback.CompletedEventHandler Handler)> _videoCompleteHandlers = new();
+    private readonly List<(ActiveTextPlayback Playback, ActiveTextPlayback.CompletedEventHandler Handler)> _textCompleteHandlers = new();
     
     private int _activeComponentCount = 0;
     
@@ -285,6 +288,22 @@ public partial class ActiveCue : GodotObject
         foreach (var playback in _activeVideoComponents.Values)
         {
             if (playback != null && playback.UsesVideoComponent(component))
+                playback.RefreshVisualProperties();
+        }
+    }
+
+    /// <summary>
+    /// Re-applies text content and style on live RichTextLabels for a text component.
+    /// </summary>
+    /// <param name="component">Text component whose active playback should refresh.</param>
+    public void RefreshTextVisuals(TextComponent component)
+    {
+        if (component == null || _isCleaned)
+            return;
+
+        foreach (var playback in _activeTextComponents.Values)
+        {
+            if (playback != null && playback.UsesTextComponent(component))
                 playback.RefreshVisualProperties();
         }
     }
@@ -711,6 +730,7 @@ public partial class ActiveCue : GodotObject
         bool hasActive =
             _activeAudioComponents.Count > 0 ||
             _activeVideoComponents.Count > 0 ||
+            _activeTextComponents.Count > 0 ||
             _activeOscComponents.Count > 0 ||
             _activeMidiOutputComponents.Count > 0 ||
             _activeCueLightComponents.Count > 0 ||
@@ -739,6 +759,10 @@ public partial class ActiveCue : GodotObject
             else if (comp is VideoComponent videoComp)
             {
                 parallel.Add(TriggerVideoComponent(videoComp));
+            }
+            else if (comp is TextComponent textComp)
+            {
+                parallel.Add(TriggerTextComponent(textComp));
             }
             else if (comp is CueLightComponent cueLightComp)
             {
@@ -1453,6 +1477,10 @@ public partial class ActiveCue : GodotObject
             {
                 tasks.Add(SetupVideoComponent(videoComponent));
             }
+            else if (component is TextComponent textComponent)
+            {
+                tasks.Add(SetupTextComponent(textComponent));
+            }
             else if (component is CueLightComponent cueLightComponent)
             {
                 tasks.Add(SetupCueLightComponent(cueLightComponent));
@@ -1473,9 +1501,64 @@ public partial class ActiveCue : GodotObject
             }
         }
         await Task.WhenAll(tasks);
+        LinkVideoSubtitlesToText();
     }
 
+    /// <summary>
+    /// When the video component has closed captions enabled, wires the active text
+    /// playback so timed subtitles drive its live text.
+    /// </summary>
+    private void LinkVideoSubtitlesToText()
+    {
+        try
+        {
+            var videoComp = _cue?.GetVideoComponent();
+            if (videoComp == null || !videoComp.UseSubtitles || videoComp.IsImage)
+                return;
 
+            ActiveVideoPlayback videoPlayback = null;
+            foreach (var kv in _componentToVideo)
+            {
+                if (kv.Value == videoComp && _activeVideoComponents.TryGetValue(kv.Key, out var pb))
+                {
+                    videoPlayback = pb;
+                    break;
+                }
+            }
+
+            ActiveTextPlayback textPlayback = null;
+            foreach (var pb in _activeTextComponents.Values)
+            {
+                if (pb != null && IsInstanceValid(pb))
+                {
+                    textPlayback = pb;
+                    break;
+                }
+            }
+
+            if (videoPlayback == null)
+                return;
+
+            if (textPlayback == null)
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Video in {_cue.Name} has closed captions enabled but no text component is present.",
+                    1);
+                return;
+            }
+
+            // CC slave: hold until video ends (do not auto-complete on text duration alone).
+            textPlayback.IsSubtitleSlave = true;
+            videoPlayback.SetLinkedTextPlayback(textPlayback);
+            // Start blank until the first cue.
+            textPlayback.SetLiveTextOverride(string.Empty);
+            GD.Print($"ActiveCue:LinkVideoSubtitlesToText - Linked CC to text on {_cue.Name}");
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:LinkVideoSubtitlesToText - {ex.Message}");
+        }
+    }
 
     private async Task SetupAudioComponent(AudioComponent audioComponent)
     {
@@ -1830,7 +1913,31 @@ public partial class ActiveCue : GodotObject
         _componentToVideo.Remove(panel);
         if (IsInstanceValid(panel))
             panel.QueueFree();
+
+        // Closed-caption text holds until stopped; end it with the video so the cue can finish.
+        StopSubtitleSlaveTextComponents();
         CheckForCueCompletion();
+    }
+
+    /// <summary>
+    /// Stops text playbooks that are slaves of video closed captions.
+    /// </summary>
+    private void StopSubtitleSlaveTextComponents()
+    {
+        foreach (var kv in _activeTextComponents.ToList())
+        {
+            var playback = kv.Value;
+            if (playback == null || !IsInstanceValid(playback) || !playback.IsSubtitleSlave)
+                continue;
+            try
+            {
+                _ = playback.Stop(0);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:StopSubtitleSlaveTextComponents - {ex.Message}");
+            }
+        }
     }
 
     private void UpdateVideoUiByPanelId(double time, ulong panelId)
@@ -1839,6 +1946,217 @@ public partial class ActiveCue : GodotObject
         PanelContainer panel = FindLivePanelKey(_activeVideoComponents.Keys, panelId);
         if (panel == null) return;
         UpdateVideoUi(time, panel);
+    }
+
+    /// <summary>
+    /// Prepares a text overlay for presentation on the target layer.
+    /// </summary>
+    /// <param name="textComponent">Text component to set up.</param>
+    private Task SetupTextComponent(TextComponent textComponent)
+    {
+        try
+        {
+            textComponent.RecalculateDuration();
+
+            var playback = new ActiveTextPlayback(textComponent);
+            // Must be in the scene tree so _Process can drive the hold timer.
+            _activeCueBar.AddChild(playback);
+            playback.Init();
+
+            PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+            _componentContainer.AddChild(componentPanel);
+            componentPanel.GetNode<Label>("%ComponentLabel").Text = textComponent.GetDisplayLabel();
+            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
+            var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
+
+            if (textComponent.Duration <= 0)
+                timeLabel.Text = "∞";
+            else
+                timeLabel.Text = UiUtilities.FormatTime(textComponent.TotalDuration);
+
+            try
+            {
+                typeIcon.Icon = _activeCueBar.GetThemeIcon("Text", "AtlasIcons");
+            }
+            catch
+            {
+                try
+                {
+                    typeIcon.Icon = _activeCueBar.GetThemeIcon("Label", "AtlasIcons");
+                }
+                catch
+                {
+                    // Icon optional.
+                }
+            }
+
+            pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+
+            _activeTextComponents.Add(componentPanel, playback);
+            _componentToText.Add(componentPanel, textComponent);
+
+            pauseButton.Pressed += () =>
+            {
+                if (_isCleaned || !IsInstanceValid(componentPanel)) return;
+                if (!playback.IsPaused)
+                    playback.Pause();
+                else
+                    playback.Resume();
+
+                if (IsInstanceValid(pauseButton) && IsInstanceValid(_activeCueBar))
+                    pauseButton.Icon = _activeCueBar.GetThemeIcon(playback.IsPaused ? "Play" : "Pause", "AtlasIcons");
+            };
+
+            stopButton.Pressed += async () => await StopTextComponent(componentPanel);
+
+            ulong textPanelId = componentPanel.GetInstanceId();
+            playback.TimeUpdated += time =>
+            {
+                double t = time;
+                Callable.From(() => UpdateTextUiByPanelId(t, textPanelId)).CallDeferred();
+            };
+
+            _activeComponentCount++;
+            WireTextCompleted(playback, componentPanel);
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:SetupTextComponent - Exception: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error activating text component for cue {_cue.Name}: {ex.Message}", 2);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task TriggerTextComponent(TextComponent textComp)
+    {
+        PanelContainer panel = null;
+        try
+        {
+            panel = _componentToText.FirstOrDefault(kv => kv.Value == textComp).Key;
+            if (panel == null)
+            {
+                GD.PrintErr($"ActiveCue:TriggerTextComponent - No playback found for text on {_cue.Name}");
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"No playback for text component in cue {_cue.Name}", 2);
+                return;
+            }
+
+            if (!_activeTextComponents.TryGetValue(panel, out var playback) || playback == null)
+                return;
+
+            double fadeIn = _controlFadeInDuration ?? textComp.FadeInDuration;
+            if (fadeIn > 1e-9)
+                await playback.FadeInAsync(fadeIn);
+            else
+                await playback.PlayAsync();
+
+            if (_isPaused)
+                playback.Pause();
+            SyncPauseTransportUi();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:TriggerTextComponent - Error: {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Trigger failed for text in {_cue.Name}: {ex.Message}", 2);
+            if (panel != null && _activeTextComponents.TryGetValue(panel, out var failedPlayback))
+            {
+                try { _ = failedPlayback.Stop(0); } catch { /* best-effort */ }
+            }
+        }
+    }
+
+    private async Task StopTextComponent(PanelContainer componentPanel)
+    {
+        if (_isCleaned || componentPanel == null || !IsInstanceValid(componentPanel))
+            return;
+        if (!_activeTextComponents.TryGetValue(componentPanel, out var playback) || playback == null)
+            return;
+
+        await playback.Stop(_settings.StopFadeDuration);
+    }
+
+    private void WireTextCompleted(ActiveTextPlayback playback, PanelContainer componentPanel)
+    {
+        ulong panelId = componentPanel.GetInstanceId();
+        ActiveTextPlayback.CompletedEventHandler handler = () =>
+        {
+            Callable.From(() => CompleteTextByPanelId(panelId)).CallDeferred();
+        };
+        playback.Completed += handler;
+        _textCompleteHandlers.Add((playback, handler));
+    }
+
+    private void CompleteTextByPanelId(ulong panelId)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+
+        PanelContainer panel = FindLivePanelKey(_activeTextComponents.Keys, panelId);
+        if (panel == null)
+        {
+            CheckForCueCompletion();
+            return;
+        }
+
+        _activeTextComponents.Remove(panel);
+        _componentToText.Remove(panel);
+        if (IsInstanceValid(panel))
+            panel.QueueFree();
+        CheckForCueCompletion();
+    }
+
+    private void UpdateTextUiByPanelId(double time, ulong panelId)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+        PanelContainer panel = FindLivePanelKey(_activeTextComponents.Keys, panelId);
+        if (panel == null) return;
+        UpdateTextUi(time, panel);
+    }
+
+    private void UpdateTextUi(double time, PanelContainer componentPanel)
+    {
+        if (_isCleaned || !IsInstanceValid(this)) return;
+        if (!IsInstanceValid(componentPanel)) return;
+        if (!_activeTextComponents.TryGetValue(componentPanel, out var textPlayback) || textPlayback == null)
+            return;
+        if (!_componentToText.TryGetValue(componentPanel, out var textComponent) || textComponent == null)
+            return;
+
+        var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
+        if (progressBar == null) return;
+        if (textPlayback.IsStopped) return;
+
+        UpdateComponentFadeProgress(
+            componentPanel,
+            textPlayback.IsFadingIn,
+            textPlayback.IsFadingOut,
+            textPlayback.CurrentFadeLevel);
+
+        if (textPlayback.IsPaused && !textPlayback.IsFadingOut)
+            return;
+
+        double span = textPlayback.GetDuration();
+        float progressPercentage;
+        if (span <= 0)
+            progressPercentage = 0f;
+        else
+            progressPercentage = (float)(time / span * 100.0);
+
+        var timeLabel = componentPanel.GetNodeOrNull<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
+        if (timeLabel != null)
+        {
+            if (span <= 0)
+                timeLabel.Text = "∞";
+            else
+                timeLabel.Text = UiUtilities.FormatTime(time);
+        }
+
+        progressBar.Value = progressPercentage;
     }
 
     private static PanelContainer FindLivePanelKey(IEnumerable<PanelContainer> keys, ulong panelId)
@@ -2005,6 +2323,7 @@ public partial class ActiveCue : GodotObject
     {
         if (!_activeVideoComponents.TryGetValue(componentPanel, out var playback))
             return;
+        StopSubtitleSlaveTextComponents();
         await playback.Stop(_settings.StopFadeDuration);
     }
     
@@ -2143,6 +2462,9 @@ public partial class ActiveCue : GodotObject
         foreach (var playback in _activeVideoComponents.Values)
             playback.Resume();
 
+        foreach (var playback in _activeTextComponents.Values)
+            playback.Resume();
+
         if (_updateTimer != null && IsInstanceValid(_updateTimer))
             _updateTimer.Start();
 
@@ -2166,6 +2488,9 @@ public partial class ActiveCue : GodotObject
         foreach (var playback in _activeVideoComponents.Values)
             playback.Pause();
 
+        foreach (var playback in _activeTextComponents.Values)
+            playback.Pause();
+
         SyncPauseTransportUi();
     }
 
@@ -2187,6 +2512,7 @@ public partial class ActiveCue : GodotObject
 
         SyncComponentPauseIcons(_activeAudioComponents, p => p != null && p.IsPaused);
         SyncComponentPauseIcons(_activeVideoComponents, p => p != null && p.IsPaused);
+        SyncComponentPauseIcons(_activeTextComponents, p => p != null && p.IsPaused);
     }
 
     private static void SyncComponentPauseIcons<T>(
@@ -2260,6 +2586,10 @@ public partial class ActiveCue : GodotObject
         {
             tasks.Add(videoComp.Stop(fadeDuration));
         }
+        foreach (var textComp in _activeTextComponents.Values.ToList())
+        {
+            tasks.Add(textComp.Stop(fadeDuration));
+        }
 
         // Instant components (OSC / MIDI / cue light / control) have no async stop — clear them now.
         foreach (var panel in _activeOscComponents.Keys.ToList())
@@ -2295,7 +2625,8 @@ public partial class ActiveCue : GodotObject
             EnsureAliveOrCleanup();
             if (!_isCleaned &&
                 _activeAudioComponents.Count == 0 &&
-                _activeVideoComponents.Count == 0)
+                _activeVideoComponents.Count == 0 &&
+                _activeTextComponents.Count == 0)
             {
                 Cleanup();
             }
@@ -2381,7 +2712,8 @@ public partial class ActiveCue : GodotObject
         if (_isCleaned) return;
 
         if (_activeAudioComponents.Count == 0 
-            && _activeVideoComponents.Count == 0 
+            && _activeVideoComponents.Count == 0
+            && _activeTextComponents.Count == 0
             && _activeOscComponents.Count == 0
             && _activeMidiOutputComponents.Count == 0
             && _activeCueLightComponents.Count == 0
@@ -2484,10 +2816,19 @@ public partial class ActiveCue : GodotObject
                 GD.PrintErr($"ActiveCue:Cleanup - Video stop failed: {ex.Message}");
             }
         }
+        foreach (var playback in _activeTextComponents.Values.ToList())
+        {
+            try { _ = playback.Stop(0); } catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:Cleanup - Text stop failed: {ex.Message}");
+            }
+        }
         _activeAudioComponents.Clear();
         _componentToAudio.Clear();
         _activeVideoComponents.Clear();
         _componentToVideo.Clear();
+        _activeTextComponents.Clear();
+        _componentToText.Clear();
         _activeOscComponents.Clear();
         _activeMidiOutputComponents.Clear();
         _activeCueLightComponents.Clear();
@@ -2585,6 +2926,20 @@ public partial class ActiveCue : GodotObject
             }
         }
         _videoCompleteHandlers.Clear();
+
+        foreach (var (playback, handler) in _textCompleteHandlers)
+        {
+            try
+            {
+                if (playback != null && IsInstanceValid(playback))
+                    playback.Completed -= handler;
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:DisconnectPlaybackCompletionHandlers - Text: {ex.Message}");
+            }
+        }
+        _textCompleteHandlers.Clear();
     }
 
     /// <summary>

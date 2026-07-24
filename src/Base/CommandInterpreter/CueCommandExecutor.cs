@@ -41,6 +41,19 @@ public partial class CueCommandExectutor : Node
         foreach (var active in _activeCues.ToList())
             active?.RefreshVideoVisuals(component);
     }
+
+    /// <summary>
+    /// Pushes text/style changes to any playing instance of a text component.
+    /// </summary>
+    /// <param name="component">Text component to refresh on active cues.</param>
+    public void RefreshPlayingTextVisuals(TextComponent component)
+    {
+        if (component == null)
+            return;
+
+        foreach (var active in _activeCues.ToList())
+            active?.RefreshTextVisuals(component);
+    }
     
     public override void _Ready()
     {
