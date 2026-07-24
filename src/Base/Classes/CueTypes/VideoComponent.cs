@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Linq;
+using Cue2.Shared;
 using Godot;
 using Godot.Collections;
 
@@ -17,11 +20,22 @@ public enum VideoDisplayMode
     Stretch = 2,
 }
 
+/// <summary>
+/// Video or still-image media component attached to a cue.
+/// Images reuse the same playback/inspector path as video; in/out points are replaced by a user duration.
+/// </summary>
 public class VideoComponent : ICueComponent
 {
     public string Type => "Video";
     public string VideoFile { get; set; }
-    /// <summary>Start Time in seconds</summary>
+
+    /// <summary>
+    /// True when <see cref="VideoFile"/> is a still image (png/jpg/etc).
+    /// Images do not use start/end times; <see cref="Duration"/> is user-set (0 = until stopped).
+    /// </summary>
+    public bool IsImage { get; set; }
+
+    /// <summary>Start Time in seconds (video only; ignored for images).</summary>
     public double StartTime { get; set; } = 0.0; // In seconds
     public double EndTime { get; set; } = -1.0; // -1 means play until end of cue
     /// <summary>
@@ -182,15 +196,42 @@ public class VideoComponent : ICueComponent
     }
 
     /// <summary>
-    /// Duration is length of video between start and endtime
+    /// Segment length in seconds.
+    /// Video: length between start and end time.
+    /// Image: user-set hold time; <c>0</c> means stay active until stopped.
     /// </summary>
     public double Duration { get; set; } = 0.0;
 
     /// <summary>
-    /// TotalDuration is time the video plays including playcount. ((Endtime-Starttime) * playcount)
+    /// Total play length including play count.
+    /// Video: ((EndTime-StartTime) * PlayCount); Image: Duration * PlayCount when Duration &gt; 0.
     /// </summary>
-    /// <value>Returns -1 if looping enabled</value>
+    /// <value>Returns -1 if looping, or if image duration is 0 (until stopped).</value>
     public double TotalDuration { get; set; } = 0.0;
+
+    /// <summary>
+    /// Returns true when <paramref name="path"/> matches a known still-image extension.
+    /// </summary>
+    /// <param name="path">File path (absolute, relative, or extension-only).</param>
+    /// <returns>True if the extension is in <see cref="GlobalData.ImageFileFilters"/>.</returns>
+    public static bool IsImagePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        string ext = Path.GetExtension(path);
+        if (string.IsNullOrEmpty(ext))
+            return false;
+        return GlobalData.ImageFileFilters.Any(e =>
+            e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Updates <see cref="IsImage"/> from the current <see cref="VideoFile"/> path.
+    /// </summary>
+    public void RefreshIsImageFromPath()
+    {
+        IsImage = IsImagePath(VideoFile);
+    }
     public double Volume { get; set; } = 1.0f;
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
@@ -240,6 +281,7 @@ public class VideoComponent : ICueComponent
     {
         var data = new Dictionary();
         data.Add("VideoFile", VideoFile);
+        data.Add("IsImage", IsImage);
         data.Add("StartTime", StartTime);
         data.Add("EndTime", EndTime);
         data.Add("TargetLayerId", TargetLayerId);
@@ -294,6 +336,11 @@ public class VideoComponent : ICueComponent
             return;
         }
         VideoFile = (string)data["VideoFile"];
+        // Prefer saved flag; fall back to extension detection for older show files.
+        if (data.ContainsKey("IsImage"))
+            IsImage = data["IsImage"].AsBool();
+        else
+            RefreshIsImageFromPath();
         StartTime = data.ContainsKey("StartTime") ? data["StartTime"].AsDouble() : 0.0;
         EndTime = data.ContainsKey("EndTime") ? data["EndTime"].AsDouble() : -1.0;
         // Legacy saves without the key used layer 0; explicit -1 is "No Output".
@@ -377,8 +424,25 @@ public class VideoComponent : ICueComponent
         return null;
     }
 
+    /// <summary>
+    /// Recomputes <see cref="Duration"/> / <see cref="TotalDuration"/> from in/out points (video)
+    /// or from the user-set hold duration (image).
+    /// </summary>
+    /// <returns>The segment <see cref="Duration"/> (0 for image until-stopped).</returns>
     public double RecalculateDuration()
     {
+        if (IsImage)
+        {
+            // Duration is user-authored; 0 / negative means stay active until stopped.
+            if (Duration < 0)
+                Duration = 0;
+            if (Duration <= 0 || Loop)
+                TotalDuration = -1.0;
+            else
+                TotalDuration = Duration * Math.Max(1, PlayCount);
+            return Duration;
+        }
+
         if (Metadata == null)
         {
             Duration = 0.0;

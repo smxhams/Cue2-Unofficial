@@ -572,6 +572,17 @@ public class Cue : ICue
             return existing;
         }
         var videoComp = new VideoComponent { VideoFile = videoFile };
+        videoComp.RefreshIsImageFromPath();
+        if (videoComp.IsImage)
+        {
+            // Still images: no in/out points; default hold is until stopped.
+            videoComp.StartTime = 0;
+            videoComp.EndTime = -1;
+            videoComp.Duration = 0;
+            videoComp.TotalDuration = -1;
+            videoComp.UseAudio = false;
+            videoComp.HasAudio = false;
+        }
         // Prefer a real layer when one exists so new media cues are playable;
         // user can still choose "No Output" (-1) in the inspector.
         if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
@@ -676,12 +687,13 @@ public class Cue : ICue
             else if (component.Type == "Video")
             {
                 var video = (VideoComponent)component;
-                if (video.Loop)
+                video.RecalculateDuration();
+                // Infinite: video loop, or image hold with Duration 0 (until stopped).
+                if (video.Loop || video.TotalDuration < 0)
                 {
                     contentsDuration = -1;
                     break;
                 }
-                video.RecalculateDuration();
                 var componentDuration = video.TotalDuration;
                 if (contentsDuration < componentDuration) contentsDuration = componentDuration;
             }

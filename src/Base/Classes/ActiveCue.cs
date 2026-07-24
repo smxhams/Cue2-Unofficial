@@ -1667,10 +1667,19 @@ public partial class ActiveCue : GodotObject
                 return;
             }
 
+            videoComponent.RefreshIsImageFromPath();
+
             // Preload metadata if not already (assuming done in inspector/load)
             if (videoComponent.Metadata == null)
             {
                 videoComponent.Metadata = await _mediaEngine.GetVideoFileMetadataAsync(videoComponent.VideoFile);
+            }
+
+            if (videoComponent.IsImage)
+            {
+                videoComponent.HasAudio = false;
+                videoComponent.UseAudio = false;
+                videoComponent.RecalculateDuration();
             }
             
             var playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
@@ -1687,9 +1696,21 @@ public partial class ActiveCue : GodotObject
             var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
-            timeLabel.Text = UiUtilities.FormatTime(videoComponent.TotalDuration);
+            if (videoComponent.IsImage && videoComponent.Duration <= 0)
+                timeLabel.Text = "∞";
+            else
+                timeLabel.Text = UiUtilities.FormatTime(videoComponent.TotalDuration);
 
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
+            // Prefer Image icon when available; fall back to Video.
+            try
+            {
+                typeIcon.Icon = _activeCueBar.GetThemeIcon(
+                    videoComponent.IsImage ? "Image" : "Video", "AtlasIcons");
+            }
+            catch
+            {
+                typeIcon.Icon = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
+            }
             pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
@@ -1724,8 +1745,15 @@ public partial class ActiveCue : GodotObject
                         playback.IsSeeking = true;
                         // Calculate initial seek time
                         var localPos = progressBar.GetLocalMousePosition();
+                        // Still images held until stopped have no seekable timeline.
+                        if (videoComponent.IsImage && playback.GetDuration() <= 0)
+                        {
+                            playback.IsSeeking = false;
+                            return;
+                        }
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                        pendingSeekTimeSec = videoComponent.StartTime + percent * playback.GetDuration();
+                        double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
+                        pendingSeekTimeSec = start + percent * playback.GetDuration();
                         progressBar.Value = percent * 100; // Preview
                         timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
                     }
@@ -1746,7 +1774,8 @@ public partial class ActiveCue : GodotObject
                     // Update preview during drag
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                    pendingSeekTimeSec = videoComponent.StartTime + percent * playback.GetDuration();
+                    double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
+                    pendingSeekTimeSec = start + percent * playback.GetDuration();
                     progressBar.Value = percent * 100; // Update preview
                     timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
                 }
@@ -2027,7 +2056,20 @@ public partial class ActiveCue : GodotObject
         if (videoPlayback.IsPaused) return;
 
         float trackTime = (float)time;
-        float progressPercentage = ((trackTime - (float)videoComponent.StartTime) / (float)videoPlayback.GetDuration() * 100f);
+        double span = videoPlayback.GetDuration();
+        float progressPercentage;
+        if (videoComponent.IsImage && span <= 0)
+        {
+            // Image held until stopped — no finite progress span.
+            progressPercentage = 0f;
+        }
+        else
+        {
+            double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
+            progressPercentage = span > 0
+                ? (float)((trackTime - start) / span * 100.0)
+                : 0f;
+        }
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
         if (!videoPlayback.IsSeeking)
         {

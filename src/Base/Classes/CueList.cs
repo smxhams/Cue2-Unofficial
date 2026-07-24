@@ -753,12 +753,25 @@ public partial class CueList : Control
 			}
 			else if (videoComp != null)
 			{
+				videoComp.RefreshIsImageFromPath();
 				var meta = await mediaEngine.GetVideoFileMetadataAsync(filePath);
 				videoComp.Metadata = meta;
-				videoComp.HasAudio = meta.AudioChannels > 0;
-				videoComp.UseAudio = videoComp.HasAudio;
+				if (videoComp.IsImage)
+				{
+					// Still image: no embedded audio; duration is user hold time (0 = until stopped).
+					videoComp.HasAudio = false;
+					videoComp.UseAudio = false;
+					videoComp.StartTime = 0;
+					videoComp.EndTime = -1;
+				}
+				else
+				{
+					videoComp.HasAudio = meta.AudioChannels > 0;
+					videoComp.UseAudio = videoComp.HasAudio;
+				}
 				videoComp.ScaledWidth = meta.Width;
 				videoComp.ScaledHeight = meta.Height;
+				videoComp.RecalculateDuration();
 
 				// For video we don't auto-gen full waveform here (inspector does when opened)
 			}

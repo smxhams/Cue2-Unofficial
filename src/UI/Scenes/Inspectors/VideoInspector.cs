@@ -40,6 +40,11 @@ public partial class VideoInspector : Control
 	private LineEdit _endTimeInput;
 	private LineEdit _durationValue;
 	private LineEdit _fileDurationValue;
+	private Label _startTimeLabel;
+	private Label _endTimeLabel;
+	private Label _durationLabel;
+	private Label _fileDurationLabel;
+	private Control _loopPlayCountRow;
 	private CheckBox _loopInput;
 	private LineEdit _playCountInput;
 
@@ -126,6 +131,8 @@ public partial class VideoInspector : Control
 		_endTimeInput.TextSubmitted += newText => TimeFieldSubmitted(newText, _endTimeInput);
 		_startTimeInput.FocusExited += () => TimeFieldSubmitted(_startTimeInput.Text, _startTimeInput);
 		_endTimeInput.FocusExited += () => TimeFieldSubmitted(_endTimeInput.Text, _endTimeInput);
+		_durationValue.TextSubmitted += OnImageDurationSubmitted;
+		_durationValue.FocusExited += () => OnImageDurationSubmitted(_durationValue.Text);
 		_loopInput.Toggled += OnLoopToggled;
 		_playCountInput.TextSubmitted += OnPlayCountSubmitted;
 		_playCountInput.FocusExited += () => OnPlayCountSubmitted(_playCountInput.Text);
@@ -190,8 +197,15 @@ public partial class VideoInspector : Control
 		_endTimeInput = GetNode<LineEdit>("%EndTimeInput");
 		_durationValue = GetNode<LineEdit>("%DurationValue");
 		_fileDurationValue = GetNode<LineEdit>("%FileDurationValue");
+		// Labels share the timing row; hide for still images.
+		var timingRow = _startTimeInput.GetParent();
+		_startTimeLabel = timingRow?.GetNodeOrNull<Label>("StartTimeLabel");
+		_endTimeLabel = timingRow?.GetNodeOrNull<Label>("EndTimeLabel");
+		_durationLabel = timingRow?.GetNodeOrNull<Label>("DurationLabel");
+		_fileDurationLabel = timingRow?.GetNodeOrNull<Label>("FileDurationLabel");
 		_loopInput = GetNode<CheckBox>("%LoopInput");
 		_playCountInput  = GetNode<LineEdit>("%PlayCountInput");
+		_loopPlayCountRow = _loopInput?.GetParent() as Control;
 		
 		_fileMetadataLabel = GetNode<Label>("%FileMetadataLabel");
 		_targetLayerOptionButton = GetNode<OptionButton>("%TargetLayerOptionButton");
@@ -480,6 +494,8 @@ public partial class VideoInspector : Control
 		
 		// Video Component Found
 		_focusedVideoComponent = _focusedCue.Components.OfType<VideoComponent>().First();
+		// Keep IsImage in sync with path (covers older saves / renames).
+		_focusedVideoComponent.RefreshIsImageFromPath();
 		if (_deleteVideoComponentButton != null)
 			_deleteVideoComponentButton.Visible = true;
 		var file = _focusedVideoComponent.VideoFile;
@@ -490,6 +506,16 @@ public partial class VideoInspector : Control
 			if (gen != _shellSelectGeneration) return;
 			if (_focusedVideoComponent == null) return;
 			_focusedVideoComponent.Metadata = refreshedMeta;
+			if (_focusedVideoComponent.IsImage)
+			{
+				_focusedVideoComponent.HasAudio = false;
+				_focusedVideoComponent.UseAudio = false;
+			}
+			else
+			{
+				_focusedVideoComponent.HasAudio = refreshedMeta?.AudioChannels > 0;
+			}
+			_focusedVideoComponent.RecalculateDuration();
 			GD.Print("VideoInspector:ShellSelected - Refreshed metadata from file");
 		}
 
@@ -642,19 +668,32 @@ public partial class VideoInspector : Control
 		// Resolve or create component; always assign the path (AddVideoComponent alone does not update existing).
 		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
 		bool isNewComponent = existingVideo == null;
+		bool isImage = VideoComponent.IsImagePath(resolvedPath);
 		if (_focusedCue != null)
 			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
-				isNewComponent ? "Add video component" : "Change video file");
+				isNewComponent
+					? (isImage ? "Add image component" : "Add video component")
+					: (isImage ? "Change image file" : "Change video file"));
 		if (existingVideo != null)
 		{
 			_focusedVideoComponent = existingVideo;
 			bool pathChanged = !string.Equals(existingVideo.VideoFile, pathToStore, StringComparison.OrdinalIgnoreCase);
+			bool wasImage = existingVideo.IsImage;
 			existingVideo.VideoFile = pathToStore;
+			existingVideo.IsImage = isImage;
 			if (pathChanged)
 			{
 				// Force re-fetch of metadata/waveform for the new file
 				existingVideo.WaveformData = null;
 				existingVideo.Metadata = null;
+			}
+			// Switching media kind resets timing model.
+			if (wasImage != isImage || (pathChanged && isImage))
+			{
+				existingVideo.StartTime = 0.0;
+				existingVideo.EndTime = -1.0;
+				if (isImage)
+					existingVideo.Duration = 0.0; // until stopped
 			}
 		}
 		else
@@ -681,14 +720,24 @@ public partial class VideoInspector : Control
 			}
 
 			_focusedVideoComponent.Metadata = fileMetadata;
-			_focusedVideoComponent.HasAudio = fileMetadata.AudioChannels > 0;
+			_focusedVideoComponent.IsImage = isImage;
+			_focusedVideoComponent.HasAudio = !isImage && fileMetadata.AudioChannels > 0;
 			_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
 			_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
 			_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
 
 			var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
 
-			if (resetInOutPoints || isNewComponent)
+			if (isImage)
+			{
+				_focusedVideoComponent.StartTime = 0.0;
+				_focusedVideoComponent.EndTime = -1.0;
+				// Preserve user Duration when replacing image-for-image unless forced reset.
+				if (resetInOutPoints || isNewComponent)
+					_focusedVideoComponent.Duration = 0.0;
+				GD.Print($"VideoInspector:SetVideoFile - Image loaded: {fileMetadata.Width}x{fileMetadata.Height}, hold={_focusedVideoComponent.Duration}s");
+			}
+			else if (resetInOutPoints || isNewComponent)
 			{
 				_focusedVideoComponent.StartTime = 0.0;
 				_focusedVideoComponent.EndTime = -1.0;
@@ -696,13 +745,13 @@ public partial class VideoInspector : Control
 			}
 			else
 			{
-				if (_focusedVideoComponent.StartTime >= fileDuration)
+				if (fileDuration > 0 && _focusedVideoComponent.StartTime >= fileDuration)
 				{
 					_focusedVideoComponent.StartTime = 0.0;
 					GD.Print("VideoInspector:SetVideoFile - Reset start time (exceeded file duration)");
 				}
 
-				if (_focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
+				if (fileDuration > 0 && _focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
 				{
 					_focusedVideoComponent.EndTime = -1.0;
 					GD.Print("VideoInspector:SetVideoFile - Reset end time to undefined (exceeded file duration)");
@@ -776,6 +825,24 @@ public partial class VideoInspector : Control
 	/// </summary>
 	private async Task RefreshAudioUiState()
 	{
+		if (_focusedVideoComponent == null)
+			return;
+
+		// Still images never use the embedded-audio / waveform path.
+		if (_focusedVideoComponent.IsImage)
+		{
+			_audioCollapseButton.Visible = false;
+			_useAudioCheckButton.Visible = false;
+			_useAudioLabel.Text = "No audio (still image)";
+			_audioAccordian.Visible = false;
+			_audioCollapseButton.ButtonPressed = false;
+			_waveformAccordian.Visible = false;
+			_waveformCollapseButton.ButtonPressed = false;
+			_routingAccordian.Visible = false;
+			_routingCollapseButton.ButtonPressed = false;
+			return;
+		}
+
 		if (_focusedVideoComponent.HasAudio)
 		{
 			_useAudioCheckButton.Visible = true;
@@ -842,42 +909,76 @@ public partial class VideoInspector : Control
 		ApplyFileUrlMissingStyleFromHealth();
 		if (_deleteVideoComponentButton != null)
 			_deleteVideoComponentButton.Visible = true;
-		_startTimeInput.Text = UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
-		_startTimeInput.TooltipText = startTip;
 
-		double metaDur = _focusedVideoComponent.Metadata?.Duration ?? 0;
-		if (_focusedVideoComponent.EndTime < 0)
+		ApplyImageVideoUiMode(_focusedVideoComponent.IsImage);
+
+		if (_focusedVideoComponent.IsImage)
 		{
-			_endTimeInput.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
+			// Image: only user duration (0 = until stopped). No start/end/file duration.
+			if (_focusedVideoComponent.Duration <= 0)
+			{
+				_durationValue.Text = "0 (until stopped)";
+				_durationValue.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+			}
+			else
+			{
+				_durationValue.Text = UiUtilities.ParseAndFormatTime(
+					_focusedVideoComponent.Duration.ToString(), out _, out string imgDurTip);
+				_durationValue.TooltipText = imgDurTip + " (0 = until stopped)";
+			}
 		}
 		else
 		{
-			_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
+			_startTimeInput.Text = UiUtilities.ParseAndFormatTime(_focusedVideoComponent.StartTime.ToString(), out _, out string startTip);
+			_startTimeInput.TooltipText = startTip;
+
+			double metaDur = _focusedVideoComponent.Metadata?.Duration ?? 0;
+			if (_focusedVideoComponent.EndTime < 0)
+			{
+				_endTimeInput.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
+			}
+			else
+			{
+				_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
+			}
+			_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
+			_durationValue.TooltipText = "m:s:ms (derived from start/end)";
+			_fileDurationValue.Text = UiUtilities.FormatTime(metaDur);
+			_loopInput.SetPressedNoSignal(_focusedVideoComponent.Loop);
+			_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
 		}
-		_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
-		_fileDurationValue.Text = UiUtilities.FormatTime(metaDur);
-		_loopInput.SetPressedNoSignal(_focusedVideoComponent.Loop);
-		_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
 		
 		// Update metadata label
 		var meta = _focusedVideoComponent.Metadata;
 		if (meta != null)
 		{
-			string metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
-			                      $"Resolution: {meta.Width}x{meta.Height} \n" +
-			                      $"Frame Rate: {meta.FrameRate:F1} fps \n" +
-			                      $"Codec: {meta.Codec} \n" +
-			                      $"Format: {meta.Format}";
-			if (meta.AudioChannels > 0)
+			string metadataText;
+			if (_focusedVideoComponent.IsImage)
 			{
-				metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +
-				                $"Audio Sample Rate: {meta.AudioSampleRate} Hz \n" +
-				                $"Audio Bit Depth: {meta.AudioBitDepth} \n" +
-				                $"Audio Codec: {meta.AudioCodec}";
+				metadataText = $"Type: Still Image\n" +
+				               $"Resolution: {meta.Width}x{meta.Height}\n" +
+				               $"Codec: {meta.Codec}\n" +
+				               $"Format: {meta.Format}\n" +
+				               $"Hold: {(_focusedVideoComponent.Duration <= 0 ? "Until stopped" : UiUtilities.FormatTime(_focusedVideoComponent.Duration))}";
 			}
 			else
 			{
-				metadataText += "\nNo Audio";
+				metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
+				               $"Resolution: {meta.Width}x{meta.Height} \n" +
+				               $"Frame Rate: {meta.FrameRate:F1} fps \n" +
+				               $"Codec: {meta.Codec} \n" +
+				               $"Format: {meta.Format}";
+				if (meta.AudioChannels > 0)
+				{
+					metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +
+					                $"Audio Sample Rate: {meta.AudioSampleRate} Hz \n" +
+					                $"Audio Bit Depth: {meta.AudioBitDepth} \n" +
+					                $"Audio Codec: {meta.AudioCodec}";
+				}
+				else
+				{
+					metadataText += "\nNo Audio";
+				}
 			}
 			_fileUrl.TooltipText = metadataText;
 		}
@@ -900,6 +1001,95 @@ public partial class VideoInspector : Control
 		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
 		var volumeDb = UiUtilities.LinearToDb((float)volume);
 		_volumeInput.Text = $"{volumeDb}dB";
+	}
+
+	/// <summary>
+	/// Shows/hides timing controls for video vs still-image mode.
+	/// Images: editable Duration only (0 = until stopped). Video: start/end/file duration + loop/playcount.
+	/// </summary>
+	/// <param name="isImage">True when the focused component is a still image.</param>
+	private void ApplyImageVideoUiMode(bool isImage)
+	{
+		if (_startTimeLabel != null) _startTimeLabel.Visible = !isImage;
+		if (_startTimeInput != null) _startTimeInput.Visible = !isImage;
+		if (_endTimeLabel != null) _endTimeLabel.Visible = !isImage;
+		if (_endTimeInput != null) _endTimeInput.Visible = !isImage;
+		if (_fileDurationLabel != null) _fileDurationLabel.Visible = !isImage;
+		if (_fileDurationValue != null) _fileDurationValue.Visible = !isImage;
+		if (_loopPlayCountRow != null) _loopPlayCountRow.Visible = !isImage;
+
+		if (_durationValue != null)
+		{
+			_durationValue.Editable = isImage;
+			_durationValue.PlaceholderText = isImage ? "0 = until stopped" : "00m:00s.000ms";
+			if (isImage)
+			{
+				_durationValue.TooltipText =
+					"How long the image stays on screen. 0 or blank = stay active until stopped.";
+			}
+		}
+		if (_durationLabel != null)
+			_durationLabel.Text = isImage ? "Duration:" : "Duration:";
+	}
+
+	/// <summary>
+	/// Handles image hold-duration edits. 0 / blank / negative = until stopped.
+	/// </summary>
+	/// <param name="text">Submitted duration text.</param>
+	private void OnImageDurationSubmitted(string text)
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null || !_focusedVideoComponent.IsImage)
+			return;
+		if (_globalData?.HistoryManager?.IsRestoring == true)
+			return;
+		if (!_focusedCue.Components.Contains(_focusedVideoComponent))
+			return;
+
+		try
+		{
+			double newDuration;
+			if (string.IsNullOrWhiteSpace(text) ||
+			    text.Trim() == "0" ||
+			    text.Contains("until stopped", StringComparison.OrdinalIgnoreCase))
+			{
+				newDuration = 0;
+			}
+			else
+			{
+				var formatted = UiUtilities.ParseAndFormatTime(text, out double secs, out string _);
+				if (formatted == "")
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Invalid image duration: {text}", 1);
+					UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+					return;
+				}
+				newDuration = Math.Max(0, secs);
+			}
+
+			if (Math.Abs(_focusedVideoComponent.Duration - newDuration) < 1e-9)
+			{
+				UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+				if (_durationValue.HasFocus())
+					_durationValue.ReleaseFocus();
+				return;
+			}
+
+			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit image duration");
+			_focusedVideoComponent.Duration = newDuration;
+			SyncDuration();
+			UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+			if (_durationValue.HasFocus())
+				_durationValue.ReleaseFocus();
+			GD.Print($"VideoInspector:OnImageDurationSubmitted - Image hold duration set to {newDuration}s");
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"VideoInspector:OnImageDurationSubmitted - {ex.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Error parsing image duration: {ex.Message}", 2);
+			UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+		}
 	}
 
 	private static void SelectOptionById(OptionButton button, int id)
@@ -929,6 +1119,9 @@ public partial class VideoInspector : Control
 	private void TimeFieldSubmitted(string text, LineEdit textField)
 	{
 		if (_focusedCue == null || _focusedVideoComponent == null || textField == null)
+			return;
+		// Images use OnImageDurationSubmitted instead of start/end points.
+		if (_focusedVideoComponent.IsImage)
 			return;
 		if (_globalData?.HistoryManager?.IsRestoring == true)
 			return;
@@ -1074,6 +1267,7 @@ public partial class VideoInspector : Control
 			return;
 		}
 
+		_focusedVideoComponent.RefreshIsImageFromPath();
 		UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
 
 		// Target layer / output assignment may have changed externally (delete→unassign/replace, undo).
@@ -1098,10 +1292,27 @@ public partial class VideoInspector : Control
 
 		_focusedVideoComponent.RecalculateDuration();
 		_focusedCue.CalculateTotalDuration();
-		_durationValue.Text =
-			UiUtilities.ParseAndFormatTime(
-				_focusedVideoComponent.Duration.ToString(), out var _, out string durLabeledTime);
-		_durationValue.TooltipText = durLabeledTime;
+		if (_focusedVideoComponent.IsImage)
+		{
+			if (_focusedVideoComponent.Duration <= 0)
+			{
+				_durationValue.Text = "0 (until stopped)";
+				_durationValue.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+			}
+			else
+			{
+				_durationValue.Text = UiUtilities.ParseAndFormatTime(
+					_focusedVideoComponent.Duration.ToString(), out var _, out string imgDurTip);
+				_durationValue.TooltipText = imgDurTip + " (0 = until stopped)";
+			}
+		}
+		else
+		{
+			_durationValue.Text =
+				UiUtilities.ParseAndFormatTime(
+					_focusedVideoComponent.Duration.ToString(), out var _, out string durLabeledTime);
+			_durationValue.TooltipText = durLabeledTime;
+		}
 
 		_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 		_globalSignals.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);

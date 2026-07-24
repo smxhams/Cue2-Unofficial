@@ -105,6 +105,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private bool _completedEmitted;
     private bool _isDisposed;
     private bool _isPlaying;
+    /// <summary>True after the first (and typically only) still-image frame has been shown.</summary>
+    private bool _imageFramePresented;
 
     // Master clock (wall path when no audio)
     private readonly Stopwatch _wallClock = new Stopwatch();
@@ -160,21 +162,41 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _godotImage = Image.CreateEmpty(1, 1, false, Image.Format.Rgba8);
         _godotTexture = ImageTexture.CreateFromImage(_godotImage);
 
-        _startTimeUs = (long)(Math.Max(0, _videoComponent.StartTime) * MicrosecondsPerSecond);
-        _useCustomEnd = _videoComponent.EndTime >= 0;
-        if (_useCustomEnd)
-            _endTimeUs = (long)(_videoComponent.EndTime * MicrosecondsPerSecond);
-        else if (_videoComponent.Metadata != null && _videoComponent.Metadata.Duration > 0)
-            _endTimeUs = (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond);
-        else
-            _endTimeUs = long.MaxValue;
-
-        EffectivePlayCount = _videoComponent.Loop ? int.MaxValue : Math.Max(1, _videoComponent.PlayCount);
-
-        if (_videoComponent.Metadata?.Duration > 0 &&
-            _startTimeUs > (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond))
+        if (_videoComponent.IsImage)
         {
+            // Still images: no in/out points. User Duration is hold time; 0 = until stopped.
             _startTimeUs = 0;
+            if (_videoComponent.Duration > 0)
+            {
+                _useCustomEnd = true;
+                _endTimeUs = (long)(_videoComponent.Duration * MicrosecondsPerSecond);
+            }
+            else
+            {
+                _useCustomEnd = false;
+                _endTimeUs = long.MaxValue;
+            }
+            // Images do not multi-play; Loop with a finite duration would re-hold — keep single hold.
+            EffectivePlayCount = 1;
+        }
+        else
+        {
+            _startTimeUs = (long)(Math.Max(0, _videoComponent.StartTime) * MicrosecondsPerSecond);
+            _useCustomEnd = _videoComponent.EndTime >= 0;
+            if (_useCustomEnd)
+                _endTimeUs = (long)(_videoComponent.EndTime * MicrosecondsPerSecond);
+            else if (_videoComponent.Metadata != null && _videoComponent.Metadata.Duration > 0)
+                _endTimeUs = (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond);
+            else
+                _endTimeUs = long.MaxValue;
+
+            EffectivePlayCount = _videoComponent.Loop ? int.MaxValue : Math.Max(1, _videoComponent.PlayCount);
+
+            if (_videoComponent.Metadata?.Duration > 0 &&
+                _startTimeUs > (long)(_videoComponent.Metadata.Duration * MicrosecondsPerSecond))
+            {
+                _startTimeUs = 0;
+            }
         }
     }
 
@@ -197,7 +219,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         string mediaPath = ResolveMediaPath(_videoComponent.VideoFile);
         await _videoDecoder.OpenAsync(mediaPath);
-        if (!_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
+        // Do not replace image hold end with container duration (often 0 or N/A for stills).
+        if (!_videoComponent.IsImage && !_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
             _endTimeUs = _videoDecoder.Info.DurationUs;
 
         if (_startTimeUs > 0)
@@ -436,9 +459,14 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (IsStopped || _isExiting) return;
             _isPlaying = true;
             IsPaused = false;
-            // Wall-clock origin = current media position (used when no audio master)
-            _wallMediaOriginUs = _videoDecoder?.PositionUs ?? _startTimeUs;
+            // Wall-clock origin = current media position (used when no audio master).
+            // Still images always start their hold timer at 0.
+            _wallMediaOriginUs = _videoComponent.IsImage
+                ? 0
+                : (_videoDecoder?.PositionUs ?? _startTimeUs);
             _wallClock.Restart();
+            if (_videoComponent.IsImage)
+                _imageFramePresented = false;
         }
 
         if (!IsInsideTree())
@@ -478,6 +506,33 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         if (masterUs >= _endTimeUs)
         {
             HandleSegmentEnd();
+            return;
+        }
+
+        // Still image: decode/present once, then hold the frame until duration (or manual stop).
+        // Keep re-applying modulate every tick so stop fade-out / fade-in alpha is visible
+        // (video gets this for free via PresentFrame; stills would otherwise freeze at full opacity).
+        if (_videoComponent.IsImage)
+        {
+            if (!_imageFramePresented)
+            {
+                if (_videoDecoder.ReadFrame(out VideoFrame frame))
+                {
+                    PresentFrame(frame);
+                    _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
+                    _imageFramePresented = true;
+                }
+                else if (_videoDecoder.EndOfStream && !_imageFramePresented)
+                {
+                    // No frame available — fail closed so the cue does not hang forever blank.
+                    GD.PrintErr("ActiveVideoPlayback:PresentCatchUpFrames - Image produced no frames.");
+                    CallDeferred(nameof(CompleteFromEnd));
+                }
+            }
+            else
+            {
+                ApplyOpacityModulate();
+            }
             return;
         }
 
@@ -1072,12 +1127,16 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 SetVolume(Mathf.Lerp(startVol, 0f, t));
                 _fadeAlpha = Mathf.Lerp(startAlpha, 0f, t);
+                // Match FadeInAsync: push visual alpha immediately (images do not re-present frames).
+                // Deferred so TextureRect updates always land on the main thread after await.
+                CallDeferred(nameof(ApplyOpacityModulate));
                 await Task.Delay(FadeUpdateIntervalMs, token);
             }
             if (!token.IsCancellationRequested)
             {
                 SetVolume(0f);
                 _fadeAlpha = 0f;
+                CallDeferred(nameof(ApplyOpacityModulate));
                 HardStop();
             }
         }
@@ -1127,6 +1186,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     public double GetDuration()
     {
+        if (_videoComponent.IsImage)
+        {
+            // 0 = until stopped (no finite progress span).
+            return _videoComponent.Duration > 0 ? _videoComponent.Duration : 0;
+        }
+
         if (_videoDecoder?.Info != null && _videoDecoder.Info.DurationUs > 0)
             return _videoDecoder.Info.DurationUs / (double)MicrosecondsPerSecond;
         return _videoComponent.Metadata?.Duration ?? 0;
