@@ -65,6 +65,7 @@ public partial class GlobalData : Node
 	public FileDropper FileDropper;
 	public UserDataManager UserDataManager;
 	public HistoryManager HistoryManager;
+	public CueLibraryManager CueLibraryManager;
 	
 	/// <summary>
 	/// Id of the cue currently focused for inspectors (-1 if none).
@@ -219,6 +220,11 @@ public partial class GlobalData : Node
 		GodotUserDataPath = ProjectSettings.GlobalizePath("user://");
 		GD.Print("GlobalData:_Ready - Godot user:// resolves to full path: " + GodotUserDataPath);
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Godot user:// full path: {GodotUserDataPath}", 0);
+
+		// Library is pure filesystem I/O — create before SDL so inspectors never race a late null.
+		CueLibraryManager = new CueLibraryManager();
+		CueLibraryManager.Name = nameof(CueLibraryManager);
+		AddChild(CueLibraryManager);
 
 		// Initialize SDL with audio, events, and video
 		if (SDL.Init(SDL.InitFlags.Audio | SDL.InitFlags.Events | SDL.InitFlags.Video) == false)

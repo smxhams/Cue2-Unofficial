@@ -1,54 +1,188 @@
-[gd_scene format=3 uid="uid://dge4tv6ikfteh"]
+[gd_scene load_steps=2 format=3 uid="uid://dge4tv6ikfteh"]
+
+[ext_resource type="Script" path="res://src/UI/Scenes/Inspectors/LibraryInspector.cs" id="1_lib"]
 
 [node name="Library" type="Control"]
 layout_mode = 3
-anchors_preset = 0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_lib")
 metadata/_tab_index = 0
 
-[node name="SplitContainer" type="HSplitContainer" parent="."]
-layout_mode = 0
-offset_right = 1148.0
-offset_bottom = 237.0
+[node name="RootMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 4
 
-[node name="VBoxContainer" type="VBoxContainer" parent="SplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="Label" type="Label" parent="SplitContainer/VBoxContainer"]
-layout_mode = 2
-text = "Favorites"
-
-[node name="HSplitContainer" type="HSplitContainer" parent="SplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="ScrollContainer2" type="ScrollContainer" parent="SplitContainer/HSplitContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="VBoxContainer2" type="VBoxContainer" parent="SplitContainer/HSplitContainer/ScrollContainer2"]
+[node name="VBox" type="VBoxContainer" parent="RootMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+theme_override_constants/separation = 4
 
-[node name="Label" type="Label" parent="SplitContainer/HSplitContainer/ScrollContainer2/VBoxContainer2"]
+[node name="Toolbar" type="HBoxContainer" parent="RootMargin/VBox"]
 layout_mode = 2
-text = "Filters"
+theme_override_constants/separation = 4
 
-[node name="ScrollContainer3" type="ScrollContainer" parent="SplitContainer/HSplitContainer"]
+[node name="SaveButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save to Library…"
+tooltip_text = "Save the focused cue into the selected library folder."
+
+[node name="LoadButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Load"
+tooltip_text = "Insert the selected library cue into the cuelist."
+
+[node name="Sep1" type="VSeparator" parent="RootMargin/VBox/Toolbar"]
+layout_mode = 2
+
+[node name="NewFolderButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New Folder"
+tooltip_text = "Create a folder under the selected library folder."
+
+[node name="RenameButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Rename"
+tooltip_text = "Rename the selected entry or folder."
+
+[node name="DeleteButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "Delete"
+tooltip_text = "Delete the selected entry or folder."
+
+[node name="RefreshButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh"
+tooltip_text = "Reload library folders and entries from disk."
+
+[node name="OpenFolderButton" type="Button" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reveal"
+tooltip_text = "Open the library folder in the system file manager."
+
+[node name="Spacer" type="Control" parent="RootMargin/VBox/Toolbar"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="VBoxContainer3" type="VBoxContainer" parent="SplitContainer/HSplitContainer/ScrollContainer3"]
+[node name="SearchEdit" type="LineEdit" parent="RootMargin/VBox/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+placeholder_text = "Search…"
+clear_button_enabled = true
+
+[node name="OptionsBar" type="HBoxContainer" parent="RootMargin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="InsertModeLabel" type="Label" parent="RootMargin/VBox/OptionsBar"]
+layout_mode = 2
+text = "Insert:"
+
+[node name="InsertModeOption" type="OptionButton" parent="RootMargin/VBox/OptionsBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CopyMediaCheck" type="CheckBox" parent="RootMargin/VBox/OptionsBar"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Copy media into show"
+tooltip_text = "When loading, copy packaged media into the current show folder (if media backup allows)."
+
+[node name="MainSplit" type="HSplitContainer" parent="RootMargin/VBox"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+split_offsets = PackedInt32Array(200)
+split_offset = 200
 
-[node name="Label" type="Label" parent="SplitContainer/HSplitContainer/ScrollContainer3/VBoxContainer3"]
+[node name="LeftPanel" type="VBoxContainer" parent="RootMargin/VBox/MainSplit"]
+custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
-text = "File Explorer"
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.35
+theme_override_constants/separation = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="."]
-layout_mode = 0
-offset_right = 1148.0
-offset_bottom = 237.0
+[node name="FoldersHeader" type="Label" parent="RootMargin/VBox/MainSplit/LeftPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Folders"
+
+[node name="FolderTree" type="Tree" parent="RootMargin/VBox/MainSplit/LeftPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+columns = 1
+hide_root = true
+select_mode = 0
+
+[node name="RightPane" type="VBoxContainer" parent="RootMargin/VBox/MainSplit"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.65
+theme_override_constants/separation = 4
+
+[node name="EntriesHeader" type="Label" parent="RootMargin/VBox/MainSplit/RightPane"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Cues"
+
+[node name="EntryList" type="ItemList" parent="RootMargin/VBox/MainSplit/RightPane"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="EmptyLabel" type="Label" parent="RootMargin/VBox/MainSplit/RightPane"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Library is empty. Select a cue and click Save to Library."
+autowrap_mode = 3
+
+[node name="DetailLabel" type="Label" parent="RootMargin/VBox/MainSplit/RightPane"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+size_flags_vertical = 0
+text = "Select a library cue to see details."
+autowrap_mode = 3
+
+[node name="PathLabel" type="Label" parent="RootMargin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = ""
+autowrap_mode = 3

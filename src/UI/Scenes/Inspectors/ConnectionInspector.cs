@@ -15,8 +15,11 @@ public partial class ConnectionInspector : Control
 
     private PackedScene _cueLightComponentCardScene = SceneLoader.LoadPackedScene("uid://cfl3cwoqby4lo", out string _);
     private PackedScene _oscComponentCardScene = SceneLoader.LoadPackedScene("uid://cst0ttvboq673", out string _);
-    
+    private PackedScene _midiOutputCardScene = SceneLoader.LoadPackedScene(
+        "res://src/UI/Scenes/Inspectors/InspectorMidiOutputCard.tscn", out string _);
+
     private Cue _focusedCue;
+    private MidiManager _midiManager;
 
     private Label _infoLabel;
 
@@ -29,10 +32,12 @@ public partial class ConnectionInspector : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
 
         _globalSignals.ShellFocused += ShellSelected;
-        
-        
+        if (_midiManager != null)
+            _midiManager.MidiStateChanged += OnMidiStateChanged;
+
         _infoLabel = GetNode<Label>("InfoLabel");
         _infoLabel.AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
         
@@ -48,6 +53,26 @@ public partial class ConnectionInspector : Control
         LoadConnections();
     }
 
+    public override void _ExitTree()
+    {
+        if (_globalSignals != null)
+            _globalSignals.ShellFocused -= ShellSelected;
+        if (_midiManager != null)
+            _midiManager.MidiStateChanged -= OnMidiStateChanged;
+        if (_availableConnectionsButton != null)
+            _availableConnectionsButton.ItemSelected -= OnConnectionSelected;
+        base._ExitTree();
+    }
+
+    /// <summary>
+    /// Refresh when session MIDI outputs are added/removed in Settings.
+    /// </summary>
+    private void OnMidiStateChanged()
+    {
+        if (Visible && _connectionCardContainer != null && _connectionCardContainer.Visible)
+            LoadConnections();
+    }
+
 
     private void LoadConnections()
     {
@@ -60,24 +85,13 @@ public partial class ConnectionInspector : Control
             child.QueueFree();
         }
         
-        // Load options button in Blank Connection Card
+        // Load options button in Blank Connection Card (OSC / cue lights / session MIDI outputs).
         _availableConnectionsButton.Clear();
-        
-        var availableConnections = _globalData.GetAvailableConnections();
-        
-        if (availableConnections.Count == 0)
-        {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "No available connections found.", 1); // Warning log
-            // Optionally show blank card or disable button
-            _availableConnectionsButton.AddItem("No available connections");
-            _availableConnectionsButton.Disabled = true;
-            return;
-        }
-
         _availableConnectionsButton.Disabled = false;
         _availableConnectionsButton.AddItem("Select Connection");
 
         int index = 1;
+        var availableConnections = _globalData.GetAvailableConnections();
         foreach (var kvp in availableConnections)
         {
             var connectionType = (string)kvp.Value;
@@ -87,7 +101,7 @@ public partial class ConnectionInspector : Control
             {
                 string displayText = $"{connectionType} - {cueLight.Name}";
                 _availableConnectionsButton.AddItem(displayText, index);
-                _availableConnectionsButton.SetItemMetadata(index, cueLight); // Associate the object with the item for later retrieval
+                _availableConnectionsButton.SetItemMetadata(index, cueLight);
                 index++;
             }
             else if (connectionObj.Obj is CueOscConnection cueOscConnection)
@@ -99,25 +113,44 @@ public partial class ConnectionInspector : Control
             }
             else
             {
-                GD.Print($"Unsupported connection type: {connectionObj.VariantType}", 2); // Error log
-                continue;
+                GD.Print($"ConnectionInspector:LoadConnections - Unsupported connection type: {connectionObj.VariantType}");
             }
         }
+
+        // Session MIDI outputs (string metadata "midi:DeviceName").
+        if (_midiManager != null)
+        {
+            foreach (string outName in _midiManager.SessionOutputNames)
+            {
+                if (string.IsNullOrEmpty(outName)) continue;
+                _availableConnectionsButton.AddItem($"MIDI Output - {outName}", index);
+                _availableConnectionsButton.SetItemMetadata(index, "midi:" + outName);
+                index++;
+            }
+        }
+
+        if (index == 1)
+        {
+            // Only the placeholder was added.
+            _availableConnectionsButton.Clear();
+            _availableConnectionsButton.AddItem("No available connections");
+            _availableConnectionsButton.Disabled = true;
+        }
+        else
+        {
+            _availableConnectionsButton.Select(0);
+        }
         
-        
-        
-        // Load Cuelight connection cards
+        // Load existing connection cards on the focused cue.
         if (_focusedCue == null) return;
         foreach (var component in _focusedCue.Components)
         {
-            if (component is CueLightComponent)
-            {
-                LoadCueLightComponentCard(component as CueLightComponent);
-            }
-            else if (component is OscComponent)
-            {
-                LoadOscComponentCard(component as OscComponent);
-            }
+            if (component is CueLightComponent cueLightComp)
+                LoadCueLightComponentCard(cueLightComp);
+            else if (component is OscComponent oscComp)
+                LoadOscComponentCard(oscComp);
+            else if (component is MidiOutputComponent midiOut)
+                LoadMidiOutputComponentCard(midiOut);
         }
     }
 
@@ -129,11 +162,25 @@ public partial class ConnectionInspector : Control
             
     }
 
+    private void LoadMidiOutputComponentCard(MidiOutputComponent component)
+    {
+        if (_midiOutputCardScene == null)
+        {
+            GD.PrintErr("ConnectionInspector:LoadMidiOutputComponentCard - card scene missing");
+            return;
+        }
+        var card = _midiOutputCardScene.Instantiate<InspectorMidiOutputCard>();
+        _connectionCardContainer.AddChild(card);
+        card.SetComponent(component, this);
+    }
+
     public void RemoveComponent(ICueComponent component)
     {
         if (_focusedCue != null)
             _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove connection component");
         _focusedCue.RemoveICueComponent(component);
+        // Refresh tab content indicators (dot on Connection tab).
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
     }
 
     private void LoadCueLightComponentCard(CueLightComponent cueLightComp)
@@ -208,7 +255,8 @@ public partial class ConnectionInspector : Control
                     _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove cue light component");
                 _focusedCue.Components.Remove(cueLightComp); 
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed CueLightComponent from Cue {_focusedCue.Id}", 0); 
-                LoadConnections(); 
+                LoadConnections();
+                _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
             } 
             catch (Exception ex) 
             { 
@@ -219,7 +267,38 @@ public partial class ConnectionInspector : Control
 
     private void OnConnectionSelected(long selectedIndex)
     {
+        if (selectedIndex < 0 || _availableConnectionsButton == null) return;
         var selectedMetadata = _availableConnectionsButton.GetItemMetadata((int)selectedIndex);
+
+        // MIDI outputs use string metadata "midi:DeviceName".
+        if (selectedMetadata.VariantType == Variant.Type.String)
+        {
+            string meta = selectedMetadata.AsString();
+            if (meta != null && meta.StartsWith("midi:", StringComparison.Ordinal))
+            {
+                string deviceName = meta.Substring("midi:".Length);
+                if (_focusedCue != null && !string.IsNullOrEmpty(deviceName))
+                {
+                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add MIDI output component");
+                    var midiComp = new MidiOutputComponent
+                    {
+                        OutputDeviceName = deviceName,
+                        MessageType = MidiTriggerMessageType.NoteOn,
+                        Channel = 1,
+                        Data1 = 60,
+                        Data2 = 100,
+                        NoteDurationSeconds = 0.5
+                    };
+                    _focusedCue.AddICueComponent(midiComp);
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                        $"Selected connection: MIDI Output - {deviceName}", 0);
+                    LoadConnections();
+                    _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+                }
+                return;
+            }
+        }
+
         var selectedObj = selectedMetadata.Obj;
         if (selectedObj is CueLight selectedCueLight)
         {
@@ -229,6 +308,7 @@ public partial class ConnectionInspector : Control
             var cueLightComponent = new CueLightComponent { CueLight = selectedCueLight, CueLightId = selectedCueLight.Id };
             _focusedCue.AddICueComponent(cueLightComponent);
             LoadConnections();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
         }
         else if (selectedObj is CueOscConnection selectedOscConnection)
         {
@@ -238,6 +318,7 @@ public partial class ConnectionInspector : Control
             var oscComponent = new OscComponent { OscConnection = selectedOscConnection, OscConnectionId = selectedOscConnection.Id };
             _focusedCue.AddICueComponent(oscComponent);
             LoadConnections();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
         }
         else
         {

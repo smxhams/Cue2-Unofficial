@@ -19,6 +19,9 @@ public partial class SettingsMidi : Control
     private VBoxContainer _sessionDevicesList;
     private OptionButton _addDeviceOption;
     private Button _refreshDevicesButton;
+    private VBoxContainer _sessionOutputsList;
+    private OptionButton _addOutputOption;
+    private Button _panicButton;
     private Label _statusLabel;
 
     private CheckBox _listenCheckBox;
@@ -42,6 +45,9 @@ public partial class SettingsMidi : Control
         _sessionDevicesList = GetNodeOrNull<VBoxContainer>("%SessionDevicesList");
         _addDeviceOption = GetNodeOrNull<OptionButton>("%AddDeviceOption");
         _refreshDevicesButton = GetNodeOrNull<Button>("%RefreshDevicesButton");
+        _sessionOutputsList = GetNodeOrNull<VBoxContainer>("%SessionOutputsList");
+        _addOutputOption = GetNodeOrNull<OptionButton>("%AddOutputOption");
+        _panicButton = GetNodeOrNull<Button>("%PanicButton");
         _statusLabel = GetNodeOrNull<Label>("%StatusLabel");
 
         _listenCheckBox = GetNodeOrNull<CheckBox>("%ListenCheckBox");
@@ -56,6 +62,10 @@ public partial class SettingsMidi : Control
             _addDeviceOption.ItemSelected += OnAddDeviceSelected;
         if (_refreshDevicesButton != null)
             _refreshDevicesButton.Pressed += OnRefreshDevicesPressed;
+        if (_addOutputOption != null)
+            _addOutputOption.ItemSelected += OnAddOutputSelected;
+        if (_panicButton != null)
+            _panicButton.Pressed += OnPanicPressed;
         if (_listenCheckBox != null)
             _listenCheckBox.Toggled += OnListenToggled;
         if (_clearLogButton != null)
@@ -98,6 +108,10 @@ public partial class SettingsMidi : Control
             _addDeviceOption.ItemSelected -= OnAddDeviceSelected;
         if (_refreshDevicesButton != null)
             _refreshDevicesButton.Pressed -= OnRefreshDevicesPressed;
+        if (_addOutputOption != null)
+            _addOutputOption.ItemSelected -= OnAddOutputSelected;
+        if (_panicButton != null)
+            _panicButton.Pressed -= OnPanicPressed;
         if (_listenCheckBox != null)
             _listenCheckBox.Toggled -= OnListenToggled;
         if (_clearLogButton != null)
@@ -200,6 +214,8 @@ public partial class SettingsMidi : Control
 
             RebuildSessionDeviceRows();
             PopulateAddDeviceOption();
+            RebuildSessionOutputRows();
+            PopulateAddOutputOption();
             UpdateStatusLabel();
         }
         finally
@@ -349,17 +365,19 @@ public partial class SettingsMidi : Control
 
         if (!_midiManager.MidiEnabled)
         {
-            int n = _midiManager.SessionInputNames.Count;
-            _statusLabel.Text = n == 0 ? "MIDI off" : $"MIDI off · {n} in session";
+            int nin = _midiManager.SessionInputNames.Count;
+            int nout = _midiManager.SessionOutputNames.Count;
+            _statusLabel.Text = (nin + nout) == 0
+                ? "MIDI off"
+                : $"MIDI off · {nin} in / {nout} out";
             return;
         }
 
-        int session = _midiManager.SessionInputNames.Count;
-        int open = _midiManager.OpenInputCount;
-        if (session == 0)
-            _statusLabel.Text = "Enabled · no inputs";
-        else
-            _statusLabel.Text = $"Listening: {open}/{session}";
+        int sessionIn = _midiManager.SessionInputNames.Count;
+        int openIn = _midiManager.OpenInputCount;
+        int sessionOut = _midiManager.SessionOutputNames.Count;
+        int openOut = _midiManager.OpenOutputCount;
+        _statusLabel.Text = $"In {openIn}/{sessionIn} · Out {openOut}/{sessionOut}";
     }
 
     private void OnEnableMidiToggled(bool pressed)
@@ -407,6 +425,155 @@ public partial class SettingsMidi : Control
 
         RecordMidiHistory($"Remove MIDI input '{deviceName}'");
         _midiManager.RemoveInputDevice(deviceName);
+    }
+
+    private void RebuildSessionOutputRows()
+    {
+        if (_sessionOutputsList == null || _midiManager == null) return;
+
+        foreach (Node child in _sessionOutputsList.GetChildren())
+            child.QueueFree();
+
+        var session = _midiManager.SessionOutputNames;
+        if (session.Count == 0)
+        {
+            var empty = new Label
+            {
+                Text = "No outputs in session — add one below.",
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            };
+            empty.AddThemeFontSizeOverride("font_size", 11);
+            empty.AddThemeColorOverride("font_color", new Color(0.55f, 0.55f, 0.55f, 1f));
+            _sessionOutputsList.AddChild(empty);
+            return;
+        }
+
+        foreach (string name in session)
+        {
+            bool available = _midiManager.IsOutputAvailable(name);
+            bool open = _midiManager.IsOutputOpen(name);
+
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
+
+            var nameLabel = new Label
+            {
+                Text = name,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                ClipText = true,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            };
+            nameLabel.AddThemeFontSizeOverride("font_size", 12);
+            row.AddChild(nameLabel);
+
+            string statusText;
+            Color statusColor;
+            if (!_midiManager.MidiEnabled)
+            {
+                statusText = available ? "Ready" : "Offline";
+                statusColor = available
+                    ? new Color(0.6f, 0.6f, 0.6f, 1f)
+                    : new Color(0.85f, 0.55f, 0.35f, 1f);
+            }
+            else if (open)
+            {
+                statusText = "Open";
+                statusColor = new Color(0.45f, 0.85f, 0.5f, 1f);
+            }
+            else if (available)
+            {
+                statusText = "Closed";
+                statusColor = new Color(0.85f, 0.7f, 0.35f, 1f);
+            }
+            else
+            {
+                statusText = "Offline";
+                statusColor = new Color(0.85f, 0.45f, 0.4f, 1f);
+            }
+
+            var status = new Label
+            {
+                Text = statusText,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            status.AddThemeFontSizeOverride("font_size", 11);
+            status.AddThemeColorOverride("font_color", statusColor);
+            status.CustomMinimumSize = new Vector2(56, 0);
+            row.AddChild(status);
+
+            var removeBtn = new Button
+            {
+                Text = "Remove",
+                FocusMode = FocusModeEnum.None,
+                TooltipText = $"Remove '{name}' from session outputs",
+            };
+            removeBtn.AddThemeFontSizeOverride("font_size", 11);
+            string captured = name;
+            removeBtn.Pressed += () => OnRemoveOutputPressed(captured);
+            row.AddChild(removeBtn);
+
+            _sessionOutputsList.AddChild(row);
+        }
+    }
+
+    private void PopulateAddOutputOption()
+    {
+        if (_addOutputOption == null || _midiManager == null) return;
+
+        _addOutputOption.Clear();
+        _addOutputOption.AddItem("Select output to add…");
+        _addOutputOption.SetItemMetadata(0, "");
+        _addOutputOption.SetItemDisabled(0, true);
+
+        var available = _midiManager.AvailableOutputsNotInSession;
+        if (available.Count == 0)
+        {
+            int idx = _addOutputOption.ItemCount;
+            string label = _midiManager.AvailableOutputNames.Count == 0
+                ? "(No MIDI outputs found)"
+                : "(All available outputs added)";
+            _addOutputOption.AddItem(label);
+            _addOutputOption.SetItemMetadata(idx, "");
+            _addOutputOption.SetItemDisabled(idx, true);
+        }
+        else
+        {
+            foreach (string name in available)
+            {
+                int idx = _addOutputOption.ItemCount;
+                _addOutputOption.AddItem(name);
+                _addOutputOption.SetItemMetadata(idx, name);
+            }
+        }
+
+        _addOutputOption.Select(0);
+    }
+
+    private void OnAddOutputSelected(long index)
+    {
+        if (_isSyncingUi || _midiManager == null || _addOutputOption == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (index <= 0 || index >= _addOutputOption.ItemCount) return;
+
+        string name = _addOutputOption.GetItemMetadata((int)index).AsString();
+        if (string.IsNullOrEmpty(name)) return;
+
+        RecordMidiHistory($"Add MIDI output '{name}'");
+        _midiManager.AddOutputDevice(name);
+    }
+
+    private void OnRemoveOutputPressed(string deviceName)
+    {
+        if (_midiManager == null || string.IsNullOrEmpty(deviceName)) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        RecordMidiHistory($"Remove MIDI output '{deviceName}'");
+        _midiManager.RemoveOutputDevice(deviceName);
+    }
+
+    private void OnPanicPressed()
+    {
+        _midiManager?.PanicAllOutputs();
     }
 
     private void OnRefreshDevicesPressed()

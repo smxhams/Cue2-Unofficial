@@ -80,6 +80,7 @@ public partial class ActiveCue : GodotObject
     private readonly Dictionary<PanelContainer, VideoComponent> _componentToVideo = new();
     private readonly Dictionary<PanelContainer, CueLightComponent> _activeCueLightComponents = new();
     private readonly Dictionary<PanelContainer, OscComponent> _activeOscComponents = new();
+    private readonly Dictionary<PanelContainer, MidiOutputComponent> _activeMidiOutputComponents = new();
     private readonly Dictionary<PanelContainer, ControlComponent> _activeControlComponents = new();
 
     /// <summary>Keeps handler refs so we can disconnect before freeing UI (avoids disposed-panel callbacks).</summary>
@@ -711,6 +712,7 @@ public partial class ActiveCue : GodotObject
             _activeAudioComponents.Count > 0 ||
             _activeVideoComponents.Count > 0 ||
             _activeOscComponents.Count > 0 ||
+            _activeMidiOutputComponents.Count > 0 ||
             _activeCueLightComponents.Count > 0 ||
             _activeControlComponents.Count > 0;
 
@@ -745,6 +747,10 @@ public partial class ActiveCue : GodotObject
             else if (comp is OscComponent oscComp)
             {
                 parallel.Add(TriggerOscComponent(oscComp));
+            }
+            else if (comp is MidiOutputComponent midiOutComp)
+            {
+                parallel.Add(TriggerMidiOutputComponent(midiOutComp));
             }
             else if (comp is ControlComponent controlComp)
             {
@@ -901,6 +907,26 @@ public partial class ActiveCue : GodotObject
             {
                 HandleOscComponentCompleted(panel);
             }
+        }
+    }
+
+    private async Task TriggerMidiOutputComponent(MidiOutputComponent comp)
+    {
+        try
+        {
+            await comp.Execute();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:TriggerMidiOutputComponent - {ex.Message}");
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"MIDI output failed in {_cue.Name}: {ex.Message}", 2);
+        }
+        finally
+        {
+            var panel = _activeMidiOutputComponents.FirstOrDefault(kv => kv.Value == comp).Key;
+            if (panel != null)
+                HandleMidiOutputComponentCompleted(panel);
         }
     }
 
@@ -1437,6 +1463,10 @@ public partial class ActiveCue : GodotObject
             {
                 tasks.Add(SetupOscComponent(oscComponent));
             }
+            else if (component is MidiOutputComponent midiOutComponent)
+            {
+                tasks.Add(SetupMidiOutputComponent(midiOutComponent));
+            }
             else if (component is ControlComponent controlComponent)
             {
                 tasks.Add(SetupControlComponent(controlComponent));
@@ -1857,6 +1887,38 @@ public partial class ActiveCue : GodotObject
         return Task.CompletedTask;
     }
 
+    private Task SetupMidiOutputComponent(MidiOutputComponent midiComponent)
+    {
+        try
+        {
+            PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+            _componentContainer.AddChild(componentPanel);
+            componentPanel.GetNode<Label>("%ComponentLabel").Text = midiComponent.GetDisplaySummary();
+            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            componentPanel.GetNode<Button>("%ComponentPause").QueueFree();
+            var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
+            componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
+            try
+            {
+                typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+            }
+            catch { /* optional */ }
+            stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+
+            _activeMidiOutputComponents.Add(componentPanel, midiComponent);
+            _activeComponentCount++;
+            stopButton.Pressed += () => HandleMidiOutputComponentCompleted(componentPanel);
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"ActiveCue:SetupMidiOutputComponent - Exception: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error setting up MIDI output for cue {_cue.Name}: {ex.Message}", 2);
+        }
+
+        return Task.CompletedTask;
+    }
+
     private Task SetupControlComponent(ControlComponent controlComponent)
     {
         try
@@ -2157,10 +2219,14 @@ public partial class ActiveCue : GodotObject
             tasks.Add(videoComp.Stop(fadeDuration));
         }
 
-        // Instant components (OSC / cue light / control) have no async stop — clear them now.
+        // Instant components (OSC / MIDI / cue light / control) have no async stop — clear them now.
         foreach (var panel in _activeOscComponents.Keys.ToList())
         {
             HandleOscComponentCompleted(panel);
+        }
+        foreach (var panel in _activeMidiOutputComponents.Keys.ToList())
+        {
+            HandleMidiOutputComponentCompleted(panel);
         }
         foreach (var panel in _activeCueLightComponents.Keys.ToList())
         {
@@ -2249,8 +2315,13 @@ public partial class ActiveCue : GodotObject
         RemoveInstantComponent(componentPanel, _activeControlComponents);
     }
 
+    private void HandleMidiOutputComponentCompleted(PanelContainer componentPanel)
+    {
+        RemoveInstantComponent(componentPanel, _activeMidiOutputComponents);
+    }
+
     /// <summary>
-    /// Removes a short-lived component row (OSC / cue light / control) and checks cue completion.
+    /// Removes a short-lived component row (OSC / MIDI / cue light / control) and checks cue completion.
     /// </summary>
     private void RemoveInstantComponent<T>(PanelContainer componentPanel, Dictionary<PanelContainer, T> map)
     {
@@ -2270,6 +2341,7 @@ public partial class ActiveCue : GodotObject
         if (_activeAudioComponents.Count == 0 
             && _activeVideoComponents.Count == 0 
             && _activeOscComponents.Count == 0
+            && _activeMidiOutputComponents.Count == 0
             && _activeCueLightComponents.Count == 0
             && _activeControlComponents.Count == 0)
         {
@@ -2375,6 +2447,7 @@ public partial class ActiveCue : GodotObject
         _activeVideoComponents.Clear();
         _componentToVideo.Clear();
         _activeOscComponents.Clear();
+        _activeMidiOutputComponents.Clear();
         _activeCueLightComponents.Clear();
         _activeControlComponents.Clear();
 

@@ -13,8 +13,9 @@ namespace Cue2.UI.Scenes.Inspectors;
 /// </summary>
 /// <remarks>
 /// Auto-switch only runs when the focused cue id changes. If the current tab already has
-/// content for the newly selected cue, the tab is left unchanged. Indicators refresh on
-/// focus changes and when document history / inspector sync implies component edits.
+/// content for the newly selected cue, the tab is left unchanged. Auto-switch is also
+/// suppressed while the user is on Library or Timeline (context/browsing tabs). Indicators
+/// refresh on focus changes and when document history / inspector sync implies component edits.
 /// </remarks>
 public partial class InspectorTabsController : TabContainer
 {
@@ -26,6 +27,15 @@ public partial class InspectorTabsController : TabContainer
 		"Connection",
 		"Control",
 		"Network"
+	};
+
+	/// <summary>
+	/// Tabs that should not be interrupted by content-based auto-switch when focused.
+	/// </summary>
+	private static readonly HashSet<string> StickyTabs = new(StringComparer.Ordinal)
+	{
+		"Library",
+		"Timeline"
 	};
 
 	private GlobalData _globalData;
@@ -119,7 +129,8 @@ public partial class InspectorTabsController : TabContainer
 	}
 
 	/// <summary>
-	/// Switches to a content tab unless the current tab already has content for this cue.
+	/// Switches to a content tab unless the current tab already has content for this cue,
+	/// or the current tab is sticky (Library / Timeline).
 	/// </summary>
 	private void TryAutoSwitchTab(HashSet<string> contentTabs)
 	{
@@ -130,8 +141,16 @@ public partial class InspectorTabsController : TabContainer
 		if (current >= 0 && current < GetTabCount())
 		{
 			string currentName = GetTabControl(current)?.Name;
-			if (!string.IsNullOrEmpty(currentName) && contentTabs.Contains(currentName))
-				return; // Stay — current tab already relevant for this cue.
+			if (!string.IsNullOrEmpty(currentName))
+			{
+				// Stay on browsing / timeline tabs even when the focused cue has other content.
+				if (StickyTabs.Contains(currentName))
+					return;
+
+				// Stay — current tab already relevant for this cue.
+				if (contentTabs.Contains(currentName))
+					return;
+			}
 		}
 
 		// Pick first priority tab that has content (respects drag-rearranged order via name lookup).
@@ -206,6 +225,7 @@ public partial class InspectorTabsController : TabContainer
 					break;
 				case "CueLight":
 				case "OscComponent":
+				case "MidiOutput":
 					flags.Add("Connection");
 					break;
 			}

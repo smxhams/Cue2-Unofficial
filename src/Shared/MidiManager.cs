@@ -15,6 +15,7 @@ using System.Text;
 using Cue2.Base.Classes;
 using Cue2.Base.Classes.CueTypes;
 using Godot;
+using Melanchall.DryWetMidi.Common;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Multimedia;
 
@@ -50,8 +51,12 @@ public partial class MidiManager : Node
 {
     private GlobalSignals _globalSignals;
 
-    /// <summary>Device name → open handle (only entries currently listening).</summary>
+    /// <summary>Device name → open input handle (only entries currently listening).</summary>
     private readonly Dictionary<string, InputDevice> _openDevices =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Device name → open output handle.</summary>
+    private readonly Dictionary<string, OutputDevice> _openOutputs =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -59,9 +64,13 @@ public partial class MidiManager : Node
     /// <see cref="MidiDevice.Name"/> throws on a removed device.
     /// </summary>
     private readonly Dictionary<InputDevice, string> _openDeviceNames = new();
+    private readonly Dictionary<OutputDevice, string> _openOutputNames = new();
 
     /// <summary>Session-configured input names (order preserved; may include offline devices).</summary>
     private readonly List<string> _sessionInputNames = new();
+
+    /// <summary>Session-configured output names (order preserved; may include offline devices).</summary>
+    private readonly List<string> _sessionOutputNames = new();
 
     /// <summary>InputMap action name → optional MIDI binding (show-scoped).</summary>
     private readonly Dictionary<string, MidiActionBinding> _inputMapBindings =
@@ -83,6 +92,10 @@ public partial class MidiManager : Node
     private readonly ConcurrentQueue<string> _pendingLogLines = new();
     private readonly ConcurrentQueue<MidiInputMessage> _pendingMessages = new();
     private readonly List<string> _availableInputNames = new();
+    private readonly List<string> _availableOutputNames = new();
+
+    /// <summary>Deferred note-offs: (device, channel0-15, note, fireAtTime).</summary>
+    private readonly List<(string Device, int Channel0, int Note, double FireAt)> _pendingNoteOffs = new();
 
     /// <summary>Seconds between automatic availability polls (reconnect / unplug detection).</summary>
     private const double DevicePollIntervalSec = 1.5;
@@ -103,9 +116,15 @@ public partial class MidiManager : Node
             if (_midiEnabled == value) return;
             _midiEnabled = value;
             if (_midiEnabled)
+            {
                 OpenAllSessionInputs();
+                OpenAllSessionOutputs();
+            }
             else
+            {
                 CloseAllInputs();
+                CloseAllOutputs();
+            }
             EmitSignal(SignalName.MidiStateChanged);
         }
     }
@@ -128,21 +147,38 @@ public partial class MidiManager : Node
     public bool IsAnyInputOpen => _openDevices.Count > 0 &&
                                   _openDevices.Values.Any(d => d != null && d.IsListeningForEvents);
 
-    /// <summary>Number of currently open listening devices.</summary>
-    public int OpenInputCount => _openDevices.Count(kv => kv.Value is { IsListeningForEvents: true });
+    /// <summary>Number of currently open listening input devices.</summary>
+    public int OpenInputCount => _openDevices.Count(kv => IsOpenHandleHealthy(kv.Key));
+
+    /// <summary>Number of currently open output devices.</summary>
+    public int OpenOutputCount => _openOutputs.Count(kv => IsOpenOutputHealthy(kv.Key));
 
     /// <summary>Session-configured input device names (may include offline devices).</summary>
     public IReadOnlyList<string> SessionInputNames => _sessionInputNames;
 
+    /// <summary>Session-configured output device names (may include offline devices).</summary>
+    public IReadOnlyList<string> SessionOutputNames => _sessionOutputNames;
+
     /// <summary>Currently available system MIDI input names (last enumeration).</summary>
     public IReadOnlyList<string> AvailableInputNames => _availableInputNames;
 
+    /// <summary>Currently available system MIDI output names (last enumeration).</summary>
+    public IReadOnlyList<string> AvailableOutputNames => _availableOutputNames;
+
     /// <summary>
-    /// Available system devices that are not already in the session (for the Add dropdown).
+    /// Available system inputs that are not already in the session (for the Add dropdown).
     /// </summary>
     public IReadOnlyList<string> AvailableInputsNotInSession =>
         _availableInputNames
             .Where(n => !_sessionInputNames.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+    /// <summary>
+    /// Available system outputs that are not already in the session (for the Add dropdown).
+    /// </summary>
+    public IReadOnlyList<string> AvailableOutputsNotInSession =>
+        _availableOutputNames
+            .Where(n => !_sessionOutputNames.Contains(n, StringComparer.OrdinalIgnoreCase))
             .ToList();
 
     /// <summary>True when the platform native library was found and loaded successfully.</summary>
@@ -212,9 +248,12 @@ public partial class MidiManager : Node
             drained++;
         }
 
+        // Deferred note-offs for Note On components with a duration.
+        ProcessPendingNoteOffs(delta);
+
         // Periodic reconcile: catches unplug/replug when DevicesWatcher is silent or incomplete
         // (Windows Equals/Name limitations, missed USB events, zombie open handles).
-        if (_nativeReady && (_midiEnabled || _sessionInputNames.Count > 0))
+        if (_nativeReady && (_midiEnabled || _sessionInputNames.Count > 0 || _sessionOutputNames.Count > 0))
         {
             _devicePollAccum += delta;
             if (_devicePollAccum >= DevicePollIntervalSec)
@@ -229,7 +268,41 @@ public partial class MidiManager : Node
     {
         UnhookDevicesWatcher();
         CancelCapture();
+        _pendingNoteOffs.Clear();
         CloseAllInputs();
+        CloseAllOutputs();
+    }
+
+    private void ProcessPendingNoteOffs(double delta)
+    {
+        if (_pendingNoteOffs.Count == 0) return;
+        // FireAt is stored as remaining seconds.
+        for (int i = _pendingNoteOffs.Count - 1; i >= 0; i--)
+        {
+            var (device, ch0, note, remaining) = _pendingNoteOffs[i];
+            remaining -= delta;
+            if (remaining > 0)
+            {
+                _pendingNoteOffs[i] = (device, ch0, note, remaining);
+                continue;
+            }
+
+            _pendingNoteOffs.RemoveAt(i);
+            try
+            {
+                if (_openOutputs.TryGetValue(device, out var outDev) && outDev != null)
+                {
+                    outDev.SendEvent(new NoteOffEvent((SevenBitNumber)note, (SevenBitNumber)0)
+                    {
+                        Channel = (FourBitNumber)Math.Clamp(ch0, 0, 15)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"MidiManager:ProcessPendingNoteOffs - {device}: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>
@@ -632,10 +705,19 @@ public partial class MidiManager : Node
     {
         // May run on a non-Godot thread.
         string name = null;
+        string kind = "device";
         try
         {
             if (e?.Device is InputDevice input)
+            {
                 name = SafeGetDeviceName(input);
+                kind = "input";
+            }
+            else if (e?.Device is OutputDevice output)
+            {
+                name = SafeGetDeviceName(output);
+                kind = "output";
+            }
         }
         catch (Exception ex)
         {
@@ -643,14 +725,15 @@ public partial class MidiManager : Node
         }
 
         string captured = name;
+        string capturedKind = kind;
         _mainThreadActions.Enqueue(() =>
         {
             if (!string.IsNullOrEmpty(captured))
             {
-                GD.Print($"MidiManager:OnWatcherDeviceAdded - Input '{captured}'");
-                EnqueueMonitorLine($"— Device added: {captured}");
+                GD.Print($"MidiManager:OnWatcherDeviceAdded - {capturedKind} '{captured}'");
+                EnqueueMonitorLine($"— {capturedKind} added: {captured}");
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                    $"MIDI: device connected — {captured}", (int)LogType.Info);
+                    $"MIDI: {capturedKind} connected — {captured}", (int)LogType.Info);
             }
             else
             {
@@ -665,32 +748,52 @@ public partial class MidiManager : Node
     {
         // DeviceRemoved instances are non-interactable (Name throws). Match by reference
         // against our open handles; otherwise fall back to a full reconcile.
-        InputDevice removed = e?.Device as InputDevice;
         string knownName = null;
-        if (removed != null && _openDeviceNames.TryGetValue(removed, out string mapped))
-            knownName = mapped;
+        bool isOutput = false;
+        if (e?.Device is InputDevice removedIn &&
+            _openDeviceNames.TryGetValue(removedIn, out string mappedIn))
+        {
+            knownName = mappedIn;
+        }
+        else if (e?.Device is OutputDevice removedOut &&
+                 _openOutputNames.TryGetValue(removedOut, out string mappedOut))
+        {
+            knownName = mappedOut;
+            isOutput = true;
+        }
 
         string captured = knownName;
-        InputDevice capturedDevice = removed;
+        bool capturedIsOutput = isOutput;
+        MidiDevice capturedDevice = e?.Device;
         _mainThreadActions.Enqueue(() =>
         {
             if (!string.IsNullOrEmpty(captured))
             {
-                GD.Print($"MidiManager:OnWatcherDeviceRemoved - Input '{captured}'");
+                GD.Print($"MidiManager:OnWatcherDeviceRemoved - '{captured}'");
                 EnqueueMonitorLine($"— Device removed: {captured}");
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                     $"MIDI: device disconnected — {captured}", (int)LogType.Warning);
-                // Close by name; keep in session list as offline.
-                CloseInput(captured, removeFromSession: false, logNotice: false);
+                if (capturedIsOutput)
+                    CloseOutput(captured, removeFromSession: false, logNotice: false);
+                else
+                    CloseInput(captured, removeFromSession: false, logNotice: false);
             }
-            else if (capturedDevice != null)
+            else if (capturedDevice is InputDevice inDev)
             {
-                // Reference match without a known name entry.
-                string byRef = FindOpenNameByInstance(capturedDevice);
+                string byRef = FindOpenNameByInstance(inDev);
                 if (!string.IsNullOrEmpty(byRef))
                 {
                     EnqueueMonitorLine($"— Device removed: {byRef}");
                     CloseInput(byRef, removeFromSession: false, logNotice: false);
+                }
+            }
+            else if (capturedDevice is OutputDevice outDev)
+            {
+                string byRef = FindOpenOutputNameByInstance(outDev);
+                if (!string.IsNullOrEmpty(byRef))
+                {
+                    EnqueueMonitorLine($"— Output removed: {byRef}");
+                    CloseOutput(byRef, removeFromSession: false, logNotice: false);
                 }
             }
 
@@ -714,12 +817,14 @@ public partial class MidiManager : Node
             return;
         }
 
-        var previousAvailable = new HashSet<string>(_availableInputNames, StringComparer.OrdinalIgnoreCase);
-        var previousOpen = new HashSet<string>(_openDevices.Keys, StringComparer.OrdinalIgnoreCase);
+        var previousAvailableIn = new HashSet<string>(_availableInputNames, StringComparer.OrdinalIgnoreCase);
+        var previousAvailableOut = new HashSet<string>(_availableOutputNames, StringComparer.OrdinalIgnoreCase);
+        var previousOpenIn = new HashSet<string>(_openDevices.Keys, StringComparer.OrdinalIgnoreCase);
+        var previousOpenOut = new HashSet<string>(_openOutputs.Keys, StringComparer.OrdinalIgnoreCase);
 
-        EnumerateAvailableInputs();
+        EnumerateAvailableDevices();
 
-        // Drop open handles that disappeared from the system or are no longer listening.
+        // Drop open inputs that disappeared or are no longer healthy.
         foreach (string openName in _openDevices.Keys.ToList())
         {
             bool stillAvailable = _availableInputNames.Contains(openName, StringComparer.OrdinalIgnoreCase);
@@ -727,19 +832,38 @@ public partial class MidiManager : Node
 
             if (!stillAvailable || !healthy)
             {
-                GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Closing '{openName}' " +
+                GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Closing input '{openName}' " +
                          $"(available={stillAvailable}, healthy={healthy})");
                 if (!stillAvailable)
                 {
-                    EnqueueMonitorLine($"— Device offline: {openName}");
+                    EnqueueMonitorLine($"— Input offline: {openName}");
                     _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                        $"MIDI: device offline — {openName}", (int)LogType.Warning);
+                        $"MIDI: input offline — {openName}", (int)LogType.Warning);
                 }
                 CloseInput(openName, removeFromSession: false, logNotice: stillAvailable);
             }
         }
 
-        // Reopen session devices that are present while MIDI is enabled.
+        // Drop open outputs that disappeared or are unhealthy.
+        foreach (string openName in _openOutputs.Keys.ToList())
+        {
+            bool stillAvailable = _availableOutputNames.Contains(openName, StringComparer.OrdinalIgnoreCase);
+            bool healthy = stillAvailable && IsOpenOutputHealthy(openName);
+
+            if (!stillAvailable || !healthy)
+            {
+                GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Closing output '{openName}'");
+                if (!stillAvailable)
+                {
+                    EnqueueMonitorLine($"— Output offline: {openName}");
+                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                        $"MIDI: output offline — {openName}", (int)LogType.Warning);
+                }
+                CloseOutput(openName, removeFromSession: false, logNotice: stillAvailable);
+            }
+        }
+
+        // Reopen session devices while MIDI is enabled.
         if (_midiEnabled)
         {
             foreach (string sessionName in _sessionInputNames.ToList())
@@ -749,24 +873,48 @@ public partial class MidiManager : Node
                 if (_openDevices.ContainsKey(sessionName) && IsOpenHandleHealthy(sessionName))
                     continue;
 
-                // Stale entry without a healthy handle.
                 if (_openDevices.ContainsKey(sessionName))
                     CloseInput(sessionName, removeFromSession: false, logNotice: false);
 
                 if (OpenInput(sessionName))
                 {
-                    GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Reopened '{sessionName}'");
-                    if (reason != "poll" || !previousOpen.Contains(sessionName))
+                    GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Reopened input '{sessionName}'");
+                    if (reason != "poll" || !previousOpenIn.Contains(sessionName))
                     {
                         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                            $"MIDI: device reconnected — {sessionName}", (int)LogType.Info);
+                            $"MIDI: input reconnected — {sessionName}", (int)LogType.Info);
+                    }
+                }
+            }
+
+            foreach (string sessionName in _sessionOutputNames.ToList())
+            {
+                if (!_availableOutputNames.Contains(sessionName, StringComparer.OrdinalIgnoreCase))
+                    continue;
+                if (_openOutputs.ContainsKey(sessionName) && IsOpenOutputHealthy(sessionName))
+                    continue;
+
+                if (_openOutputs.ContainsKey(sessionName))
+                    CloseOutput(sessionName, removeFromSession: false, logNotice: false);
+
+                if (OpenOutput(sessionName))
+                {
+                    GD.Print($"MidiManager:ReconcileSessionDevices[{reason}] - Reopened output '{sessionName}'");
+                    if (reason != "poll" || !previousOpenOut.Contains(sessionName))
+                    {
+                        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                            $"MIDI: output reconnected — {sessionName}", (int)LogType.Info);
                     }
                 }
             }
         }
 
-        bool availabilityChanged = !previousAvailable.SetEquals(_availableInputNames);
-        bool openChanged = !previousOpen.SetEquals(_openDevices.Keys);
+        bool availabilityChanged =
+            !previousAvailableIn.SetEquals(_availableInputNames) ||
+            !previousAvailableOut.SetEquals(_availableOutputNames);
+        bool openChanged =
+            !previousOpenIn.SetEquals(_openDevices.Keys) ||
+            !previousOpenOut.SetEquals(_openOutputs.Keys);
         if (forceStateEmit || (emitStateIfChanged && (availabilityChanged || openChanged)))
             EmitSignal(SignalName.MidiStateChanged);
     }
@@ -789,11 +937,12 @@ public partial class MidiManager : Node
     }
 
     /// <summary>
-    /// Enumerates system input names into <see cref="_availableInputNames"/> (disposes temp handles).
+    /// Enumerates system input/output names (disposes temp handles we do not own).
     /// </summary>
-    private void EnumerateAvailableInputs()
+    private void EnumerateAvailableDevices()
     {
         _availableInputNames.Clear();
+        _availableOutputNames.Clear();
         try
         {
             foreach (var device in InputDevice.GetAll())
@@ -807,7 +956,6 @@ public partial class MidiManager : Node
                 }
                 finally
                 {
-                    // Never dispose a handle we currently own for the session.
                     if (device != null && !_openDeviceNames.ContainsKey(device))
                     {
                         try { device.Dispose(); }
@@ -816,12 +964,48 @@ public partial class MidiManager : Node
                 }
             }
             _availableInputNames.Sort(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var device in OutputDevice.GetAll())
+            {
+                try
+                {
+                    string name = SafeGetDeviceName(device);
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (!_availableOutputNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                        _availableOutputNames.Add(name);
+                }
+                finally
+                {
+                    if (device != null && !_openOutputNames.ContainsKey(device))
+                    {
+                        try { device.Dispose(); }
+                        catch { /* ignore */ }
+                    }
+                }
+            }
+            _availableOutputNames.Sort(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"MidiManager:EnumerateAvailableInputs - {ex.Message}");
+            GD.PrintErr($"MidiManager:EnumerateAvailableDevices - {ex.Message}");
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 $"MIDI: failed to list devices — {ex.Message}", (int)LogType.Warning);
+        }
+    }
+
+    private bool IsOpenOutputHealthy(string deviceName)
+    {
+        if (!_openOutputs.TryGetValue(deviceName, out var device) || device == null)
+            return false;
+        try
+        {
+            // Touch a cheap property; removed devices throw.
+            _ = device.Name;
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -843,6 +1027,78 @@ public partial class MidiManager : Node
                 return kvp.Key;
         }
         return null;
+    }
+
+    private string FindOpenOutputNameByInstance(OutputDevice device)
+    {
+        if (device == null) return null;
+        if (_openOutputNames.TryGetValue(device, out string name))
+            return name;
+        foreach (var kvp in _openOutputs)
+        {
+            if (ReferenceEquals(kvp.Value, device))
+                return kvp.Key;
+        }
+        return null;
+    }
+
+    /// <summary>True if a session output is open.</summary>
+    public bool IsOutputOpen(string deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName)) return false;
+        return IsOpenOutputHealthy(deviceName);
+    }
+
+    /// <summary>True if an output name is currently visible to the system.</summary>
+    public bool IsOutputAvailable(string deviceName)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName)) return false;
+        return _availableOutputNames.Contains(deviceName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Adds a system output device to the session. Opens immediately when MIDI is enabled.
+    /// </summary>
+    public bool AddOutputDevice(string deviceName)
+    {
+        string name = deviceName?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(name)) return false;
+        if (_sessionOutputNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        _sessionOutputNames.Add(name);
+        GD.Print($"MidiManager:AddOutputDevice - Added '{name}' to session.");
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            $"MIDI: added output '{name}'", (int)LogType.Info);
+
+        if (_midiEnabled)
+            OpenOutput(name);
+
+        EmitSignal(SignalName.MidiStateChanged);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes an output from the session and closes it if open.
+    /// </summary>
+    public bool RemoveOutputDevice(string deviceName)
+    {
+        string name = deviceName?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(name)) return false;
+
+        int idx = _sessionOutputNames.FindIndex(n =>
+            string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0) return false;
+
+        CloseOutput(_sessionOutputNames[idx], removeFromSession: false);
+        _sessionOutputNames.RemoveAt(idx);
+
+        GD.Print($"MidiManager:RemoveOutputDevice - Removed '{name}' from session.");
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            $"MIDI: removed output '{name}'", (int)LogType.Info);
+
+        EmitSignal(SignalName.MidiStateChanged);
+        return true;
     }
 
     /// <summary>
@@ -937,6 +1193,10 @@ public partial class MidiManager : Node
         foreach (string name in _sessionInputNames)
             inputs.Add(name);
         dict["SessionInputs"] = inputs;
+        var outputs = new Godot.Collections.Array();
+        foreach (string name in _sessionOutputNames)
+            outputs.Add(name);
+        dict["SessionOutputs"] = outputs;
         return dict;
     }
 
@@ -951,7 +1211,9 @@ public partial class MidiManager : Node
 
         CancelCapture();
         CloseAllInputs();
+        CloseAllOutputs();
         _sessionInputNames.Clear();
+        _sessionOutputNames.Clear();
 
         if (data.TryGetValue("SessionInputs", out var inputsVar))
         {
@@ -965,6 +1227,18 @@ public partial class MidiManager : Node
             }
         }
 
+        if (data.TryGetValue("SessionOutputs", out var outputsVar))
+        {
+            var arr = outputsVar.AsGodotArray();
+            foreach (var item in arr)
+            {
+                string name = item.AsString()?.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (_sessionOutputNames.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                _sessionOutputNames.Add(name);
+            }
+        }
+
         _monitorEnabled = !data.TryGetValue("MonitorEnabled", out var mon) || mon.AsBool();
         _midiEnabled = data.TryGetValue("MidiEnabled", out var en) && en.AsBool();
 
@@ -973,10 +1247,14 @@ public partial class MidiManager : Node
             RefreshDeviceListQuiet();
 
         if (_midiEnabled)
+        {
             OpenAllSessionInputs();
+            OpenAllSessionOutputs();
+        }
 
         EmitSignal(SignalName.MidiStateChanged);
-        GD.Print($"MidiManager:LoadFromData - Enabled={_midiEnabled}, session inputs={_sessionInputNames.Count}");
+        GD.Print($"MidiManager:LoadFromData - Enabled={_midiEnabled}, " +
+                 $"inputs={_sessionInputNames.Count}, outputs={_sessionOutputNames.Count}");
     }
 
     /// <summary>
@@ -985,13 +1263,16 @@ public partial class MidiManager : Node
     public void ResetToDefaults()
     {
         CancelCapture();
+        _pendingNoteOffs.Clear();
         CloseAllInputs();
+        CloseAllOutputs();
         _sessionInputNames.Clear();
+        _sessionOutputNames.Clear();
         _inputMapBindings.Clear();
         _midiEnabled = false;
         _monitorEnabled = true;
         EmitSignal(SignalName.MidiStateChanged);
-        GD.Print("MidiManager:ResetToDefaults - MIDI disabled, session inputs and Input Map cleared.");
+        GD.Print("MidiManager:ResetToDefaults - MIDI disabled, session devices and Input Map cleared.");
     }
 
     /// <summary>
@@ -1000,7 +1281,7 @@ public partial class MidiManager : Node
     /// </summary>
     private void RefreshDeviceListQuiet()
     {
-        EnumerateAvailableInputs();
+        EnumerateAvailableDevices();
     }
 
     // ── Open / close ────────────────────────────────────────────────────────
@@ -1014,7 +1295,7 @@ public partial class MidiManager : Node
             return;
         }
 
-        EnumerateAvailableInputs();
+        EnumerateAvailableDevices();
 
         if (_sessionInputNames.Count == 0)
         {
@@ -1025,6 +1306,234 @@ public partial class MidiManager : Node
 
         foreach (string name in _sessionInputNames.ToList())
             OpenInput(name);
+    }
+
+    private void OpenAllSessionOutputs()
+    {
+        if (!_nativeReady && !(_nativeReady = EnsureNativeLibraryLoaded()))
+            return;
+
+        EnumerateAvailableDevices();
+
+        if (_sessionOutputNames.Count == 0)
+            return;
+
+        foreach (string name in _sessionOutputNames.ToList())
+            OpenOutput(name);
+    }
+
+    private bool OpenOutput(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName)) return false;
+
+        if (_openOutputs.TryGetValue(deviceName, out var existing))
+        {
+            if (IsOpenOutputHealthy(deviceName))
+                return true;
+            CloseOutput(deviceName, removeFromSession: false, logNotice: false);
+        }
+
+        if (!_nativeReady && !(_nativeReady = EnsureNativeLibraryLoaded()))
+            return false;
+
+        try
+        {
+            OutputDevice device;
+            try
+            {
+                device = OutputDevice.GetByName(deviceName);
+            }
+            catch (Exception getEx)
+            {
+                GD.Print($"MidiManager:OpenOutput - GetByName('{deviceName}') failed: {getEx.Message}");
+                return false;
+            }
+
+            if (device == null)
+                return false;
+
+            // Prepare for sending (DryWetMIDI opens on first send for some platforms;
+            // explicit PrepareForEventsSending avoids first-message lag where available).
+            try { device.PrepareForEventsSending(); }
+            catch { /* optional API depending on version */ }
+
+            _openOutputs[deviceName] = device;
+            _openOutputNames[device] = deviceName;
+
+            GD.Print($"MidiManager:OpenOutput - Opened '{deviceName}'.");
+            EnqueueMonitorLine($"— Opened output: {deviceName}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"MidiManager:OpenOutput - {deviceName}: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"MIDI: failed to open output '{deviceName}' — {ex.Message}", (int)LogType.Warning);
+            return false;
+        }
+    }
+
+    private void CloseOutput(string deviceName, bool removeFromSession, bool logNotice = true)
+    {
+        if (string.IsNullOrEmpty(deviceName)) return;
+
+        if (_openOutputs.TryGetValue(deviceName, out var device))
+        {
+            _openOutputs.Remove(deviceName);
+            if (device != null)
+                _openOutputNames.Remove(device);
+
+            if (device != null)
+            {
+                try { device.Dispose(); }
+                catch (Exception ex)
+                {
+                    GD.Print($"MidiManager:CloseOutput - Dispose '{deviceName}': {ex.Message}");
+                }
+            }
+
+            if (logNotice)
+                EnqueueMonitorLine($"— Closed output: {deviceName}");
+        }
+
+        // Cancel pending note-offs for this device.
+        _pendingNoteOffs.RemoveAll(n =>
+            string.Equals(n.Device, deviceName, StringComparison.OrdinalIgnoreCase));
+
+        if (removeFromSession)
+        {
+            _sessionOutputNames.RemoveAll(n =>
+                string.Equals(n, deviceName, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private void CloseAllOutputs()
+    {
+        foreach (string name in _openOutputs.Keys.ToList())
+            CloseOutput(name, removeFromSession: false, logNotice: false);
+        _pendingNoteOffs.Clear();
+    }
+
+    // ── MIDI send (cue components / panic) ──────────────────────────────────
+
+    /// <summary>
+    /// Sends a channel message to a session output device.
+    /// Channel is 1–16. For Note On with <paramref name="noteDurationSeconds"/> &gt; 0, schedules Note Off.
+    /// </summary>
+    public bool SendMessage(
+        string outputDeviceName,
+        MidiTriggerMessageType type,
+        int channel,
+        int data1,
+        int data2 = 0,
+        double noteDurationSeconds = 0)
+    {
+        if (string.IsNullOrWhiteSpace(outputDeviceName)) return false;
+        if (!_midiEnabled)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "MIDI send failed: MIDI is disabled.", (int)LogType.Warning);
+            return false;
+        }
+
+        if (!_openOutputs.TryGetValue(outputDeviceName, out var device) || device == null)
+        {
+            // Try open if in session but not open.
+            if (_sessionOutputNames.Contains(outputDeviceName, StringComparer.OrdinalIgnoreCase))
+                OpenOutput(outputDeviceName);
+            if (!_openOutputs.TryGetValue(outputDeviceName, out device) || device == null)
+            {
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    $"MIDI send failed: output '{outputDeviceName}' not open.", (int)LogType.Warning);
+                return false;
+            }
+        }
+
+        int ch0 = Math.Clamp(channel, 1, 16) - 1;
+        data1 = Math.Clamp(data1, 0, 127);
+        data2 = Math.Clamp(data2, 0, 127);
+
+        try
+        {
+            MidiEvent ev = type switch
+            {
+                MidiTriggerMessageType.NoteOn => new NoteOnEvent((SevenBitNumber)data1, (SevenBitNumber)data2)
+                {
+                    Channel = (FourBitNumber)ch0
+                },
+                MidiTriggerMessageType.NoteOff => new NoteOffEvent((SevenBitNumber)data1, (SevenBitNumber)data2)
+                {
+                    Channel = (FourBitNumber)ch0
+                },
+                MidiTriggerMessageType.ControlChange => new ControlChangeEvent(
+                    (SevenBitNumber)data1, (SevenBitNumber)data2)
+                {
+                    Channel = (FourBitNumber)ch0
+                },
+                MidiTriggerMessageType.ProgramChange => new ProgramChangeEvent((SevenBitNumber)data1)
+                {
+                    Channel = (FourBitNumber)ch0
+                },
+                _ => null
+            };
+
+            if (ev == null) return false;
+            device.SendEvent(ev);
+
+            if (type == MidiTriggerMessageType.NoteOn && noteDurationSeconds > 1e-6)
+            {
+                _pendingNoteOffs.Add((outputDeviceName, ch0, data1, noteDurationSeconds));
+            }
+
+            if (_monitorEnabled)
+            {
+                EnqueueMonitorLine(
+                    $"→ [{outputDeviceName}] {type} ch{channel} d1={data1} d2={data2}");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"MidiManager:SendMessage - {outputDeviceName}: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"MIDI send error on '{outputDeviceName}': {ex.Message}", (int)LogType.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends All Notes Off (CC 123) and All Sound Off (CC 120) on all channels for all open outputs.
+    /// </summary>
+    public void PanicAllOutputs()
+    {
+        _pendingNoteOffs.Clear();
+        foreach (var kvp in _openOutputs.ToList())
+        {
+            var device = kvp.Value;
+            if (device == null) continue;
+            try
+            {
+                for (int ch = 0; ch < 16; ch++)
+                {
+                    device.SendEvent(new ControlChangeEvent((SevenBitNumber)123, (SevenBitNumber)0)
+                    {
+                        Channel = (FourBitNumber)ch
+                    });
+                    device.SendEvent(new ControlChangeEvent((SevenBitNumber)120, (SevenBitNumber)0)
+                    {
+                        Channel = (FourBitNumber)ch
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"MidiManager:PanicAllOutputs - {kvp.Key}: {ex.Message}");
+            }
+        }
+        EnqueueMonitorLine("— Panic: All Notes/Sound Off on all outputs");
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            "MIDI panic: All Notes Off / All Sound Off sent", (int)LogType.Info);
     }
 
     /// <summary>

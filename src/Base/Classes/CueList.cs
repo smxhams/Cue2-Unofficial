@@ -9,6 +9,7 @@ using Godot.Collections;
 
 using Cue2.Base.Classes.Connections;
 using Cue2.Base.Classes.CueTypes;
+using Cue2.Base.Classes.Library;
 using Cue2.Base.Minor;
 using Cue2.Shared;
 
@@ -994,6 +995,177 @@ public partial class CueList : Control
 	}
 
 	/// <summary>
+	/// Imports a library cue forest (temp-id keyed dictionaries) into the live cuelist.
+	/// Allocates new session cue ids, remaps parent/child and in-tree control targets, creates shells.
+	/// </summary>
+	/// <param name="cuesByTempId">Cue <see cref="Cue.GetData"/> dicts keyed by temp id string.</param>
+	/// <param name="rootTempId">Temp id of the forest root.</param>
+	/// <param name="insertMode">Where to place the new root relative to the current selection.</param>
+	/// <returns>New root cue id, or -1 on failure.</returns>
+	public int ImportCueTreeFromLibrary(
+		Dictionary cuesByTempId,
+		int rootTempId,
+		LibraryInsertMode insertMode)
+	{
+		if (cuesByTempId == null || cuesByTempId.Count == 0)
+			return -1;
+
+		string rootKey = rootTempId.ToString();
+		if (!cuesByTempId.ContainsKey(rootKey) && cuesByTempId.Count > 0)
+		{
+			// Fallback: first key
+			rootKey = cuesByTempId.Keys.First().AsString();
+			if (!int.TryParse(rootKey, out rootTempId))
+				return -1;
+		}
+
+		if (!cuesByTempId.ContainsKey(rootKey))
+			return -1;
+
+		// Resolve insert location from focused / selected cue
+		int focusId = _globalData?.FocusedCue ?? -1;
+		if (focusId < 0 && ShellSelection.SelectedCues != null && ShellSelection.SelectedCues.Count > 0)
+			focusId = ShellSelection.SelectedCues[0].Id;
+
+		VBoxContainer container;
+		int insertIndex;
+		int parentId;
+		switch (insertMode)
+		{
+			case LibraryInsertMode.AsChild:
+				(container, insertIndex, parentId) = ResolveInsertLocation(focusId, DropInsertMode.AsChild);
+				break;
+			case LibraryInsertMode.End:
+				(container, insertIndex, parentId) = ResolveInsertLocation(-1, DropInsertMode.AtEnd);
+				break;
+			default:
+				(container, insertIndex, parentId) = ResolveInsertLocation(
+					focusId, focusId >= 0 ? DropInsertMode.Below : DropInsertMode.AtEnd);
+				break;
+		}
+
+		// First pass: build live cues from data with reminted ids; track temp→new map
+		var tempToNew = new System.Collections.Generic.Dictionary<int, int>();
+		var tempToCue = new System.Collections.Generic.Dictionary<int, Cue>();
+		var tempChildOrder = new System.Collections.Generic.Dictionary<int, List<int>>();
+
+		foreach (var kv in cuesByTempId)
+		{
+			string key = kv.Key.AsString();
+			if (!int.TryParse(key, out int tempId))
+				continue;
+			if (kv.Value.VariantType != Variant.Type.Dictionary)
+				continue;
+
+			var data = kv.Value.AsGodotDictionary();
+
+			// Capture child order (temp ids) before we clear hierarchy fields
+			var childTemps = new List<int>();
+			if (data.TryGetValue("ChildCues", out var childVar))
+			{
+				foreach (var c in childVar.AsGodotArray())
+					childTemps.Add(c.AsInt32());
+			}
+			tempChildOrder[tempId] = childTemps;
+
+			// Build a clean copy for ApplyFromData: hierarchy applied by CreateShellAndInsert
+			var applyData = DeepCloneDict(data);
+			applyData["ParentId"] = "-1";
+			applyData["ChildCues"] = new Godot.Collections.Array();
+			// Id in data is ignored by ApplyFromData (keeps live Id)
+
+			var cue = new Cue();
+			cue.ApplyFromData(applyData);
+			// Ensure ChildCues empty until we insert children
+			cue.ChildCues = new List<int>();
+			cue.ParentId = -1;
+
+			tempToNew[tempId] = cue.Id;
+			tempToCue[tempId] = cue;
+		}
+
+		if (!tempToCue.ContainsKey(rootTempId))
+		{
+			GD.PrintErr($"CueList:ImportCueTreeFromLibrary - Root temp id {rootTempId} missing.");
+			return -1;
+		}
+
+		// Remap Control targets: library temp ids → new session ids
+		foreach (var cue in tempToCue.Values)
+		{
+			foreach (var comp in cue.Components)
+			{
+				if (comp is not ControlComponent control) continue;
+				if (control.TargetCueId < 0) continue;
+				if (tempToNew.TryGetValue(control.TargetCueId, out int newTarget))
+					control.TargetCueId = newTarget;
+				else
+					control.TargetCueId = -1;
+			}
+
+			RelinkCueComponents(cue);
+		}
+
+		// Second pass: insert shells in tree order
+		Cue ImportNode(int tempId, int newParentId, VBoxContainer cont, int index)
+		{
+			if (!tempToCue.TryGetValue(tempId, out var cue))
+				return null;
+
+			CreateShellAndInsert(cue, cont, index, newParentId);
+
+			var children = tempChildOrder.TryGetValue(tempId, out var list) ? list : new List<int>();
+			var childContainer = cue.ShellBar?.ShellChildContainer;
+			if (childContainer != null && children.Count > 0)
+			{
+				int childIndex = 0;
+				foreach (int childTemp in children)
+				{
+					ImportNode(childTemp, cue.Id, childContainer, childIndex);
+					childIndex++;
+				}
+
+				// Restore expanded state from data if present
+				if (cuesByTempId.TryGetValue(tempId.ToString(), out var raw) &&
+				    raw.VariantType == Variant.Type.Dictionary)
+				{
+					var d = raw.AsGodotDictionary();
+					if (d.TryGetValue("Expanded", out var exp))
+						cue.Expanded = exp.AsBool();
+				}
+
+				cue.ShellBar?.RelationshipChanged();
+				cue.ShellBar?.SetExpanded(cue.Expanded);
+			}
+
+			cue.CalculateTotalDuration();
+			return cue;
+		}
+
+		var rootCue = ImportNode(rootTempId, parentId, container, insertIndex);
+		if (rootCue == null)
+			return -1;
+
+		MaybeSelectNewCue(rootCue);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), rootCue.Id);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+
+		GD.Print($"CueList:ImportCueTreeFromLibrary - Imported root id {rootCue.Id} ({tempToCue.Count} cue(s)).");
+		return rootCue.Id;
+	}
+
+	private static Dictionary DeepCloneDict(Dictionary source)
+	{
+		if (source == null) return new Dictionary();
+		string json = Json.Stringify(source);
+		using var parser = new Json();
+		var err = parser.Parse(json);
+		if (err != Error.Ok)
+			throw new InvalidOperationException($"CueList deep-clone JSON parse failed: {err}");
+		return parser.Data.AsGodotDictionary();
+	}
+
+	/// <summary>
 	/// Deep-clones a cue and all descendants into <paramref name="container"/> at <paramref name="insertIndex"/>.
 	/// </summary>
 	/// <returns>The new root clone, or null on failure.</returns>
@@ -1061,6 +1233,7 @@ public partial class CueList : Control
 					"CueLight" => new CueLightComponent(),
 					"OscComponent" => new OscComponent(),
 					"Control" => new ControlComponent(),
+					"MidiOutput" => new MidiOutputComponent(),
 					_ => null
 				};
 				if (newComp == null) continue;

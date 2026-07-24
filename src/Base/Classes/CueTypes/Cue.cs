@@ -493,6 +493,7 @@ public class Cue : ICue
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
                     "Control" => new ControlComponent(),
+                    "MidiOutput" => new MidiOutputComponent(),
                     _ => null
                 };
                 if (comp != null)
@@ -637,6 +638,14 @@ public class Cue : ICue
     public OscComponent[] GetOscComponents()
     {
         return Components.OfType<OscComponent>().ToArray();
+    }
+
+    /// <summary>
+    /// Returns all MIDI output components on this cue.
+    /// </summary>
+    public MidiOutputComponent[] GetMidiOutputComponents()
+    {
+        return Components.OfType<MidiOutputComponent>().ToArray();
     }
 
     /// <summary>
@@ -1401,6 +1410,7 @@ public class Cue : ICue
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
                     "Control" => new ControlComponent(),
+                    "MidiOutput" => new MidiOutputComponent(),
                     _ => null
                 };
                 if (comp == null) continue;
