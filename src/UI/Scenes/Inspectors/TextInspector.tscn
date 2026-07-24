@@ -157,7 +157,6 @@ theme_override_constants/separation = 8
 
 [node name="ContentLabel" type="Label" parent="ContentRoot/VBox/EditorSplit/ContentColumn/ContentHeader" unique_id=306936372]
 layout_mode = 2
-size_flags_horizontal = 3
 text = "Content"
 
 [node name="UseBbcodeCheck" type="CheckBox" parent="ContentRoot/VBox/EditorSplit/ContentColumn/ContentHeader" unique_id=376845745]
@@ -182,8 +181,10 @@ size_flags_vertical = 3
 theme_override_constants/separation = 2
 
 [node name="PreviewLabel" type="Label" parent="ContentRoot/VBox/EditorSplit/PreviewColumn" unique_id=2091976969]
+custom_minimum_size = Vector2(0, 31)
 layout_mode = 2
 text = "Preview"
+vertical_alignment = 1
 
 [node name="PreviewContainer" type="Control" parent="ContentRoot/VBox/EditorSplit/PreviewColumn" unique_id=1134347118]
 unique_name_in_owner = true
@@ -196,21 +197,21 @@ size_flags_vertical = 3
 unique_name_in_owner = true
 layout_mode = 1
 
-[node name="FontRow" type="HBoxContainer" parent="ContentRoot/VBox"]
+[node name="FontRow" type="HBoxContainer" parent="ContentRoot/VBox" unique_id=1007600582]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="FontLabel" type="Label" parent="ContentRoot/VBox/FontRow"]
+[node name="FontLabel" type="Label" parent="ContentRoot/VBox/FontRow" unique_id=1209191454]
 layout_mode = 2
 text = "Font"
 
-[node name="FontOptionButton" type="OptionButton" parent="ContentRoot/VBox/FontRow"]
+[node name="FontOptionButton" type="OptionButton" parent="ContentRoot/VBox/FontRow" unique_id=1129058867]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "System font family. Default uses the project theme font."
-fit_to_longest_item = false
 clip_text = true
+fit_to_longest_item = false
 
 [node name="StyleRow1" type="HBoxContainer" parent="ContentRoot/VBox" unique_id=736918727]
 layout_mode = 2

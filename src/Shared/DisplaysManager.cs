@@ -650,6 +650,22 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Sets whether a layer is locked against cue Translate Layer controls.
+    /// </summary>
+    /// <param name="layerId">The layer ID.</param>
+    /// <param name="locked">When true, Translate Layer control cues are ignored for this layer.</param>
+    public void UpdateLayerLocked(int layerId, bool locked)
+    {
+        var layer = Layers.Find(l => l.LayerId == layerId);
+        if (layer != null)
+        {
+            layer.Locked = locked;
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"{(locked ? "Locked" : "Unlocked")} layer '{layer.LayerName}' against Translate Layer controls.", 0);
+        }
+    }
+
+    /// <summary>
     /// Toggles the test pattern for a layer on intersecting outputs.
     /// </summary>
     /// <param name="layerId">The layer ID.</param>

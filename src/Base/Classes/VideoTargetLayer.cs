@@ -48,7 +48,12 @@ public class VideoTargetLayer
     /// When true, changing one size dimension updates the other to preserve aspect ratio.
     /// </summary>
     public bool KeepAspect { get; set; } = false;
-    
+
+    /// <summary>
+    /// When true, control cues cannot apply Translate Layer geometry changes to this layer.
+    /// Manual edits in the canvas editor remain allowed.
+    /// </summary>
+    public bool Locked { get; set; } = false;
 
     public VideoTargetLayer()
     {
@@ -87,6 +92,7 @@ public class VideoTargetLayer
         data.Add("Transparent", Transparent);
         data.Add("KeepAspect", KeepAspect);
         data.Add("TestPatternEnabled", TestPatternEnabled);
+        data.Add("Locked", Locked);
         return data;
     }
 
@@ -120,6 +126,7 @@ public class VideoTargetLayer
         Transparent = data.ContainsKey("Transparent") && (bool)data["Transparent"];
         KeepAspect = data.ContainsKey("KeepAspect") && (bool)data["KeepAspect"];
         TestPatternEnabled = data.ContainsKey("TestPatternEnabled") && (bool)data["TestPatternEnabled"];
+        Locked = data.ContainsKey("Locked") && (bool)data["Locked"];
     }
     
 }

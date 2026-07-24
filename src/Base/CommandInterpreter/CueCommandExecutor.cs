@@ -445,6 +445,15 @@ public partial class CueCommandExectutor : Node
             return;
         }
 
+        if (layer.Locked)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Control Translate Layer: layer '{layer.LayerName}' is locked", (int)LogType.Warning);
+            GD.Print(
+                $"CueCommandExecutor:ApplyTranslateLayerAsync - Layer '{layer.LayerName}' (id {layer.LayerId}) is locked; skipping translate");
+            return;
+        }
+
         if (!control.TranslateSizeEnabled && !control.TranslatePositionEnabled)
         {
             GD.Print("CueCommandExecutor:ApplyTranslateLayerAsync - Neither size nor position enabled");

@@ -1,6 +1,8 @@
-[gd_scene load_steps=9 format=3 uid="uid://dt7rlfag7yr2c"]
+[gd_scene load_steps=10 format=3 uid="uid://dt7rlfag7yr2c"]
 
 [ext_resource type="PackedScene" uid="uid://cb7g4xgryo2dg" path="res://src/UI/Scenes/ComponentProgressBar.tscn" id="1_4ndav"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_head"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2onnw"]
 draw_center = false
@@ -253,20 +255,19 @@ size_flags_vertical = 4
 focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
-[node name="CueProgressHead" type="Panel" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
+[node name="CueProgressHead" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_head")
 
 [node name="ProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead"]
 unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_vertical = 1
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_default_cursor_shape = 2
 theme_override_styles/fill = SubResource("StyleBoxFlat_usfis")
 value = 20.0
@@ -358,11 +359,15 @@ theme_override_constants/icon_max_width = 14
 [node name="ComponentList" type="VBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
 
 [node name="ComponentProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/ComponentList" instance=ExtResource("1_4ndav")]
 visible = false
 layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="ChildCuelist" type="VBoxContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3

@@ -173,13 +173,13 @@ public partial class ControlComponentCard : PanelContainer
             _sizeEnable.Toggled += OnSizeEnableToggled;
         if (_sizeXLineEdit != null)
         {
-            _sizeXLineEdit.TextSubmitted += _ => CommitSizeFields();
+            _sizeXLineEdit.TextSubmitted += _ => OnSizeSubmitted(_sizeXLineEdit);
             _sizeXLineEdit.FocusExited += () => { if (_sizeEditing) CommitSizeFields(); };
             _sizeXLineEdit.TextChanged += _ => _sizeEditing = true;
         }
         if (_sizeYLineEdit != null)
         {
-            _sizeYLineEdit.TextSubmitted += _ => CommitSizeFields();
+            _sizeYLineEdit.TextSubmitted += _ => OnSizeSubmitted(_sizeYLineEdit);
             _sizeYLineEdit.FocusExited += () => { if (_sizeEditing) CommitSizeFields(); };
             _sizeYLineEdit.TextChanged += _ => _sizeEditing = true;
         }
@@ -193,13 +193,13 @@ public partial class ControlComponentCard : PanelContainer
             _posEnable.Toggled += OnPosEnableToggled;
         if (_posXLineEdit != null)
         {
-            _posXLineEdit.TextSubmitted += _ => CommitPosFields();
+            _posXLineEdit.TextSubmitted += _ => OnPosSubmitted(_posXLineEdit);
             _posXLineEdit.FocusExited += () => { if (_posEditing) CommitPosFields(); };
             _posXLineEdit.TextChanged += _ => _posEditing = true;
         }
         if (_posYLineEdit != null)
         {
-            _posYLineEdit.TextSubmitted += _ => CommitPosFields();
+            _posYLineEdit.TextSubmitted += _ => OnPosSubmitted(_posYLineEdit);
             _posYLineEdit.FocusExited += () => { if (_posEditing) CommitPosFields(); };
             _posYLineEdit.TextChanged += _ => _posEditing = true;
         }
@@ -1036,6 +1036,18 @@ public partial class ControlComponentCard : PanelContainer
         RefreshFromComponent();
     }
 
+    private void OnSizeSubmitted(LineEdit field)
+    {
+        CommitSizeFields();
+        field?.ReleaseFocus();
+    }
+
+    private void OnPosSubmitted(LineEdit field)
+    {
+        CommitPosFields();
+        field?.ReleaseFocus();
+    }
+
     private void CommitSizeFields()
     {
         if (_isSyncingUi || _component == null) return;
@@ -1047,6 +1059,7 @@ public partial class ControlComponentCard : PanelContainer
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 "Control card: invalid size values", (int)LogType.Warning);
+            _sizeEditing = false;
             RefreshFromComponent();
             return;
         }
@@ -1082,6 +1095,7 @@ public partial class ControlComponentCard : PanelContainer
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 "Control card: invalid position values", (int)LogType.Warning);
+            _posEditing = false;
             RefreshFromComponent();
             return;
         }

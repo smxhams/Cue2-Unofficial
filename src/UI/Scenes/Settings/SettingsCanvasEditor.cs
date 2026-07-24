@@ -113,12 +113,14 @@ public partial class SettingsCanvasEditor : Control
     private CheckBox _layerKeepAspectCheckBox;
     private CheckBox _layerTransparentCheckBox;
     private CheckBox _layerTestPatternCheckBox;
+    private CheckBox _layerLockCheckBox;
     private Button _deleteLayerButton;
     private Button _layerSizeResetButton;
     private Button _layerKeepAspectResetButton;
     private Button _layerPosResetButton;
     private Button _layerTransparentResetButton;
     private Button _layerTestPatternResetButton;
+    private Button _layerLockResetButton;
 
     private float _zoom = 0.2f;
     private const float MinZoom = 0.05f;
@@ -516,12 +518,14 @@ public partial class SettingsCanvasEditor : Control
         _layerKeepAspectCheckBox = GetNode<CheckBox>("%LayerKeepAspectCheckBox");
         _layerTransparentCheckBox = GetNode<CheckBox>("%LayerTransparentCheckBox");
         _layerTestPatternCheckBox = GetNode<CheckBox>("%LayerTestPatternCheckBox");
+        _layerLockCheckBox = GetNode<CheckBox>("%LayerLockCheckBox");
         _deleteLayerButton = GetNode<Button>("%DeleteLayerButton");
         _layerSizeResetButton = GetNode<Button>("%LayerSizeResetButton");
         _layerKeepAspectResetButton = GetNode<Button>("%LayerKeepAspectResetButton");
         _layerPosResetButton = GetNode<Button>("%LayerPosResetButton");
         _layerTransparentResetButton = GetNode<Button>("%LayerTransparentResetButton");
         _layerTestPatternResetButton = GetNode<Button>("%LayerTestPatternResetButton");
+        _layerLockResetButton = GetNode<Button>("%LayerLockResetButton");
 
         SetupResetButtonIcons();
     }
@@ -534,7 +538,8 @@ public partial class SettingsCanvasEditor : Control
                      _screenOutputResetButton, _screenSizeResetButton, _screenKeepAspectResetButton,
                      _screenPosResetButton, _screenDisplayOffsetResetButton, _screenTransparentResetButton,
                      _screenTestPatternResetButton, _layerSizeResetButton, _layerKeepAspectResetButton,
-                     _layerPosResetButton, _layerTransparentResetButton, _layerTestPatternResetButton
+                     _layerPosResetButton, _layerTransparentResetButton, _layerTestPatternResetButton,
+                     _layerLockResetButton
                  })
         {
             if (btn != null)
@@ -632,12 +637,14 @@ public partial class SettingsCanvasEditor : Control
         _layerKeepAspectCheckBox.Toggled += OnLayerKeepAspectToggled;
         _layerTransparentCheckBox.Toggled += OnLayerTransparentToggled;
         _layerTestPatternCheckBox.Toggled += OnLayerTestPatternToggled;
+        _layerLockCheckBox.Toggled += OnLayerLockToggled;
         _deleteLayerButton.Pressed += OnDeleteLayerPressed;
         _layerSizeResetButton.Pressed += OnLayerSizeResetPressed;
         _layerKeepAspectResetButton.Pressed += OnLayerKeepAspectResetPressed;
         _layerPosResetButton.Pressed += OnLayerPosResetPressed;
         _layerTransparentResetButton.Pressed += OnLayerTransparentResetPressed;
         _layerTestPatternResetButton.Pressed += OnLayerTestPatternResetPressed;
+        _layerLockResetButton.Pressed += OnLayerLockResetPressed;
     }
 
     #region Stage input (move / resize / select)
@@ -1639,6 +1646,7 @@ public partial class SettingsCanvasEditor : Control
             _layerKeepAspectCheckBox.ButtonPressed = layer.KeepAspect;
             _layerTransparentCheckBox.ButtonPressed = layer.Transparent;
             _layerTestPatternCheckBox.ButtonPressed = layer.TestPatternEnabled;
+            _layerLockCheckBox.ButtonPressed = layer.Locked;
             UpdateLayerResetButtons(layer);
         }
         finally
@@ -1656,6 +1664,7 @@ public partial class SettingsCanvasEditor : Control
     private const bool DefaultKeepAspect = false;
     private const bool DefaultTransparent = false;
     private const bool DefaultTestPattern = false;
+    private const bool DefaultLocked = false;
     private const int DefaultOutputMonitor = VideoOutputDevice.VirtualMonitorIndex;
 
     private void UpdateScreenResetButtons(VideoOutputDevice screen)
@@ -1697,6 +1706,8 @@ public partial class SettingsCanvasEditor : Control
         SetResetVisible(_layerTransparentResetButton, layer.Transparent != DefaultTransparent,
             "Reset to default: Off");
         SetResetVisible(_layerTestPatternResetButton, layer.TestPatternEnabled != DefaultTestPattern,
+            "Reset to default: Off");
+        SetResetVisible(_layerLockResetButton, layer.Locked != DefaultLocked,
             "Reset to default: Off");
     }
 
@@ -1829,6 +1840,15 @@ public partial class SettingsCanvasEditor : Control
             return;
         RecordDisplaysHistory("Reset layer test pattern");
         _displaysManager.ToggleLayerTestPattern(_selectedLayerId, DefaultTestPattern);
+        LoadLayerProps();
+    }
+
+    private void OnLayerLockResetPressed()
+    {
+        if (_selectionKind != SelectionKind.Layer)
+            return;
+        RecordDisplaysHistory("Reset layer lock");
+        _displaysManager.UpdateLayerLocked(_selectedLayerId, DefaultLocked);
         LoadLayerProps();
     }
 
@@ -2367,6 +2387,18 @@ public partial class SettingsCanvasEditor : Control
 
         RecordDisplaysHistory(toggled ? "Enable layer test pattern" : "Disable layer test pattern");
         _displaysManager.ToggleLayerTestPattern(_selectedLayerId, toggled);
+        var layer = DisplaysManager.GetLayerById(_selectedLayerId);
+        if (layer != null)
+            UpdateLayerResetButtons(layer);
+    }
+
+    private void OnLayerLockToggled(bool toggled)
+    {
+        if (_isUpdatingProps || _selectionKind != SelectionKind.Layer)
+            return;
+
+        RecordDisplaysHistory(toggled ? "Lock layer" : "Unlock layer");
+        _displaysManager.UpdateLayerLocked(_selectedLayerId, toggled);
         var layer = DisplaysManager.GetLayerById(_selectedLayerId);
         if (layer != null)
             UpdateLayerResetButtons(layer);

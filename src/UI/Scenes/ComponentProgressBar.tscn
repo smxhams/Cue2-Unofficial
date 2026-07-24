@@ -1,4 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://cb7g4xgryo2dg"]
+[gd_scene load_steps=3 format=3 uid="uid://cb7g4xgryo2dg"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_root"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ret6o"]
 bg_color = Color(0, 0, 0, 0.596078)
@@ -13,10 +15,14 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxEmpty_root")
 
 [node name="ComponentProgress" type="ProgressBar" parent="."]
 custom_minimum_size = Vector2(0, 25)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_default_cursor_shape = 2
 show_percentage = false
 
 [node name="ComponentFadeProgress" type="ProgressBar" parent="ComponentProgress"]

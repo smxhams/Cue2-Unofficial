@@ -727,6 +727,27 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
 
+[node name="LayerLockRow" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/LayerProps" unique_id=417364250]
+layout_mode = 2
+
+[node name="LayerLockCheckBox" type="CheckBox" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/LayerProps/LayerLockRow" unique_id=535514687]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+tooltip_text = "When locked, Translate Layer control cues cannot move or resize this layer"
+text = "Lock"
+
+[node name="LayerLockResetButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/LayerProps/LayerLockRow" unique_id=850684174]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
 [node name="DeleteLayerButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/LayerProps" unique_id=478338729]
 unique_name_in_owner = true
 layout_mode = 2

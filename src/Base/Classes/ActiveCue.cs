@@ -134,45 +134,70 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
-    /// Seeks all active audio/video components on this cue.
+    /// Seeks this cue on its body timeline and propagates to components and nested children.
     /// </summary>
-    /// <param name="timeSeconds">Absolute media time, or relative offset when <paramref name="relative"/> is true.</param>
-    /// <param name="relative">When true, offset from each component's current playback position.</param>
+    /// <param name="timeSeconds">
+    /// Absolute time on this cue's playable timeline (pre-wait + content), or a relative offset
+    /// when <paramref name="relative"/> is true.
+    /// </param>
+    /// <param name="relative">When true, offset from the current playhead.</param>
+    /// <remarks>
+    /// Timeline layout: <c>[0 .. PreWait)</c> pre-wait, then <c>[PreWait .. PreWait+Duration)</c> content.
+    /// Nested children share the parent's content origin (child t=0 == parent content t=0).
+    /// Seeking past a child's occupancy finishes that child.
+    /// </remarks>
     public void RequestSeek(double timeSeconds, bool relative)
     {
         if (_isCleaned) return;
 
-        foreach (var playback in _activeAudioComponents.Values.ToList())
+        double current = GetCueTimelineSeconds();
+        double target = relative ? current + timeSeconds : timeSeconds;
+        if (target < 0) target = 0;
+
+        ApplyCueTimelineSeek(target);
+    }
+
+    /// <summary>
+    /// Seeks this cue to an absolute body-timeline position (pre-wait + content).
+    /// Used for head-bar scrub and parent→child propagation.
+    /// </summary>
+    /// <param name="timelineSeconds">Seconds from this cue's body start (start of pre-wait).</param>
+    public void ApplyCueTimelineSeek(double timelineSeconds)
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+        if (timelineSeconds < 0) timelineSeconds = 0;
+
+        double pre = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        double playable = GetPlayableTimelineDuration();
+
+        // Past end of playable span → finish this cue (and nested children).
+        if (playable >= 0 && timelineSeconds >= playable - 1e-4)
         {
-            if (playback == null) continue;
-            try
-            {
-                double current = playback.GetPlaybackTimeMs() / 1000.0;
-                double target = relative ? current + timeSeconds : timeSeconds;
-                if (target < 0) target = 0;
-                playback.Seek((long)(target * 1_000_000.0));
-            }
-            catch (Exception ex)
-            {
-                GD.PrintErr($"ActiveCue:RequestSeek - Audio seek failed on {_cue?.Name}: {ex.Message}");
-            }
+            GD.Print(
+                $"ActiveCue:ApplyCueTimelineSeek - {_cue?.Name}: {timelineSeconds:F3}s past end {playable:F3}s — finishing");
+            SetTimelineSeconds(playable);
+            if (_inPreWait || _contentPlaybackActive || _childActiveCues.Count > 0 || HasOwnMediaPlayback())
+                StopAll(propagateToChildren: true, fadeDurationOverride: 0);
+            else
+                UpdateHeadProgressUi();
+            return;
         }
 
-        foreach (var playback in _activeVideoComponents.Values.ToList())
+        // Not yet in body (still on continue/follow, or setup): queue for when body runs.
+        if (!_contentStarted && !_timelineStarted)
         {
-            if (playback == null) continue;
-            try
-            {
-                double current = playback.GetPlaybackTimeSeconds();
-                double target = relative ? current + timeSeconds : timeSeconds;
-                if (target < 0) target = 0;
-                playback.Seek(target);
-            }
-            catch (Exception ex)
-            {
-                GD.PrintErr($"ActiveCue:RequestSeek - Video seek failed on {_cue?.Name}: {ex.Message}");
-            }
+            _pendingTimelineSeekSeconds = timelineSeconds;
+            return;
         }
+
+        if (timelineSeconds < pre - 1e-9)
+        {
+            SeekIntoPreWaitRegion(timelineSeconds);
+            return;
+        }
+
+        // Content region on the proportional bar.
+        SeekIntoContentRegion(timelineSeconds - pre, timelineSeconds);
     }
 
     /// <summary>
@@ -391,9 +416,52 @@ public partial class ActiveCue : GodotObject
     /// <summary>True after the first Stop while a stop-fade is in progress (second Stop = hard stop).</summary>
     private bool _isStopFading = false;
 
-    private readonly List<ActiveCue> _childActiveCues = new List<ActiveCue>(); 
-    
-    
+    private readonly List<ActiveCue> _childActiveCues = new List<ActiveCue>();
+
+    // --- Body timeline (head progress / parent↔child seek) ---
+    // Layout: [0, PreWait) pre-wait, [PreWait, PreWait+Duration) content (Duration includes nested children).
+
+    /// <summary>Frozen body-timeline position (seconds) when the clock is not running.</summary>
+    private double _timelineBase;
+
+    /// <summary>Engine msec when the running body clock was started/resumed.</summary>
+    private ulong _timelineClockStartMsec;
+
+    /// <summary>True while the body wall clock advances.</summary>
+    private bool _timelineClockRunning;
+
+    /// <summary>True after pre-wait or content has started (body clock origin established).</summary>
+    private bool _timelineStarted;
+
+    /// <summary>How much pre-wait was honored when content began (0 if skipped).</summary>
+    private double _preWaitSecondsHonored;
+
+    /// <summary>True while content playback is active (media and/or children running).</summary>
+    private bool _contentPlaybackActive;
+
+    /// <summary>True after <see cref="TriggerComponents"/> has been called at least once.</summary>
+    private bool _componentsTriggered;
+
+    /// <summary>True while the user is scrubbing the head progress bar.</summary>
+    private bool _headIsSeeking;
+
+    /// <summary>Preview body-timeline time while scrubbing the head bar.</summary>
+    private double _pendingHeadSeekSeconds;
+
+    /// <summary>
+    /// Absolute body-timeline seek to apply when body/content becomes ready.
+    /// </summary>
+    private double? _pendingTimelineSeekSeconds;
+
+    /// <summary>
+    /// True while rewinding content for a scrub into pre-wait (ignore child Completed → parent finish).
+    /// </summary>
+    private bool _isRewindingContent;
+
+    /// <summary>
+    /// Child cue ids that have already finished (or been finished by seek). Never resurrected on scrub-back.
+    /// </summary>
+    private readonly HashSet<int> _finishedChildCueIds = new();
 
     /// <summary>
     /// Initializes a new instance of the ActiveCue class for Godot serialization.
@@ -507,9 +575,64 @@ public partial class ActiveCue : GodotObject
         
         _headProgressBar.Value = 0;
         _headLabelName.Text = _cue.Name;
-        
-        _headLabelTimeLeft.Text = UiUtilities.FormatTime(_cue.Duration);
-        _headLabelTimeRight.Text = $"-({UiUtilities.FormatTime(_cue.Duration)})";
+
+        // Ensure duration includes nested children before first paint.
+        try { _cue.CalculateTotalDuration(); } catch { /* best-effort */ }
+
+        double playable = GetPlayableTimelineDuration();
+        _headLabelTimeLeft.Text = UiUtilities.FormatTime(0);
+        _headLabelTimeRight.Text = playable < 0
+            ? "∞"
+            : $"-({UiUtilities.FormatTime(playable)})";
+
+        // Head bar scrub seeks full body timeline (pre-wait + content + nested children).
+        WireHeadProgressSeek();
+    }
+
+    /// <summary>
+    /// Wires click/drag scrubbing on the cue head progress bar to the body timeline.
+    /// </summary>
+    private void WireHeadProgressSeek()
+    {
+        if (_headProgressBar == null) return;
+
+        _headProgressBar.GuiInput += OnHeadProgressGuiInput;
+    }
+
+    private void OnHeadProgressGuiInput(InputEvent @event)
+    {
+        if (_isCleaned || _headProgressBar == null || !IsInstanceValid(_headProgressBar))
+            return;
+
+        double playable = GetPlayableTimelineDuration();
+        // Infinite / unknown / empty: no meaningful scrub target.
+        if (playable < 0 || playable <= 1e-9)
+            return;
+
+        if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
+        {
+            if (mb.Pressed)
+            {
+                _headIsSeeking = true;
+                double percent = Math.Clamp(mb.Position.X / Math.Max(1.0, _headProgressBar.Size.X), 0.0, 1.0);
+                _pendingHeadSeekSeconds = percent * playable;
+                _headProgressBar.Value = percent * 100.0;
+                UpdateHeadTimeLabels(_pendingHeadSeekSeconds, playable);
+            }
+            else if (_headIsSeeking)
+            {
+                _headIsSeeking = false;
+                ApplyCueTimelineSeek(_pendingHeadSeekSeconds);
+                GD.Print($"ActiveCue:OnHeadProgressGuiInput - {_cue?.Name}: seek to {_pendingHeadSeekSeconds:F3}s / {playable:F3}s");
+            }
+        }
+        else if (@event is InputEventMouseMotion mm && _headIsSeeking)
+        {
+            double percent = Math.Clamp(mm.Position.X / Math.Max(1.0, _headProgressBar.Size.X), 0.0, 1.0);
+            _pendingHeadSeekSeconds = percent * playable;
+            _headProgressBar.Value = percent * 100.0;
+            UpdateHeadTimeLabels(_pendingHeadSeekSeconds, playable);
+        }
     }
 
     /// <summary>
@@ -646,7 +769,8 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
-    /// Children, components, optional pre-wait, then content trigger.
+    /// Optional pre-wait, then content phase (children + component trigger).
+    /// Children start only when the content phase begins so parent pre-wait delays the group.
     /// </summary>
     private async Task StartPlaybackCoreAsync(bool includePreWait)
     {
@@ -668,56 +792,137 @@ public partial class ActiveCue : GodotObject
             return;
         }
 
+        // Preload own media during pre-wait for lower trigger latency. Children wait for content phase.
+        await SetupComponents();
+
+        bool doPreWait = includePreWait && !_skipPreWait && _cue.PreWait > 0;
+        if (doPreWait)
+        {
+            EnsureTimelineStarted();
+            PreWait();
+            ApplyPendingTimelineSeekIfAny();
+            return;
+        }
+
+        // Zero or skipped pre-wait: content origin sits at PreWait on the proportional bar
+        // (skipped wait still occupies the pre-wait segment so scrub proportions stay stable).
+        EnsureTimelineStarted();
+        _preWaitSecondsHonored = Math.Max(0.0, _cue.PreWait);
+        SetTimelineSeconds(_preWaitSecondsHonored);
+
+        HidePreWaitPanel();
+        await BeginContentPhaseAsync();
+    }
+
+    /// <summary>
+    /// Starts (or restarts) content playback: nested children + component trigger.
+    /// Body timeline clock continues from pre-wait (not reset).
+    /// </summary>
+    private async Task BeginContentPhaseAsync()
+    {
+        if (_isCleaned || _suppressContentCompleted) return;
+
+        RaiseContentPhaseStarted();
+        EnsureTimelineStarted();
+
+        // _preWaitSecondsHonored set by FinishPreWait / skip path before we get here.
+        _contentPlaybackActive = true;
+        _isPlaying = true;
+
+        // Nested children share this content origin (child t=0 == parent content t=0).
+        if (_childActiveCues.Count == 0)
+            StartChildCues();
+
+        bool hasChildren = _childActiveCues.Count > 0;
+        if (_activeComponentCount == 0)
+        {
+            _isFinished = true;
+            if (!hasChildren)
+            {
+                HandleNaturalContentFinished();
+                return;
+            }
+
+            // Group with only children: play until children complete.
+            ApplyPendingTimelineSeekIfAny();
+            UpdateHeadProgressUi();
+            return;
+        }
+
+        if (!_componentsTriggered)
+        {
+            await TriggerComponents();
+            _componentsTriggered = true;
+        }
+        else
+        {
+            // Re-entered content after rewind into pre-wait: media still loaded — unpause transport.
+            if (!_isPaused)
+            {
+                foreach (var playback in _activeAudioComponents.Values)
+                    playback.Resume();
+                foreach (var playback in _activeVideoComponents.Values)
+                    playback.Resume();
+                foreach (var playback in _activeTextComponents.Values)
+                    playback.Resume();
+            }
+        }
+
+        ApplyPendingTimelineSeekIfAny();
+        EnsureAliveOrCleanup();
+        UpdateHeadProgressUi();
+    }
+
+    /// <summary>
+    /// Spawns nested active cues under this bar's child list and starts them.
+    /// Skips children that have already finished this activation (no resurrect on scrub-back).
+    /// </summary>
+    private void StartChildCues()
+    {
+        if (_cue?.ChildCues == null || _cue.ChildCues.Count == 0) return;
+        if (_activeCueBar == null || !IsInstanceValid(_activeCueBar)) return;
+
+        var childCueList = _activeCueBar.GetNodeOrNull<VBoxContainer>("%ChildCuelist");
+        if (childCueList == null)
+        {
+            GD.PrintErr($"ActiveCue:StartChildCues - ChildCuelist missing on {_cue.Name}");
+            return;
+        }
+
         foreach (var childId in _cue.ChildCues)
         {
+            if (_finishedChildCueIds.Contains(childId))
+                continue; // Already completed this run — do not resurrect.
+
+            // Already live under this parent.
+            if (_childActiveCues.Any(c => c != null && IsInstanceValid(c) && c.Cue?.Id == childId))
+                continue;
+
             var child = CueList.FetchCueFromId(childId);
             if (child == null)
             {
-                GD.PrintErr($"ActiveCue:StartPlaybackCoreAsync - Child cue {childId} not found");
+                GD.PrintErr($"ActiveCue:StartChildCues - Child cue {childId} not found");
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"Child cue {childId} not found for parent {_cue.Name}", 2);
                 continue;
             }
-            var childCueList = _activeCueBar.GetNode<VBoxContainer>("%ChildCuelist");
+
             var activeCue = new ActiveCue(child, childCueList, _mediaEngine, _audioDevices, _globalSignals);
             _childActiveCues.Add(activeCue);
             activeCue.Completed += () => OnChildCompleted(activeCue);
             _ = activeCue.StartAsync();
         }
-        
-        // Set up components
-        await SetupComponents();
+    }
 
-        // If no components or children, mark as finished and tear down immediately
-        if (_activeComponentCount == 0)
-        {
-            _isFinished = true;
-            if (_childActiveCues.Count == 0)
-            {
-                RaiseContentPhaseStarted();
-                HandleNaturalContentFinished();
-                return;
-            }
-            // Parent with only children: content phase starts when children start.
-            RaiseContentPhaseStarted();
-            _isPlaying = true;
-            return;
-        }
-
-        _isPlaying = true;
-
-        bool doPreWait = includePreWait && !_skipPreWait && _cue.PreWait > 0;
-        if (doPreWait)
-        {
-            PreWait();
-        }
-        else
-        {
-            HidePreWaitPanel();
-            RaiseContentPhaseStarted();
-            await TriggerComponents();
-            EnsureAliveOrCleanup();
-        }
+    /// <summary>
+    /// Applies a body-timeline seek deferred across pre-wait / content-phase start.
+    /// </summary>
+    private void ApplyPendingTimelineSeekIfAny()
+    {
+        if (!_pendingTimelineSeekSeconds.HasValue) return;
+        double t = _pendingTimelineSeekSeconds.Value;
+        _pendingTimelineSeekSeconds = null;
+        ApplyCueTimelineSeek(t);
     }
 
     /// <summary>
@@ -1010,6 +1215,8 @@ public partial class ActiveCue : GodotObject
 
         _inPreWait = true;
         _preWaitFinished = false;
+        _contentPlaybackActive = false;
+        EnsureTimelineStarted();
         HookPreWaitUpdate(true);
         
         // Pause logic
@@ -1019,6 +1226,10 @@ public partial class ActiveCue : GodotObject
             _preWaitTimeoutHooked = true;
         }
         _preWaitTimer.Start();
+        if (_isPaused)
+            _preWaitTimer.SetPaused(true);
+
+        UpdateHeadProgressUi();
     }
 
     private void PreWaitUpdate()
@@ -1027,6 +1238,8 @@ public partial class ActiveCue : GodotObject
         _preWaitTimerLabel.Text = UiUtilities.FormatTime(_preWaitTimer.TimeLeft);
         var preWaitPercentage = (_preWaitTimer.TimeLeft / (float)_cue.PreWait) * 100;
         _preWaitProgress.Value = preWaitPercentage;
+        // Keep head bar in sync during pre-wait (proportional pre-wait segment).
+        UpdateHeadProgressUi();
     }
 
     private void TogglePreWaitPause()
@@ -1042,14 +1255,19 @@ public partial class ActiveCue : GodotObject
     {
         if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
         _preWaitTimer.SetPaused(true);
+        PauseTimelineClock();
         _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Play", "AtlasIcons");
+        UpdateHeadProgressUi();
     }
 
     private void PreWaitResume()
     {
         if (_preWaitTimer == null || !IsInstanceValid(_preWaitTimer)) return;
+        if (_isPaused) return; // cue-level pause owns transport
         _preWaitTimer.SetPaused(false);
+        ResumeTimelineClock();
         _preWaitPause.Icon = _activeCueBar.GetThemeIcon("Pause", "AtlasIcons");
+        UpdateHeadProgressUi();
     }
 
     private void OnPreWaitTimerTimeout()
@@ -1081,9 +1299,13 @@ public partial class ActiveCue : GodotObject
 
         HidePreWaitPanel();
 
-        RaiseContentPhaseStarted();
-        await TriggerComponents();
-        EnsureAliveOrCleanup();
+        // Content region starts after the pre-wait segment on the proportional head bar.
+        _preWaitSecondsHonored = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        // Keep playhead continuous: if wall clock drifted, snap to pre-wait boundary.
+        if (GetCueTimelineSeconds() < _preWaitSecondsHonored - 1e-3)
+            SetTimelineSeconds(_preWaitSecondsHonored);
+
+        await BeginContentPhaseAsync();
     }
 
     private void HidePreWaitPanel()
@@ -1462,6 +1684,507 @@ public partial class ActiveCue : GodotObject
             UpdateComponentUiState(panel, audioComponent);
         }
         // Video components are updated via TimeUpdated event for real-time updates
+
+        UpdateHeadProgressUi();
+    }
+
+    /// <summary>
+    /// Playable head-bar span: PreWait + Duration. -1 when infinite/unknown.
+    /// </summary>
+    private double GetPlayableTimelineDuration()
+    {
+        if (_cue == null) return 0;
+        if (_cue.Duration < 0) return -1;
+        return Math.Max(0.0, _cue.PreWait) + Math.Max(0.0, _cue.Duration);
+    }
+
+    /// <summary>
+    /// True when this active cue still holds audio/video/text playback instances.
+    /// </summary>
+    private bool HasOwnMediaPlayback()
+    {
+        return _activeAudioComponents.Count > 0
+               || _activeVideoComponents.Count > 0
+               || _activeTextComponents.Count > 0;
+    }
+
+    /// <summary>
+    /// Seeks into the pre-wait region of the body timeline (0 .. PreWait).
+    /// </summary>
+    private void SeekIntoPreWaitRegion(double preWaitElapsed)
+    {
+        double pre = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        preWaitElapsed = Math.Clamp(preWaitElapsed, 0.0, Math.Max(0.0, pre - 1e-4));
+
+        // Rewind from content: tear down children / park media, re-enter pre-wait.
+        if (_contentPlaybackActive || (_contentPhaseStartedRaised && !_inPreWait))
+        {
+            TearDownContentPlaybackForRewind();
+            BeginPreWaitAtElapsed(preWaitElapsed);
+            SetTimelineSeconds(preWaitElapsed);
+            UpdateHeadProgressUi();
+            return;
+        }
+
+        if (_inPreWait)
+        {
+            AdjustPreWaitElapsed(preWaitElapsed);
+            SetTimelineSeconds(preWaitElapsed);
+            UpdateHeadProgressUi();
+            return;
+        }
+
+        // Body not in pre-wait yet — queue.
+        _pendingTimelineSeekSeconds = preWaitElapsed;
+    }
+
+    /// <summary>
+    /// Seeks into the content region. <paramref name="contentTimeSeconds"/> is time since content origin;
+    /// <paramref name="absoluteTimelineSeconds"/> is the full body playhead (including pre-wait).
+    /// </summary>
+    private void SeekIntoContentRegion(double contentTimeSeconds, double absoluteTimelineSeconds)
+    {
+        if (contentTimeSeconds < 0) contentTimeSeconds = 0;
+
+        // Still in pre-wait: finish it, then land at this absolute body time.
+        if (_inPreWait)
+        {
+            _pendingTimelineSeekSeconds = absoluteTimelineSeconds;
+            _ = FinishPreWaitAndStartContent();
+            return;
+        }
+
+        // Content not started yet (setup) — apply once content begins.
+        if (!_contentPhaseStartedRaised && !_contentPlaybackActive)
+        {
+            _pendingTimelineSeekSeconds = absoluteTimelineSeconds;
+            return;
+        }
+
+        SetTimelineSeconds(absoluteTimelineSeconds);
+
+        // Content was rewound away (e.g. scrubbed into pre-wait) — restart playback.
+        // Finished children are not resurrected (see <see cref="_finishedChildCueIds"/>).
+        if (!_contentPlaybackActive)
+        {
+            _pendingTimelineSeekSeconds = absoluteTimelineSeconds;
+            _ = BeginContentPhaseAsync();
+            return;
+        }
+
+        // Do not resurrect finished / inactive children on scrub-back — only seek still-live ones.
+        SeekOwnMediaToContentTime(contentTimeSeconds);
+        PropagateTimelineSeekToChildren(contentTimeSeconds);
+        UpdateHeadProgressUi();
+    }
+
+    /// <summary>
+    /// Pushes a content-origin timeline (child t=0) into every nested active child.
+    /// </summary>
+    private void PropagateTimelineSeekToChildren(double childTimelineSeconds)
+    {
+        foreach (var child in _childActiveCues.ToList())
+        {
+            if (child == null || !IsInstanceValid(child)) continue;
+            try
+            {
+                // Child body timeline starts when parent content starts.
+                child.ApplyCueTimelineSeek(childTimelineSeconds);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:PropagateTimelineSeekToChildren - {_cue?.Name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops nested children and parks own media so pre-wait can be re-entered without freeing this cue.
+    /// </summary>
+    private void TearDownContentPlaybackForRewind()
+    {
+        _isRewindingContent = true;
+        try
+        {
+            foreach (var child in _childActiveCues.ToList())
+            {
+                if (child == null || !IsInstanceValid(child)) continue;
+                try
+                {
+                    // Immediate cleanup (no fade) — parent is rewinding.
+                    child.Cleanup();
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"ActiveCue:TearDownContentPlaybackForRewind - child: {ex.Message}");
+                }
+            }
+            _childActiveCues.Clear();
+        }
+        finally
+        {
+            _isRewindingContent = false;
+        }
+
+        // Park media at start without completing (Stop/Clean would free component rows).
+        foreach (var kv in _activeAudioComponents.ToList())
+        {
+            var playback = kv.Value;
+            if (playback == null) continue;
+            _componentToAudio.TryGetValue(kv.Key, out var audioComp);
+            try
+            {
+                playback.Pause();
+                double start = audioComp?.StartTime ?? 0;
+                playback.Seek((long)(start * 1_000_000.0));
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:TearDownContentPlaybackForRewind - audio: {ex.Message}");
+            }
+        }
+
+        foreach (var kv in _activeVideoComponents.ToList())
+        {
+            var playback = kv.Value;
+            if (playback == null) continue;
+            _componentToVideo.TryGetValue(kv.Key, out var videoComp);
+            try
+            {
+                playback.Pause();
+                double start = videoComp != null && !videoComp.IsImage ? videoComp.StartTime : 0;
+                playback.Seek(start);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:TearDownContentPlaybackForRewind - video: {ex.Message}");
+            }
+        }
+
+        foreach (var playback in _activeTextComponents.Values.ToList())
+        {
+            try { playback?.Pause(); }
+            catch { /* best-effort */ }
+        }
+
+        _contentPlaybackActive = false;
+        _isFinished = false;
+    }
+
+    /// <summary>
+    /// Re-enters pre-wait at a specific elapsed time (used when scrubbing backward into pre-wait).
+    /// </summary>
+    private void BeginPreWaitAtElapsed(double elapsedSeconds)
+    {
+        double pre = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        if (pre <= 1e-9)
+        {
+            _ = BeginContentPhaseAsync();
+            return;
+        }
+
+        elapsedSeconds = Math.Clamp(elapsedSeconds, 0.0, pre);
+        double remaining = pre - elapsedSeconds;
+        if (remaining <= 1e-4)
+        {
+            _preWaitSecondsHonored = pre;
+            _ = BeginContentPhaseAsync();
+            return;
+        }
+
+        // Reuse PreWait UI path then adjust remaining.
+        if (!_inPreWait)
+            PreWait();
+
+        AdjustPreWaitElapsed(elapsedSeconds);
+    }
+
+    /// <summary>
+    /// Seeks own audio/video components so content-local time maps onto media (StartTime + t).
+    /// </summary>
+    private void SeekOwnMediaToContentTime(double contentTimeSeconds)
+    {
+        foreach (var kv in _activeAudioComponents.ToList())
+        {
+            var playback = kv.Value;
+            if (playback == null) continue;
+            _componentToAudio.TryGetValue(kv.Key, out var audioComp);
+            try
+            {
+                double start = audioComp?.StartTime ?? 0;
+                double mediaTime = start + contentTimeSeconds;
+                if (mediaTime < 0) mediaTime = 0;
+                // Clamp to component end when known so scrubbing past a short file doesn't hang.
+                if (audioComp != null && audioComp.Duration > 0)
+                    mediaTime = Math.Min(mediaTime, start + audioComp.Duration);
+                playback.Seek((long)(mediaTime * 1_000_000.0));
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:SeekOwnMediaToContentTime - Audio seek failed on {_cue?.Name}: {ex.Message}");
+            }
+        }
+
+        foreach (var kv in _activeVideoComponents.ToList())
+        {
+            var playback = kv.Value;
+            if (playback == null) continue;
+            _componentToVideo.TryGetValue(kv.Key, out var videoComp);
+            try
+            {
+                double start = videoComp != null && !videoComp.IsImage ? videoComp.StartTime : 0;
+                double mediaTime = start + contentTimeSeconds;
+                if (mediaTime < 0) mediaTime = 0;
+                double span = playback.GetDuration();
+                if (span > 0)
+                    mediaTime = Math.Min(mediaTime, start + span);
+                playback.Seek(mediaTime);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:SeekOwnMediaToContentTime - Video seek failed on {_cue?.Name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Starts the body timeline clock at 0 if not already running.
+    /// </summary>
+    private void EnsureTimelineStarted()
+    {
+        if (_timelineStarted) return;
+        _timelineStarted = true;
+        _timelineBase = 0;
+        _timelineClockStartMsec = Time.GetTicksMsec();
+        _timelineClockRunning = !_isPaused;
+    }
+
+    /// <summary>
+    /// Sets the body playhead, preserving running/paused clock state.
+    /// </summary>
+    private void SetTimelineSeconds(double seconds)
+    {
+        EnsureTimelineStarted();
+        _timelineBase = Math.Max(0.0, seconds);
+        _timelineClockStartMsec = Time.GetTicksMsec();
+    }
+
+    private void PauseTimelineClock()
+    {
+        if (!_timelineStarted || !_timelineClockRunning) return;
+        _timelineBase = GetWallTimelineSeconds();
+        _timelineClockRunning = false;
+    }
+
+    private void ResumeTimelineClock()
+    {
+        if (!_timelineStarted || _isCleaned || _timelineClockRunning) return;
+        _timelineClockStartMsec = Time.GetTicksMsec();
+        _timelineClockRunning = true;
+    }
+
+    /// <summary>
+    /// Wall-clock body playhead (no media/child soft-sync).
+    /// </summary>
+    private double GetWallTimelineSeconds()
+    {
+        if (!_timelineStarted) return 0;
+        double t = _timelineBase;
+        if (_timelineClockRunning)
+            t += (Time.GetTicksMsec() - _timelineClockStartMsec) / 1000.0;
+        return Math.Max(0.0, t);
+    }
+
+    /// <summary>
+    /// Current body playhead in seconds (0 = start of pre-wait).
+    /// Prefers live pre-wait timer / media / nested children when available so group bars track real progress.
+    /// </summary>
+    public double GetCueTimelineSeconds()
+    {
+        if (!_timelineStarted && !_inPreWait && !_contentPlaybackActive)
+            return 0;
+
+        double pre = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+
+        // Pre-wait: derive from timer so head bar matches pre-wait strip.
+        if (_inPreWait && _preWaitTimer != null && IsInstanceValid(_preWaitTimer))
+        {
+            double elapsed = pre - _preWaitTimer.TimeLeft;
+            return Math.Clamp(elapsed, 0.0, pre);
+        }
+
+        if (!(_contentPlaybackActive || _contentPhaseStartedRaised))
+            return GetWallTimelineSeconds();
+
+        double media = TryGetMaxOwnMediaContentSeconds();
+
+        // Leaf with own media: media playhead is authoritative (component scrub must move the head bar,
+        // including seek-backward — wall clock alone would stick at the high-water mark).
+        if (_childActiveCues.Count == 0 && media >= 0)
+            return _preWaitSecondsHonored + media;
+
+        // Groups: max of wall, own media, and still-active children.
+        double best = GetWallTimelineSeconds();
+        if (media >= 0)
+            best = Math.Max(best, _preWaitSecondsHonored + media);
+
+        foreach (var child in _childActiveCues)
+        {
+            if (child == null || !IsInstanceValid(child)) continue;
+            try
+            {
+                double childT = child.GetCueTimelineSeconds();
+                best = Math.Max(best, _preWaitSecondsHonored + childT);
+            }
+            catch
+            {
+                // ignore disposed child during teardown
+            }
+        }
+
+        return Math.Max(0.0, best);
+    }
+
+    /// <summary>
+    /// After a component-level scrub, snap the body playhead to own media so the head bar updates immediately.
+    /// </summary>
+    /// <param name="contentLocalSeconds">Content-local time (media time − StartTime).</param>
+    private void SyncHeadTimelineFromComponentSeek(double contentLocalSeconds)
+    {
+        if (_isCleaned) return;
+        if (contentLocalSeconds < 0) contentLocalSeconds = 0;
+
+        double absolute = _preWaitSecondsHonored + contentLocalSeconds;
+        SetTimelineSeconds(absolute);
+        UpdateHeadProgressUi();
+    }
+
+    /// <summary>
+    /// Max content-local time from active audio/video (media time − StartTime).
+    /// </summary>
+    /// <returns>Seconds, or -1 when no running media.</returns>
+    private double TryGetMaxOwnMediaContentSeconds()
+    {
+        double max = -1;
+
+        foreach (var kv in _activeAudioComponents)
+        {
+            var playback = kv.Value;
+            if (playback == null || playback.IsStopped) continue;
+            _componentToAudio.TryGetValue(kv.Key, out var audioComp);
+            double start = audioComp?.StartTime ?? 0;
+            double media = playback.GetPlaybackTimeMs() / 1000.0;
+            double local = media - start;
+            if (local > max) max = local;
+        }
+
+        foreach (var kv in _activeVideoComponents)
+        {
+            var playback = kv.Value;
+            if (playback == null || playback.IsStopped) continue;
+            _componentToVideo.TryGetValue(kv.Key, out var videoComp);
+            double start = videoComp != null && !videoComp.IsImage ? videoComp.StartTime : 0;
+            double media = playback.GetPlaybackTimeSeconds();
+            double local = media - start;
+            if (local > max) max = local;
+        }
+
+        return max;
+    }
+
+    /// <summary>
+    /// Adjusts an active pre-wait timer so elapsed time matches <paramref name="elapsedSeconds"/>.
+    /// </summary>
+    private void AdjustPreWaitElapsed(double elapsedSeconds)
+    {
+        if (!_inPreWait || _preWaitTimer == null || !IsInstanceValid(_preWaitTimer))
+            return;
+
+        double preWait = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        if (preWait <= 1e-9)
+            return;
+
+        elapsedSeconds = Math.Clamp(elapsedSeconds, 0.0, preWait);
+        double remaining = preWait - elapsedSeconds;
+        if (remaining <= 1e-4)
+        {
+            _ = FinishPreWaitAndStartContent();
+            return;
+        }
+
+        bool wasPaused = _preWaitTimer.Paused || _isPaused;
+        _preWaitTimer.Stop();
+        _preWaitTimer.WaitTime = remaining;
+        _preWaitTimer.Start();
+        if (wasPaused)
+            _preWaitTimer.SetPaused(true);
+
+        if (_preWaitTimerLabel != null)
+            _preWaitTimerLabel.Text = UiUtilities.FormatTime(remaining);
+        if (_preWaitProgress != null)
+            _preWaitProgress.Value = (remaining / preWait) * 100.0;
+    }
+
+    /// <summary>
+    /// Refreshes head progress bar and time labels from the body timeline (pre-wait + content).
+    /// </summary>
+    private void UpdateHeadProgressUi()
+    {
+        if (_isCleaned || _headProgressBar == null || !IsInstanceValid(_headProgressBar))
+            return;
+        if (_headIsSeeking)
+            return;
+
+        double playable = GetPlayableTimelineDuration();
+        double elapsed = 0;
+
+        if (_timelineStarted || _inPreWait || _contentPlaybackActive)
+            elapsed = GetCueTimelineSeconds();
+
+        // Soft-sync wall clock to derived playhead so pause/resume stays consistent.
+        if (!_headIsSeeking && (_timelineClockRunning || _timelineStarted))
+        {
+            _timelineBase = elapsed;
+            _timelineClockStartMsec = Time.GetTicksMsec();
+        }
+
+        UpdateHeadTimeLabels(elapsed, playable);
+
+        if (playable < 0)
+        {
+            // Infinite: show empty fill, elapsed only.
+            _headProgressBar.Value = 0;
+        }
+        else if (playable <= 1e-9)
+        {
+            _headProgressBar.Value = _contentPlaybackActive || _inPreWait ? 100 : 0;
+        }
+        else
+        {
+            _headProgressBar.Value = Math.Clamp(elapsed / playable * 100.0, 0.0, 100.0);
+        }
+    }
+
+    /// <summary>
+    /// Writes head elapsed / remaining labels for the playable body span.
+    /// </summary>
+    private void UpdateHeadTimeLabels(double elapsedSeconds, double durationSeconds)
+    {
+        if (_headLabelTimeLeft != null && IsInstanceValid(_headLabelTimeLeft))
+            _headLabelTimeLeft.Text = UiUtilities.FormatTime(Math.Max(0, elapsedSeconds));
+
+        if (_headLabelTimeRight == null || !IsInstanceValid(_headLabelTimeRight))
+            return;
+
+        if (durationSeconds < 0)
+        {
+            _headLabelTimeRight.Text = "∞";
+        }
+        else
+        {
+            double remaining = Math.Max(0, durationSeconds - elapsedSeconds);
+            _headLabelTimeRight.Text = $"-({UiUtilities.FormatTime(remaining)})";
+        }
     }
     
     private async Task SetupComponents()
@@ -1656,7 +2379,8 @@ public partial class ActiveCue : GodotObject
                         pendingSeekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration;
                         progressBar.Value = percent * 100; // Preview
                         timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
-    
+                        // Live head preview while scrubbing component.
+                        SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
                     }
                     else
                     {
@@ -1665,6 +2389,7 @@ public partial class ActiveCue : GodotObject
                         {
                             long timestampUs = (long)(pendingSeekTimeSec * 1_000_000);
                             playback.Seek(timestampUs);
+                            SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
                             GD.Print($"ActiveCue:ProgressBar - Sought to {pendingSeekTimeSec} sec on release");
                         }
                         playback.IsSeeking = false;
@@ -1678,6 +2403,7 @@ public partial class ActiveCue : GodotObject
                     pendingSeekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration;
                     progressBar.Value = percent * 100; // Update preview
                     timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
+                    SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
                 }
             };
 
@@ -1839,6 +2565,7 @@ public partial class ActiveCue : GodotObject
                         pendingSeekTimeSec = start + percent * playback.GetDuration();
                         progressBar.Value = percent * 100; // Preview
                         timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
+                        SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - start);
                     }
                     else
                     {
@@ -1846,7 +2573,9 @@ public partial class ActiveCue : GodotObject
                         if (playback.IsSeeking)
                         {
                             double time = pendingSeekTimeSec;
+                            double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
                             playback.Seek(time);
+                            SyncHeadTimelineFromComponentSeek(time - start);
                             GD.Print($"ActiveCue:ProgressBar - Sought to {pendingSeekTimeSec} sec on release");
                         }
                         playback.IsSeeking = false;
@@ -1861,6 +2590,7 @@ public partial class ActiveCue : GodotObject
                     pendingSeekTimeSec = start + percent * playback.GetDuration();
                     progressBar.Value = percent * 100; // Update preview
                     timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
+                    SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - start);
                 }
             };
             ulong videoPanelId = componentPanel.GetInstanceId();
@@ -2450,20 +3180,28 @@ public partial class ActiveCue : GodotObject
             _isPlaying = true;
         }
 
+        ResumeTimelineClock();
+        if (_inPreWait)
+            PreWaitResume();
+
         if (propagateToChildren)
         {
             foreach (var child in _childActiveCues.ToList())
                 child.ResumeAll(true);
         }
 
-        foreach (var playback in _activeAudioComponents.Values)
-            playback.Resume();
+        // Only resume media while content playback is active (not parked for pre-wait rewind).
+        if (_contentPlaybackActive)
+        {
+            foreach (var playback in _activeAudioComponents.Values)
+                playback.Resume();
 
-        foreach (var playback in _activeVideoComponents.Values)
-            playback.Resume();
+            foreach (var playback in _activeVideoComponents.Values)
+                playback.Resume();
 
-        foreach (var playback in _activeTextComponents.Values)
-            playback.Resume();
+            foreach (var playback in _activeTextComponents.Values)
+                playback.Resume();
+        }
 
         if (_updateTimer != null && IsInstanceValid(_updateTimer))
             _updateTimer.Start();
@@ -2475,6 +3213,9 @@ public partial class ActiveCue : GodotObject
     private void PauseAll(bool propagateToChildren = true)
     {
         _isPaused = true;
+        PauseTimelineClock();
+        if (_inPreWait)
+            PreWaitPause();
 
         if (propagateToChildren)
         {
@@ -2553,8 +3294,11 @@ public partial class ActiveCue : GodotObject
             NextInChain?.CancelPendingFromPredecessor();
 
             // Waiting / paused / not yet playing content — tear down immediately.
+            // Still stop nested children first so they do not outlive the parent bar.
             if (!_contentStarted || _inIncomingWait || _inPreWait || _isPaused)
             {
+                if (propagateToChildren)
+                    StopChildCuesImmediate(fadeDurationOverride ?? 0.0);
                 Cleanup();
                 return;
             }
@@ -2565,6 +3309,7 @@ public partial class ActiveCue : GodotObject
         }
 
         // Stop child cues if propagating (same fade override).
+        // Nested bars live under this cue's UI — do not free parent until children finish.
         if (propagateToChildren)
         {
             foreach (var child in _childActiveCues.ToList())
@@ -2609,28 +3354,67 @@ public partial class ActiveCue : GodotObject
             HandleControlComponentCompleted(panel);
         }
 
+        // Group with no own media (or only instant comps): keep parent bar until children finish fade.
         if (tasks.Count == 0)
         {
-            // Nothing left to await — remove the active bar immediately.
-            Cleanup();
+            TryCleanupAfterStop();
             return;
         }
 
         await Task.WhenAll(tasks);
         _isPlaying = false;
 
-        // Completion handlers normally clean up; if they didn't (e.g. already stopped), force it.
+        // Own media finished stop-fade; still wait for nested children before freeing UI.
         if (!_isCleaned)
+            TryCleanupAfterStop();
+    }
+
+    /// <summary>
+    /// Hard-stops nested children without awaiting (used when parent tears down immediately).
+    /// </summary>
+    private void StopChildCuesImmediate(double fadeDuration)
+    {
+        foreach (var child in _childActiveCues.ToList())
         {
-            EnsureAliveOrCleanup();
-            if (!_isCleaned &&
-                _activeAudioComponents.Count == 0 &&
-                _activeVideoComponents.Count == 0 &&
-                _activeTextComponents.Count == 0)
+            if (child == null || !IsInstanceValid(child)) continue;
+            try
             {
-                Cleanup();
+                child.StopAll(true, fadeDuration);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:StopChildCuesImmediate - {_cue?.Name}: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// After a stop, free this cue only when own media is gone and nested children have finished.
+    /// Parent bars own the child UI tree — freeing early aborts child stop-fades.
+    /// </summary>
+    private void TryCleanupAfterStop()
+    {
+        if (_isCleaned) return;
+
+        bool hasOwnMedia =
+            _activeAudioComponents.Count > 0 ||
+            _activeVideoComponents.Count > 0 ||
+            _activeTextComponents.Count > 0;
+
+        if (hasOwnMedia)
+            return;
+
+        if (_childActiveCues.Count > 0)
+        {
+            // Children still fading/playing — OnChildCompleted will call back when the last one ends.
+            _isFinished = true;
+            _isPlaying = false;
+            GD.Print(
+                $"ActiveCue:TryCleanupAfterStop - {_cue?.Name}: waiting for {_childActiveCues.Count} child cue(s) to finish stop");
+            return;
+        }
+
+        Cleanup();
     }
 
     private void GlobalStopAll()
@@ -2730,8 +3514,27 @@ public partial class ActiveCue : GodotObject
 
     private void OnChildCompleted(ActiveCue child)
     {
+        int childId = -1;
+        try { childId = child?.Cue?.Id ?? -1; } catch { /* disposed */ }
+
         _childActiveCues.Remove(child);
-        if (_childActiveCues.Count == 0 && _isFinished)
+
+        // Permanent finish for this activation (not a scrub-rewind teardown).
+        if (!_isRewindingContent && childId >= 0)
+            _finishedChildCueIds.Add(childId);
+
+        if (_childActiveCues.Count > 0 || _isCleaned || _isRewindingContent)
+            return;
+
+        // Stop/panic path: parent may have been waiting for child stop-fades before freeing UI.
+        if (_suppressContentCompleted || _isStopFading)
+        {
+            Callable.From(TryCleanupAfterStop).CallDeferred();
+            return;
+        }
+
+        // Natural completion: parent content is done when components finished and last child ends.
+        if (_isFinished)
             Callable.From(HandleNaturalContentFinished).CallDeferred();
     }
 
@@ -2866,6 +3669,22 @@ public partial class ActiveCue : GodotObject
             _globalSignals.PauseAll -= GlobalPauseAll;
             _globalSignals.ResumeAll -= GlobalResumeAll;
         }
+
+        // Nested active cues own UI under this bar — clean them before freeing the parent tree.
+        // Prefer waiting for stop-fades via TryCleanupAfterStop; this is the hard teardown path.
+        foreach (var child in _childActiveCues.ToList())
+        {
+            if (child == null || !IsInstanceValid(child)) continue;
+            try
+            {
+                child.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveCue:Cleanup - Child cleanup failed on {_cue?.Name}: {ex.Message}");
+            }
+        }
+        _childActiveCues.Clear();
 
         // Do not manually disconnect child-bar button handlers (PreWaitPause etc.): rebinding
         // for the scheduled path makes -= of the original handler throw "nonexistent connection".

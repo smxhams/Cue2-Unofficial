@@ -531,12 +531,26 @@ public class ControlComponent : ICueComponent
         video != null && video.HasAudio && video.UseAudio;
 
     /// <summary>
-    /// True when <paramref name="cue"/> has audio and/or video media that can be seeked while playing.
+    /// True when <paramref name="cue"/> (or any nested child) has audio/video media that can be seeked while playing.
+    /// Groups are seekable when they contain seekable descendants — parent timeline seek propagates to children.
     /// </summary>
     public static bool CueHasSeekableMedia(Cue cue)
     {
         if (cue == null) return false;
-        return cue.GetAudioComponent() != null || cue.GetVideoComponent() != null;
+        if (cue.GetAudioComponent() != null || cue.GetVideoComponent() != null)
+            return true;
+
+        if (cue.ChildCues == null || cue.ChildCues.Count == 0)
+            return false;
+
+        foreach (int childId in cue.ChildCues)
+        {
+            var child = CueList.FetchCueFromId(childId);
+            if (CueHasSeekableMedia(child))
+                return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />
