@@ -81,6 +81,12 @@ public partial class ShellInspector : Control
 	private MidiManager _midiManager;
 	private bool _isCapturingMidi;
 
+	// OSC cue trigger UI
+	private CheckBox _oscEnabledCheckBox;
+	private LineEdit _oscAddressLineEdit;
+	private Button _oscResetButton;
+	private bool _oscAddressEditing;
+
 	// Notes UI (under Triggers column)
 	private TextEdit _notesTextEdit;
 	private CheckBox _memoCheckBox;
@@ -137,6 +143,10 @@ public partial class ShellInspector : Control
 		_midiData2Spin = GetNodeOrNull<SpinBox>("%MidiData2Spin");
 		_midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
 		EnsureMidiTypeOptions();
+
+		_oscEnabledCheckBox = GetNodeOrNull<CheckBox>("%OscEnabledCheckBox");
+		_oscAddressLineEdit = GetNodeOrNull<LineEdit>("%OscAddressLineEdit");
+		_oscResetButton = GetNodeOrNull<Button>("%OscResetButton");
 
 		_notesTextEdit = GetNodeOrNull<TextEdit>("%NotesTextEdit");
 		_memoCheckBox = GetNodeOrNull<CheckBox>("%MemoCheckBox");
@@ -231,6 +241,24 @@ public partial class ShellInspector : Control
 			_midiMatchValueCheck.Toggled += OnMidiMatchValueToggled;
 		if (_midiData2Spin != null)
 			_midiData2Spin.ValueChanged += OnMidiData2Changed;
+
+		if (_oscEnabledCheckBox != null)
+			_oscEnabledCheckBox.Toggled += OnOscEnabledToggled;
+		if (_oscAddressLineEdit != null)
+		{
+			_oscAddressLineEdit.TextSubmitted += OnOscAddressSubmitted;
+			_oscAddressLineEdit.FocusExited += OnOscAddressFocusExited;
+		}
+		if (_oscResetButton != null)
+		{
+			_oscResetButton.Pressed += OnOscResetPressed;
+			try
+			{
+				_oscResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+				_oscResetButton.ExpandIcon = true;
+			}
+			catch { /* icon optional */ }
+		}
 
 		if (_notesTextEdit != null)
 		{
@@ -757,6 +785,7 @@ public partial class ShellInspector : Control
 			RefreshHotkeyUi();
 			RefreshClockUi();
 			RefreshMidiUi();
+			RefreshOscUi();
 
 			if (_notesTextEdit != null)
 			{
@@ -1783,6 +1812,107 @@ public partial class ShellInspector : Control
 		if (_midiTypeOption == null || _midiTypeOption.Selected < 0)
 			return MidiTriggerMessageType.NoteOn;
 		return (MidiTriggerMessageType)_midiTypeOption.GetItemMetadata(_midiTypeOption.Selected).AsInt32();
+	}
+
+	// ── OSC cue trigger UI ──────────────────────────────────────────────────
+
+	private void RefreshOscUi()
+	{
+		if (_isMultiEdit) return;
+
+		if (_oscEnabledCheckBox != null)
+			_oscEnabledCheckBox.SetPressedNoSignal(_focusedCue?.OscTriggerEnabled == true);
+
+		if (_oscAddressLineEdit != null && !_oscAddressEditing)
+		{
+			_oscAddressLineEdit.Text = _focusedCue?.OscTriggerAddress ?? string.Empty;
+		}
+
+		if (_oscResetButton != null)
+		{
+			bool nonDefault = _focusedCue != null && _focusedCue.IsOscTriggerNonDefault;
+			_oscResetButton.Visible = nonDefault;
+		}
+	}
+
+	private void OnOscEnabledToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].OscTriggerEnabled == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable cue OSC trigger" : "Disable cue OSC trigger",
+			pressed ? "Multi-edit enable cue OSC" : "Multi-edit disable cue OSC");
+
+		foreach (var cue in targets)
+		{
+			if (cue.OscTriggerEnabled == pressed) continue;
+			cue.OscTriggerEnabled = pressed;
+		}
+
+		if (!_isMultiEdit)
+			RefreshOscUi();
+	}
+
+	private void OnOscAddressSubmitted(string text)
+	{
+		_oscAddressEditing = false;
+		_oscAddressLineEdit?.ReleaseFocus();
+		CommitOscAddress(text);
+	}
+
+	private void OnOscAddressFocusExited()
+	{
+		if (_oscAddressLineEdit == null) return;
+		_oscAddressEditing = false;
+		CommitOscAddress(_oscAddressLineEdit.Text);
+	}
+
+	private void CommitOscAddress(string text)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		string path = (text ?? string.Empty).Trim();
+		if (!string.IsNullOrEmpty(path) && !path.StartsWith("/"))
+			path = "/" + path;
+
+		if (!_isMultiEdit && targets.Count == 1
+		    && string.Equals(targets[0].OscTriggerAddress, path, System.StringComparison.Ordinal))
+			return;
+
+		RecordHistoryBeforeEdit("Edit cue OSC trigger path", "Multi-edit cue OSC path");
+		foreach (var cue in targets)
+			cue.OscTriggerAddress = path;
+
+		if (!_isMultiEdit)
+			RefreshOscUi();
+	}
+
+	private void OnOscResetPressed()
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		RecordHistoryBeforeEdit("Reset cue OSC trigger", "Multi-edit reset cue OSC");
+		foreach (var cue in targets)
+		{
+			cue.OscTriggerEnabled = false;
+			cue.OscTriggerAddress = string.Empty;
+		}
+		if (!_isMultiEdit)
+			RefreshOscUi();
 	}
 
 	private void OnMidiEnabledToggled(bool pressed)

@@ -82,11 +82,13 @@ public partial class InputActionsListener : Node
     /// <summary>
     /// Invokes the same handler as the keyboard InputMap for <paramref name="actionName"/>
     /// (used by MIDI / OSC Input Map bindings). Undo/Redo always fire even when typing-focused.
-    /// Other actions respect the text-field listen gate.
+    /// Other actions respect the text-field listen gate unless <paramref name="ignoreFocusGate"/> is true
+    /// (OSC show control should always work).
     /// </summary>
     /// <param name="actionName">Project InputMap action name (e.g. "Go").</param>
+    /// <param name="ignoreFocusGate">When true, fire even if a LineEdit has focus (OSC).</param>
     /// <returns><c>true</c> when a handler was invoked.</returns>
-    public bool TryTriggerAction(string actionName)
+    public bool TryTriggerAction(string actionName, bool ignoreFocusGate = false)
     {
         if (string.IsNullOrEmpty(actionName)) return false;
 
@@ -104,7 +106,7 @@ public partial class InputActionsListener : Node
             return true;
         }
 
-        if (!_listenForInput) return false;
+        if (!ignoreFocusGate && !_listenForInput) return false;
 
         if (_actionMap.TryGetValue(actionName, out var entry))
         {

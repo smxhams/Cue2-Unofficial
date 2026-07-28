@@ -12,8 +12,8 @@ using Godot;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// Card for assigning an OSC address to a project InputMap action.
-/// Capture arms <see cref="OscListen"/> for the next message (like MIDI Input Map).
+/// Card for assigning a user-defined OSC address to a project InputMap action.
+/// Binding is typed in a LineEdit (not capture-from-listener).
 /// </summary>
 public partial class OscInputActionCard : PanelContainer
 {
@@ -24,12 +24,12 @@ public partial class OscInputActionCard : PanelContainer
     [Export] public string Action { get; set; } = "";
 
     private Label _actionNameLabel;
-    private Button _bindingButton;
+    private LineEdit _bindingLineEdit;
     private Button _resetButton;
     private Button _clearButton;
 
-    private bool _isCapturing;
-    private bool _captureSubscribed;
+    private bool _isSyncingUi;
+    private bool _editing;
 
     private StyleBoxFlat _normalStyle;
     private StyleBoxFlat _flashStyle;
@@ -40,14 +40,6 @@ public partial class OscInputActionCard : PanelContainer
     /// </summary>
     public event Action<string, string> BindingConflict;
 
-    /// <summary>
-    /// Raised when this card starts capture so the parent can cancel other cards.
-    /// </summary>
-    public event Action<OscInputActionCard> CaptureStarted;
-
-    /// <summary>True while waiting for the next OSC message.</summary>
-    public bool IsCapturing => _isCapturing;
-
     public override void _Ready()
     {
         _globalSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
@@ -55,14 +47,20 @@ public partial class OscInputActionCard : PanelContainer
         _oscListen = GetNodeOrNull<OscListen>("/root/OscListen");
 
         _actionNameLabel = GetNodeOrNull<Label>("%ActionName");
-        _bindingButton = GetNodeOrNull<Button>("%BindingButton");
+        _bindingLineEdit = GetNodeOrNull<LineEdit>("%BindingLineEdit");
         _resetButton = GetNodeOrNull<Button>("%ResetButton");
         _clearButton = GetNodeOrNull<Button>("%ClearButton");
 
         CaptureNormalStyle();
 
-        if (_bindingButton != null)
-            _bindingButton.Pressed += OnBindingButtonPressed;
+        if (_bindingLineEdit != null)
+        {
+            _bindingLineEdit.TextSubmitted += OnBindingTextSubmitted;
+            _bindingLineEdit.FocusEntered += OnBindingFocusEntered;
+            _bindingLineEdit.FocusExited += OnBindingFocusExited;
+            _bindingLineEdit.TextChanged += OnBindingTextChanged;
+        }
+
         if (_resetButton != null)
         {
             _resetButton.Pressed += OnResetPressed;
@@ -90,7 +88,13 @@ public partial class OscInputActionCard : PanelContainer
 
     public override void _ExitTree()
     {
-        CancelCapture(emitFocusExit: true);
+        if (_bindingLineEdit != null)
+        {
+            _bindingLineEdit.TextSubmitted -= OnBindingTextSubmitted;
+            _bindingLineEdit.FocusEntered -= OnBindingFocusEntered;
+            _bindingLineEdit.FocusExited -= OnBindingFocusExited;
+            _bindingLineEdit.TextChanged -= OnBindingTextChanged;
+        }
         if (_flashTween != null && GodotObject.IsInstanceValid(_flashTween))
         {
             _flashTween.Kill();
@@ -116,131 +120,114 @@ public partial class OscInputActionCard : PanelContainer
     }
 
     /// <summary>
-    /// Updates the binding button and reset visibility from <see cref="OscListen"/>.
+    /// Updates the LineEdit and button visibility from <see cref="OscListen"/>.
     /// </summary>
     public void RefreshDisplay()
     {
-        if (_bindingButton == null) return;
-        if (_isCapturing) return;
+        if (_bindingLineEdit == null) return;
+        if (_editing) return;
 
-        var binding = _oscListen?.GetInputMapBinding(Action) ?? OscActionBinding.Unbound();
-        if (!binding.HasBinding)
-            _bindingButton.Text = "None";
-        else
-            _bindingButton.Text = binding.GetDisplay();
+        var binding = _oscListen?.GetInputMapBinding(Action) ?? OscActionBinding.GetDefaultFor(Action);
+        _isSyncingUi = true;
+        try
+        {
+            _bindingLineEdit.Text = binding.HasBinding ? binding.Address : string.Empty;
+            _bindingLineEdit.PlaceholderText = binding.HasBinding ? string.Empty : "None";
+        }
+        finally
+        {
+            _isSyncingUi = false;
+        }
 
+        bool nonDefault = binding.IsNonDefaultFor(Action)
+                          || (_oscListen?.IsInputMapBindingOverridden(Action) ?? false);
         if (_resetButton != null)
         {
-            _resetButton.Visible = binding.IsNonDefault;
-            if (binding.IsNonDefault)
-                _resetButton.TooltipText = "Reset to default (no OSC)";
+            _resetButton.Visible = nonDefault;
+            var factory = OscActionBinding.GetDefaultFor(Action);
+            _resetButton.TooltipText = factory.HasBinding
+                ? $"Reset to default ({factory.Address})"
+                : "Reset to default (no OSC)";
         }
     }
 
-    private void OnBindingButtonPressed()
+    private void OnBindingFocusEntered()
     {
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
-
-        if (_isCapturing)
-        {
-            CancelCapture(emitFocusExit: true);
-            return;
-        }
-
-        if (_oscListen == null)
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                "OSC Input Map: OscListen not found.", (int)LogType.Warning);
-            return;
-        }
-
-        if (!_oscListen.OscListenEnabled || !_oscListen.IsListening)
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                "OSC Input Map: enable OSC Listener first (Settings → OSC Listener).",
-                (int)LogType.Warning);
-            return;
-        }
-
-        CaptureStarted?.Invoke(this);
-        StartCapture();
-    }
-
-    private void StartCapture()
-    {
-        _isCapturing = true;
-        if (_bindingButton != null)
-            _bindingButton.Text = "OSC… (Esc)";
-
-        if (!_captureSubscribed && _oscListen != null)
-        {
-            _oscListen.OscCaptured += OnOscCaptured;
-            _captureSubscribed = true;
-        }
-
-        _oscListen?.StartCapture();
+        _editing = true;
         _globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusEntered));
-        GD.Print($"OscInputActionCard:StartCapture - '{Action}'");
     }
 
-    /// <summary>
-    /// Cancels capture on this card. Safe when not capturing.
-    /// </summary>
-    /// <param name="emitFocusExit">When false, another card is taking over capture immediately.</param>
-    public void CancelCapture(bool emitFocusExit = true)
+    private void OnBindingFocusExited()
     {
-        if (!_isCapturing && !_captureSubscribed) return;
-
-        _isCapturing = false;
-        if (_captureSubscribed && _oscListen != null)
-        {
-            _oscListen.OscCaptured -= OnOscCaptured;
-            _captureSubscribed = false;
-        }
-
-        if (_oscListen != null && _oscListen.IsCapturing)
-            _oscListen.CancelCapture();
-
-        RefreshDisplay();
-        if (emitFocusExit)
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
-        GD.Print($"OscInputActionCard:CancelCapture - '{Action}'");
-    }
-
-    private void OnOscCaptured(string address, string argsDisplay)
-    {
-        if (!_isCapturing) return;
-
-        _isCapturing = false;
-        if (_captureSubscribed && _oscListen != null)
-        {
-            _oscListen.OscCaptured -= OnOscCaptured;
-            _captureSubscribed = false;
-        }
-
+        if (!_editing) return;
+        _editing = false;
+        CommitBindingText(_bindingLineEdit?.Text ?? string.Empty);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusExited));
+    }
 
-        // When the captured message has arguments, match them by default
-        // (useful for /go 1 vs /go 2 style control). Address-only if no args.
-        bool matchArgs = !string.IsNullOrEmpty(argsDisplay);
+    private void OnBindingTextSubmitted(string text)
+    {
+        CommitBindingText(text);
+        _bindingLineEdit?.ReleaseFocus();
+    }
+
+    private void OnBindingTextChanged(string _)
+    {
+        // Live typing only; commit on submit / focus exit.
+    }
+
+    private void CommitBindingText(string text)
+    {
+        if (_isSyncingUi || _globalData?.HistoryManager?.IsRestoring == true) return;
+        if (_oscListen == null) return;
+
+        string trimmed = (text ?? string.Empty).Trim();
+        var current = _oscListen.GetInputMapBinding(Action);
+
+        // Empty → clear (unbound override if there was a default).
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            if (!current.HasBinding && !_oscListen.IsInputMapBindingOverridden(Action))
+            {
+                RefreshDisplay();
+                return;
+            }
+            RecordHistory("Clear OSC Input Map binding");
+            _oscListen.SetInputMapBinding(Action, OscActionBinding.Unbound());
+            RefreshDisplay();
+            return;
+        }
 
         var candidate = new OscActionBinding();
-        candidate.SetFromMessage(address, argsDisplay, matchArgs);
+        if (!candidate.SetFromAddress(trimmed))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC Input Map: path must start with / and contain no spaces.",
+                (int)LogType.Warning);
+            RefreshDisplay();
+            return;
+        }
 
-        string conflict = _oscListen?.FindConflictingInputMapAction(Action, candidate);
+        if (current.EqualsBinding(candidate))
+        {
+            // Normalise display (e.g. missing leading slash).
+            RefreshDisplay();
+            return;
+        }
+
+        string conflict = _oscListen.FindConflictingInputMapAction(Action, candidate);
         if (!string.IsNullOrEmpty(conflict))
         {
-            string combo = candidate.GetDisplay();
-            BindingConflict?.Invoke(conflict, combo);
-            GD.Print($"OscInputActionCard:OnOscCaptured - Rejected '{combo}' for '{Action}'; used by '{conflict}'");
+            BindingConflict?.Invoke(conflict, candidate.GetDisplay());
+            GD.Print($"OscInputActionCard:Commit - Rejected '{candidate.GetDisplay()}' for '{Action}'; used by '{conflict}'");
             RefreshDisplay();
             return;
         }
 
         RecordHistory("Set OSC Input Map binding");
-        _oscListen?.SetInputMapBinding(Action, candidate);
+        _oscListen.SetInputMapBinding(Action, candidate);
         RefreshDisplay();
-        GD.Print($"OscInputActionCard:OnOscCaptured - '{Action}' ← {candidate.GetDisplay()}");
+        GD.Print($"OscInputActionCard:Commit - '{Action}' ← {candidate.GetDisplay()}");
     }
 
     private void OnClearPressed()
@@ -249,11 +236,12 @@ public partial class OscInputActionCard : PanelContainer
         if (_oscListen == null) return;
 
         var current = _oscListen.GetInputMapBinding(Action);
-        if (!current.HasBinding) return;
+        if (!current.HasBinding && _oscListen.IsInputMapBindingOverridden(Action))
+            return; // already cleared
+        if (!current.HasBinding && !_oscListen.IsInputMapBindingOverridden(Action))
+            return; // already default unbound
 
-        if (_isCapturing)
-            CancelCapture(emitFocusExit: true);
-
+        _editing = false;
         RecordHistory("Clear OSC Input Map binding");
         _oscListen.SetInputMapBinding(Action, OscActionBinding.Unbound());
         RefreshDisplay();
@@ -261,7 +249,16 @@ public partial class OscInputActionCard : PanelContainer
 
     private void OnResetPressed()
     {
-        OnClearPressed();
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+        if (_oscListen == null) return;
+        if (!_oscListen.IsInputMapBindingOverridden(Action)
+            && !_oscListen.GetInputMapBinding(Action).IsNonDefaultFor(Action))
+            return;
+
+        _editing = false;
+        RecordHistory("Reset OSC Input Map binding");
+        _oscListen.ResetInputMapBinding(Action);
+        RefreshDisplay();
     }
 
     private void RecordHistory(string description)
@@ -269,16 +266,6 @@ public partial class OscInputActionCard : PanelContainer
         var history = _globalData?.HistoryManager;
         if (history == null || history.IsRestoring) return;
         history.RecordSettingsChange(description, null, "OscInputMap");
-    }
-
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        if (!_isCapturing) return;
-        if (@event is not InputEventKey key || !key.Pressed) return;
-        if (key.Keycode != Key.Escape) return;
-
-        CancelCapture(emitFocusExit: true);
-        GetViewport().SetInputAsHandled();
     }
 
     /// <summary>

@@ -12,14 +12,14 @@ namespace Cue2.Shared;
 
 /// <summary>
 /// OSC pattern bound to a project InputMap action (e.g. Go, SaveSession).
-/// Default is unbound (no OSC control).
+/// Factory defaults for common playback actions are <c>/Go</c>, <c>/StopAll</c>, etc.
 /// </summary>
 public sealed class OscActionBinding
 {
     /// <summary>True when an OSC address pattern is assigned.</summary>
     public bool HasBinding { get; set; }
 
-    /// <summary>OSC address path to match (e.g. "/go", "/cue/1/start"). Case-sensitive.</summary>
+    /// <summary>OSC address path to match (e.g. "/Go", "/cue/1/start"). Case-sensitive.</summary>
     public string Address { get; set; } = string.Empty;
 
     /// <summary>
@@ -37,11 +37,46 @@ public sealed class OscActionBinding
     /// <summary>Factory default: unbound.</summary>
     public static OscActionBinding Unbound() => new();
 
-    /// <summary>True when this differs from unbound default.</summary>
-    public bool IsNonDefault => HasBinding;
+    /// <summary>
+    /// Factory default OSC path for a project InputMap action, or unbound when none.
+    /// These replace the former global built-in paths for the same actions.
+    /// </summary>
+    public static OscActionBinding GetDefaultFor(string actionName)
+    {
+        string path = actionName switch
+        {
+            "Go" => "/Go",
+            "StopAll" => "/StopAll",
+            "PauseAll" => "/PauseAll",
+            "ResumeAll" => "/ResumeAll",
+            "SelectNext" => "/SelectNext",
+            "SelectPrevious" => "/SelectPrevious",
+            "SaveSession" => "/Save",
+            "Undo" => "/Undo",
+            "Redo" => "/Redo",
+            _ => null
+        };
+        return path == null ? Unbound() : FromAddress(path);
+    }
+
+    /// <summary>Creates an address-only binding (any arguments accepted).</summary>
+    public static OscActionBinding FromAddress(string address)
+    {
+        var b = new OscActionBinding();
+        b.SetFromAddress(address);
+        return b;
+    }
 
     /// <summary>
-    /// Human-readable summary (e.g. "/go" or "/level 0.5").
+    /// True when this binding differs from the factory default for <paramref name="actionName"/>.
+    /// </summary>
+    public bool IsNonDefaultFor(string actionName)
+    {
+        return !EqualsBinding(GetDefaultFor(actionName));
+    }
+
+    /// <summary>
+    /// Human-readable summary (e.g. "/Go" or "/level 0.5").
     /// </summary>
     public string GetDisplay()
     {
@@ -66,17 +101,42 @@ public sealed class OscActionBinding
     }
 
     /// <summary>
-    /// Sets the binding from a captured OSC message.
+    /// Sets an address-only binding from user-typed path text.
     /// </summary>
-    /// <param name="address">OSC address path.</param>
-    /// <param name="argsDisplay">Formatted args (may be empty).</param>
-    /// <param name="matchArgs">When true, require exact args match at runtime.</param>
+    /// <param name="address">OSC address path (should start with /).</param>
+    /// <returns>False when the address is empty or invalid.</returns>
+    public bool SetFromAddress(string address)
+    {
+        string trimmed = (address ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            Clear();
+            return false;
+        }
+
+        // Allow typing without leading slash — normalise.
+        if (!trimmed.StartsWith('/'))
+            trimmed = "/" + trimmed;
+
+        // Basic validation: no whitespace in path.
+        if (trimmed.IndexOfAny(new[] { ' ', '\t', '\r', '\n' }) >= 0)
+            return false;
+
+        HasBinding = true;
+        Address = trimmed;
+        MatchArgs = false;
+        ArgsDisplay = string.Empty;
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the binding from a captured OSC message (optional; Input Map uses typed paths).
+    /// </summary>
     public void SetFromMessage(string address, string argsDisplay, bool matchArgs)
     {
         HasBinding = !string.IsNullOrWhiteSpace(address);
         Address = address?.Trim() ?? string.Empty;
         ArgsDisplay = argsDisplay ?? string.Empty;
-        // Only match args when the message actually carried arguments.
         MatchArgs = matchArgs && !string.IsNullOrEmpty(ArgsDisplay);
     }
 
@@ -87,6 +147,17 @@ public sealed class OscActionBinding
         Address = string.Empty;
         MatchArgs = false;
         ArgsDisplay = string.Empty;
+    }
+
+    /// <summary>Structural equality for defaults / conflict checks.</summary>
+    public bool EqualsBinding(OscActionBinding other)
+    {
+        if (other == null) return !HasBinding;
+        if (HasBinding != other.HasBinding) return false;
+        if (!HasBinding) return true;
+        return string.Equals(Address ?? string.Empty, other.Address ?? string.Empty, StringComparison.Ordinal)
+               && MatchArgs == other.MatchArgs
+               && string.Equals(ArgsDisplay ?? string.Empty, other.ArgsDisplay ?? string.Empty, StringComparison.Ordinal);
     }
 
     /// <summary>Serializes for showfile / history.</summary>
@@ -100,7 +171,7 @@ public sealed class OscActionBinding
         return d;
     }
 
-    /// <summary>Deserializes from showfile / history.</summary>
+    /// <summary>Deserializes from showfile / history (including explicit unbound overrides).</summary>
     public static OscActionBinding FromDict(Dictionary data)
     {
         var b = new OscActionBinding();
@@ -109,7 +180,13 @@ public sealed class OscActionBinding
         b.Address = data.TryGetValue("Address", out var a) ? a.AsString() : string.Empty;
         b.MatchArgs = data.TryGetValue("MatchArgs", out var ma) && ma.AsBool();
         b.ArgsDisplay = data.TryGetValue("ArgsDisplay", out var ad) ? ad.AsString() : string.Empty;
-        if (!b.HasBinding || string.IsNullOrEmpty(b.Address))
+        // Explicit unbound: HasBinding false with empty address.
+        if (!b.HasBinding)
+        {
+            b.Clear();
+            return b;
+        }
+        if (string.IsNullOrEmpty(b.Address))
             b.Clear();
         return b;
     }

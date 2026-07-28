@@ -14,7 +14,7 @@ using Godot;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// Settings panel for assigning OSC addresses to project InputMap actions.
+/// Settings panel for assigning user-defined OSC addresses to project InputMap actions.
 /// Layout mirrors <see cref="SettingsMidiInputMap"/> (categorized accordion of cards).
 /// </summary>
 public partial class SettingsOscInputMap : ScrollContainer
@@ -29,7 +29,6 @@ public partial class SettingsOscInputMap : ScrollContainer
 
     private readonly Dictionary<string, OscInputActionCard> _cardsByAction = new();
     private readonly Dictionary<string, CategorySection> _sectionByAction = new();
-    private OscInputActionCard _activeCaptureCard;
 
     private sealed class CategorySection
     {
@@ -86,8 +85,6 @@ public partial class SettingsOscInputMap : ScrollContainer
     {
         if (scope != (int)HistoryManager.HistoryScope.Settings) return;
         if (!IsInstanceValid(this) || !Visible) return;
-
-        CancelActiveCapture();
         RefreshAllCardDisplays();
     }
 
@@ -99,7 +96,6 @@ public partial class SettingsOscInputMap : ScrollContainer
 
     private void ClearCards()
     {
-        CancelActiveCapture();
         _cardsByAction.Clear();
         _sectionByAction.Clear();
 
@@ -109,13 +105,6 @@ public partial class SettingsOscInputMap : ScrollContainer
             _inputsContainer.RemoveChild(child);
             child.QueueFree();
         }
-    }
-
-    private void CancelActiveCapture()
-    {
-        if (_activeCaptureCard != null && IsInstanceValid(_activeCaptureCard))
-            _activeCaptureCard.CancelCapture(emitFocusExit: true);
-        _activeCaptureCard = null;
     }
 
     private void RefreshAllCardDisplays()
@@ -208,22 +197,9 @@ public partial class SettingsOscInputMap : ScrollContainer
             card.SetAction(actionName);
             content.AddChild(card);
             card.BindingConflict += OnBindingConflict;
-            card.CaptureStarted += OnCardCaptureStarted;
             _cardsByAction[actionName] = card;
             _sectionByAction[actionName] = section;
         }
-    }
-
-    private void OnCardCaptureStarted(OscInputActionCard card)
-    {
-        if (_activeCaptureCard != null &&
-            _activeCaptureCard != card &&
-            IsInstanceValid(_activeCaptureCard))
-        {
-            _activeCaptureCard.CancelCapture(emitFocusExit: false);
-        }
-
-        _activeCaptureCard = card;
     }
 
     private void OnBindingConflict(string conflictingAction, string attemptedCombo)

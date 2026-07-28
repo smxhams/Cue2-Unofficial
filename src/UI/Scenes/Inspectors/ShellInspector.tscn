@@ -370,6 +370,36 @@ tooltip_text = "Velocity or CC value (0–127). Only used when Val is checked."
 max_value = 127.0
 rounded = true
 
+[node name="OscRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="OscEnabledCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/OscRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "When checked and a path is set, matching received OSC GO's this cue."
+focus_mode = 0
+text = "OSC"
+
+[node name="OscAddressLineEdit" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/OscRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "OSC address that GO's this cue (e.g. /my/fx). Exact match, case-sensitive."
+theme_override_font_sizes/font_size = 10
+placeholder_text = "/path"
+
+[node name="OscResetButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/OscRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default (no OSC trigger)"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
 [node name="NotesHeaderRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers"]
 layout_mode = 2
 theme_override_constants/separation = 8

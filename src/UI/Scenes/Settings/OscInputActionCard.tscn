@@ -16,7 +16,7 @@ corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
 [node name="OscInputActionCard" type="PanelContainer"]
-custom_minimum_size = Vector2(200, 0)
+custom_minimum_size = Vector2(240, 0)
 size_flags_horizontal = 3
 theme_override_styles/panel = SubResource("OscInputCardStyle")
 script = ExtResource("1_card")
@@ -43,17 +43,14 @@ text = "ActionName"
 vertical_alignment = 1
 text_overrun_behavior = 3
 
-[node name="BindingButton" type="Button" parent="MarginContainer/Content"]
+[node name="BindingLineEdit" type="LineEdit" parent="MarginContainer/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(70, 0)
+custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-focus_mode = 0
 theme_override_font_sizes/font_size = 10
-text = "None"
-clip_text = true
-text_overrun_behavior = 1
-tooltip_text = "Click to capture OSC binding. Esc cancels."
+placeholder_text = "None"
+tooltip_text = "Type an OSC address path for this action (e.g. /Go). Leave empty for no OSC binding. Enter or focus out to apply."
 
 [node name="ResetButton" type="Button" parent="MarginContainer/Content"]
 unique_name_in_owner = true
@@ -63,7 +60,7 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
 visible = false
-tooltip_text = "Reset to default (no OSC)"
+tooltip_text = "Reset to factory default OSC path"
 
 [node name="ClearButton" type="Button" parent="MarginContainer/Content"]
 unique_name_in_owner = true
@@ -72,4 +69,4 @@ layout_mode = 2
 focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
-tooltip_text = "Clear OSC binding"
+tooltip_text = "Clear OSC binding (no OSC for this action)"

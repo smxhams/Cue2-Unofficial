@@ -9,6 +9,7 @@ using System.Text;
 using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
 using Godot;
+using Rug.Osc;
 
 namespace Cue2.UI.Scenes.Settings;
 
@@ -34,6 +35,9 @@ public partial class SettingsOscConnections : Control
     private CheckBox _listenCheckBox;
     private Button _clearLogButton;
     private CodeEdit _monitorLog;
+    private LineEdit _testPathLineEdit;
+    private LineEdit _testArgsLineEdit;
+    private Button _testSendButton;
 
     private bool _isSyncingUi;
     private readonly StringBuilder _logBuilder = new();
@@ -61,6 +65,9 @@ public partial class SettingsOscConnections : Control
         _listenCheckBox = GetNodeOrNull<CheckBox>("%ListenCheckBox");
         _clearLogButton = GetNodeOrNull<Button>("%ClearLogButton");
         _monitorLog = GetNodeOrNull<CodeEdit>("%MonitorLog");
+        _testPathLineEdit = GetNodeOrNull<LineEdit>("%TestPathLineEdit");
+        _testArgsLineEdit = GetNodeOrNull<LineEdit>("%TestArgsLineEdit");
+        _testSendButton = GetNodeOrNull<Button>("%TestSendButton");
 
         _oscConnectionCardScene = SceneLoader.LoadPackedScene(
             "uid://b53mk1xolhtmv", out string err);
@@ -75,6 +82,16 @@ public partial class SettingsOscConnections : Control
             _listenCheckBox.Toggled += OnListenToggled;
         if (_clearLogButton != null)
             _clearLogButton.Pressed += OnClearLogPressed;
+        if (_testSendButton != null)
+            _testSendButton.Pressed += OnTestSendPressed;
+        if (_testPathLineEdit != null)
+            _testPathLineEdit.TextSubmitted += _ => _testPathLineEdit.ReleaseFocus();
+        if (_testArgsLineEdit != null)
+            _testArgsLineEdit.TextSubmitted += _ =>
+            {
+                _testArgsLineEdit.ReleaseFocus();
+                OnTestSendPressed();
+            };
 
         if (_nameLabel != null) _nameLabel.Resized += UpdateUiColumns;
         if (_interfaceLabel != null) _interfaceLabel.Resized += UpdateUiColumns;
@@ -283,6 +300,48 @@ public partial class SettingsOscConnections : Control
         RecordHistory("Add OSC connection");
         OscConnections.CreateConnection();
         // Rebuild via OscConnectionsStateChanged
+    }
+
+    private void OnTestSendPressed()
+    {
+        var list = OscConnections.Connections;
+        if (list == null || list.Count == 0)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC test: no connections", (int)LogType.Warning);
+            return;
+        }
+
+        string path = (_testPathLineEdit?.Text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(path))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC test: enter a path", (int)LogType.Warning);
+            return;
+        }
+        if (!path.StartsWith("/"))
+            path = "/" + path;
+
+        try
+        {
+            string args = _testArgsLineEdit?.Text ?? string.Empty;
+            OscMessage msg = string.IsNullOrWhiteSpace(args)
+                ? new OscMessage(path)
+                : OscMessageUtil.BuildMessage(path, args);
+            // Send on all open connections so multi-dest shows can verify.
+            foreach (var conn in list)
+            {
+                if (conn == null || !GodotObject.IsInstanceValid(conn)) continue;
+                conn.SendMessage(msg);
+            }
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"OSC test: {path} → {list.Count} connection(s)", (int)LogType.Info);
+        }
+        catch (Exception ex)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"OSC test failed: {ex.Message}", (int)LogType.Error);
+        }
     }
 
     private void OnListenToggled(bool pressed)

@@ -433,6 +433,54 @@ public class Cue : ICue
     /// </summary>
     public bool CanFireMidiTrigger => MidiTriggerEnabled && HasMidiTrigger && Armed;
 
+    // ── Cue OSC trigger ─────────────────────────────────────────────────────
+
+    private bool _oscTriggerEnabled;
+    private string _oscTriggerAddress = string.Empty;
+
+    /// <summary>
+    /// When true and an OSC address is set, matching received OSC GO's this cue.
+    /// </summary>
+    public bool OscTriggerEnabled
+    {
+        get => _oscTriggerEnabled;
+        set
+        {
+            if (_oscTriggerEnabled == value) return;
+            _oscTriggerEnabled = value;
+            OscTriggerChanged?.Invoke();
+        }
+    }
+
+    /// <summary>OSC address path that GO's this cue (e.g. <c>/my/cue</c>). Empty = none.</summary>
+    public string OscTriggerAddress
+    {
+        get => _oscTriggerAddress ?? string.Empty;
+        set
+        {
+            string next = value?.Trim() ?? string.Empty;
+            if (_oscTriggerAddress == next) return;
+            _oscTriggerAddress = next;
+            OscTriggerChanged?.Invoke();
+        }
+    }
+
+    /// <summary>True when OSC trigger differs from default (off / empty).</summary>
+    public bool IsOscTriggerNonDefault =>
+        OscTriggerEnabled || !string.IsNullOrEmpty(OscTriggerAddress);
+
+    /// <summary>True when enabled, path set, and cue is armed.</summary>
+    public bool CanFireOscTrigger =>
+        OscTriggerEnabled && !string.IsNullOrEmpty(OscTriggerAddress) && Armed;
+
+    /// <summary>Exact address match (case-sensitive).</summary>
+    public bool OscTriggerMatches(string address) =>
+        !string.IsNullOrEmpty(address)
+        && string.Equals(OscTriggerAddress, address, StringComparison.Ordinal);
+
+    /// <summary>Raised when OSC trigger enable/address changes.</summary>
+    public event Action OscTriggerChanged;
+
     // Events
     public event Action<string> NameChanged;
     public event Action<string> CueNumChanged;
@@ -506,6 +554,7 @@ public class Cue : ICue
         LoadHotkeyFromData(data);
         LoadClockFromData(data);
         LoadMidiTriggerFromData(data);
+        LoadOscTriggerFromData(data);
 
         if (data.ContainsKey("Components"))
         {
@@ -1354,6 +1403,31 @@ public class Cue : ICue
         dict["MidiDeviceFilter"] = MidiDeviceFilter ?? string.Empty;
     }
 
+    private void WriteOscTriggerToData(Dictionary dict)
+    {
+        dict["OscTriggerEnabled"] = OscTriggerEnabled;
+        dict["OscTriggerAddress"] = OscTriggerAddress ?? string.Empty;
+    }
+
+    private void LoadOscTriggerFromData(Dictionary data)
+    {
+        if (data == null) return;
+        _oscTriggerEnabled = data.TryGetValue("OscTriggerEnabled", out var en) && en.AsBool();
+        _oscTriggerAddress = data.TryGetValue("OscTriggerAddress", out var addr)
+            ? addr.AsString() ?? string.Empty
+            : string.Empty;
+    }
+
+    private void ApplyOscTriggerFromData(Dictionary data)
+    {
+        bool prevEn = _oscTriggerEnabled;
+        string prevAddr = _oscTriggerAddress;
+        LoadOscTriggerFromData(data);
+        if (prevEn != _oscTriggerEnabled
+            || !string.Equals(prevAddr, _oscTriggerAddress, StringComparison.Ordinal))
+            OscTriggerChanged?.Invoke();
+    }
+
     private void LoadMidiTriggerFromData(Dictionary data)
     {
         _midiTriggerEnabled = data.TryGetValue("MidiTriggerEnabled", out var en) && en.AsBool();
@@ -1424,6 +1498,7 @@ public class Cue : ICue
         WriteHotkeyToData(dict);
         WriteClockToData(dict);
         WriteMidiTriggerToData(dict);
+        WriteOscTriggerToData(dict);
 
         var compData = new Array();
         foreach (var comp in Components)
@@ -1491,6 +1566,7 @@ public class Cue : ICue
         ApplyHotkeyFromData(data);
         ApplyClockFromData(data);
         ApplyMidiTriggerFromData(data);
+        ApplyOscTriggerFromData(data);
 
         Components.Clear();
         if (data.ContainsKey("Components"))

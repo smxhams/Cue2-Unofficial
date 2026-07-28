@@ -39,7 +39,7 @@ layout_mode = 2
 custom_minimum_size = Vector2(50, 0)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "Assign OSC addresses to the same actions as the keyboard Input Map (Go, Save, Undo, …). Click a binding to capture the next OSC message. Requires OSC Listener enabled under Settings → OSC Listener. Esc cancels capture."
+text = "Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching)."
 autowrap_mode = 2
 
 [node name="InputsContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]

@@ -9,6 +9,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Cue2.Shared;
 using Godot;
@@ -30,9 +31,16 @@ public partial class OscConnections : Node
 
     private bool _monitorEnabled = true;
     private readonly ConcurrentQueue<string> _pendingLogLines = new();
+    /// <summary>Work from background threads (TCP connect) — drained on the Godot main thread only.</summary>
+    private readonly ConcurrentQueue<Action> _mainThreadActions = new();
 
     /// <summary>Maximum lines retained in the in-memory monitor buffer.</summary>
     public const int MaxMonitorLines = 500;
+
+    /// <summary>
+    /// Common default destination port for outbound OSC (TouchOSC / many show tools use 8000).
+    /// </summary>
+    public const int DefaultSendPort = 8000;
 
     /// <summary>When true, sent OSC messages are queued for the monitor log UI.</summary>
     public bool MonitorEnabled
@@ -64,12 +72,30 @@ public partial class OscConnections : Node
 
     public override void _Process(double delta)
     {
+        // Background TCP connect status / logs must only touch Godot nodes here.
+        int actions = 0;
+        while (actions < 32 && _mainThreadActions.TryDequeue(out Action action))
+        {
+            try { action?.Invoke(); }
+            catch (Exception ex) { GD.PrintErr($"OscConnections:_Process - deferred: {ex.Message}"); }
+            actions++;
+        }
+
         int drained = 0;
         while (drained < 80 && _pendingLogLines.TryDequeue(out string line))
         {
             EmitSignal(SignalName.OscSendMonitorLine, line);
             drained++;
         }
+    }
+
+    /// <summary>
+    /// Queues work onto the Godot main thread (safe to call from TCP connect workers).
+    /// </summary>
+    public void RunOnMainThread(Action action)
+    {
+        if (action == null) return;
+        _mainThreadActions.Enqueue(action);
     }
 
     public static CueOscConnection GetCueOscConnection(int id) =>
@@ -99,7 +125,7 @@ public partial class OscConnections : Node
     public static CueOscConnection CreateConnection(
         string name = "Osc",
         IPAddress address = null,
-        int port = 7002,
+        int port = DefaultSendPort,
         string networkInterface = "")
     {
         var connection = new CueOscConnection
@@ -160,9 +186,20 @@ public partial class OscConnections : Node
     /// </summary>
     public void NotifyMessageSent(CueOscConnection connection, OscMessage message)
     {
+        // May be called from any thread after a send — marshal Godot work.
+        RunOnMainThread(() => NotifyMessageSentMain(connection, message));
+    }
+
+    private void NotifyMessageSentMain(CueOscConnection connection, OscMessage message)
+    {
         if (!_monitorEnabled || connection == null || message == null) return;
-        string line = FormatSendLine(connection, message);
-        _pendingLogLines.Enqueue(line);
+        string transport = connection.Transport == OscTransport.Tcp ? "TCP" : "UDP";
+        string args = OscListen.FormatArgs(message);
+        string argPart = string.IsNullOrEmpty(args) ? "(no args)" : args;
+        string dest = $"{connection.Address}:{connection.Port}";
+        string name = connection.Name ?? "OSC";
+        EnqueueMonitorLine(
+            $"OK   [{name}] {transport} → {dest}  {message.Address}  {argPart}");
     }
 
     /// <summary>
@@ -170,8 +207,65 @@ public partial class OscConnections : Node
     /// </summary>
     public void NotifySendError(CueOscConnection connection, string error)
     {
+        RunOnMainThread(() => NotifySendErrorMain(connection, error));
+    }
+
+    private void NotifySendErrorMain(CueOscConnection connection, string error)
+    {
         string name = connection?.Name ?? "?";
-        EnqueueMonitorLine($"— Send failed [{name}]: {error}");
+        string transport = connection?.Transport == OscTransport.Tcp ? "TCP" : "UDP";
+        string dest = connection != null ? $"{connection.Address}:{connection.Port}" : "?";
+        EnqueueMonitorLine($"FAIL  [{name}] {transport} → {dest}  {error}");
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            $"OSC send failed [{name}] {transport} → {dest}: {error}",
+            (int)LogType.Warning);
+    }
+
+    /// <summary>
+    /// Connection open / close / transport status for the send monitor and event log.
+    /// Safe to call from background threads (marshalled to main).
+    /// </summary>
+    /// <param name="phase">connecting | ok | fail</param>
+    public void NotifyConnectionStatus(CueOscConnection connection, string detail, string phase = "ok")
+    {
+        // Capture plain values — connection fields are fine to read from worker; Godot APIs are not.
+        string name = connection?.Name ?? "?";
+        string transport = connection?.Transport == OscTransport.Tcp ? "TCP" : "UDP";
+        string dest = connection != null ? $"{connection.Address}:{connection.Port}" : "?";
+        string detailCopy = detail ?? string.Empty;
+        string phaseCopy = phase ?? "ok";
+
+        RunOnMainThread(() => NotifyConnectionStatusMain(name, transport, dest, detailCopy, phaseCopy));
+    }
+
+    private void NotifyConnectionStatusMain(
+        string name, string transport, string dest, string detail, string phase)
+    {
+        string monitor;
+        string logMsg;
+        int logType;
+        switch (phase)
+        {
+            case "connecting":
+                monitor = $"…  [{name}] {transport} connecting → {dest}  {detail}";
+                logMsg = $"OSC [{name}] {transport} connecting → {dest}…";
+                logType = (int)LogType.Info;
+                break;
+            case "fail":
+                monitor = $"FAIL  [{name}] {transport} → {dest}  {detail}";
+                logMsg = $"OSC [{name}] {transport} connect failed → {dest}: {detail}";
+                logType = (int)LogType.Warning;
+                break;
+            default:
+                monitor = $"OK   [{name}] {transport} → {dest}  {detail}";
+                logMsg = $"OSC [{name}] {transport} ready → {dest}";
+                logType = (int)LogType.Info;
+                break;
+        }
+
+        EnqueueMonitorLine(monitor);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), logMsg, logType);
+        EmitSignal(SignalName.OscConnectionsStateChanged);
     }
 
     /// <summary>Clears any pending monitor log lines that have not yet been emitted.</summary>
@@ -185,27 +279,6 @@ public partial class OscConnections : Node
         if (string.IsNullOrEmpty(line)) return;
         string stamped = $"{DateTime.Now:HH:mm:ss.fff}  {line}";
         _pendingLogLines.Enqueue(stamped);
-    }
-
-    private static string FormatSendLine(CueOscConnection connection, OscMessage message)
-    {
-        var sb = new StringBuilder(128);
-        sb.Append(DateTime.Now.ToString("HH:mm:ss.fff"));
-        sb.Append("  [");
-        sb.Append(connection.Name ?? "OSC");
-        sb.Append(" → ");
-        sb.Append(connection.Address);
-        sb.Append(':');
-        sb.Append(connection.Port);
-        sb.Append("] ");
-        sb.Append(message.Address);
-        string args = OscListen.FormatArgs(message);
-        if (!string.IsNullOrEmpty(args))
-        {
-            sb.Append("  ");
-            sb.Append(args);
-        }
-        return sb.ToString();
     }
 
     public Dictionary GetData()
@@ -288,8 +361,16 @@ public partial class OscConnections : Node
     }
 }
 
+/// <summary>OSC transport for a send connection.</summary>
+public enum OscTransport
+{
+    Udp = 0,
+    Tcp = 1
+}
+
 /// <summary>
-/// A named OSC UDP sender (destination IP/port + optional local network interface).
+/// A named OSC sender (UDP or TCP destination IP/port + optional local network interface).
+/// TCP uses binary length-prefixed framing (Rug.Osc / common OSC-over-TCP).
 /// </summary>
 public partial class CueOscConnection : GodotObject
 {
@@ -298,24 +379,54 @@ public partial class CueOscConnection : GodotObject
     public string Name = "Osc";
     public string NetworkInterface { get; set; }
     public IPAddress Address { get; set; } = IPAddress.Loopback;
-    public int Port { get; set; } = 7002;
+    public int Port { get; set; } = OscConnections.DefaultSendPort;
+    public OscTransport Transport { get; set; } = OscTransport.Udp;
 
     private OscSender _sender;
+    private TcpClient _tcpClient;
+    private readonly object _tcpLock = new();
 
-    /// <summary>True when the underlying UDP sender has been opened.</summary>
-    public bool IsSenderOpen => _sender != null;
+    /// <summary>
+    /// Generation counter so async TCP connect results are ignored if the user
+    /// changes transport/address again before the connect finishes.
+    /// </summary>
+    private int _connectGeneration;
 
+    /// <summary>True when the underlying sender has been opened.</summary>
+    public bool IsSenderOpen => Transport == OscTransport.Tcp
+        ? (_tcpClient != null && _tcpClient.Connected)
+        : _sender != null;
+
+    /// <summary>True while a background TCP connect is in progress.</summary>
+    public bool IsConnecting { get; private set; }
+
+    /// <summary>
+    /// Resolves <see cref="OscConnections"/> — <b>must only be called on the Godot main thread</b>.
+    /// Background workers must capture this reference before leaving the main thread.
+    /// </summary>
+    private static OscConnections GetManagerMainThread() =>
+        Engine.GetMainLoop() is SceneTree tree
+            ? tree.Root.GetNodeOrNull<OscConnections>("/root/OscConnections")
+            : null;
+
+    /// <summary>
+    /// Opens the sender for the current transport. UDP is synchronous; TCP connects
+    /// on a background thread so the UI is never blocked by connect timeout.
+    /// </summary>
     public void InitialiseSender()
     {
+        int gen = System.Threading.Interlocked.Increment(ref _connectGeneration);
+        CloseConnectionKeepingGeneration();
+
+        if (Transport == OscTransport.Tcp)
+        {
+            BeginTcpConnectAsync(gen);
+            return;
+        }
+
+        // UDP — fast; keep on calling thread
         try
         {
-            if (_sender != null)
-            {
-                _sender.Close();
-                _sender.Dispose();
-                _sender = null;
-            }
-
             IPAddress localAddress = IPAddress.Any;
             if (!string.IsNullOrEmpty(NetworkInterface))
             {
@@ -340,36 +451,152 @@ public partial class CueOscConnection : GodotObject
             if (!string.IsNullOrEmpty(NetworkInterface))
             {
                 _sender = new OscSender(localAddress, Address, Port);
-                GD.Print($"CueOscConnection:InitialiseSender - Via {NetworkInterface} → {Name}@{Address}:{Port} from {localAddress}");
+                GD.Print($"CueOscConnection:InitialiseSender - UDP via {NetworkInterface} → {Name}@{Address}:{Port}");
             }
             else
             {
                 _sender = new OscSender(Address, Port);
-                GD.Print($"CueOscConnection:InitialiseSender - Auto → {Name}@{Address}:{Port}");
+                GD.Print($"CueOscConnection:InitialiseSender - UDP auto → {Name}@{Address}:{Port}");
             }
             _sender.Connect();
+            GetManagerMainThread()?.NotifyConnectionStatus(this, "UDP socket ready", phase: "ok");
         }
         catch (Exception ex)
         {
             GD.PrintErr($"CueOscConnection:InitialiseSender - '{Name}': {ex.Message}");
             _sender = null;
+            GetManagerMainThread()?.NotifyConnectionStatus(this, ex.Message, phase: "fail");
         }
     }
 
     /// <summary>
-    /// Reconnects the OSC sender with the current properties.
+    /// Starts a non-blocking TCP connect. UI selection can update immediately.
+    /// Manager reference is captured on the main thread; workers never call GetNode.
+    /// </summary>
+    private void BeginTcpConnectAsync(int generation)
+    {
+        IsConnecting = true;
+        var addr = Address;
+        int port = Port;
+        string name = Name;
+        // Capture on main thread only — workers must not call GetNodeOrNull.
+        var manager = GetManagerMainThread();
+
+        manager?.NotifyConnectionStatus(this, "waiting for remote…", phase: "connecting");
+
+        // Fire-and-forget background connect — never block the UI thread.
+        System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                var client = OscTcpTransport.Connect(addr, port);
+                // Discard if superseded by a newer Reconnect / transport change
+                if (generation != System.Threading.Volatile.Read(ref _connectGeneration)
+                    || Transport != OscTransport.Tcp)
+                {
+                    try { client.Close(); } catch { /* ignore */ }
+                    return;
+                }
+
+                lock (_tcpLock)
+                {
+                    CloseTcpUnlocked();
+                    _tcpClient = client;
+                }
+
+                IsConnecting = false;
+                GD.Print($"CueOscConnection:BeginTcpConnectAsync - TCP connected → {name}@{addr}:{port}");
+                manager?.NotifyConnectionStatus(this, "TCP session open", phase: "ok");
+            }
+            catch (Exception ex)
+            {
+                if (generation != System.Threading.Volatile.Read(ref _connectGeneration)) return;
+                IsConnecting = false;
+                CloseTcp();
+                GD.PrintErr($"CueOscConnection:BeginTcpConnectAsync - '{name}': {ex.Message}");
+                manager?.NotifyConnectionStatus(this, ex.Message, phase: "fail");
+            }
+        });
+    }
+
+    private void EnsureTcpConnected()
+    {
+        lock (_tcpLock)
+        {
+            if (_tcpClient != null && _tcpClient.Connected) return;
+        }
+
+        // Synchronous fallback for send path only (should already be connected).
+        // Prefer calling from main thread; status notify is marshalled either way.
+        var manager = GetManagerMainThread();
+        try
+        {
+            var client = OscTcpTransport.Connect(Address, Port);
+            lock (_tcpLock)
+            {
+                CloseTcpUnlocked();
+                _tcpClient = client;
+            }
+            manager?.NotifyConnectionStatus(this, "TCP reconnected on send", phase: "ok");
+        }
+        catch (Exception ex)
+        {
+            CloseTcp();
+            manager?.NotifyConnectionStatus(this, $"reconnect on send failed: {ex.Message}", phase: "fail");
+            throw;
+        }
+    }
+
+    private void CloseTcp()
+    {
+        lock (_tcpLock)
+            CloseTcpUnlocked();
+    }
+
+    private void CloseTcpUnlocked()
+    {
+        try { _tcpClient?.Close(); } catch { /* ignore */ }
+        try { _tcpClient?.Dispose(); } catch { /* ignore */ }
+        _tcpClient = null;
+    }
+
+    /// <summary>
+    /// Reconnects the OSC sender with the current properties (non-blocking for TCP).
     /// </summary>
     public void Reconnect()
     {
-        CloseConnection();
         InitialiseSender();
     }
 
     public void SendMessage(OscMessage message)
     {
-        var manager = Engine.GetMainLoop() is SceneTree tree
-            ? tree.Root.GetNodeOrNull<OscConnections>("/root/OscConnections")
-            : null;
+        // Prefer main-thread manager; if somehow called off-thread, notifications still marshal.
+        var manager = GetManagerMainThread();
+
+        if (Transport == OscTransport.Tcp)
+        {
+            try
+            {
+                if (IsConnecting)
+                    throw new InvalidOperationException("TCP still connecting");
+                EnsureTcpConnected();
+                lock (_tcpLock)
+                {
+                    if (_tcpClient == null || !_tcpClient.Connected)
+                        throw new InvalidOperationException("TCP not connected");
+                    OscTcpTransport.SendPacket(_tcpClient, message);
+                }
+                GD.Print($"CueOscConnection:SendMessage - TCP {message} via {Name}");
+                manager?.NotifyMessageSent(this, message);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"CueOscConnection:SendMessage - TCP failed {message}: {ex.Message}");
+                manager?.NotifySendError(this, ex.Message);
+                CloseTcp();
+            }
+            return;
+        }
 
         if (_sender == null)
         {
@@ -381,7 +608,7 @@ public partial class CueOscConnection : GodotObject
         try
         {
             _sender.Send(message);
-            GD.Print($"CueOscConnection:SendMessage - {message} via {Name}");
+            GD.Print($"CueOscConnection:SendMessage - UDP {message} via {Name}");
             manager?.NotifyMessageSent(this, message);
         }
         catch (Exception ex)
@@ -393,6 +620,13 @@ public partial class CueOscConnection : GodotObject
 
     public void CloseConnection()
     {
+        System.Threading.Interlocked.Increment(ref _connectGeneration);
+        CloseConnectionKeepingGeneration();
+    }
+
+    private void CloseConnectionKeepingGeneration()
+    {
+        IsConnecting = false;
         try
         {
             _sender?.Close();
@@ -403,6 +637,7 @@ public partial class CueOscConnection : GodotObject
             GD.PrintErr($"CueOscConnection:CloseConnection - {ex.Message}");
         }
         _sender = null;
+        CloseTcp();
     }
 
     public Dictionary GetData()
@@ -413,6 +648,7 @@ public partial class CueOscConnection : GodotObject
         dict["NetworkInterface"] = NetworkInterface ?? string.Empty;
         dict["Address"] = Address?.ToString() ?? "";
         dict["Port"] = Port;
+        dict["Transport"] = (int)Transport;
         return dict;
     }
 
@@ -426,6 +662,10 @@ public partial class CueOscConnection : GodotObject
             ? IPAddress.Parse((string)value)
             : IPAddress.Loopback;
         Port = data.TryGetValue("Port", out value) ? (int)value : Port;
-        GD.Print($"CueOscConnection:LoadFromData - {Id}: {Name} {Address}:{Port}");
+        if (data.TryGetValue("Transport", out value))
+            Transport = (OscTransport)value.AsInt32();
+        else if (data.TryGetValue("UseTcp", out value) && value.AsBool())
+            Transport = OscTransport.Tcp;
+        GD.Print($"CueOscConnection:LoadFromData - {Id}: {Name} {Transport} {Address}:{Port}");
     }
 }

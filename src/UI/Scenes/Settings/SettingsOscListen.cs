@@ -34,6 +34,15 @@ public partial class SettingsOscListen : Control
     private Button _clearLogButton;
     private CodeEdit _monitorLog;
 
+    private CheckBox _replyEnabledCheck;
+    private CheckBox _pushFeedbackCheck;
+
+    private CheckBox _tcpEnabledCheck;
+    private LineEdit _tcpPortLineEdit;
+    private bool _tcpPortEditing;
+    private LineEdit _allowlistLineEdit;
+    private Button _allowlistApplyButton;
+
     private bool _isSyncingUi;
     private bool _portEditing;
     private bool _sessionNameEditing;
@@ -59,6 +68,13 @@ public partial class SettingsOscListen : Control
         _clearLogButton = GetNodeOrNull<Button>("%ClearLogButton");
         _monitorLog = GetNodeOrNull<CodeEdit>("%MonitorLog");
 
+        _replyEnabledCheck = GetNodeOrNull<CheckBox>("%ReplyEnabledCheck");
+        _pushFeedbackCheck = GetNodeOrNull<CheckBox>("%PushFeedbackCheck");
+        _tcpEnabledCheck = GetNodeOrNull<CheckBox>("%TcpEnabledCheck");
+        _tcpPortLineEdit = GetNodeOrNull<LineEdit>("%TcpPortLineEdit");
+        _allowlistLineEdit = GetNodeOrNull<LineEdit>("%AllowlistLineEdit");
+        _allowlistApplyButton = GetNodeOrNull<Button>("%AllowlistApplyButton");
+
         // Fixed built-in command catalog (read-only; generated from OscListen.BuiltInCommandCatalog).
         PopulateBuiltInCommandList();
 
@@ -67,13 +83,34 @@ public partial class SettingsOscListen : Control
         if (_enabledCheckButton != null)
             _enabledCheckButton.Toggled += OnEnabledToggled;
         if (_portLineEdit != null)
+        {
             _portLineEdit.EditingToggled += OnPortEditingToggled;
+            _portLineEdit.TextSubmitted += OnPortTextSubmitted;
+        }
         if (_sessionNameLineEdit != null)
+        {
             _sessionNameLineEdit.EditingToggled += OnSessionNameEditingToggled;
+            _sessionNameLineEdit.TextSubmitted += OnSessionNameTextSubmitted;
+        }
         if (_listenCheckBox != null)
             _listenCheckBox.Toggled += OnListenToggled;
         if (_clearLogButton != null)
             _clearLogButton.Pressed += OnClearLogPressed;
+        if (_replyEnabledCheck != null)
+            _replyEnabledCheck.Toggled += OnReplyEnabledToggled;
+        if (_pushFeedbackCheck != null)
+            _pushFeedbackCheck.Toggled += OnPushFeedbackToggled;
+        if (_tcpEnabledCheck != null)
+            _tcpEnabledCheck.Toggled += OnTcpEnabledToggled;
+        if (_tcpPortLineEdit != null)
+        {
+            _tcpPortLineEdit.EditingToggled += OnTcpPortEditingToggled;
+            _tcpPortLineEdit.TextSubmitted += OnTcpPortTextSubmitted;
+        }
+        if (_allowlistApplyButton != null)
+            _allowlistApplyButton.Pressed += OnAllowlistApplyPressed;
+        if (_allowlistLineEdit != null)
+            _allowlistLineEdit.TextSubmitted += OnAllowlistTextSubmitted;
 
         if (_oscListen != null)
         {
@@ -110,13 +147,34 @@ public partial class SettingsOscListen : Control
         if (_enabledCheckButton != null)
             _enabledCheckButton.Toggled -= OnEnabledToggled;
         if (_portLineEdit != null)
+        {
             _portLineEdit.EditingToggled -= OnPortEditingToggled;
+            _portLineEdit.TextSubmitted -= OnPortTextSubmitted;
+        }
         if (_sessionNameLineEdit != null)
+        {
             _sessionNameLineEdit.EditingToggled -= OnSessionNameEditingToggled;
+            _sessionNameLineEdit.TextSubmitted -= OnSessionNameTextSubmitted;
+        }
         if (_listenCheckBox != null)
             _listenCheckBox.Toggled -= OnListenToggled;
         if (_clearLogButton != null)
             _clearLogButton.Pressed -= OnClearLogPressed;
+        if (_replyEnabledCheck != null)
+            _replyEnabledCheck.Toggled -= OnReplyEnabledToggled;
+        if (_pushFeedbackCheck != null)
+            _pushFeedbackCheck.Toggled -= OnPushFeedbackToggled;
+        if (_tcpEnabledCheck != null)
+            _tcpEnabledCheck.Toggled -= OnTcpEnabledToggled;
+        if (_tcpPortLineEdit != null)
+        {
+            _tcpPortLineEdit.EditingToggled -= OnTcpPortEditingToggled;
+            _tcpPortLineEdit.TextSubmitted -= OnTcpPortTextSubmitted;
+        }
+        if (_allowlistApplyButton != null)
+            _allowlistApplyButton.Pressed -= OnAllowlistApplyPressed;
+        if (_allowlistLineEdit != null)
+            _allowlistLineEdit.TextSubmitted -= OnAllowlistTextSubmitted;
 
         base._ExitTree();
     }
@@ -159,6 +217,7 @@ public partial class SettingsOscListen : Control
 
     /// <summary>
     /// Builds the read-only built-in command list from <see cref="OscListen.BuiltInCommandCatalog"/>.
+    /// Categories stack vertically; commands within each category wrap in a multi-column flow.
     /// </summary>
     private void PopulateBuiltInCommandList()
     {
@@ -168,45 +227,81 @@ public partial class SettingsOscListen : Control
         foreach (Node child in list.GetChildren())
             child.QueueFree();
 
+        list.AddThemeConstantOverride("separation", 6);
+
         string lastCategory = null;
+        FlowContainer flow = null;
+
         foreach (var cmd in OscListen.BuiltInCommandCatalog)
         {
             if (cmd.Category != lastCategory)
             {
                 lastCategory = cmd.Category;
+
                 var cat = new Label
                 {
                     Text = lastCategory,
-                    TooltipText = $"{lastCategory} commands"
+                    TooltipText = $"{lastCategory} commands",
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 };
                 cat.AddThemeFontSizeOverride("font_size", 11);
                 cat.AddThemeColorOverride("font_color", new Color(0.75f, 0.75f, 0.75f, 1f));
-                // Small top gap between categories
-                if (list.GetChildCount() > 0)
-                {
-                    var spacer = new Control { CustomMinimumSize = new Vector2(0, 4) };
-                    list.AddChild(spacer);
-                }
                 list.AddChild(cat);
+
+                flow = new FlowContainer
+                {
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                };
+                flow.AddThemeConstantOverride("h_separation", 6);
+                flow.AddThemeConstantOverride("v_separation", 4);
+                list.AddChild(flow);
             }
 
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 8);
-            row.TooltipText = cmd.Description;
+            if (flow == null) continue;
+
+            // Compact chip: monospaced-looking path with tooltip description.
+            var chip = new PanelContainer
+            {
+                TooltipText = cmd.Description,
+                CustomMinimumSize = new Vector2(148, 0),
+                SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            };
+
+            var chipStyle = new StyleBoxFlat
+            {
+                BgColor = new Color(0.1f, 0.1f, 0.1f, 1f),
+                BorderColor = new Color(0.28f, 0.28f, 0.28f, 1f),
+                ContentMarginLeft = 6,
+                ContentMarginRight = 6,
+                ContentMarginTop = 3,
+                ContentMarginBottom = 3,
+            };
+            chipStyle.SetBorderWidthAll(1);
+            chipStyle.SetCornerRadiusAll(3);
+            chip.AddThemeStyleboxOverride("panel", chipStyle);
 
             var pattern = new LineEdit
             {
                 Text = cmd.Pattern,
                 Editable = false,
-                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                ExpandToTextLength = false,
                 SelectAllOnFocus = true,
                 TooltipText = cmd.Description,
-                CustomMinimumSize = new Vector2(180, 0),
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                Flat = true,
+                ContextMenuEnabled = true,
             };
-            pattern.AddThemeFontSizeOverride("font_size", 11);
-            row.AddChild(pattern);
+            pattern.AddThemeFontSizeOverride("font_size", 10);
+            pattern.AddThemeColorOverride("font_uneditable_color", new Color(0.85f, 0.9f, 0.95f, 1f));
+            pattern.AddThemeColorOverride("font_readonly_color", new Color(0.85f, 0.9f, 0.95f, 1f));
+            // Transparent so the panel style shows through.
+            var clear = new StyleBoxEmpty();
+            pattern.AddThemeStyleboxOverride("normal", clear);
+            pattern.AddThemeStyleboxOverride("focus", clear);
+            pattern.AddThemeStyleboxOverride("read_only", clear);
 
-            list.AddChild(row);
+            chip.AddChild(pattern);
+            flow.AddChild(chip);
         }
     }
 
@@ -263,12 +358,110 @@ public partial class SettingsOscListen : Control
             if (_listenCheckBox != null)
                 _listenCheckBox.SetPressedNoSignal(_oscListen.MonitorEnabled);
 
+            if (_replyEnabledCheck != null)
+                _replyEnabledCheck.SetPressedNoSignal(_oscListen.ReplyEnabled);
+            if (_pushFeedbackCheck != null)
+                _pushFeedbackCheck.SetPressedNoSignal(_oscListen.PushFeedback);
+
+            if (_tcpEnabledCheck != null)
+                _tcpEnabledCheck.SetPressedNoSignal(_oscListen.TcpEnabled);
+            if (_tcpPortLineEdit != null && !_tcpPortEditing)
+                _tcpPortLineEdit.Text = _oscListen.TcpPort.ToString();
+            if (_allowlistLineEdit != null && !_allowlistLineEdit.HasFocus())
+            {
+                var list = _oscListen.AllowlistIps;
+                _allowlistLineEdit.Text = list.Count == 0 ? string.Empty : string.Join(", ", list);
+            }
+
             UpdateStatusLabel();
         }
         finally
         {
             _isSyncingUi = false;
         }
+    }
+
+    private void OnTcpEnabledToggled(bool pressed)
+    {
+        if (_isSyncingUi || _oscListen == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (_oscListen.TcpEnabled == pressed) return;
+        RecordHistory(pressed ? "Enable OSC TCP listen" : "Disable OSC TCP listen");
+        _oscListen.TcpEnabled = pressed;
+    }
+
+    private void OnTcpPortEditingToggled(bool editing)
+    {
+        if (editing) { _tcpPortEditing = true; return; }
+        if (!_tcpPortEditing) return;
+        _tcpPortEditing = false;
+        _tcpPortLineEdit?.ReleaseFocus();
+        SubmitTcpPort();
+    }
+
+    private void OnTcpPortTextSubmitted(string _)
+    {
+        _tcpPortEditing = false;
+        _tcpPortLineEdit?.ReleaseFocus();
+        SubmitTcpPort();
+    }
+
+    private void SubmitTcpPort()
+    {
+        if (_oscListen == null || _tcpPortLineEdit == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (int.TryParse(_tcpPortLineEdit.Text, out int port) && port >= 1 && port <= 65535)
+        {
+            if (_oscListen.TcpPort == port) return;
+            RecordHistory($"Set OSC TCP port to {port}");
+            _oscListen.TcpPort = port;
+        }
+        else
+            _tcpPortLineEdit.Text = _oscListen.TcpPort.ToString();
+    }
+
+    private void OnAllowlistTextSubmitted(string _)
+    {
+        _allowlistLineEdit?.ReleaseFocus();
+        OnAllowlistApplyPressed();
+    }
+
+    private void OnAllowlistApplyPressed()
+    {
+        if (_isSyncingUi || _oscListen == null || _allowlistLineEdit == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        _allowlistLineEdit.ReleaseFocus();
+        string text = _allowlistLineEdit.Text ?? string.Empty;
+        var parts = text.Split(new[] { ',', ';', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        RecordHistory("Update OSC IP allowlist");
+        _oscListen.SetAllowlist(parts);
+        // Refresh normalized display
+        var list = _oscListen.AllowlistIps;
+        _allowlistLineEdit.Text = list.Count == 0 ? string.Empty : string.Join(", ", list);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            list.Count == 0
+                ? "OSC allowlist cleared (all IPs allowed)"
+                : $"OSC allowlist: {list.Count} IP(s)",
+            (int)LogType.Info);
+    }
+
+    private void OnReplyEnabledToggled(bool pressed)
+    {
+        if (_isSyncingUi || _oscListen == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (_oscListen.ReplyEnabled == pressed) return;
+        RecordHistory(pressed ? "Enable OSC reply" : "Disable OSC reply");
+        _oscListen.ReplyEnabled = pressed;
+    }
+
+    private void OnPushFeedbackToggled(bool pressed)
+    {
+        if (_isSyncingUi || _oscListen == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (_oscListen.PushFeedback == pressed) return;
+        RecordHistory(pressed ? "Enable OSC playhead push" : "Disable OSC playhead push");
+        _oscListen.PushFeedback = pressed;
     }
 
     private void UpdateStatusLabel()
@@ -281,9 +474,19 @@ public partial class SettingsOscListen : Control
             return;
         }
 
-        _statusLabel.Text = _oscListen.IsListening
-            ? $"Listening · UDP {_oscListen.Port}"
-            : $"Enabled · port {_oscListen.Port} (not bound)";
+        if (!_oscListen.IsListening)
+        {
+            _statusLabel.Text = "Enabled · not bound";
+            return;
+        }
+
+        string tcp = _oscListen.TcpEnabled ? $" · TCP {_oscListen.TcpPort}" : "";
+        int n = _oscListen.AllowlistIps.Count;
+        string allow = n == 0 ? "" : $" · allow {n}";
+        string prefix = _oscListen.HasRequiredSessionPrefix
+            ? $" · /{_oscListen.SessionName}/"
+            : "";
+        _statusLabel.Text = $"UDP {_oscListen.Port}{tcp}{prefix}{allow}";
     }
 
     private void OnEnabledToggled(bool pressed)
@@ -316,6 +519,13 @@ public partial class SettingsOscListen : Control
         }
 
         if (!_portEditing) return;
+        _portEditing = false;
+        _portLineEdit?.ReleaseFocus();
+        SubmitPort();
+    }
+
+    private void OnPortTextSubmitted(string _)
+    {
         _portEditing = false;
         _portLineEdit?.ReleaseFocus();
         SubmitPort();
@@ -356,6 +566,13 @@ public partial class SettingsOscListen : Control
         SubmitSessionName();
     }
 
+    private void OnSessionNameTextSubmitted(string _)
+    {
+        _sessionNameEditing = false;
+        _sessionNameLineEdit?.ReleaseFocus();
+        SubmitSessionName();
+    }
+
     private void SubmitSessionName()
     {
         if (_oscListen == null || _sessionNameLineEdit == null) return;
@@ -363,7 +580,7 @@ public partial class SettingsOscListen : Control
 
         string sessionName = _sessionNameLineEdit.Text.Trim();
 
-        // Empty is allowed (optional label).
+        // Empty = no prefix required. Non-empty = all OSC must use /{SessionName}/…
         if (!string.IsNullOrEmpty(sessionName))
         {
             if (sessionName.Length > 20)
@@ -386,6 +603,18 @@ public partial class SettingsOscListen : Control
         if (_oscListen.SessionName == sessionName) return;
         RecordHistory("Set OSC session name");
         _oscListen.SessionName = sessionName;
+        if (!string.IsNullOrEmpty(sessionName))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"OSC session prefix required: /{sessionName}/… (e.g. /{sessionName}/Go)",
+                (int)LogType.Info);
+        }
+        else
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC session prefix cleared — unprefixed paths accepted",
+                (int)LogType.Info);
+        }
     }
 
     private void OnClearLogPressed()

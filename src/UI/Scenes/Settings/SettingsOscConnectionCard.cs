@@ -28,6 +28,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
     public CueOscConnection CueOscConnection;
 
     private LineEdit _nameLineEdit;
+    private OptionButton _transportOption;
     private OptionButton _interfaceOptionButton;
     private LineEdit _destinationLineEdit;
     private LineEdit _portLineEdit;
@@ -50,10 +51,19 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         _historyManager = _globalData?.HistoryManager;
 
         _nameLineEdit = GetNodeOrNull<LineEdit>("%NameLineEdit");
+        _transportOption = GetNodeOrNull<OptionButton>("%TransportOption");
         _interfaceOptionButton = GetNodeOrNull<OptionButton>("%InterfaceOptionButton");
         _destinationLineEdit = GetNodeOrNull<LineEdit>("%DestinationLineEdit");
         _portLineEdit = GetNodeOrNull<LineEdit>("%PortLineEdit");
         _deleteButton = GetNodeOrNull<Button>("%DeleteButton");
+
+        if (_transportOption != null)
+        {
+            _transportOption.Clear();
+            _transportOption.AddItem("UDP", 0);
+            _transportOption.AddItem("TCP", 1);
+            _transportOption.ItemSelected += OnTransportSelected;
+        }
 
         if (_nameLineEdit != null)
         {
@@ -97,16 +107,37 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         {
             if (_nameLineEdit != null)
                 _nameLineEdit.Text = connection?.Name ?? string.Empty;
+            if (_transportOption != null)
+                _transportOption.Select(connection?.Transport == OscTransport.Tcp ? 1 : 0);
             if (_destinationLineEdit != null)
                 _destinationLineEdit.Text = connection?.Address?.ToString() ?? string.Empty;
             if (_portLineEdit != null)
-                _portLineEdit.Text = (connection?.Port ?? 7002).ToString();
+                _portLineEdit.Text = (connection?.Port ?? OscConnections.DefaultSendPort).ToString();
+            if (_interfaceOptionButton != null)
+                _interfaceOptionButton.Disabled = connection?.Transport == OscTransport.Tcp;
             LoadInterfaceOptions();
         }
         finally
         {
             _isSyncingUi = false;
         }
+    }
+
+    private void OnTransportSelected(long index)
+    {
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        var next = index == 1 ? OscTransport.Tcp : OscTransport.Udp;
+        if (CueOscConnection.Transport == next) return;
+
+        // Update model + UI controls immediately — TCP connect runs async and must not freeze the dropdown.
+        RequestHistory(next == OscTransport.Tcp ? "Set OSC transport TCP" : "Set OSC transport UDP");
+        CueOscConnection.Transport = next;
+        if (_interfaceOptionButton != null)
+            _interfaceOptionButton.Disabled = next == OscTransport.Tcp;
+
+        // Non-blocking: UDP opens inline; TCP connect is background with status in monitor/log.
+        CueOscConnection.Reconnect();
     }
 
     private void RequestHistory(string description)
@@ -128,6 +159,8 @@ public partial class SettingsOscConnectionCard : HBoxContainer
 
     private void OnNameTextSubmitted(string newText)
     {
+        _nameEditing = false;
+        _nameLineEdit?.ReleaseFocus();
         if (_isSyncingUi || CueOscConnection == null) return;
         if (_historyManager?.IsRestoring == true) return;
 
@@ -194,6 +227,8 @@ public partial class SettingsOscConnectionCard : HBoxContainer
 
     private void OnDestinationTextSubmitted(string newText)
     {
+        _destinationEditing = false;
+        _destinationLineEdit?.ReleaseFocus();
         if (_isSyncingUi || CueOscConnection == null) return;
         if (_historyManager?.IsRestoring == true) return;
 
@@ -225,6 +260,8 @@ public partial class SettingsOscConnectionCard : HBoxContainer
 
     private void OnPortTextSubmitted(string newText)
     {
+        _portEditing = false;
+        _portLineEdit?.ReleaseFocus();
         if (_isSyncingUi || CueOscConnection == null) return;
         if (_historyManager?.IsRestoring == true) return;
 
