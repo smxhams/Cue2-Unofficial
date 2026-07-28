@@ -140,7 +140,8 @@ public partial class CueCommandExectutor : Node
         if (ShellSelection.SelectedCues.Count == 1 && ShellSelection.SelectedCues[0] == target)
             return;
 
-        _globalData?.ShellSelection?.SelectIndividualShell(target);
+        // Playback playhead move is not a document/selection undo step.
+        _globalData?.ShellSelection?.SelectIndividualShell(target, recordHistory: false);
     }
 
     /// <summary>

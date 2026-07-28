@@ -69,6 +69,21 @@ public partial class ShellBar : PanelContainer
 	/// <summary>Per-row panel style (metrics fixed; colours rebuilt for zebra + cue + state).</summary>
 	private StyleBoxFlat _panelStyle;
 
+	/// <summary>Right-click context menu for cue editing actions (replaces built-in LineEdit menu).</summary>
+	private PopupMenu _contextMenu;
+
+	/// <summary>Ids for <see cref="_contextMenu"/> items.</summary>
+	private enum ShellContextMenuId
+	{
+		Cut = 0,
+		Copy = 1,
+		Paste = 2,
+		Duplicate = 3,
+		Delete = 4,
+		Group = 5,
+		CreateCue = 6
+	}
+
 	// Called when the node enters the scene tree for the first time.
 	public override void _Ready()
 	{
@@ -100,6 +115,13 @@ public partial class ShellBar : PanelContainer
 		_cueNameLineEdit.EditingToggled += OnNameEditToggled;
 		_preWaitLineEdit.EditingToggled += OnPreWaitEditToggled;
 		_postWaitLineEdit.EditingToggled += OnPostWaitEditToggled;
+		// Pre/duration/post do not use the name-field GuiInput path — still need right-click.
+		if (_preWaitLineEdit != null)
+			_preWaitLineEdit.GuiInput += OnTimeFieldGuiInput;
+		if (_durationLineEdit != null)
+			_durationLineEdit.GuiInput += OnTimeFieldGuiInput;
+		if (_postWaitLineEdit != null)
+			_postWaitLineEdit.GuiInput += OnTimeFieldGuiInput;
 		if (_memoLineEdit != null)
 		{
 			_memoLineEdit.GuiInput += OnMemoGuiInput;
@@ -258,10 +280,12 @@ public partial class ShellBar : PanelContainer
 
 	/// <summary>
 	/// Tight LineEdit padding so theme content margins don't force fields taller than the row.
+	/// Disables Godot's built-in right-click text menu (replaced by shell cue context menu).
 	/// </summary>
 	private static void ApplyCompactFieldStyle(LineEdit field)
 	{
 		if (field == null) return;
+		field.ContextMenuEnabled = false;
 		field.CustomMinimumSize = new Vector2(field.CustomMinimumSize.X, ShellColumnLayout.RowControlHeight);
 		field.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		field.Alignment = HorizontalAlignment.Left;
@@ -1262,8 +1286,18 @@ public partial class ShellBar : PanelContainer
 
 	private void OnInput(InputEvent @event)
 	{
-		// Gets if input is Left mouse button
-		if (@event is not InputEventMouseButton mouseEvent || !mouseEvent.Pressed || mouseEvent.ButtonIndex != MouseButton.Left)
+		if (@event is not InputEventMouseButton mouseEvent || !mouseEvent.Pressed)
+			return;
+
+		// Right-click: cue context menu (Cut / Copy / Paste / … with hotkeys).
+		if (mouseEvent.ButtonIndex == MouseButton.Right)
+		{
+			ShowShellContextMenu();
+			AcceptEvent();
+			return;
+		}
+
+		if (mouseEvent.ButtonIndex != MouseButton.Left)
 			return;
 
 		// Selection logging is low-volume; retained or replace with conditional _globalSignals if desired.
@@ -1281,6 +1315,142 @@ public partial class ShellBar : PanelContainer
 		
 		//Select single shell
 		_globalData.ShellSelection.SelectIndividualShell(CueList.FetchCueFromId(CueId));
+	}
+
+	/// <summary>
+	/// Right-click on time fields (pre/duration/post) — same shell context menu as the row.
+	/// </summary>
+	private void OnTimeFieldGuiInput(InputEvent @event)
+	{
+		OnInput(@event);
+	}
+
+	/// <summary>
+	/// Builds and shows the shell cue-editing context menu at the mouse position.
+	/// Ensures this cue is selected first so cut/copy/delete apply to a sensible selection.
+	/// </summary>
+	private void ShowShellContextMenu()
+	{
+		EnsureSelectedForContextMenu();
+
+		if (_contextMenu == null || !IsInstanceValid(_contextMenu))
+		{
+			_contextMenu = new PopupMenu
+			{
+				Name = "ShellContextMenu",
+				HideOnItemSelection = true
+			};
+			AddChild(_contextMenu);
+			_contextMenu.IdPressed += OnShellContextMenuIdPressed;
+		}
+
+		_contextMenu.Clear();
+		AddContextMenuItem("Cut", "CutSelectedCues", ShellContextMenuId.Cut);
+		AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
+		AddContextMenuItem("Paste", "PasteCues", ShellContextMenuId.Paste);
+		_contextMenu.AddSeparator();
+		AddContextMenuItem("Duplicate", "DuplicateSelectedCues", ShellContextMenuId.Duplicate);
+		AddContextMenuItem("Delete", "DeleteCue", ShellContextMenuId.Delete);
+		_contextMenu.AddSeparator();
+		AddContextMenuItem("Group", "GroupSelectedCues", ShellContextMenuId.Group);
+		AddContextMenuItem("Create Cue", "CreateCue", ShellContextMenuId.CreateCue);
+
+		// Popup at cursor (screen coords — PopupMenu is a Window).
+		_contextMenu.ResetSize();
+		_contextMenu.Position = DisplayServer.MouseGetPosition();
+		_contextMenu.Popup();
+	}
+
+	/// <summary>
+	/// Adds a context-menu row with the action title on the left and a right-aligned hotkey
+	/// via <see cref="PopupMenu.SetItemShortcut"/> (native accelerator column layout).
+	/// </summary>
+	/// <param name="title">Left-side action label.</param>
+	/// <param name="inputAction">InputMap action used for the displayed shortcut.</param>
+	/// <param name="id">Menu id for <see cref="OnShellContextMenuIdPressed"/>.</param>
+	private void AddContextMenuItem(string title, string inputAction, ShellContextMenuId id)
+	{
+		_contextMenu.AddItem(title, (int)id);
+		int index = _contextMenu.ItemCount - 1;
+		var shortcut = CreateShortcutFromAction(inputAction);
+		if (shortcut == null || shortcut.Events.Count == 0)
+			return;
+
+		// Display-only: InputActionsListener already handles these keys globally.
+		// Disabled shortcuts still paint in the right-hand accelerator column.
+		_contextMenu.SetItemShortcut(index, shortcut, global: false);
+		_contextMenu.SetItemShortcutDisabled(index, true);
+	}
+
+	/// <summary>
+	/// Builds a <see cref="Shortcut"/> from the live InputMap binding(s) for <paramref name="action"/>.
+	/// </summary>
+	/// <param name="action">Project InputMap action name.</param>
+	/// <returns>Shortcut with duplicated events, or empty when unbound.</returns>
+	private static Shortcut CreateShortcutFromAction(string action)
+	{
+		var shortcut = new Shortcut();
+		if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action))
+			return shortcut;
+
+		var events = new Godot.Collections.Array();
+		foreach (InputEvent ev in InputMap.ActionGetEvents(action))
+		{
+			if (ev == null) continue;
+			events.Add((InputEvent)ev.Duplicate());
+		}
+		shortcut.Events = events;
+		return shortcut;
+	}
+
+	/// <summary>
+	/// If this shell is not already part of the selection, select it alone before context actions.
+	/// Keeps multi-select when right-clicking a cue that is already selected.
+	/// </summary>
+	private void EnsureSelectedForContextMenu()
+	{
+		var cue = CueList.FetchCueFromId(CueId);
+		if (cue == null || _globalData?.ShellSelection == null) return;
+
+		var selected = ShellSelection.SelectedCues;
+		if (selected != null && selected.Contains(cue))
+			return;
+
+		_globalData.ShellSelection.SelectIndividualShell(cue);
+	}
+
+	/// <summary>
+	/// Dispatches context menu choices to the same GlobalSignals as the Input Map hotkeys.
+	/// </summary>
+	/// <param name="id"><see cref="ShellContextMenuId"/> value.</param>
+	private void OnShellContextMenuIdPressed(long id)
+	{
+		if (_globalSignals == null) return;
+
+		switch ((ShellContextMenuId)id)
+		{
+			case ShellContextMenuId.Cut:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CutSelectedCues));
+				break;
+			case ShellContextMenuId.Copy:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CopySelectedCues));
+				break;
+			case ShellContextMenuId.Paste:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.PasteCues));
+				break;
+			case ShellContextMenuId.Duplicate:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.DuplicateSelectedCues));
+				break;
+			case ShellContextMenuId.Delete:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.DeleteSelectedCues));
+				break;
+			case ShellContextMenuId.Group:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.GroupSelectedCues));
+				break;
+			case ShellContextMenuId.CreateCue:
+				_globalSignals.EmitSignal(nameof(GlobalSignals.CreateCue));
+				break;
+		}
 	}
 
 	public void Focus()

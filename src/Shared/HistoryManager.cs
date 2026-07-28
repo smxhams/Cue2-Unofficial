@@ -9,8 +9,8 @@ using Godot.Collections;
 namespace Cue2.Shared;
 
 /// <summary>
-/// Scoped undo/redo for document data changes (cues, cuelist structure, show settings).
-/// Playback and app preferences are not tracked.
+/// Scoped undo/redo for document data changes (cues, cuelist structure, show settings)
+/// and cuelist selection. Playback and app preferences are not tracked.
 /// </summary>
 /// <remarks>
 /// Prefer the narrowest scope:
@@ -18,6 +18,7 @@ namespace Cue2.Shared;
 /// <item><see cref="RecordCueChange"/> — single cue property/component edits (no display reload)</item>
 /// <item><see cref="RecordCuelistChange"/> — create/delete/reorder/group (rebuilds shells only)</item>
 /// <item><see cref="RecordSettingsChange"/> — settings slice only (omit Displays unless needed)</item>
+/// <item><see cref="RecordSelectionChange"/> — shell selection / focus only</item>
 /// </list>
 /// </remarks>
 public partial class HistoryManager : Node
@@ -32,7 +33,9 @@ public partial class HistoryManager : Node
 		/// <summary>Full cuelist (order + all cues), no settings.</summary>
 		Cuelist = 1,
 		/// <summary>Settings keys only (optionally filtered).</summary>
-		Settings = 2
+		Settings = 2,
+		/// <summary>Selected cue ids + focused cue only (no document mutation).</summary>
+		Selection = 3
 	}
 
 	private GlobalData _globalData;
@@ -140,18 +143,7 @@ public partial class HistoryManager : Node
 
 		try
 		{
-			var data = DeepCloneDictionary(cue.GetData());
-			StripWaveformPayloads(data);
-			var entry = new HistoryEntry(
-				description ?? "Edit cue",
-				coalesceKey,
-				HistoryScope.Cue,
-				cueId,
-				data,
-				null,
-				null);
-
-			PushUndo(entry, coalesceKey);
+			PushUndo(CaptureCueEntry(cueId, description ?? "Edit cue", coalesceKey), coalesceKey);
 		}
 		catch (Exception ex)
 		{
@@ -209,6 +201,7 @@ public partial class HistoryManager : Node
 				return;
 			}
 
+			var (selectedIds, focusedId) = CaptureSelectionState();
 			var entry = new HistoryEntry(
 				description ?? "Edit settings",
 				coalesceKey,
@@ -216,7 +209,9 @@ public partial class HistoryManager : Node
 				-1,
 				null,
 				null,
-				stored);
+				stored,
+				selectedIds,
+				focusedId);
 
 			PushUndo(entry, coalesceKey);
 		}
@@ -242,6 +237,27 @@ public partial class HistoryManager : Node
 			return;
 
 		_activeCoalesceKey = null;
+	}
+
+	/// <summary>
+	/// Records a selection/focus checkpoint before a pure selection change (click, range, next/prev).
+	/// Does not capture cue data or settings. Call before mutating <see cref="ShellSelection"/>.
+	/// </summary>
+	/// <param name="description">Human-readable description (e.g. "Select cue").</param>
+	/// <param name="coalesceKey">Optional continuous-session key; usually null for discrete clicks.</param>
+	public void RecordSelectionChange(string description, string coalesceKey = null)
+	{
+		if (_isRestoring) return;
+		if (ShouldCoalesce(coalesceKey)) return;
+
+		try
+		{
+			PushUndo(CaptureSelectionEntry(description ?? "Select cues", coalesceKey), coalesceKey);
+		}
+		catch (Exception ex)
+		{
+			LogRecordFailure(ex);
+		}
 	}
 
 	/// <summary>
@@ -425,15 +441,11 @@ public partial class HistoryManager : Node
 		{
 			HistoryScope.Cue => CaptureCueEntry(template.CueId, template.Description, null),
 			HistoryScope.Cuelist => CaptureCuelistEntry(template.Description),
-			HistoryScope.Settings => new HistoryEntry(
+			HistoryScope.Settings => CaptureSettingsEntry(
 				template.Description,
-				null,
-				HistoryScope.Settings,
-				-1,
-				null,
-				null,
 				// Capture the same key set that was stored on the template (never full GetData).
 				CaptureSettingsMatchingKeys(template.SettingsData)),
+			HistoryScope.Selection => CaptureSelectionEntry(template.Description, null),
 			_ => throw new InvalidOperationException($"Unknown history scope: {template.Scope}")
 		};
 	}
@@ -449,6 +461,7 @@ public partial class HistoryManager : Node
 		// so JSON cloning stays reliable and memory stays bounded.
 		StripWaveformPayloads(data);
 
+		var (selectedIds, focusedId) = CaptureSelectionState();
 		return new HistoryEntry(
 			description,
 			coalesceKey,
@@ -456,7 +469,9 @@ public partial class HistoryManager : Node
 			cueId,
 			data,
 			null,
-			null);
+			null,
+			selectedIds,
+			focusedId);
 	}
 
 	private HistoryEntry CaptureCuelistEntry(string description)
@@ -471,6 +486,7 @@ public partial class HistoryManager : Node
 			}
 		}
 
+		var (selectedIds, focusedId) = CaptureSelectionState();
 		return new HistoryEntry(
 			description,
 			null,
@@ -478,7 +494,104 @@ public partial class HistoryManager : Node
 			-1,
 			null,
 			cues,
-			null);
+			null,
+			selectedIds,
+			focusedId);
+	}
+
+	private HistoryEntry CaptureSettingsEntry(string description, Dictionary settingsData)
+	{
+		var (selectedIds, focusedId) = CaptureSelectionState();
+		return new HistoryEntry(
+			description,
+			null,
+			HistoryScope.Settings,
+			-1,
+			null,
+			null,
+			settingsData,
+			selectedIds,
+			focusedId);
+	}
+
+	private HistoryEntry CaptureSelectionEntry(string description, string coalesceKey)
+	{
+		var (selectedIds, focusedId) = CaptureSelectionState();
+		return new HistoryEntry(
+			description,
+			coalesceKey,
+			HistoryScope.Selection,
+			-1,
+			null,
+			null,
+			null,
+			selectedIds,
+			focusedId);
+	}
+
+	/// <summary>
+	/// Snapshots current shell multi-selection (ordered) and focused cue id for history restore.
+	/// </summary>
+	private (int[] SelectedCueIds, int FocusedCueId) CaptureSelectionState()
+	{
+		int focusedId = _globalData?.FocusedCue ?? -1;
+		var selected = ShellSelection.SelectedCues;
+		if (selected == null || selected.Count == 0)
+			return (System.Array.Empty<int>(), focusedId);
+
+		// Preserve list order — last entry is "most recently selected" (paste/duplicate anchor).
+		var ids = new int[selected.Count];
+		int n = 0;
+		foreach (var cue in selected)
+		{
+			if (cue == null) continue;
+			ids[n++] = cue.Id;
+		}
+		if (n == ids.Length)
+			return (ids, focusedId);
+		if (n == 0)
+			return (System.Array.Empty<int>(), focusedId);
+		var trimmed = new int[n];
+		System.Array.Copy(ids, trimmed, n);
+		return (trimmed, focusedId);
+	}
+
+	/// <summary>
+	/// Restores shell selection and focus from a history memento after model apply.
+	/// Missing cue ids (deleted / not yet recreated) are skipped.
+	/// </summary>
+	private void RestoreSelection(HistoryEntry entry)
+	{
+		if (entry == null) return;
+
+		// Drop current selection chrome (shells may be freed after cuelist rebuild).
+		foreach (var cue in ShellSelection.SelectedCues.ToList())
+		{
+			if (cue?.ShellBar != null && IsInstanceValid(cue.ShellBar))
+				cue.ShellBar.Deselect();
+		}
+		ShellSelection.SelectedCues.Clear();
+
+		if (entry.SelectedCueIds != null)
+		{
+			foreach (int id in entry.SelectedCueIds)
+			{
+				var cue = CueList.FetchCueFromId(id);
+				if (cue?.ShellBar == null || !IsInstanceValid(cue.ShellBar))
+					continue;
+				cue.ShellBar.Select();
+				ShellSelection.SelectedCues.Add(cue);
+			}
+		}
+
+		int focusId = entry.FocusedCueId;
+		if (focusId >= 0 && CueList.FetchCueFromId(focusId) == null)
+			focusId = -1;
+		if (focusId < 0 && ShellSelection.SelectedCues.Count > 0)
+			focusId = ShellSelection.SelectedCues[^1].Id;
+
+		// Always publish so FocusedCue / inspectors match selection (including empty).
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), focusId);
 	}
 
 	/// <summary>
@@ -602,21 +715,20 @@ public partial class HistoryManager : Node
 					_globalData.Settings.ApplyPartialFromHistory(settingsData);
 					// Patches are freed and recreated — re-link cue components and refresh inspectors
 					// that list patch names / hold live AudioOutputPatch references.
-					bool refreshFocusedInspectors = false;
 					if (entry.SettingsData != null && entry.SettingsData.ContainsKey("AudioPatch"))
-					{
 						RelinkAllCueComponents();
-						refreshFocusedInspectors = true;
-					}
-					// Displays (canvas / screens / layers) reload recreates output windows; refresh
-					// video inspectors that list target layers by id/name.
-					if (entry.SettingsData != null && entry.SettingsData.ContainsKey("Displays"))
-						refreshFocusedInspectors = true;
+					// Displays / AudioPatch inspector refresh happens via RestoreSelection → ShellFocused.
+					break;
 
-					if (refreshFocusedInspectors && _globalData.FocusedCue >= 0)
-						_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), _globalData.FocusedCue);
+				case HistoryScope.Selection:
+					// Selection-only memento — no document apply.
 					break;
 			}
+
+			// Always re-apply selection last so cuelist rebuilds have live shells to select,
+			// and so property undos put the user back on the cues they had selected.
+			// Selection-scope undos only run this step.
+			RestoreSelection(entry);
 		}
 		finally
 		{
@@ -660,6 +772,12 @@ public partial class HistoryManager : Node
 		public Dictionary CuesData { get; }
 		public Dictionary SettingsData { get; }
 
+		/// <summary>Ordered selected cue ids at capture time (last = most recent selection).</summary>
+		public int[] SelectedCueIds { get; }
+
+		/// <summary>Focused cue id at capture time, or -1.</summary>
+		public int FocusedCueId { get; }
+
 		public HistoryEntry(
 			string description,
 			string coalesceKey,
@@ -667,7 +785,9 @@ public partial class HistoryManager : Node
 			int cueId,
 			Dictionary cueData,
 			Dictionary cuesData,
-			Dictionary settingsData)
+			Dictionary settingsData,
+			int[] selectedCueIds,
+			int focusedCueId)
 		{
 			Description = description ?? "Edit";
 			CoalesceKey = coalesceKey;
@@ -676,6 +796,8 @@ public partial class HistoryManager : Node
 			CueData = cueData;
 			CuesData = cuesData;
 			SettingsData = settingsData;
+			SelectedCueIds = selectedCueIds ?? System.Array.Empty<int>();
+			FocusedCueId = focusedCueId;
 		}
 	}
 }

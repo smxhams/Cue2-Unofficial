@@ -264,6 +264,19 @@ public class VideoComponent : ICueComponent
     public CuePatch Routing { get; set; } = null;
     /// <summary>Volume multiplier for embedded audio (0-1).</summary>
     public float AudioVolume { get; set; } = 1f;
+
+    /// <summary>
+    /// Stereo pan/balance for embedded audio, applied after volume and before the routing matrix.
+    /// Range −1 (full left) … 0 (center) … +1 (full right). Only used for stereo sources.
+    /// </summary>
+    /// <value>Clamped to [−1, 1]. Default 0 (center / "C").</value>
+    public float Pan
+    {
+        get => _pan;
+        set => _pan = Math.Clamp(value, -1f, 1f);
+    }
+    private float _pan;
+
     /// <summary>Serialised waveform data for display</summary>
     public byte[] WaveformData { get; set; } = null;
 
@@ -351,6 +364,7 @@ public class VideoComponent : ICueComponent
             data.Add("Routing", Routing.GetData());
         }
         data.Add("AudioVolume", AudioVolume);
+        data.Add("Pan", Pan);
         data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
 
         if (Metadata != null)
@@ -435,6 +449,9 @@ public class VideoComponent : ICueComponent
             Routing.LoadFromData((Dictionary)data["Routing"]);
         }
         AudioVolume = data.ContainsKey("AudioVolume") ? (float)(double)data["AudioVolume"] : 1f;
+        Pan = data.ContainsKey("Pan")
+            ? Math.Clamp(data["Pan"].AsSingle(), -1f, 1f)
+            : 0f;
 
         if (data.ContainsKey("Metadata"))
         {

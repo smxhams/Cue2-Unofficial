@@ -443,7 +443,35 @@ text = "Volume:"
 
 [node name="VolumeInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/AudioAccordian/VBoxContainer/HBoxContainer5" unique_id=1549063368]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 0)
 layout_mode = 2
+
+[node name="PanLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/AudioAccordian/VBoxContainer/HBoxContainer5"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Stereo pan (balance) before routing matrix. Stereo embedded audio only."
+mouse_filter = 1
+text = "Pan:"
+
+[node name="PanSlider" type="HSlider" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/AudioAccordian/VBoxContainer/HBoxContainer5"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Stereo pan: L ← C → R. Applied before the routing matrix."
+min_value = -100.0
+max_value = 100.0
+step = 1.0
+value = 0.0
+scrollable = false
+
+[node name="PanInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/AudioAccordian/VBoxContainer/HBoxContainer5"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+tooltip_text = "Pan: C, L/R, L50, R25, or −100…100"
+placeholder_text = "C"
+alignment = 1
 
 [node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/AudioAccordian/VBoxContainer" unique_id=1195066835]
 layout_mode = 2

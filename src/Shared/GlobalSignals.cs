@@ -77,6 +77,15 @@ public partial class GlobalSignals : Node
 
 	/// <summary>Duplicate currently selected cue(s) (and full child trees when a parent is selected).</summary>
 	[Signal] public delegate void DuplicateSelectedCuesEventHandler();
+
+	/// <summary>Cut currently selected cue(s) to the cue clipboard (copy then delete).</summary>
+	[Signal] public delegate void CutSelectedCuesEventHandler();
+
+	/// <summary>Copy currently selected cue(s) to the cue clipboard.</summary>
+	[Signal] public delegate void CopySelectedCuesEventHandler();
+
+	/// <summary>Paste cue clipboard contents below the last selected cue.</summary>
+	[Signal] public delegate void PasteCuesEventHandler();
 	
 	[Signal] public delegate void GroupSelectedCuesEventHandler();
 

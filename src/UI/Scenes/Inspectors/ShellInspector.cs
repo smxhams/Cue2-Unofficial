@@ -307,9 +307,10 @@ public partial class ShellInspector : Control
 			if (_focusedCue == null)
 				return;
 
-			// Ensure this cue is selected so DeleteSelectedCues targets it
+			// Ensure this cue is selected so DeleteSelectedCues targets it.
+			// Do not record a separate selection step — delete records cuelist history with selection.
 			if (!ShellSelection.SelectedCues.Contains(_focusedCue))
-				_globalData?.ShellSelection?.SelectIndividualShell(_focusedCue);
+				_globalData?.ShellSelection?.SelectIndividualShell(_focusedCue, recordHistory: false);
 		}
 		else if (ShellSelection.SelectedCues == null || ShellSelection.SelectedCues.Count == 0)
 		{

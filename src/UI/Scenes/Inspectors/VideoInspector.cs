@@ -76,12 +76,18 @@ public partial class VideoInspector : Control
 	private Label _useAudioLabel;
 	private OptionButton _outputOptionButton;
 	private LineEdit _volumeInput;
+	private Label _panLabel;
+	private HSlider _panSlider;
+	private LineEdit _panInput;
+	private bool _isUpdatingPanUi;
 	
 	// Routing matrix
 	private Button _routingCollapseButton;
 	private VBoxContainer _routingAccordian;
 	private GridContainer _routingMatrixGrid;
 	private VBoxContainer _routingContainer;
+	/// <summary>Left-column input labels in the routing matrix (updated when pan changes).</summary>
+	private readonly List<Label> _routingInputLabels = new List<Label>();
     
 	// Waveform
 	private Button _waveformCollapseButton;
@@ -153,6 +159,19 @@ public partial class VideoInspector : Control
 		_useAudioCheckButton.Toggled += OnUseAudioToggled;
 		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
 		_volumeInput.FocusExited += () => VolumeInputSubmitted(_volumeInput.Text, _volumeInput);
+		if (_panSlider != null)
+		{
+			_panSlider.MinValue = -100;
+			_panSlider.MaxValue = 100;
+			_panSlider.Step = 1;
+			_panSlider.ValueChanged += OnPanSliderChanged;
+			_panSlider.DragEnded += OnPanSliderDragEnded;
+		}
+		if (_panInput != null)
+		{
+			_panInput.TextSubmitted += _ => PanInputSubmitted(_panInput.Text);
+			_panInput.FocusExited += () => PanInputSubmitted(_panInput.Text);
+		}
 		_outputOptionButton.ItemSelected += OutputOptionSelected;
 		_targetLayerOptionButton.ItemSelected += TargetLayerSelected;
 		_expandModeOptionButton.ItemSelected += ExpandModeSelected;
@@ -244,6 +263,9 @@ public partial class VideoInspector : Control
 		_waveformCollapseButton  = GetNode<Button>("%WaveformCollapseButton");
 		_waveformAccordian =   GetNode<VBoxContainer>("%WaveformAccordian");
 		_volumeInput = GetNode<LineEdit>("%VolumeInput");
+		_panLabel = GetNodeOrNull<Label>("%PanLabel");
+		_panSlider = GetNodeOrNull<HSlider>("%PanSlider");
+		_panInput = GetNodeOrNull<LineEdit>("%PanInput");
 	}
 
 	/// <summary>
@@ -976,6 +998,8 @@ public partial class VideoInspector : Control
 			_routingAccordian.Visible = false;
 			_routingCollapseButton.ButtonPressed = false;
 		}
+
+		UpdatePanUiVisibilityAndValues();
 	}
 	
 	/// <summary>
@@ -1102,6 +1126,139 @@ public partial class VideoInspector : Control
 		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
 		var volumeDb = UiUtilities.LinearToDb((float)volume);
 		_volumeInput.Text = $"{volumeDb}dB";
+		UpdatePanUiVisibilityAndValues();
+	}
+
+	/// <summary>
+	/// True when pan UI should be shown (stereo embedded audio only).
+	/// </summary>
+	private bool IsStereoAudioSource =>
+		_focusedVideoComponent?.UseAudio == true
+		&& _focusedVideoComponent.HasAudio
+		&& _focusedVideoComponent.Metadata != null
+		&& _focusedVideoComponent.Metadata.AudioChannels == 2;
+
+	/// <summary>
+	/// Shows or hides pan controls and syncs slider/text from the component.
+	/// </summary>
+	private void UpdatePanUiVisibilityAndValues()
+	{
+		bool show = IsStereoAudioSource;
+		if (_panLabel != null) _panLabel.Visible = show;
+		if (_panSlider != null) _panSlider.Visible = show;
+		if (_panInput != null) _panInput.Visible = show;
+		if (!show || _focusedVideoComponent == null) return;
+		SyncPanUiFromComponent();
+	}
+
+	/// <summary>
+	/// Writes pan slider and text from <see cref="VideoComponent.Pan"/> without firing handlers.
+	/// </summary>
+	private void SyncPanUiFromComponent()
+	{
+		if (_focusedVideoComponent == null) return;
+		_isUpdatingPanUi = true;
+		try
+		{
+			float pan = Mathf.Clamp(_focusedVideoComponent.Pan, -1f, 1f);
+			if (_panSlider != null)
+				_panSlider.SetValueNoSignal(Mathf.Round(pan * 100f));
+			if (_panInput != null && !_panInput.HasFocus())
+				_panInput.Text = UiUtilities.FormatPan(pan);
+		}
+		finally
+		{
+			_isUpdatingPanUi = false;
+		}
+	}
+
+	private void OnPanSliderChanged(double value)
+	{
+		if (_isUpdatingPanUi || _focusedCue == null || _focusedVideoComponent == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		if (!IsStereoAudioSource) return;
+
+		float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
+		if (Math.Abs(_focusedVideoComponent.Pan - pan) < 1e-6f) return;
+
+		_globalData?.HistoryManager?.RecordCueChange(
+			_focusedCue.Id, "Edit video audio pan", $"cue:{_focusedCue.Id}:video:pan");
+		_focusedVideoComponent.Pan = pan;
+
+		_isUpdatingPanUi = true;
+		try
+		{
+			if (_panInput != null)
+				_panInput.Text = UiUtilities.FormatPan(pan);
+		}
+		finally
+		{
+			_isUpdatingPanUi = false;
+		}
+		RefreshRoutingInputPanLabels();
+	}
+
+	private void OnPanSliderDragEnded(bool valueChanged)
+	{
+		if (_focusedCue == null) return;
+		_globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCue.Id}:video:pan");
+	}
+
+	/// <summary>
+	/// Commits pan from the text field (C, L50, R25, −100…100).
+	/// </summary>
+	private void PanInputSubmitted(string text)
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null || _panInput == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		if (_isUpdatingPanUi) return;
+		if (!IsStereoAudioSource)
+		{
+			if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+			return;
+		}
+
+		if (!UiUtilities.TryParsePan(text, out float pan))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid pan format: {text}", 1);
+			_panInput.Text = UiUtilities.FormatPan(_focusedVideoComponent.Pan);
+			if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+			return;
+		}
+
+		pan = Mathf.Clamp(pan, -1f, 1f);
+		_panInput.Text = UiUtilities.FormatPan(pan);
+
+		if (Math.Abs(_focusedVideoComponent.Pan - pan) < 1e-6f)
+		{
+			SyncPanUiFromComponent();
+			if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+			return;
+		}
+
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video audio pan");
+		_focusedVideoComponent.Pan = pan;
+		SyncPanUiFromComponent();
+		RefreshRoutingInputPanLabels();
+		if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Updates Left/Right routing matrix row labels with the current pan status in parentheses.
+	/// </summary>
+	private void RefreshRoutingInputPanLabels()
+	{
+		if (_routingInputLabels.Count == 0 || _focusedVideoComponent == null) return;
+		if (_focusedVideoComponent.Metadata?.AudioChannels != 2) return;
+
+		string panStatus = UiUtilities.FormatPan(_focusedVideoComponent.Pan);
+		for (int i = 0; i < _routingInputLabels.Count && i < 2; i++)
+		{
+			var label = _routingInputLabels[i];
+			if (label == null || !IsInstanceValid(label)) continue;
+			string baseName = i == 0 ? "Left" : "Right";
+			label.Text = $"{baseName} ({panStatus})";
+		}
 	}
 
 	/// <summary>
@@ -2161,6 +2318,7 @@ public partial class VideoInspector : Control
 			return;
 
 		int gen = _shellSelectGeneration;
+		_routingInputLabels.Clear();
 		foreach (var child in _routingMatrixGrid.GetChildren())
 		{
 			child.QueueFree();
@@ -2302,11 +2460,18 @@ public partial class VideoInspector : Control
 			_routingMatrixGrid.AddChild(new Label { Text = label, HorizontalAlignment = HorizontalAlignment.Center });
 		}
 
-		// Add rows: input label + volume fields
+		// Add rows: input label (+ pan status for stereo) + volume fields
+		string panStatus = inputChannels == 2
+			? UiUtilities.FormatPan(_focusedVideoComponent.Pan)
+			: null;
 		for (int row = 0; row < inputChannels; row++)
 		{
-			var inLabel = new Label { Text = inputLabels[row] };
+			string labelText = inputLabels[row];
+			if (panStatus != null && row < 2)
+				labelText = $"{labelText} ({panStatus})";
+			var inLabel = new Label { Text = labelText };
 			_routingMatrixGrid.AddChild(inLabel);
+			_routingInputLabels.Add(inLabel);
 
 			for (int col = 0; col < outputChannels; col++)
 			{

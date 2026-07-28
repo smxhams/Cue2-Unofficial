@@ -116,7 +116,7 @@ public partial class MainTitleBarUI : Control
             _mainMenuButton.ButtonPressed = false;
         };
 
-        // Edit drop down (Undo / Redo)
+        // Edit drop down (Undo / Redo / Cut / Copy / Paste)
         _editUndoButton = GetNode<Button>("%EditUndo");
         _editRedoButton = GetNode<Button>("%EditRedo");
         _editUndoButton.Pressed += () =>
@@ -129,6 +129,33 @@ public partial class MainTitleBarUI : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Redo));
             _mainMenuButton.ButtonPressed = false;
         };
+        var editCut = GetNodeOrNull<Button>("%EditCut");
+        if (editCut != null)
+        {
+            editCut.Pressed += () =>
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.CutSelectedCues));
+                _mainMenuButton.ButtonPressed = false;
+            };
+        }
+        var editCopy = GetNodeOrNull<Button>("%EditCopy");
+        if (editCopy != null)
+        {
+            editCopy.Pressed += () =>
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.CopySelectedCues));
+                _mainMenuButton.ButtonPressed = false;
+            };
+        }
+        var editPaste = GetNodeOrNull<Button>("%EditPaste");
+        if (editPaste != null)
+        {
+            editPaste.Pressed += () =>
+            {
+                _globalSignals.EmitSignal(nameof(GlobalSignals.PasteCues));
+                _mainMenuButton.ButtonPressed = false;
+            };
+        }
         if (_globalData.HistoryManager != null)
         {
             _globalData.HistoryManager.HistoryChanged += UpdateUndoRedoMenuState;
@@ -202,6 +229,12 @@ public partial class MainTitleBarUI : Control
         GetNode<Label>("%FileOpenHotkey").Text = GlobalData.ParseHotkey("OpenSession");
         GetNode<Label>("%EditUndoHotkey").Text = GlobalData.ParseHotkey("Undo");
         GetNode<Label>("%EditRedoHotkey").Text = GlobalData.ParseHotkey("Redo");
+        var editCutHk = GetNodeOrNull<Label>("%EditCutHotkey");
+        if (editCutHk != null) editCutHk.Text = GlobalData.ParseHotkey("CutSelectedCues");
+        var editCopyHk = GetNodeOrNull<Label>("%EditCopyHotkey");
+        if (editCopyHk != null) editCopyHk.Text = GlobalData.ParseHotkey("CopySelectedCues");
+        var editPasteHk = GetNodeOrNull<Label>("%EditPasteHotkey");
+        if (editPasteHk != null) editPasteHk.Text = GlobalData.ParseHotkey("PasteCues");
 
         var settingsBtn = GetNode<Button>("%SettingsButton");
         string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");

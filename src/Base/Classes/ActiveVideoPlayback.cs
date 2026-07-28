@@ -1064,7 +1064,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         float masterVol;
         lock (_lock) masterVol = _volume;
-        float componentVol = (float)_videoComponent.Volume;
+        // Prefer dedicated embedded-audio volume when UseAudio is enabled (inspector writes AudioVolume).
+        float componentVol = _videoComponent.UseAudio
+            ? Mathf.Clamp(_videoComponent.AudioVolume, 0f, 1f)
+            : Mathf.Clamp((float)_videoComponent.Volume, 0f, 1f);
+        // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
+        float pan = SourceChannels == 2 ? _videoComponent.Pan : 0f;
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
 
         // Snapshot de-click state so multi-device push uses the same ramp positions.
@@ -1079,7 +1084,6 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 _audioMixBuffer = new float[outSamples];
 
             string deviceName = _audioDevices.GetAudioDeviceByLogicalId(kv.Key)?.Name;
-            // Video embedded audio has no pan control yet — pass center.
             AudioMixMatrix.Mix(
                 _audioSrcBuffer.AsSpan(0, frames * SourceChannels),
                 frames,
@@ -1088,7 +1092,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 outCh,
                 masterVol,
                 componentVol,
-                pan: 0f,
+                pan,
                 Routing,
                 Patch,
                 deviceName,

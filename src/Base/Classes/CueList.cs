@@ -78,6 +78,13 @@ public partial class CueList : Control
 
 	/// <summary>True while the user is dragging the Number/Name column grip.</summary>
 	private bool _isDraggingNumberColumn;
+
+	/// <summary>
+	/// In-app cue clipboard: ordered root original ids and a flat map of original-id → deep-cloned <see cref="Cue.GetData"/>.
+	/// Survives cut (sources deleted) and supports multi-root paste with full child trees.
+	/// </summary>
+	private List<int> _clipboardRootIds = new();
+	private Dictionary _clipboardCuesByOldId;
 	
 	public CueList()
 	{
@@ -126,6 +133,9 @@ public partial class CueList : Control
 		_globalSignals.CreateCue += CreateCue;
 		_globalSignals.DeleteSelectedCues += DeleteSelectedCues;
 		_globalSignals.DuplicateSelectedCues += DuplicateSelectedCues;
+		_globalSignals.CutSelectedCues += CutSelectedCues;
+		_globalSignals.CopySelectedCues += CopySelectedCues;
+		_globalSignals.PasteCues += PasteCues;
 		_globalSignals.GroupSelectedCues += GroupSelectedCues;
 		_globalSignals.CuelistExpandOneLayer += ExpandOneLayer;
 		_globalSignals.CuelistCollapseOneLayer += CollapseOneLayer;
@@ -343,7 +353,8 @@ public partial class CueList : Control
 		if (cue == null) return;
 		if (_globalData?.Settings?.SelectNewCues != true) return;
 
-		_globalData.ShellSelection?.SelectIndividualShell(cue);
+		// Covered by the create/import cuelist history step — do not push a separate selection undo.
+		_globalData.ShellSelection?.SelectIndividualShell(cue, recordHistory: false);
 	}
 
 	private void _syncHotkeys()
@@ -466,8 +477,9 @@ public partial class CueList : Control
 		// Update the new group
 		groupCue.ShellBar?.RelationshipChanged();
 
-		// Select the group cue (replacing the previous multi-selection)
-		_globalData.ShellSelection.SelectIndividualShell(groupCue);
+		// Select the group cue (replacing the previous multi-selection).
+		// Covered by the group cuelist history step.
+		_globalData.ShellSelection.SelectIndividualShell(groupCue, recordHistory: false);
 
 		// Recalculate durations (children first conceptually, then group)
 		groupCue.CalculateTotalDuration();
@@ -967,6 +979,291 @@ public partial class CueList : Control
 				: $"Duplicated {newTopLevel.Count} cues.",
 			(int)LogType.Info);
 		GD.Print($"CueList:DuplicateSelectedCues - Created {newTopLevel.Count} top-level duplicate(s).");
+	}
+
+	/// <summary>
+	/// Copies selected cue roots (and full child trees) to the in-app cue clipboard (Ctrl+C).
+	/// Parent selected ⇒ whole tree; selected descendants of that parent are ignored as separate roots.
+	/// </summary>
+	public void CopySelectedCues()
+	{
+		if (!TryCaptureSelectionToClipboard("copy", out int rootCount, out string sampleName))
+			return;
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			rootCount == 1
+				? $"Copied cue \"{sampleName}\"."
+				: $"Copied {rootCount} cues.",
+			(int)LogType.Info);
+		GD.Print($"CueList:CopySelectedCues - Captured {rootCount} root(s) to clipboard.");
+	}
+
+	/// <summary>
+	/// Cuts selected cue roots to the clipboard then deletes them (Ctrl+X).
+	/// One cuelist history step covers the removal; paste is a separate undo step.
+	/// </summary>
+	public void CutSelectedCues()
+	{
+		if (!TryCaptureSelectionToClipboard("cut", out int rootCount, out string sampleName))
+			return;
+
+		// Same root selection as capture (recompute so we delete what was copied)
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		var selectedIds = new HashSet<int>(selected.Select(c => c.Id));
+		var roots = selected
+			.Where(c => c != null && !IsDescendantOfAnySelectedAncestor(c, selectedIds))
+			.ToList();
+
+		_globalData?.HistoryManager?.RecordCuelistChange("Cut cues");
+
+		int count = 0;
+		foreach (var cue in roots)
+			count += RemoveCueRecursive(cue);
+
+		ShellSelection.SelectedCues.Clear();
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			rootCount == 1
+				? $"Cut cue \"{sampleName}\" ({count} cue(s) removed)."
+				: $"Cut {rootCount} cues ({count} total removed).",
+			(int)LogType.Info);
+		GD.Print($"CueList:CutSelectedCues - Cut {rootCount} root(s), removed {count} cue(s).");
+	}
+
+	/// <summary>
+	/// Pastes the cue clipboard as a contiguous block below the last selected cue (Ctrl+V).
+	/// If nothing is selected, pastes at the end of the top-level list.
+	/// Control targets that point inside the pasted forest are remapped to the new ids.
+	/// </summary>
+	public void PasteCues()
+	{
+		if (_clipboardRootIds == null || _clipboardRootIds.Count == 0 ||
+		    _clipboardCuesByOldId == null || _clipboardCuesByOldId.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Nothing to paste.", (int)LogType.Info);
+			return;
+		}
+
+		_globalData?.HistoryManager?.RecordCuelistChange("Paste cues");
+
+		// Anchor: always last selected cue → Below; empty selection → end of list
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		Cue anchor = selected.Count > 0 ? selected.Last() : null;
+		VBoxContainer container;
+		int insertIndex;
+		int parentId;
+		if (anchor?.ShellBar != null && IsInstanceValid(anchor.ShellBar))
+		{
+			(container, insertIndex, parentId) = ResolveInsertLocation(anchor.Id, DropInsertMode.Below);
+		}
+		else
+		{
+			(container, insertIndex, parentId) = ResolveInsertLocation(-1, DropInsertMode.AtEnd);
+		}
+
+		// Build new cues from deep-cloned clipboard data (fresh ids)
+		var oldToNew = new System.Collections.Generic.Dictionary<int, int>();
+		var oldToCue = new System.Collections.Generic.Dictionary<int, Cue>();
+		var oldChildOrder = new System.Collections.Generic.Dictionary<int, List<int>>();
+
+		foreach (var kv in _clipboardCuesByOldId)
+		{
+			string key = kv.Key.AsString();
+			if (!int.TryParse(key, out int oldId))
+				continue;
+			if (kv.Value.VariantType != Variant.Type.Dictionary)
+				continue;
+
+			var data = kv.Value.AsGodotDictionary();
+
+			var childIds = new List<int>();
+			if (data.TryGetValue("ChildCues", out var childVar))
+			{
+				foreach (var c in childVar.AsGodotArray())
+					childIds.Add(c.AsInt32());
+			}
+			oldChildOrder[oldId] = childIds;
+
+			var applyData = DeepCloneDict(data);
+			applyData["ParentId"] = "-1";
+			applyData["ChildCues"] = new Godot.Collections.Array();
+
+			var cue = new Cue();
+			cue.ApplyFromData(applyData);
+			cue.ChildCues = new List<int>();
+			cue.ParentId = -1;
+
+			oldToNew[oldId] = cue.Id;
+			oldToCue[oldId] = cue;
+		}
+
+		if (oldToCue.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Paste produced no cues (clipboard empty or invalid).", 1);
+			return;
+		}
+
+		// Remap Control targets that live inside the pasted forest
+		foreach (var cue in oldToCue.Values)
+		{
+			foreach (var comp in cue.Components)
+			{
+				if (comp is not ControlComponent control) continue;
+				if (control.TargetCueId < 0) continue;
+				if (oldToNew.TryGetValue(control.TargetCueId, out int newTarget))
+					control.TargetCueId = newTarget;
+				// else: leave pointing at original id (may still exist if this was a copy)
+			}
+			RelinkCueComponents(cue);
+		}
+
+		Cue PasteNode(int oldId, int newParentId, VBoxContainer cont, int index)
+		{
+			if (!oldToCue.TryGetValue(oldId, out var cue))
+				return null;
+
+			CreateShellAndInsert(cue, cont, index, newParentId);
+
+			var children = oldChildOrder.TryGetValue(oldId, out var list) ? list : new List<int>();
+			var childContainer = cue.ShellBar?.ShellChildContainer;
+			if (childContainer != null && children.Count > 0)
+			{
+				int childIndex = 0;
+				foreach (int childOld in children)
+				{
+					PasteNode(childOld, cue.Id, childContainer, childIndex);
+					childIndex++;
+				}
+
+				if (_clipboardCuesByOldId.TryGetValue(oldId.ToString(), out var raw) &&
+				    raw.VariantType == Variant.Type.Dictionary)
+				{
+					var d = raw.AsGodotDictionary();
+					if (d.TryGetValue("Expanded", out var exp))
+						cue.Expanded = exp.AsBool();
+				}
+
+				cue.ShellBar?.RelationshipChanged();
+				cue.ShellBar?.SetExpanded(cue.Expanded);
+			}
+
+			cue.CalculateTotalDuration();
+			return cue;
+		}
+
+		var newTopLevel = new List<Cue>();
+		int index = insertIndex;
+		foreach (int rootOldId in _clipboardRootIds)
+		{
+			var root = PasteNode(rootOldId, parentId, container, index);
+			if (root != null)
+			{
+				newTopLevel.Add(root);
+				index++;
+			}
+		}
+
+		if (parentId != -1)
+		{
+			var parentCue = FetchCueFromId(parentId);
+			SyncChildCuesFromShellContainer(parentCue);
+		}
+
+		if (newTopLevel.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Paste produced no cues.", 1);
+			return;
+		}
+
+		// Select the pasted top-level block
+		foreach (var c in ShellSelection.SelectedCues.ToList())
+			c.ShellBar?.Deselect();
+		ShellSelection.SelectedCues.Clear();
+		foreach (var c in newTopLevel)
+		{
+			if (c.ShellBar != null)
+			{
+				c.ShellBar.Select();
+				ShellSelection.SelectedCues.Add(c);
+			}
+		}
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), newTopLevel.Last().Id);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			newTopLevel.Count == 1
+				? $"Pasted cue \"{newTopLevel[0].Name}\"."
+				: $"Pasted {newTopLevel.Count} cues.",
+			(int)LogType.Info);
+		GD.Print($"CueList:PasteCues - Pasted {newTopLevel.Count} top-level cue(s).");
+	}
+
+	/// <summary>
+	/// Captures selection roots (and full descendant trees) into the in-app clipboard.
+	/// </summary>
+	/// <param name="verb">User-facing verb for empty-selection messages (e.g. "copy", "cut").</param>
+	/// <returns>False if nothing was selected / capture failed.</returns>
+	private bool TryCaptureSelectionToClipboard(string verb, out int rootCount, out string sampleName)
+	{
+		rootCount = 0;
+		sampleName = string.Empty;
+
+		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
+		if (selected.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"No cues selected to {verb}.", (int)LogType.Info);
+			return false;
+		}
+
+		var selectedIds = new HashSet<int>(selected.Select(c => c.Id));
+		var roots = selected
+			.Where(c => c != null && !IsDescendantOfAnySelectedAncestor(c, selectedIds))
+			.ToList();
+
+		if (roots.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"No cues selected to {verb}.", (int)LogType.Info);
+			return false;
+		}
+
+		var visualOrder = GetVisualCueOrderIncludingCollapsed();
+		roots = roots
+			.OrderBy(c =>
+			{
+				int idx = visualOrder.IndexOf(c.Id);
+				return idx < 0 ? int.MaxValue : idx;
+			})
+			.ToList();
+
+		var cuesByOldId = new Dictionary();
+		void Walk(Cue cue)
+		{
+			if (cue == null) return;
+			string key = cue.Id.ToString();
+			if (cuesByOldId.ContainsKey(key)) return;
+			cuesByOldId[key] = DeepCloneDict(cue.GetData());
+			foreach (int childId in cue.ChildCues.ToList())
+			{
+				var child = FetchCueFromId(childId);
+				if (child != null)
+					Walk(child);
+			}
+		}
+
+		foreach (var root in roots)
+			Walk(root);
+
+		if (cuesByOldId.Count == 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Copy produced no cue data.", 1);
+			return false;
+		}
+
+		_clipboardRootIds = roots.Select(r => r.Id).ToList();
+		_clipboardCuesByOldId = cuesByOldId;
+		rootCount = roots.Count;
+		sampleName = roots[0].Name ?? string.Empty;
+		return true;
 	}
 
 	/// <summary>
@@ -1609,7 +1906,6 @@ public partial class CueList : Control
 	internal void ApplyCuelistHistorySnapshot(Dictionary cuesData)
 	{
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
-		int previousFocus = _globalData?.FocusedCue ?? -1;
 
 		ResetCuelist();
 		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
@@ -1617,10 +1913,8 @@ public partial class CueList : Control
 		if (cuesData != null)
 			LoadData(cuesData);
 
-		if (previousFocus >= 0 && CueIndex.ContainsKey(previousFocus))
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), previousFocus);
-		else
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+		// Selection + focus are restored by HistoryManager after this returns
+		// (snapshots include ordered selected cue ids).
 
 		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
@@ -1630,7 +1924,7 @@ public partial class CueList : Control
 	{
 		var cue = FetchCueFromId(cueId);
 		if (cue != null)
-			_globalData.ShellSelection.SelectIndividualShell(cue);
+			_globalData.ShellSelection.SelectIndividualShell(cue, recordHistory: false);
 	}
 
 	private ShellBar FindLastShell(VBoxContainer container)

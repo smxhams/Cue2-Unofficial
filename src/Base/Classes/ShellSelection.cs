@@ -24,21 +24,37 @@ public partial class ShellSelection : Node
         _globalSignals.SelectPreviousCue += SelectPreviousCue;
     }
 
-    public void SelectIndividualShell(Cue selectedCue)
+    /// <summary>
+    /// Replaces the selection with a single cue (standard click).
+    /// </summary>
+    /// <param name="selectedCue">Cue to select.</param>
+    /// <param name="recordHistory">
+    /// When true (default), records a selection-only undo step before changing selection.
+    /// Pass false for programmatic selection that is already covered by a cuelist/cue history
+    /// step (create, group, playback playhead, etc.).
+    /// </param>
+    public void SelectIndividualShell(Cue selectedCue, bool recordHistory = true)
     {
-        if (SelectedCues.Any())
-        {
-            foreach (var cue in SelectedCues.ToList())
-            {
-                SelectedCues.Remove(cue);
-                cue.ShellBar.Deselect();
-            }
-        }
-        
-        AddSelection(selectedCue);
+        if (selectedCue == null) return;
+
+        // No-op when this is already the sole selection.
+        if (SelectedCues.Count == 1 && ReferenceEquals(SelectedCues[0], selectedCue))
+            return;
+
+        if (recordHistory)
+            RecordSelectionHistory("Select cue");
+
+        ClearSelectionVisuals();
+        SelectedCues.Clear();
+        ApplySelectCue(selectedCue);
     }
-    
-    public void SelectThrough(Cue pressedCue)
+
+    /// <summary>
+    /// Shift-click range selection from the last selected cue through <paramref name="pressedCue"/>.
+    /// </summary>
+    /// <param name="pressedCue">Range end (inclusive).</param>
+    /// <param name="recordHistory">When true, records a selection undo step before expanding.</param>
+    public void SelectThrough(Cue pressedCue, bool recordHistory = true)
     {
         var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
         var allShellBars = GetAllShellBarsInOrder(cueContainer);
@@ -55,6 +71,28 @@ public partial class ShellSelection : Node
 
         int start = Math.Min(startIndex, pressedIndex);
         int end = Math.Max(startIndex, pressedIndex);
+
+        // Detect whether the range would actually add anything (or only re-focus).
+        bool willAdd = false;
+        for (int i = start; i <= end; i++)
+        {
+            var sb = allShellBars[i];
+            int cueId = sb.Get("CueId").AsInt32();
+            Cue cue = CueList.FetchCueFromId(cueId);
+            if (cue != null && !SelectedCues.Contains(cue))
+            {
+                willAdd = true;
+                break;
+            }
+        }
+
+        bool focusChanged = _globalData != null && _globalData.FocusedCue != pressedCue.Id;
+        if (!willAdd && !focusChanged)
+            return;
+
+        if (recordHistory)
+            RecordSelectionHistory(willAdd ? "Select cue range" : "Focus cue");
+
         // Expand selection silently — only emit ShellFocused once for the pressed cue.
         // (Per-cue AddSelection would flood async audio/video inspectors mid multi-select.)
         for (int i = start; i <= end; i++)
@@ -89,36 +127,54 @@ public partial class ShellSelection : Node
         }
         return result;
     }
-    
-    public void SelectAllShells()
+
+    /// <summary>
+    /// Selects every currently visible cue (respects collapsed groups).
+    /// </summary>
+    /// <param name="recordHistory">When true, records a selection undo step first.</param>
+    public void SelectAllShells(bool recordHistory = true)
     {
         var visibleCues = GetAllCuesInOrder();
         if (visibleCues.Count == 0) return;
 
-        // Clear current
-        foreach (var cue in SelectedCues.ToList())
-        {
-            cue.ShellBar.Deselect();
-        }
+        // No-op when selection already matches the full visible set in order.
+        if (SelectedCues.Count == visibleCues.Count &&
+            SelectedCues.Zip(visibleCues, (a, b) => ReferenceEquals(a, b)).All(eq => eq))
+            return;
+
+        if (recordHistory)
+            RecordSelectionHistory("Select all cues");
+
+        ClearSelectionVisuals();
         SelectedCues.Clear();
 
         foreach (var cue in visibleCues)
         {
-            cue.ShellBar.Select();
+            cue.ShellBar?.Select();
             SelectedCues.Add(cue);
         }
 
         if (visibleCues.Count > 0)
             _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), visibleCues.Last().Id);
     }
-    
-    public void AddSelection(Cue cue)
+
+    /// <summary>
+    /// Adds a cue to the multi-selection (Ctrl/Cmd-click).
+    /// </summary>
+    /// <param name="cue">Cue to add.</param>
+    /// <param name="recordHistory">When true, records a selection undo step first.</param>
+    public void AddSelection(Cue cue, bool recordHistory = true)
     {
-        cue.ShellBar.Select();
-        SelectedCues.Add(cue);
-        _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
+        if (cue == null) return;
+        if (SelectedCues.Contains(cue))
+            return;
+
+        if (recordHistory)
+            RecordSelectionHistory("Add cue to selection");
+
+        ApplySelectCue(cue);
     }
-    
+
     public void RemoveSelection(int shellIndex)
     {
         //
@@ -203,5 +259,34 @@ public partial class ShellSelection : Node
             }
         }
         SelectIndividualShell(target);
+    }
+
+    /// <summary>
+    /// Records a selection-only history checkpoint when not mid-restore.
+    /// </summary>
+    private void RecordSelectionHistory(string description)
+    {
+        var history = _globalData?.HistoryManager;
+        if (history == null || history.IsRestoring) return;
+        history.RecordSelectionChange(description);
+    }
+
+    private void ClearSelectionVisuals()
+    {
+        foreach (var cue in SelectedCues.ToList())
+        {
+            if (cue?.ShellBar != null && IsInstanceValid(cue.ShellBar))
+                cue.ShellBar.Deselect();
+        }
+    }
+
+    /// <summary>
+    /// Marks <paramref name="cue"/> selected and emits focus (no history).
+    /// </summary>
+    private void ApplySelectCue(Cue cue)
+    {
+        cue.ShellBar?.Select();
+        SelectedCues.Add(cue);
+        _globalSignals.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
     }
 }
