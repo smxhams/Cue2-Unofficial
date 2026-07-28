@@ -81,6 +81,10 @@ public partial class ShellInspector : Control
 	private MidiManager _midiManager;
 	private bool _isCapturingMidi;
 
+	// Notes UI (under Triggers column)
+	private TextEdit _notesTextEdit;
+	private CheckBox _memoCheckBox;
+
 	/// <summary>
 	/// True while UI is being pushed from the model (undo/redo, sync). Prevents TextChanged handlers
 	/// from writing back into the model / recording history.
@@ -89,6 +93,7 @@ public partial class ShellInspector : Control
 
 	private const string MultiNumCoalesceKey = "multi:shell:num";
 	private const string MultiNameCoalesceKey = "multi:shell:name";
+	private const string MultiNotesCoalesceKey = "multi:shell:notes";
 	private const string MultiPlaceholder = "Multiple selected";
 
 	public override void _Ready()
@@ -132,6 +137,9 @@ public partial class ShellInspector : Control
 		_midiData2Spin = GetNodeOrNull<SpinBox>("%MidiData2Spin");
 		_midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
 		EnsureMidiTypeOptions();
+
+		_notesTextEdit = GetNodeOrNull<TextEdit>("%NotesTextEdit");
+		_memoCheckBox = GetNodeOrNull<CheckBox>("%MemoCheckBox");
 
 		UiUtilities.FormatLabelsColours(this, GlobalStyles.SoftFontColor);
 
@@ -223,6 +231,14 @@ public partial class ShellInspector : Control
 			_midiMatchValueCheck.Toggled += OnMidiMatchValueToggled;
 		if (_midiData2Spin != null)
 			_midiData2Spin.ValueChanged += OnMidiData2Changed;
+
+		if (_notesTextEdit != null)
+		{
+			_notesTextEdit.TextChanged += OnNotesTextChanged;
+			_notesTextEdit.FocusExited += OnNotesFocusExited;
+		}
+		if (_memoCheckBox != null)
+			_memoCheckBox.Toggled += OnMemoToggled;
 
 		if (_midiManager != null)
 			_midiManager.MidiCaptured += OnMidiCaptured;
@@ -536,6 +552,15 @@ public partial class ShellInspector : Control
 				_midiMatchValueCheck.SetPressedNoSignal(false);
 			if (_midiData2Spin != null)
 				_midiData2Spin.SetValueNoSignal(0);
+
+			if (_notesTextEdit != null)
+			{
+				_notesTextEdit.Text = "";
+				_notesTextEdit.PlaceholderText = MultiPlaceholder;
+			}
+
+			if (_memoCheckBox != null)
+				_memoCheckBox.SetPressedNoSignal(false);
 		}
 		finally
 		{
@@ -560,6 +585,8 @@ public partial class ShellInspector : Control
 			_durationValue.PlaceholderText = "";
 		if (_clockTimeInput != null)
 			_clockTimeInput.PlaceholderText = "HH:mm:ss";
+		if (_notesTextEdit != null)
+			_notesTextEdit.PlaceholderText = "Cue notes…";
 		SyncDeleteHotkeyTooltip();
 	}
 
@@ -729,6 +756,18 @@ public partial class ShellInspector : Control
 			RefreshHotkeyUi();
 			RefreshClockUi();
 			RefreshMidiUi();
+
+			if (_notesTextEdit != null)
+			{
+				// Avoid stomping caret while the operator is mid-type, but always
+				// apply model state during undo/redo restore.
+				bool restoring = _globalData?.HistoryManager?.IsRestoring == true;
+				if (restoring || !_notesTextEdit.HasFocus())
+					_notesTextEdit.Text = _focusedCue.Notes ?? string.Empty;
+			}
+
+			if (_memoCheckBox != null)
+				_memoCheckBox.SetPressedNoSignal(_focusedCue.Memo);
 		}
 		finally
 		{
@@ -969,6 +1008,55 @@ public partial class ShellInspector : Control
 
 		foreach (var cue in targets)
 			cue.Name = data;
+	}
+
+	private void OnNotesTextChanged()
+	{
+		if (_isRefreshingUi || _notesTextEdit == null) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		string text = _notesTextEdit.Text ?? string.Empty;
+
+		// Skip no-op when single-edit and unchanged.
+		if (!_isMultiEdit && targets.Count == 1 &&
+		    string.Equals(targets[0].Notes ?? string.Empty, text, StringComparison.Ordinal))
+			return;
+
+		string coalesce = _isMultiEdit ? MultiNotesCoalesceKey : $"cue:{_focusedCueId}:notes";
+		RecordHistoryBeforeEdit("Edit cue notes", "Multi-edit cue notes", coalesce);
+
+		foreach (var cue in targets)
+			cue.Notes = text;
+	}
+
+	private void OnNotesFocusExited() => EndCoalesceForCurrentEdit("notes", MultiNotesCoalesceKey);
+
+	/// <summary>
+	/// Toggles memo shell layout for edit target(s): notes replace number/name/times on the shell bar.
+	/// </summary>
+	private void OnMemoToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].Memo == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable memo mode" : "Disable memo mode",
+			pressed ? "Multi-edit enable memo mode" : "Multi-edit disable memo mode");
+
+		foreach (var cue in targets)
+		{
+			if (cue.Memo == pressed) continue;
+			cue.Memo = pressed;
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
+		}
 	}
 
 	// ── Hotkey trigger UI ───────────────────────────────────────────────────

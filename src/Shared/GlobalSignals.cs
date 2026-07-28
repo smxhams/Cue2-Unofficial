@@ -104,6 +104,9 @@ public partial class GlobalSignals : Node
 	// Singals assaciated with settings
 	[Signal] public delegate void UiScaleChangedEventHandler(float value);
 	[Signal] public delegate void GoScaleChangedEventHandler(float value);
+
+	/// <summary>Fired when the Timeline Inspector waveform display setting changes.</summary>
+	[Signal] public delegate void ShowTimelineWaveformsChangedEventHandler(bool enabled);
 	[Signal] public delegate void SettingsSaveAsEventHandler(string filters, string url);
 	[Signal] public delegate void SettingsSaveWithShowEventHandler(string filters);
 	[Signal] public delegate void SettingsSaveUserDirEventHandler(string filters);

@@ -1226,6 +1226,8 @@ public partial class CueList : Control
 		clone.Follow = source.Follow;
 		clone.Expanded = source.Expanded;
 		clone.Color = source.Color;
+		clone.Notes = source.Notes;
+		clone.Memo = source.Memo;
 		clone.ParentId = -1;
 		clone.ChildCues = new List<int>();
 

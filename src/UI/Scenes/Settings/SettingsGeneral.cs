@@ -34,6 +34,9 @@ public partial class SettingsGeneral : ScrollContainer
     private CheckBox _selectNewCuesCheckBox;
     private Button _selectNewCuesResetButton;
 
+    private CheckBox _timelineWaveformsCheckBox;
+    private Button _timelineWaveformsResetButton;
+
     /// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
     private bool _isSyncingUi;
 
@@ -106,6 +109,16 @@ public partial class SettingsGeneral : ScrollContainer
             _selectNewCuesResetButton.Pressed += OnSelectNewCuesResetPressed;
         }
 
+        _timelineWaveformsCheckBox = GetNodeOrNull<CheckBox>("%TimelineWaveformsCheckBox");
+        if (_timelineWaveformsCheckBox != null)
+            _timelineWaveformsCheckBox.Toggled += OnTimelineWaveformsToggled;
+        _timelineWaveformsResetButton = GetNodeOrNull<Button>("%TimelineWaveformsResetButton");
+        if (_timelineWaveformsResetButton != null)
+        {
+            _timelineWaveformsResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+            _timelineWaveformsResetButton.Pressed += OnTimelineWaveformsResetPressed;
+        }
+
         // Only re-sync this form when a *settings* history entry was undone/redone —
         // not on cue undos (that re-wrote the spin box and polluted history / looked like
         // fade was jumping while undoing unrelated steps).
@@ -171,6 +184,7 @@ public partial class SettingsGeneral : ScrollContainer
             _mediaBackupCheckBox?.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
             _multiEditCheckBox?.SetPressedNoSignal(_globalData.Settings.MultiEditEnabled);
             _selectNewCuesCheckBox?.SetPressedNoSignal(_globalData.Settings.SelectNewCues);
+            _timelineWaveformsCheckBox?.SetPressedNoSignal(_globalData.Settings.ShowTimelineWaveforms);
 
             UpdateAllResetButtons();
         }
@@ -188,6 +202,7 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateMediaBackupResetButton();
         UpdateMultiEditResetButton();
         UpdateSelectNewCuesResetButton();
+        UpdateTimelineWaveformsResetButton();
     }
 
     // ── UI Scale ──────────────────────────────────────────────────────────
@@ -528,6 +543,54 @@ public partial class SettingsGeneral : ScrollContainer
         {
             string defaultText = AppSettings.DefaultSelectNewCues ? "Enabled" : "Disabled";
             _selectNewCuesResetButton.TooltipText = $"Reset to default: {defaultText}";
+        }
+    }
+
+    // ── Timeline waveforms ────────────────────────────────────────────────
+
+    private void OnTimelineWaveformsToggled(bool enabled)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        if (_globalData.Settings.ShowTimelineWaveforms == enabled)
+        {
+            UpdateTimelineWaveformsResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change timeline waveforms setting", null, "ShowTimelineWaveforms");
+        _globalData.Settings.ShowTimelineWaveforms = enabled;
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.ShowTimelineWaveformsChanged), enabled);
+        UpdateTimelineWaveformsResetButton();
+    }
+
+    private void OnTimelineWaveformsResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_globalData.Settings.ShowTimelineWaveforms == AppSettings.DefaultShowTimelineWaveforms)
+        {
+            SyncSettings();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Reset timeline waveforms setting", null, "ShowTimelineWaveforms");
+        _globalData.Settings.ShowTimelineWaveforms = AppSettings.DefaultShowTimelineWaveforms;
+        SyncSettings();
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.ShowTimelineWaveformsChanged),
+            AppSettings.DefaultShowTimelineWaveforms);
+    }
+
+    private void UpdateTimelineWaveformsResetButton()
+    {
+        if (_timelineWaveformsResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = _globalData.Settings.ShowTimelineWaveforms == AppSettings.DefaultShowTimelineWaveforms;
+        _timelineWaveformsResetButton.Visible = !atDefault;
+        if (!atDefault)
+        {
+            string defaultText = AppSettings.DefaultShowTimelineWaveforms ? "Enabled" : "Disabled";
+            _timelineWaveformsResetButton.TooltipText = $"Reset to default: {defaultText}";
         }
     }
 }

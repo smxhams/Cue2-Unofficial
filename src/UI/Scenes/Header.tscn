@@ -35,14 +35,18 @@ text = "GO"
 layout_mode = 2
 
 [node name="StandbyCueText" type="LineEdit" parent="HBoxContainer/VBoxContainer"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 focus_mode = 0
+tooltip_text = "Next cue to be played (current selection)."
 placeholder_text = "Standby Cue"
 editable = false
 
 [node name="StandbyCueNote" type="LineEdit" parent="HBoxContainer/VBoxContainer"]
+unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
+tooltip_text = "Notes for the standby cue."
 placeholder_text = "Notes"
 editable = false

@@ -634,6 +634,109 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     public double GetPlaybackTimeSeconds() =>
         GetMasterClockUs() / (double)MicrosecondsPerSecond;
 
+    /// <summary>
+    /// Content-local elapsed time including completed playcount iterations.
+    /// Infinite loop returns elapsed within the current segment only.
+    /// </summary>
+    public double GetTotalElapsedContentSeconds()
+    {
+        lock (_lock)
+        {
+            double segmentDuration = GetSegmentDurationSecondsUnlocked();
+            if (segmentDuration <= 1e-12)
+                return 0;
+
+            double posSec = GetMasterClockUs() / (double)MicrosecondsPerSecond;
+            double startSec = _startTimeUs / (double)MicrosecondsPerSecond;
+            double segmentElapsed = Math.Clamp(posSec - startSec, 0.0, segmentDuration);
+
+            if (_videoComponent.Loop || EffectivePlayCount >= int.MaxValue / 4)
+                return segmentElapsed;
+
+            int completed = Math.Max(0, _currentPlayCount - 1);
+            completed = Math.Min(completed, Math.Max(0, EffectivePlayCount - 1));
+            return completed * segmentDuration + segmentElapsed;
+        }
+    }
+
+    /// <summary>
+    /// Seeks into the multi-play content timeline and updates <see cref="CurrentPlayCount"/>.
+    /// </summary>
+    /// <param name="contentSeconds">Elapsed content seconds across playcount iterations.</param>
+    public void SeekToTotalContentSeconds(double contentSeconds)
+    {
+        if (contentSeconds < 0) contentSeconds = 0;
+
+        double segmentDuration;
+        int effectiveCount;
+        bool isLoop;
+        lock (_lock)
+        {
+            segmentDuration = GetSegmentDurationSecondsUnlocked();
+            effectiveCount = EffectivePlayCount;
+            isLoop = _videoComponent.Loop;
+        }
+
+        if (segmentDuration <= 1e-12)
+        {
+            Seek(_startTimeUs / (double)MicrosecondsPerSecond);
+            return;
+        }
+
+        if (isLoop || effectiveCount >= int.MaxValue / 4)
+        {
+            double local = contentSeconds % segmentDuration;
+            if (local < 0) local += segmentDuration;
+            Seek(_startTimeUs / (double)MicrosecondsPerSecond + local);
+            return;
+        }
+
+        double total = segmentDuration * Math.Max(1, effectiveCount);
+        contentSeconds = Math.Clamp(contentSeconds, 0.0, total);
+
+        int playIndex;
+        double localInSegment;
+        if (contentSeconds >= total - 1e-9)
+        {
+            playIndex = Math.Max(0, effectiveCount - 1);
+            localInSegment = segmentDuration;
+        }
+        else
+        {
+            playIndex = (int)Math.Floor(contentSeconds / segmentDuration);
+            playIndex = Math.Clamp(playIndex, 0, Math.Max(0, effectiveCount - 1));
+            localInSegment = contentSeconds - playIndex * segmentDuration;
+            localInSegment = Math.Clamp(localInSegment, 0.0, segmentDuration);
+        }
+
+        lock (_lock)
+        {
+            _currentPlayCount = playIndex + 1;
+        }
+
+        Seek(_startTimeUs / (double)MicrosecondsPerSecond + localInSegment);
+    }
+
+    private double GetSegmentDurationSecondsUnlocked()
+    {
+        if (_endTimeUs < long.MaxValue && _endTimeUs > _startTimeUs)
+            return (_endTimeUs - _startTimeUs) / (double)MicrosecondsPerSecond;
+
+        if (_videoComponent.IsImage)
+            return _videoComponent.Duration > 0 ? _videoComponent.Duration : 0;
+
+        double span = GetDuration();
+        if (span > 0)
+        {
+            double start = _startTimeUs / (double)MicrosecondsPerSecond;
+            // GetDuration is full file length for video decoder; prefer component Duration when set.
+            if (_videoComponent.Duration > 0)
+                return _videoComponent.Duration;
+            return Math.Max(0, span - start);
+        }
+        return _videoComponent.Duration > 0 ? _videoComponent.Duration : 0;
+    }
+
     /// <summary>Seeks both video and audio to the same media time (seconds).</summary>
     public void Seek(double timeSeconds)
     {
@@ -976,6 +1079,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 _audioMixBuffer = new float[outSamples];
 
             string deviceName = _audioDevices.GetAudioDeviceByLogicalId(kv.Key)?.Name;
+            // Video embedded audio has no pan control yet — pass center.
             AudioMixMatrix.Mix(
                 _audioSrcBuffer.AsSpan(0, frames * SourceChannels),
                 frames,
@@ -984,6 +1088,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 outCh,
                 masterVol,
                 componentVol,
+                pan: 0f,
                 Routing,
                 Patch,
                 deviceName,

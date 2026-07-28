@@ -36,6 +36,19 @@ public class AudioComponent : ICueComponent
     /// <value>Returns -1 if looping enabled</value>
     public double TotalDuration { get; set; } = 0.0;
     public double Volume { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Stereo pan/balance applied after volume and before the routing matrix.
+    /// Range −1 (full left) … 0 (center) … +1 (full right). Only used for stereo sources.
+    /// </summary>
+    /// <value>Clamped to [−1, 1]. Default 0 (center / "C").</value>
+    public float Pan
+    {
+        get => _pan;
+        set => _pan = Math.Clamp(value, -1f, 1f);
+    }
+    private float _pan;
+
     public bool Loop { get; set; } = false;
     public int PlayCount { get; set; } = 1;
     
@@ -62,6 +75,7 @@ public class AudioComponent : ICueComponent
         data.Add("Duration", Duration);
         data.Add("Loop", Loop);
         data.Add("Volume", Volume);
+        data.Add("Pan", Pan);
         data.Add("PlayCount", PlayCount);
         data.Add("FadeInDuration", FadeInDuration);
         data.Add("FadeOutDuration", FadeOutDuration);
@@ -121,6 +135,9 @@ public class AudioComponent : ICueComponent
         Duration = data.ContainsKey("Duration") ? data["Duration"].AsDouble() : 0.0;
         Loop = data.ContainsKey("Loop") ? data["Loop"].AsBool() : false;
         Volume = data.ContainsKey("Volume") ? data["Volume"].AsSingle() : 1.0f;
+        Pan = data.ContainsKey("Pan")
+            ? Math.Clamp(data["Pan"].AsSingle(), -1f, 1f)
+            : 0f;
         PlayCount = data.ContainsKey("PlayCount") ? data["PlayCount"].AsInt32() : 1;
         FadeInDuration = data.ContainsKey("FadeInDuration") ? data["FadeInDuration"].AsDouble() : 0.0;
         FadeOutDuration = data.ContainsKey("FadeOutDuration") ? data["FadeOutDuration"].AsDouble() : 0.0;

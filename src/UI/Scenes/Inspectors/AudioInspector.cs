@@ -52,11 +52,17 @@ public partial class AudioInspector : Control
     private CheckBox _loopInput;
     private LineEdit _playCountInput;
     private LineEdit _volumeInput;
+    private Label _panLabel;
+    private HSlider _panSlider;
+    private LineEdit _panInput;
     private OptionButton _outputOptionButton;
+    private bool _isUpdatingPanUi;
     
     // Routing matrix
     private GridContainer _routingMatrixGrid;
     private VBoxContainer _routingContainer;
+    /// <summary>Left-column input labels in the routing matrix (updated when pan changes).</summary>
+    private readonly List<Label> _routingInputLabels = new List<Label>();
     
     // Waveform
     private PanelContainer _waveformPanel;
@@ -126,6 +132,9 @@ public partial class AudioInspector : Control
         _loopInput = GetNode<CheckBox>("%LoopInput");
         _playCountInput = GetNode<LineEdit>("%PlayCountInput");
         _volumeInput = GetNode<LineEdit>("%VolumeInput");
+        _panLabel = GetNodeOrNull<Label>("%PanLabel");
+        _panSlider = GetNodeOrNull<HSlider>("%PanSlider");
+        _panInput = GetNodeOrNull<LineEdit>("%PanInput");
         _outputOptionButton = GetNode<OptionButton>("%OutputOptionButton");
         
         // Waveform UI setup — peak bars + zoom/scroll
@@ -174,6 +183,19 @@ public partial class AudioInspector : Control
         _endTimeInput.FocusExited += () => TimeFieldSubmitted(_endTimeInput.Text, _endTimeInput);
         _volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
         _volumeInput.FocusExited += () => VolumeInputSubmitted(_volumeInput.Text, _volumeInput);
+        if (_panSlider != null)
+        {
+            _panSlider.MinValue = -100;
+            _panSlider.MaxValue = 100;
+            _panSlider.Step = 1;
+            _panSlider.ValueChanged += OnPanSliderChanged;
+            _panSlider.DragEnded += OnPanSliderDragEnded;
+        }
+        if (_panInput != null)
+        {
+            _panInput.TextSubmitted += newText => PanInputSubmitted(newText);
+            _panInput.FocusExited += () => PanInputSubmitted(_panInput.Text);
+        }
         _loopInput.Toggled += OnLoopToggled;
         _playCountInput.TextSubmitted += OnPlayCountSubmitted;
         _playCountInput.FocusExited += () => OnPlayCountSubmitted(_playCountInput.Text);
@@ -387,11 +409,18 @@ public partial class AudioInspector : Control
             {
                 _focusedAudioComponent.Metadata =
                     await _mediaEngine.GetAudioFileMetadataAsync(_focusedAudioComponent.AudioFile);
+                // Channel count now known — pan is stereo-only.
+                UpdatePanUiVisibilityAndValues();
+                RefreshRoutingInputPanLabels();
             }
             catch (Exception ex)
             {
                 GD.PrintErr($"AudioInspector:OnSyncFromHistory - Metadata refresh failed: {ex.Message}");
             }
+        }
+        else
+        {
+            UpdatePanUiVisibilityAndValues();
         }
 
         await DrawWaveform();
@@ -435,6 +464,135 @@ public partial class AudioInspector : Control
         catch (Exception ex)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Error parsing volume: {ex.Message}", 2);
+        }
+    }
+
+    /// <summary>
+    /// True when pan UI should be shown (stereo source only).
+    /// </summary>
+    private bool IsStereoSource =>
+        _focusedAudioComponent?.Metadata != null && _focusedAudioComponent.Metadata.Channels == 2;
+
+    /// <summary>
+    /// Shows or hides pan controls and syncs slider/text from the component.
+    /// </summary>
+    private void UpdatePanUiVisibilityAndValues()
+    {
+        bool show = IsStereoSource;
+        if (_panLabel != null) _panLabel.Visible = show;
+        if (_panSlider != null) _panSlider.Visible = show;
+        if (_panInput != null) _panInput.Visible = show;
+        if (!show || _focusedAudioComponent == null) return;
+        SyncPanUiFromComponent();
+    }
+
+    /// <summary>
+    /// Writes pan slider and text from <see cref="AudioComponent.Pan"/> without firing handlers.
+    /// </summary>
+    private void SyncPanUiFromComponent()
+    {
+        if (_focusedAudioComponent == null) return;
+        _isUpdatingPanUi = true;
+        try
+        {
+            float pan = Mathf.Clamp(_focusedAudioComponent.Pan, -1f, 1f);
+            if (_panSlider != null)
+                _panSlider.SetValueNoSignal(Mathf.Round(pan * 100f));
+            if (_panInput != null && !_panInput.HasFocus())
+                _panInput.Text = UiUtilities.FormatPan(pan);
+        }
+        finally
+        {
+            _isUpdatingPanUi = false;
+        }
+    }
+
+    private void OnPanSliderChanged(double value)
+    {
+        if (_isUpdatingPanUi || _focusedCue == null || _focusedAudioComponent == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+        if (!IsStereoSource) return;
+
+        float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
+        if (Math.Abs(_focusedAudioComponent.Pan - pan) < 1e-6f) return;
+
+        _globalData?.HistoryManager?.RecordCueChange(
+            _focusedCue.Id, "Edit audio pan", $"cue:{_focusedCue.Id}:audio:pan");
+        _focusedAudioComponent.Pan = pan;
+
+        _isUpdatingPanUi = true;
+        try
+        {
+            if (_panInput != null)
+                _panInput.Text = UiUtilities.FormatPan(pan);
+        }
+        finally
+        {
+            _isUpdatingPanUi = false;
+        }
+        RefreshRoutingInputPanLabels();
+    }
+
+    private void OnPanSliderDragEnded(bool valueChanged)
+    {
+        if (_focusedCue == null) return;
+        _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCue.Id}:audio:pan");
+    }
+
+    /// <summary>
+    /// Commits pan from the text field (C, L50, R25, −100…100).
+    /// </summary>
+    private void PanInputSubmitted(string text)
+    {
+        if (_focusedCue == null || _focusedAudioComponent == null || _panInput == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+        if (_isUpdatingPanUi) return;
+        if (!IsStereoSource)
+        {
+            if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+            return;
+        }
+
+        if (!UiUtilities.TryParsePan(text, out float pan))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid pan format: {text}", 1);
+            _panInput.Text = UiUtilities.FormatPan(_focusedAudioComponent.Pan);
+            if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+            return;
+        }
+
+        pan = Mathf.Clamp(pan, -1f, 1f);
+        _panInput.Text = UiUtilities.FormatPan(pan);
+
+        if (Math.Abs(_focusedAudioComponent.Pan - pan) < 1e-6f)
+        {
+            SyncPanUiFromComponent();
+            if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+            return;
+        }
+
+        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit audio pan");
+        _focusedAudioComponent.Pan = pan;
+        SyncPanUiFromComponent();
+        RefreshRoutingInputPanLabels();
+        if (_panInput.HasFocus()) _panInput.ReleaseFocus();
+    }
+
+    /// <summary>
+    /// Updates Left/Right routing matrix row labels with the current pan status in parentheses.
+    /// </summary>
+    private void RefreshRoutingInputPanLabels()
+    {
+        if (_routingInputLabels.Count == 0 || _focusedAudioComponent == null) return;
+        if (_focusedAudioComponent.Metadata?.Channels != 2) return;
+
+        string panStatus = UiUtilities.FormatPan(_focusedAudioComponent.Pan);
+        for (int i = 0; i < _routingInputLabels.Count && i < 2; i++)
+        {
+            var label = _routingInputLabels[i];
+            if (label == null || !IsInstanceValid(label)) continue;
+            string baseName = i == 0 ? "Left" : "Right";
+            label.Text = $"{baseName} ({panStatus})";
         }
     }
     
@@ -650,6 +808,7 @@ public partial class AudioInspector : Control
             return;
 
         int gen = _shellSelectGeneration;
+        _routingInputLabels.Clear();
         foreach (var child in _routingMatrixGrid.GetChildren())
         {
             child.QueueFree();
@@ -792,11 +951,18 @@ public partial class AudioInspector : Control
             _routingMatrixGrid.AddChild(label);
         }
         
-        // Add rows: input label + volume fields
+        // Add rows: input label (+ pan status for stereo) + volume fields
+        string panStatus = inputChannels == 2
+            ? UiUtilities.FormatPan(_focusedAudioComponent.Pan)
+            : null;
         for (int row = 0; row < inputChannels; row++)
         {
-            var inLabel = new Label { Text = inputLabels[row] };
+            string labelText = inputLabels[row];
+            if (panStatus != null && row < 2)
+                labelText = $"{labelText} ({panStatus})";
+            var inLabel = new Label { Text = labelText };
             _routingMatrixGrid.AddChild(inLabel);
+            _routingInputLabels.Add(inLabel);
             
             for (int col = 0; col < outputChannels; col++)
             {
@@ -1148,6 +1314,7 @@ public partial class AudioInspector : Control
         _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
         _volumeInput.Text = $"{volumeDb}dB";
+        UpdatePanUiVisibilityAndValues();
     }
 
     private void StyleWaveformHandles()

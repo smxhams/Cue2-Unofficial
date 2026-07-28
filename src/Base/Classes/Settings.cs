@@ -41,6 +41,9 @@ public partial class Settings : Node
     /// <summary>Default for selecting a newly created cue after Add / drop.</summary>
     public const bool DefaultSelectNewCues = true;
 
+    /// <summary>Default for drawing audio waveforms inside Timeline Inspector cue bars.</summary>
+    public const bool DefaultShowTimelineWaveforms = true;
+
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
     /// <summary>System default pre-wait in seconds for newly created cues.</summary>
@@ -90,6 +93,12 @@ public partial class Settings : Node
     /// When false, selection is left unchanged. Persisted with the showfile.
     /// </summary>
     public bool SelectNewCues = DefaultSelectNewCues;
+
+    /// <summary>
+    /// When true, the Timeline Inspector draws available audio waveforms inside cue bars.
+    /// When false, bars show solid colour only. Persisted with the showfile.
+    /// </summary>
+    public bool ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
 
     // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
 
@@ -368,6 +377,7 @@ public partial class Settings : Node
         MediaBackupEnabled = DefaultMediaBackupEnabled;
         MultiEditEnabled = DefaultMultiEditEnabled;
         SelectNewCues = DefaultSelectNewCues;
+        ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
         VerbosePrint = true;
 
         // Cue shell defaults for newly created cues
@@ -426,6 +436,7 @@ public partial class Settings : Node
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
         saveTable.Add("MultiEditEnabled", MultiEditEnabled);
         saveTable.Add("SelectNewCues", SelectNewCues);
+        saveTable.Add("ShowTimelineWaveforms", ShowTimelineWaveforms);
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -527,6 +538,9 @@ public partial class Settings : Node
         SelectNewCues = settingsData.TryGetValue("SelectNewCues", out value)
             ? value.AsBool()
             : DefaultSelectNewCues;
+        ShowTimelineWaveforms = settingsData.TryGetValue("ShowTimelineWaveforms", out value)
+            ? value.AsBool()
+            : DefaultShowTimelineWaveforms;
 
         // Cue shell defaults (older shows without this key keep system defaults)
         if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
@@ -664,6 +678,8 @@ public partial class Settings : Node
             MultiEditEnabled = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "SelectNewCues", out value))
             SelectNewCues = ReadBoolVariant(value);
+        if (TryGetSettingsValue(settingsData, "ShowTimelineWaveforms", out value))
+            ShowTimelineWaveforms = ReadBoolVariant(value);
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
             && value.VariantType == Variant.Type.Dictionary)
@@ -813,6 +829,9 @@ public partial class Settings : Node
                 return true;
             case "SelectNewCues":
                 value = SelectNewCues ? 1 : 0;
+                return true;
+            case "ShowTimelineWaveforms":
+                value = ShowTimelineWaveforms ? 1 : 0;
                 return true;
             default:
                 value = default;

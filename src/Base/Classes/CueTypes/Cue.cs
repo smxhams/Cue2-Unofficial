@@ -219,6 +219,41 @@ public class Cue : ICue
     /// </summary>
     public bool ShouldSkipOnPlayhead => !Armed && SkipIfDisarmed;
 
+    private string _notes = string.Empty;
+
+    /// <summary>
+    /// Free-form operator notes for this cue. Not used during playback; editable in the shell inspector.
+    /// </summary>
+    /// <value>Plain text; empty string when unset. Default is empty.</value>
+    public string Notes
+    {
+        get => _notes;
+        set
+        {
+            string next = value ?? string.Empty;
+            if (string.Equals(_notes, next, StringComparison.Ordinal)) return;
+            _notes = next;
+            NotesChanged?.Invoke(_notes);
+        }
+    }
+
+    private bool _memo;
+
+    /// <summary>
+    /// When true, the shell bar in the cuelist shows notes instead of number, name, and timing fields.
+    /// </summary>
+    /// <value>Default is <c>false</c> (standard shell layout).</value>
+    public bool Memo
+    {
+        get => _memo;
+        set
+        {
+            if (_memo == value) return;
+            _memo = value;
+            MemoChanged?.Invoke(_memo);
+        }
+    }
+
     // ── Cue hotkey trigger ──────────────────────────────────────────────────
 
     private bool _hotkeyEnabled;
@@ -401,6 +436,8 @@ public class Cue : ICue
     // Events
     public event Action<string> NameChanged;
     public event Action<string> CueNumChanged;
+    public event Action<string> NotesChanged;
+    public event Action<bool> MemoChanged;
     public event Action<double> PreWaitChanged;
     public event Action<double> DurationChanged;
     public event Action<double> TotalDurationChanged;
@@ -463,6 +500,8 @@ public class Cue : ICue
         // Missing keys (legacy saves) default to armed / not skip.
         _armed = data.TryGetValue("Armed", out var armedVal) ? armedVal.AsBool() : true;
         _skipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal) && skipVal.AsBool();
+        _notes = data.TryGetValue("Notes", out var notesVal) ? notesVal.AsString() : string.Empty;
+        _memo = data.TryGetValue("Memo", out var memoVal) && memoVal.AsBool();
 
         LoadHotkeyFromData(data);
         LoadClockFromData(data);
@@ -1380,6 +1419,8 @@ public class Cue : ICue
         dict.Add("Color", Color.ToHtml());
         dict.Add("Armed", Armed);
         dict.Add("SkipIfDisarmed", SkipIfDisarmed);
+        dict.Add("Notes", Notes ?? string.Empty);
+        dict.Add("Memo", Memo);
         WriteHotkeyToData(dict);
         WriteClockToData(dict);
         WriteMidiTriggerToData(dict);
@@ -1444,6 +1485,8 @@ public class Cue : ICue
         SkipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal)
             ? skipVal.AsBool()
             : SkipIfDisarmed;
+        Notes = data.TryGetValue("Notes", out var notesVal) ? notesVal.AsString() : Notes;
+        Memo = data.TryGetValue("Memo", out var memoVal) ? memoVal.AsBool() : Memo;
 
         ApplyHotkeyFromData(data);
         ApplyClockFromData(data);

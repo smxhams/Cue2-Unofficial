@@ -152,9 +152,13 @@ public partial class CueCommandExectutor : Node
     /// Optional fade-in seconds for the head cue when started via a control GO.
     /// When null or ≤ 0, playback uses each component's own fade-in.
     /// </param>
-    public void ActivateSequenceFrom(Cue head, double? controlGoFadeIn = null)
+    /// <param name="startAtTimelineSeconds">
+    /// Optional absolute body-timeline seek (pre-wait + content) applied to the head before play.
+    /// Used by the Timeline Inspector playhead.
+    /// </param>
+    public void ActivateSequenceFrom(Cue head, double? controlGoFadeIn = null, double? startAtTimelineSeconds = null)
     {
-        _ = ActivateSequenceFromAsync(head, controlGoFadeIn);
+        _ = ActivateSequenceFromAsync(head, controlGoFadeIn, startAtTimelineSeconds);
     }
 
     /// <summary>
@@ -163,7 +167,11 @@ public partial class CueCommandExectutor : Node
     /// </summary>
     /// <param name="head">Chain head cue to activate.</param>
     /// <param name="controlGoFadeIn">Optional control GO fade-in seconds for the head.</param>
-    public async Task ActivateSequenceFromAsync(Cue head, double? controlGoFadeIn = null)
+    /// <param name="startAtTimelineSeconds">
+    /// Optional absolute body-timeline seek (pre-wait + content) applied to the head before start
+    /// (queued as a pending seek if the body has not started yet).
+    /// </param>
+    public async Task ActivateSequenceFromAsync(Cue head, double? controlGoFadeIn = null, double? startAtTimelineSeconds = null)
     {
         if (head == null)
         {
@@ -185,7 +193,8 @@ public partial class CueCommandExectutor : Node
             };
         }
 
-        GD.Print($"CueCommandExecutor:ActivateSequenceFromAsync - {head.Name}: {chain.Count} cue(s)");
+        GD.Print($"CueCommandExecutor:ActivateSequenceFromAsync - {head.Name}: {chain.Count} cue(s)" +
+                 (startAtTimelineSeconds.HasValue ? $", startAt={startAtTimelineSeconds.Value:F3}s" : string.Empty));
 
         // Create all active rows, build UI in sequence order (so the list matches occurrence),
         // then wire events and start playback.
@@ -207,6 +216,11 @@ public partial class CueCommandExectutor : Node
         // Control GO fade-in applies to the head instance only (not continue/follow peers).
         if (controlGoFadeIn.HasValue && controlGoFadeIn.Value > 1e-9 && actives.Count > 0)
             actives[0].SetControlFadeInDuration(controlGoFadeIn.Value);
+
+        // Timeline playhead: queue body position before StartAsync (skips pre-wait when landing in content,
+        // seeks media + filters nested children that have already ended).
+        if (startAtTimelineSeconds.HasValue && actives.Count > 0)
+            actives[0].QueueStartAtBodyTime(Math.Max(0.0, startAtTimelineSeconds.Value));
 
         // Synchronous UI insert in chain order (avoids async race reordering the VBox).
         foreach (var active in actives)

@@ -16,8 +16,5 @@
 </ItemGroup>  
 <ItemGroup>
   <EmbeddedResource Remove="bin\**" />
-</ItemGroup>  
-<ItemGroup>
-  <Content Include="src\ElephantsDream.srt" />
 </ItemGroup>
 </Project> 

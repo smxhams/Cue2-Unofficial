@@ -43,6 +43,11 @@ OscListen="*res://src/Base/Classes/Connections/OscListen.cs"
 OscConnections="*res://src/Base/Classes/Connections/OscConnections.cs"
 MidiManager="*res://src/Shared/MidiManager.cs"
 
+[debug]
+
+file_logging/log_path="user://logs/Cue2Sytem.log"
+file_logging/max_log_files=7
+
 [display]
 
 window/size/initial_position_type=4

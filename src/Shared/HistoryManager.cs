@@ -522,7 +522,10 @@ public partial class HistoryManager : Node
 		"GoScale",
 		"WaveformResolution",
 		"StopFadeDuration",
-		"MediaBackupEnabled"
+		"MediaBackupEnabled",
+		"MultiEditEnabled",
+		"SelectNewCues",
+		"ShowTimelineWaveforms"
 	};
 
 	private static bool IsScalarSettingsSlice(string[] keys)

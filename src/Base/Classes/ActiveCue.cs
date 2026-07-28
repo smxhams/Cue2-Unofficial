@@ -158,6 +158,28 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
+    /// Queues an absolute body-timeline start position for the next run (Timeline Inspector playhead).
+    /// When the target lands in the content region, pre-wait wait time is skipped so playback
+    /// jumps straight into content and then seeks media/children to the correct offset.
+    /// </summary>
+    /// <param name="bodySeconds">Seconds from this cue's body start (start of pre-wait).</param>
+    public void QueueStartAtBodyTime(double bodySeconds)
+    {
+        if (_isCleaned) return;
+        if (bodySeconds < 0) bodySeconds = 0;
+
+        double pre = Math.Max(0.0, _cue?.PreWait ?? 0.0);
+        _pendingTimelineSeekSeconds = bodySeconds;
+
+        // Landing in (or past) content: do not sit through the pre-wait timer.
+        if (bodySeconds >= pre - 1e-9)
+            _skipPreWait = true;
+
+        GD.Print(
+            $"ActiveCue:QueueStartAtBodyTime - {_cue?.Name}: body={bodySeconds:F3}s pre={pre:F3}s skipPre={_skipPreWait}");
+    }
+
+    /// <summary>
     /// Seeks this cue to an absolute body-timeline position (pre-wait + content).
     /// Used for head-bar scrub and parent→child propagation.
     /// </summary>
@@ -175,6 +197,13 @@ public partial class ActiveCue : GodotObject
         {
             GD.Print(
                 $"ActiveCue:ApplyCueTimelineSeek - {_cue?.Name}: {timelineSeconds:F3}s past end {playable:F3}s — finishing");
+            // Not running yet: remember past-end so Start path finishes immediately without firing.
+            if (!_contentStarted && !_timelineStarted)
+            {
+                _pendingTimelineSeekSeconds = timelineSeconds;
+                _skipPreWait = true;
+                return;
+            }
             SetTimelineSeconds(playable);
             if (_inPreWait || _contentPlaybackActive || _childActiveCues.Count > 0 || HasOwnMediaPlayback())
                 StopAll(propagateToChildren: true, fadeDurationOverride: 0);
@@ -186,7 +215,7 @@ public partial class ActiveCue : GodotObject
         // Not yet in body (still on continue/follow, or setup): queue for when body runs.
         if (!_contentStarted && !_timelineStarted)
         {
-            _pendingTimelineSeekSeconds = timelineSeconds;
+            QueueStartAtBodyTime(timelineSeconds);
             return;
         }
 
@@ -829,7 +858,24 @@ public partial class ActiveCue : GodotObject
         _contentPlaybackActive = true;
         _isPlaying = true;
 
+        // Play-from-playhead past end: finish without firing components or children.
+        if (_pendingTimelineSeekSeconds.HasValue)
+        {
+            double playable = GetPlayableTimelineDuration();
+            if (playable >= 0 && _pendingTimelineSeekSeconds.Value >= playable - 1e-4)
+            {
+                GD.Print(
+                    $"ActiveCue:BeginContentPhaseAsync - {_cue?.Name}: start-at past end " +
+                    $"({_pendingTimelineSeekSeconds.Value:F3}s ≥ {playable:F3}s) — finishing without play");
+                _pendingTimelineSeekSeconds = null;
+                _isFinished = true;
+                HandleNaturalContentFinished();
+                return;
+            }
+        }
+
         // Nested children share this content origin (child t=0 == parent content t=0).
+        // StartChildCues reads pending body time to skip already-ended children and queue their start-at.
         if (_childActiveCues.Count == 0)
             StartChildCues();
 
@@ -839,6 +885,7 @@ public partial class ActiveCue : GodotObject
             _isFinished = true;
             if (!hasChildren)
             {
+                _pendingTimelineSeekSeconds = null;
                 HandleNaturalContentFinished();
                 return;
             }
@@ -868,6 +915,7 @@ public partial class ActiveCue : GodotObject
             }
         }
 
+        // Seek media + still-live children to the queued playhead (must run after TriggerComponents).
         ApplyPendingTimelineSeekIfAny();
         EnsureAliveOrCleanup();
         UpdateHeadProgressUi();
@@ -876,6 +924,8 @@ public partial class ActiveCue : GodotObject
     /// <summary>
     /// Spawns nested active cues under this bar's child list and starts them.
     /// Skips children that have already finished this activation (no resurrect on scrub-back).
+    /// When a pending body seek is set (play-from-playhead), children that have already ended
+    /// at that content time are not started; others are queued to start at that body time.
     /// </summary>
     private void StartChildCues()
     {
@@ -887,6 +937,14 @@ public partial class ActiveCue : GodotObject
         {
             GD.PrintErr($"ActiveCue:StartChildCues - ChildCuelist missing on {_cue.Name}");
             return;
+        }
+
+        // Parent content-local time for play-from-playhead (child body t == parent content t).
+        double? contentTimeAtStart = null;
+        if (_pendingTimelineSeekSeconds.HasValue)
+        {
+            double pre = Math.Max(0.0, _cue.PreWait);
+            contentTimeAtStart = Math.Max(0.0, _pendingTimelineSeekSeconds.Value - pre);
         }
 
         foreach (var childId in _cue.ChildCues)
@@ -907,11 +965,45 @@ public partial class ActiveCue : GodotObject
                 continue;
             }
 
+            // Playhead past this child's end on the parent content clock → do not start it.
+            if (contentTimeAtStart.HasValue &&
+                IsCuePastEndAtBodyTime(child, contentTimeAtStart.Value))
+            {
+                _finishedChildCueIds.Add(childId);
+                GD.Print(
+                    $"ActiveCue:StartChildCues - Skipping child {child.Name} (ended before content t={contentTimeAtStart.Value:F3}s)");
+                continue;
+            }
+
             var activeCue = new ActiveCue(child, childCueList, _mediaEngine, _audioDevices, _globalSignals);
             _childActiveCues.Add(activeCue);
             activeCue.Completed += () => OnChildCompleted(activeCue);
+
+            // Nested children share parent content origin as body t=0.
+            if (contentTimeAtStart.HasValue)
+                activeCue.QueueStartAtBodyTime(contentTimeAtStart.Value);
+
             _ = activeCue.StartAsync();
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="bodyTime"/> is at/after the end of a cue's body span
+    /// (pre-wait + duration). Instant (0-duration) cues are past end once time moves beyond their start.
+    /// </summary>
+    private static bool IsCuePastEndAtBodyTime(Cue cue, double bodyTime)
+    {
+        if (cue == null) return true;
+        double pre = Math.Max(0.0, cue.PreWait);
+        if (cue.Duration < 0)
+            return false; // infinite / unknown — still active
+        double dur = Math.Max(0.0, cue.Duration);
+        if (dur <= 1e-9)
+        {
+            // Fire-and-forget / zero length: only "active" at the action instant.
+            return bodyTime > pre + 1e-3;
+        }
+        return bodyTime >= pre + dur - 1e-4;
     }
 
     /// <summary>
@@ -1691,7 +1783,7 @@ public partial class ActiveCue : GodotObject
     /// <summary>
     /// Playable head-bar span: PreWait + Duration. -1 when infinite/unknown.
     /// </summary>
-    private double GetPlayableTimelineDuration()
+    public double GetPlayableTimelineDuration()
     {
         if (_cue == null) return 0;
         if (_cue.Duration < 0) return -1;
@@ -1900,24 +1992,20 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
-    /// Seeks own audio/video components so content-local time maps onto media (StartTime + t).
+    /// Seeks own audio/video components to a content-local time, mapping across playcount iterations.
     /// </summary>
     private void SeekOwnMediaToContentTime(double contentTimeSeconds)
     {
+        if (contentTimeSeconds < 0) contentTimeSeconds = 0;
+
         foreach (var kv in _activeAudioComponents.ToList())
         {
             var playback = kv.Value;
             if (playback == null) continue;
-            _componentToAudio.TryGetValue(kv.Key, out var audioComp);
             try
             {
-                double start = audioComp?.StartTime ?? 0;
-                double mediaTime = start + contentTimeSeconds;
-                if (mediaTime < 0) mediaTime = 0;
-                // Clamp to component end when known so scrubbing past a short file doesn't hang.
-                if (audioComp != null && audioComp.Duration > 0)
-                    mediaTime = Math.Min(mediaTime, start + audioComp.Duration);
-                playback.Seek((long)(mediaTime * 1_000_000.0));
+                // Multi-play: maps total content seconds → play index + in-segment media seek.
+                playback.SeekToTotalContentSeconds(contentTimeSeconds);
             }
             catch (Exception ex)
             {
@@ -1929,16 +2017,9 @@ public partial class ActiveCue : GodotObject
         {
             var playback = kv.Value;
             if (playback == null) continue;
-            _componentToVideo.TryGetValue(kv.Key, out var videoComp);
             try
             {
-                double start = videoComp != null && !videoComp.IsImage ? videoComp.StartTime : 0;
-                double mediaTime = start + contentTimeSeconds;
-                if (mediaTime < 0) mediaTime = 0;
-                double span = playback.GetDuration();
-                if (span > 0)
-                    mediaTime = Math.Min(mediaTime, start + span);
-                playback.Seek(mediaTime);
+                playback.SeekToTotalContentSeconds(contentTimeSeconds);
             }
             catch (Exception ex)
             {
@@ -2060,7 +2141,7 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
-    /// Max content-local time from active audio/video (media time − StartTime).
+    /// Max content-local time from active audio/video, including completed playcount iterations.
     /// </summary>
     /// <returns>Seconds, or -1 when no running media.</returns>
     private double TryGetMaxOwnMediaContentSeconds()
@@ -2071,10 +2152,8 @@ public partial class ActiveCue : GodotObject
         {
             var playback = kv.Value;
             if (playback == null || playback.IsStopped) continue;
-            _componentToAudio.TryGetValue(kv.Key, out var audioComp);
-            double start = audioComp?.StartTime ?? 0;
-            double media = playback.GetPlaybackTimeMs() / 1000.0;
-            double local = media - start;
+            // Includes (playCount-1)*segment + in-segment elapsed so head bar does not reset on loop.
+            double local = playback.GetTotalElapsedContentSeconds();
             if (local > max) max = local;
         }
 
@@ -2082,10 +2161,7 @@ public partial class ActiveCue : GodotObject
         {
             var playback = kv.Value;
             if (playback == null || playback.IsStopped) continue;
-            _componentToVideo.TryGetValue(kv.Key, out var videoComp);
-            double start = videoComp != null && !videoComp.IsImage ? videoComp.StartTime : 0;
-            double media = playback.GetPlaybackTimeSeconds();
-            double local = media - start;
+            double local = playback.GetTotalElapsedContentSeconds();
             if (local > max) max = local;
         }
 
@@ -2362,9 +2438,12 @@ public partial class ActiveCue : GodotObject
             stopButton.Pressed += async () => await StopComponent(componentPanel);
             
             
-            // Progress bar seeking
+            // Progress bar seeking (span includes playcount when not looping)
             var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
-            double pendingSeekTimeSec = 0;
+            double pendingContentSeekSec = 0;
+            double audioSeekSpan = audioComponent.Loop || audioComponent.TotalDuration < 0
+                ? Math.Max(0, audioComponent.Duration)
+                : Math.Max(0, audioComponent.TotalDuration);
             progressBar.GuiInput += (@event) =>
             {
                 if (!_activeAudioComponents.ContainsKey(componentPanel)) return;
@@ -2373,37 +2452,34 @@ public partial class ActiveCue : GodotObject
                     if (mb.Pressed)
                     {
                         playback.IsSeeking = true;
-                        // Calculate initial seek time
                         var localPos = progressBar.GetLocalMousePosition();
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                        pendingSeekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration;
+                        pendingContentSeekSec = percent * audioSeekSpan;
                         progressBar.Value = percent * 100; // Preview
-                        timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
+                        timeLabel.Text = UiUtilities.FormatTime(pendingContentSeekSec);
                         // Live head preview while scrubbing component.
-                        SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
+                        SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                     }
                     else
                     {
-                        // Release: perform the seek
+                        // Release: perform the seek across playcount timeline
                         if (playback.IsSeeking)
                         {
-                            long timestampUs = (long)(pendingSeekTimeSec * 1_000_000);
-                            playback.Seek(timestampUs);
-                            SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
-                            GD.Print($"ActiveCue:ProgressBar - Sought to {pendingSeekTimeSec} sec on release");
+                            playback.SeekToTotalContentSeconds(pendingContentSeekSec);
+                            SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
+                            GD.Print($"ActiveCue:ProgressBar - Sought to content {pendingContentSeekSec:F3}s on release");
                         }
                         playback.IsSeeking = false;
                     }
                 }
                 else if (@event is InputEventMouseMotion && playback.IsSeeking)
                 {
-                    // Update preview during drag
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                    pendingSeekTimeSec = audioComponent.StartTime + percent * audioComponent.Duration;
-                    progressBar.Value = percent * 100; // Update preview
-                    timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
-                    SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - audioComponent.StartTime);
+                    pendingContentSeekSec = percent * audioSeekSpan;
+                    progressBar.Value = percent * 100;
+                    timeLabel.Text = UiUtilities.FormatTime(pendingContentSeekSec);
+                    SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                 }
             };
 
@@ -2542,9 +2618,12 @@ public partial class ActiveCue : GodotObject
             // Stop
             stopButton.Pressed += async () => await StopVideoComponent(componentPanel);
             
-            // Progress bar seeking
+            // Progress bar seeking (span includes playcount when not looping)
             var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
-            double pendingSeekTimeSec = 0;
+            double pendingContentSeekSec = 0;
+            double videoSeekSpan = videoComponent.Loop || videoComponent.TotalDuration < 0
+                ? (videoComponent.Duration > 0 ? videoComponent.Duration : Math.Max(0, playback.GetDuration()))
+                : Math.Max(0, videoComponent.TotalDuration);
             progressBar.GuiInput += (@event) =>
             {
                 if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
@@ -2552,45 +2631,38 @@ public partial class ActiveCue : GodotObject
                     if (mb.Pressed)
                     {
                         playback.IsSeeking = true;
-                        // Calculate initial seek time
                         var localPos = progressBar.GetLocalMousePosition();
                         // Still images held until stopped have no seekable timeline.
-                        if (videoComponent.IsImage && playback.GetDuration() <= 0)
+                        if (videoComponent.IsImage && videoSeekSpan <= 0)
                         {
                             playback.IsSeeking = false;
                             return;
                         }
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                        double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
-                        pendingSeekTimeSec = start + percent * playback.GetDuration();
+                        pendingContentSeekSec = percent * videoSeekSpan;
                         progressBar.Value = percent * 100; // Preview
-                        timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Preview time
-                        SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - start);
+                        timeLabel.Text = UiUtilities.FormatTime(pendingContentSeekSec);
+                        SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                     }
                     else
                     {
-                        // Release: perform the seek
                         if (playback.IsSeeking)
                         {
-                            double time = pendingSeekTimeSec;
-                            double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
-                            playback.Seek(time);
-                            SyncHeadTimelineFromComponentSeek(time - start);
-                            GD.Print($"ActiveCue:ProgressBar - Sought to {pendingSeekTimeSec} sec on release");
+                            playback.SeekToTotalContentSeconds(pendingContentSeekSec);
+                            SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
+                            GD.Print($"ActiveCue:ProgressBar - Sought to content {pendingContentSeekSec:F3}s on release");
                         }
                         playback.IsSeeking = false;
                     }
                 }
                 else if (@event is InputEventMouseMotion && playback.IsSeeking)
                 {
-                    // Update preview during drag
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
-                    double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
-                    pendingSeekTimeSec = start + percent * playback.GetDuration();
-                    progressBar.Value = percent * 100; // Update preview
-                    timeLabel.Text = UiUtilities.FormatTime(pendingSeekTimeSec); // Update preview time
-                    SyncHeadTimelineFromComponentSeek(pendingSeekTimeSec - start);
+                    pendingContentSeekSec = percent * videoSeekSpan;
+                    progressBar.Value = percent * 100;
+                    timeLabel.Text = UiUtilities.FormatTime(pendingContentSeekSec);
+                    SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                 }
             };
             ulong videoPanelId = componentPanel.GetInstanceId();
@@ -3073,13 +3145,18 @@ public partial class ActiveCue : GodotObject
 
         if (audioPlayback.IsPaused) return;
 
-        //GD.Print($"ActiveCue:UpdateComponentUiState - Current time ms: {audioPlayback.Decoder.CurrentTime}");
-        float trackTime = audioPlayback.GetPlaybackTimeMs() / 1000f; // ms to seconds
-        float progressPercentage = ((trackTime - (float)audioComponent.StartTime) / (float)audioComponent.Duration) * 100f;
+        // Content elapsed includes completed playcount iterations (does not reset on replay).
+        double contentElapsed = audioPlayback.GetTotalElapsedContentSeconds();
+        double progressSpan = audioComponent.Loop || audioComponent.TotalDuration < 0
+            ? audioComponent.Duration
+            : audioComponent.TotalDuration;
+        float progressPercentage = progressSpan > 1e-9
+            ? (float)(contentElapsed / progressSpan * 100.0)
+            : 0f;
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
         if (!audioPlayback.IsSeeking)
         {
-            timeLabel.Text = UiUtilities.FormatTime(trackTime);
+            timeLabel.Text = UiUtilities.FormatTime(contentElapsed);
             progressBar.Value = progressPercentage;
         }
     }
@@ -3104,25 +3181,26 @@ public partial class ActiveCue : GodotObject
 
         if (videoPlayback.IsPaused) return;
 
-        float trackTime = (float)time;
-        double span = videoPlayback.GetDuration();
+        double contentElapsed = videoPlayback.GetTotalElapsedContentSeconds();
         float progressPercentage;
-        if (videoComponent.IsImage && span <= 0)
+        if (videoComponent.IsImage && videoComponent.Duration <= 0)
         {
             // Image held until stopped — no finite progress span.
             progressPercentage = 0f;
         }
         else
         {
-            double start = videoComponent.IsImage ? 0 : videoComponent.StartTime;
-            progressPercentage = span > 0
-                ? (float)((trackTime - start) / span * 100.0)
+            double progressSpan = videoComponent.Loop || videoComponent.TotalDuration < 0
+                ? (videoComponent.Duration > 0 ? videoComponent.Duration : videoPlayback.GetDuration())
+                : videoComponent.TotalDuration;
+            progressPercentage = progressSpan > 1e-9
+                ? (float)(contentElapsed / progressSpan * 100.0)
                 : 0f;
         }
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
         if (!videoPlayback.IsSeeking)
         {
-            timeLabel.Text = UiUtilities.FormatTime(trackTime);
+            timeLabel.Text = UiUtilities.FormatTime(contentElapsed);
             progressBar.Value = progressPercentage;
         }
     }

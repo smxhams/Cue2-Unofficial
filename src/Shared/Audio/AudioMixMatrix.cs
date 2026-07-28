@@ -6,14 +6,53 @@ using Cue2.Base.Classes.Devices;
 namespace Cue2.Shared.Audio;
 
 /// <summary>
-/// Pure float PCM mixing utilities for cue volume and routing matrices.
+/// Pure float PCM mixing utilities for cue volume, stereo pan, and routing matrices.
 /// No Godot or SDL dependencies — safe to unit-test.
 /// </summary>
+/// <remarks>
+/// Signal flow per sample: source → component volume × master volume → stereo pan (L/R only)
+/// → cue routing matrix → output patch / direct device.
+/// </remarks>
 public static class AudioMixMatrix
 {
     /// <summary>
+    /// Equal-power stereo balance gains for pan in [−1, 1].
+    /// Center (0) keeps both channels at unity; full left/right fully attenuates the opposite side.
+    /// </summary>
+    /// <param name="pan">Pan position (−1 = full left, 0 = center, +1 = full right).</param>
+    /// <param name="leftGain">Linear gain for the left (channel 0) source.</param>
+    /// <param name="rightGain">Linear gain for the right (channel 1) source.</param>
+    public static void GetStereoPanGains(float pan, out float leftGain, out float rightGain)
+    {
+        pan = Math.Clamp(pan, -1f, 1f);
+        if (pan <= 0f)
+        {
+            leftGain = 1f;
+            // cos(0)=1 at center; cos(π/2)=0 at full left
+            rightGain = MathF.Cos((-pan) * (MathF.PI * 0.5f));
+        }
+        else
+        {
+            leftGain = MathF.Cos(pan * (MathF.PI * 0.5f));
+            rightGain = 1f;
+        }
+    }
+
+    /// <summary>
+    /// Per-input-channel gain from stereo pan. Non-stereo or out-of-range channels return 1.
+    /// </summary>
+    public static float GetInputPanGain(float pan, int inChannels, int channelIndex)
+    {
+        if (inChannels != 2 || channelIndex < 0 || channelIndex > 1)
+            return 1f;
+        GetStereoPanGains(pan, out float left, out float right);
+        return channelIndex == 0 ? left : right;
+    }
+
+    /// <summary>
     /// Mixes interleaved source PCM into an output buffer for a single device.
-    /// Applies master volume, optional CuePatch, and optional AudioOutputPatch device mapping.
+    /// Applies master volume, optional stereo pan (before routing), optional CuePatch,
+    /// and optional AudioOutputPatch device mapping.
     /// </summary>
     /// <param name="source">Interleaved float32 source samples (frames * inChannels).</param>
     /// <param name="frames">Number of sample-frames.</param>
@@ -22,6 +61,7 @@ public static class AudioMixMatrix
     /// <param name="outChannels">Output channel count for this stream (must match stream creation).</param>
     /// <param name="masterVolume">Runtime master volume [0,1] (includes fades).</param>
     /// <param name="componentVolume">Cue component volume [0,1].</param>
+    /// <param name="pan">Stereo pan [−1,1]; applied only when <paramref name="inChannels"/> is 2.</param>
     /// <param name="routing">Optional per-cue channel matrix (source → patch buses).</param>
     /// <param name="patch">Optional global output patch.</param>
     /// <param name="deviceName">Device name for patch lookup; may be null for direct.</param>
@@ -34,6 +74,7 @@ public static class AudioMixMatrix
         int outChannels,
         float masterVolume,
         float componentVolume,
+        float pan,
         CuePatch routing,
         AudioOutputPatch patch,
         string deviceName,
@@ -52,9 +93,16 @@ public static class AudioMixMatrix
         output.Slice(0, requiredOut).Clear();
         float gain = masterVolume * componentVolume;
 
+        // Pre-routing pan gains (identity for mono / multi-channel beyond stereo, and at center).
+        float panL = 1f;
+        float panR = 1f;
+        bool applyStereoPan = inChannels == 2 && Math.Abs(pan) > 1e-6f;
+        if (applyStereoPan)
+            GetStereoPanGains(pan, out panL, out panR);
+
         if (isDirectOutput)
         {
-            MixDirect(source, frames, inChannels, output, outChannels, gain, routing);
+            MixDirect(source, frames, inChannels, output, outChannels, gain, panL, panR, applyStereoPan, routing);
             return;
         }
 
@@ -64,19 +112,27 @@ public static class AudioMixMatrix
             deviceOutputs != null &&
             deviceOutputs.Count > 0)
         {
-            MixPatched(source, frames, inChannels, output, outChannels, gain, routing, deviceOutputs, patch.Volume);
+            MixPatched(source, frames, inChannels, output, outChannels, gain, panL, panR, applyStereoPan,
+                routing, deviceOutputs, patch.Volume);
             return;
         }
 
-        // Fallback: 1:1 with master gain
+        // Fallback: 1:1 with master gain (+ stereo pan when applicable)
         int ch = Math.Min(inChannels, outChannels);
         for (int f = 0; f < frames; f++)
         {
             for (int c = 0; c < ch; c++)
             {
-                output[f * outChannels + c] = source[f * inChannels + c] * gain;
+                float channelGain = gain * ChannelPanGain(c, panL, panR, applyStereoPan);
+                output[f * outChannels + c] = source[f * inChannels + c] * channelGain;
             }
         }
+    }
+
+    private static float ChannelPanGain(int inCh, float panL, float panR, bool applyStereoPan)
+    {
+        if (!applyStereoPan) return 1f;
+        return inCh == 0 ? panL : inCh == 1 ? panR : 1f;
     }
 
     private static void MixDirect(
@@ -86,6 +142,9 @@ public static class AudioMixMatrix
         Span<float> output,
         int outChannels,
         float gain,
+        float panL,
+        float panR,
+        bool applyStereoPan,
         CuePatch routing)
     {
         if (routing != null)
@@ -99,7 +158,8 @@ public static class AudioMixMatrix
                     float sample = 0f;
                     for (int inCh = 0; inCh < routeIn; inCh++)
                     {
-                        sample += source[f * inChannels + inCh] * gain * routing.GetVolume(inCh, outCh);
+                        float panGain = ChannelPanGain(inCh, panL, panR, applyStereoPan);
+                        sample += source[f * inChannels + inCh] * gain * panGain * routing.GetVolume(inCh, outCh);
                     }
                     output[f * outChannels + outCh] = sample;
                 }
@@ -112,7 +172,8 @@ public static class AudioMixMatrix
         {
             for (int c = 0; c < ch; c++)
             {
-                output[f * outChannels + c] = source[f * inChannels + c] * gain;
+                float panGain = ChannelPanGain(c, panL, panR, applyStereoPan);
+                output[f * outChannels + c] = source[f * inChannels + c] * gain * panGain;
             }
         }
     }
@@ -124,6 +185,9 @@ public static class AudioMixMatrix
         Span<float> output,
         int outChannels,
         float gain,
+        float panL,
+        float panR,
+        bool applyStereoPan,
         CuePatch routing,
         List<OutputChannel> deviceOutputs,
         float patchVolume)
@@ -163,7 +227,8 @@ public static class AudioMixMatrix
                             routeGain = (inCh == patchCh) ? 1f : 0f;
                         }
 
-                        sample += source[f * inChannels + inCh] * totalGain * routeGain;
+                        float panGain = ChannelPanGain(inCh, panL, panR, applyStereoPan);
+                        sample += source[f * inChannels + inCh] * totalGain * panGain * routeGain;
                     }
                 }
 

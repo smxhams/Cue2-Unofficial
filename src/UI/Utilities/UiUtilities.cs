@@ -377,6 +377,101 @@ public partial class UiUtilities : Node
             db = 0f;
         return Mathf.Pow(10f, db / 20f);
     }
+
+    /// <summary>
+    /// Formats a stereo pan value (−1…1) for UI display: "C", "L50", "R100", etc.
+    /// </summary>
+    /// <param name="pan">Pan in [−1, 1] (negative = left, positive = right, 0 = center).</param>
+    /// <returns>Human-readable pan status string.</returns>
+    public static string FormatPan(float pan)
+    {
+        pan = Mathf.Clamp(pan, -1f, 1f);
+        if (Mathf.IsZeroApprox(pan))
+            return "C";
+        int percent = Mathf.RoundToInt(Mathf.Abs(pan) * 100f);
+        if (percent <= 0)
+            return "C";
+        if (percent > 100)
+            percent = 100;
+        return pan < 0f ? $"L{percent}" : $"R{percent}";
+    }
+
+    /// <summary>
+    /// Parses user pan text into a linear pan value (−1…1).
+    /// Accepts: C / center / 0, L / L50 / left, R / R25 / right, or numeric −100…100.
+    /// </summary>
+    /// <param name="text">User input.</param>
+    /// <param name="pan">Parsed pan on success.</param>
+    /// <returns>True when parsing succeeded.</returns>
+    public static bool TryParsePan(string text, out float pan)
+    {
+        pan = 0f;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        string cleaned = text.Trim().TrimEnd('%');
+        string upper = cleaned.ToUpperInvariant();
+
+        if (upper is "C" or "CENTER" or "CENTRE" or "0")
+        {
+            pan = 0f;
+            return true;
+        }
+
+        // L / L50 / LEFT / LEFT50  (must check LEFT before bare L)
+        if (upper.StartsWith("LEFT") || (upper.Length >= 1 && upper[0] == 'L'))
+        {
+            string numPart = upper.StartsWith("LEFT") ? upper.Substring(4) : upper.Substring(1);
+            numPart = numPart.Trim();
+            if (string.IsNullOrEmpty(numPart))
+            {
+                pan = -1f;
+                return true;
+            }
+            if (float.TryParse(numPart, out float leftPct))
+            {
+                pan = -Mathf.Clamp(leftPct / 100f, 0f, 1f);
+                return true;
+            }
+            return false;
+        }
+
+        // R / R50 / RIGHT / RIGHT25
+        if (upper.StartsWith("RIGHT") || (upper.Length >= 1 && upper[0] == 'R'))
+        {
+            string numPart = upper.StartsWith("RIGHT") ? upper.Substring(5) : upper.Substring(1);
+            numPart = numPart.Trim();
+            if (string.IsNullOrEmpty(numPart))
+            {
+                pan = 1f;
+                return true;
+            }
+            if (float.TryParse(numPart, out float rightPct))
+            {
+                pan = Mathf.Clamp(rightPct / 100f, 0f, 1f);
+                return true;
+            }
+            return false;
+        }
+
+        // Bare number on −100…100 scale (negative = left, positive = right).
+        if (!float.TryParse(cleaned, out float value))
+            return false;
+
+        if (Mathf.IsZeroApprox(value))
+        {
+            pan = 0f;
+            return true;
+        }
+
+        // Values outside ±1 are always percent; ±1 and fractions with a decimal are normalized;
+        // whole numbers in 1…100 are percent (so "50" → R50).
+        if (Math.Abs(value) > 1f || (!cleaned.Contains('.') && Math.Abs(value) >= 1f))
+            pan = Mathf.Clamp(value / 100f, -1f, 1f);
+        else
+            pan = Mathf.Clamp(value, -1f, 1f);
+        return true;
+    }
     
     /// <summary>
     /// Recursively sets the colour of all label children of provided root

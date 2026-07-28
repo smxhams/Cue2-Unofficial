@@ -32,6 +32,8 @@ public partial class ShellBar : PanelContainer
 	
 	private LineEdit _cueNumLineEdit;
 	private LineEdit _cueNameLineEdit;
+	/// <summary>Shown in place of number/name/times when the cue is in memo mode.</summary>
+	private LineEdit _memoLineEdit;
 
 	private LineEdit _preWaitLineEdit;
 	private LineEdit _durationLineEdit;
@@ -54,6 +56,7 @@ public partial class ShellBar : PanelContainer
 	private bool _isEditingCueNum = false;
 	private bool _isEditingPreWait = false;
 	private bool _isEditingPostWait = false;
+	private bool _isEditingMemo = false;
 	
 	public bool Selected = false;
 
@@ -77,6 +80,8 @@ public partial class ShellBar : PanelContainer
 		
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;
+		if (_memoLineEdit != null)
+			_memoLineEdit.Editable = false;
 		
 		// Connect Ui events
 		GuiInput += OnInput;
@@ -95,6 +100,11 @@ public partial class ShellBar : PanelContainer
 		_cueNameLineEdit.EditingToggled += OnNameEditToggled;
 		_preWaitLineEdit.EditingToggled += OnPreWaitEditToggled;
 		_postWaitLineEdit.EditingToggled += OnPostWaitEditToggled;
+		if (_memoLineEdit != null)
+		{
+			_memoLineEdit.GuiInput += OnMemoGuiInput;
+			_memoLineEdit.EditingToggled += OnMemoEditToggled;
+		}
 		if (_followButton != null)
 			_followButton.Pressed += OnFollowButtonPressed;
 
@@ -200,9 +210,12 @@ public partial class ShellBar : PanelContainer
 
 		if (_cueNameLineEdit != null)
 			_cueNameLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+		if (_memoLineEdit != null)
+			_memoLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 
 		ApplyCompactFieldStyle(_cueNumLineEdit);
 		ApplyCompactFieldStyle(_cueNameLineEdit);
+		ApplyCompactFieldStyle(_memoLineEdit);
 		ApplyCompactFieldStyle(_preWaitLineEdit);
 		ApplyCompactFieldStyle(_durationLineEdit);
 		ApplyCompactFieldStyle(_postWaitLineEdit);
@@ -307,6 +320,8 @@ public partial class ShellBar : PanelContainer
 			_cue.FollowChanged -= UpdateFollowMode;
 			_cue.ArmedChanged -= OnArmedVisualChanged;
 			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
+			_cue.NotesChanged -= OnNotesChanged;
+			_cue.MemoChanged -= OnMemoChanged;
 			_cue = null;
 		}
 		// Drop duplicated theme StyleBox so it is not retained after node free
@@ -374,7 +389,17 @@ public partial class ShellBar : PanelContainer
 			_cueNameLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		}
 
+		if (_memoLineEdit != null)
+		{
+			_memoLineEdit.CustomMinimumSize = new Vector2(40f, ctrlH);
+			_memoLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+			_memoLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		}
+
 		// Fixed trailing band widths (Pre + Dur + Post + Follow + separations).
+		// In memo mode only Follow remains visible — shrink the band so notes get the space.
+		bool memo = _cue?.Memo == true;
+
 		_preWaitLineEdit.CustomMinimumSize = new Vector2(timeW, ctrlH);
 		_preWaitLineEdit.SizeFlagsHorizontal = SizeFlags.Fill;
 		_preWaitLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
@@ -398,7 +423,9 @@ public partial class ShellBar : PanelContainer
 		if (_trailingHBox != null)
 		{
 			// Explicit fixed width so the band never shrinks or grows with indent.
-			float trailW = timeW * 3f + followW + sep * 3f;
+			float trailW = memo
+				? followW
+				: timeW * 3f + followW + sep * 3f;
 			_trailingHBox.CustomMinimumSize = new Vector2(trailW, ctrlH);
 			_trailingHBox.SizeFlagsHorizontal = SizeFlags.Fill;
 			_trailingHBox.SizeFlagsVertical = SizeFlags.ShrinkCenter;
@@ -513,6 +540,7 @@ public partial class ShellBar : PanelContainer
 		if (_cue != null && _cue.Id == cueId)
 		{
 			RefreshTimesFromCue();
+			ApplyMemoMode();
 			QueueRedraw();
 		}
 	}
@@ -631,6 +659,7 @@ public partial class ShellBar : PanelContainer
 		_trailingHBox = GetNodeOrNull<HBoxContainer>("%TrailingHBox");
 		_cueNumLineEdit = GetNode<LineEdit>("%CueNumLineEdit");
 		_cueNameLineEdit = GetNode<LineEdit>("%CueNameLineEdit");
+		_memoLineEdit = GetNodeOrNull<LineEdit>("%MemoLineEdit");
 
 		_preWaitLineEdit = GetNode<LineEdit>("%PreWaitLineEdit");
 		_durationLineEdit = GetNode<LineEdit>("%DurationLineEdit");
@@ -657,6 +686,8 @@ public partial class ShellBar : PanelContainer
 			_cue.FollowChanged -= UpdateFollowMode;
 			_cue.ArmedChanged -= OnArmedVisualChanged;
 			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
+			_cue.NotesChanged -= OnNotesChanged;
+			_cue.MemoChanged -= OnMemoChanged;
 		}
 		_cue = cue;
 		_cue.NameChanged += UpdateName;
@@ -669,6 +700,8 @@ public partial class ShellBar : PanelContainer
 		_cue.FollowChanged += UpdateFollowMode;
 		_cue.ArmedChanged += OnArmedVisualChanged;
 		_cue.SkipIfDisarmedChanged += OnArmedVisualChanged;
+		_cue.NotesChanged += OnNotesChanged;
+		_cue.MemoChanged += OnMemoChanged;
 		_cueNumLineEdit.Text = cue.CueNum;
 		_cueNameLineEdit.Text = cue.Name;
 		RefreshTimesFromCue();
@@ -683,12 +716,16 @@ public partial class ShellBar : PanelContainer
 		RefreshIssueIndicatorFromService();
 		ApplyTreeIndent();
 		RefreshShellChrome();
+		ApplyMemoMode();
 		QueueRedraw();
 
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;
+		if (_memoLineEdit != null)
+			_memoLineEdit.Editable = false;
 		_isEditingCueNum = false;
 		_isEditingName = false;
+		_isEditingMemo = false;
 	}
 
 	/// <summary>
@@ -744,6 +781,71 @@ public partial class ShellBar : PanelContainer
 		UpdateCollapseUI();
 		RefreshIssueIndicatorFromService();
 		RefreshShellChrome();
+		ApplyMemoMode();
+	}
+
+	/// <summary>
+	/// Swaps shell row content between standard fields and memo (notes) layout.
+	/// Memo mode hides number, name, pre-wait, duration, and post-wait; follow stays.
+	/// </summary>
+	private void ApplyMemoMode()
+	{
+		bool memo = _cue?.Memo == true;
+
+		if (_cueNumLineEdit != null)
+			_cueNumLineEdit.Visible = !memo;
+		if (_cueNameLineEdit != null)
+			_cueNameLineEdit.Visible = !memo;
+		if (_preWaitLineEdit != null)
+			_preWaitLineEdit.Visible = !memo;
+		if (_durationLineEdit != null)
+			_durationLineEdit.Visible = !memo;
+		if (_postWaitLineEdit != null)
+			_postWaitLineEdit.Visible = !memo;
+
+		if (_memoLineEdit != null)
+		{
+			_memoLineEdit.Visible = memo;
+			if (memo && !_isEditingMemo)
+			{
+				_memoLineEdit.Text = FlattenNotesForShell(_cue?.Notes);
+				_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue?.Notes)
+					? "Memo cue — double-click to edit notes."
+					: _cue.Notes;
+			}
+		}
+
+		// Trailing band width changes when times hide/show.
+		ApplyColumnLayout();
+	}
+
+	private void OnMemoChanged(bool _)
+	{
+		ApplyMemoMode();
+	}
+
+	private void OnNotesChanged(string notes)
+	{
+		if (_memoLineEdit == null || _isEditingMemo)
+			return;
+		if (_cue?.Memo != true)
+			return;
+		_memoLineEdit.Text = FlattenNotesForShell(notes);
+		_memoLineEdit.TooltipText = string.IsNullOrEmpty(notes)
+			? "Memo cue — double-click to edit notes."
+			: notes;
+	}
+
+	/// <summary>Collapses multi-line notes for the single-line shell field.</summary>
+	private static string FlattenNotesForShell(string notes)
+	{
+		if (string.IsNullOrEmpty(notes))
+			return string.Empty;
+		return notes
+			.Replace("\r\n", " ")
+			.Replace('\n', ' ')
+			.Replace('\r', ' ')
+			.Trim();
 	}
 
 	private static string FormatDurationField(double seconds)
@@ -850,6 +952,54 @@ public partial class ShellBar : PanelContainer
 			_cueNameLineEdit.FocusMode = FocusModeEnum.Click;
 			_cueNameLineEdit.GrabFocus();
 			_isEditingName = true;
+		}
+	}
+
+	private void OnMemoGuiInput(InputEvent @event)
+	{
+		OnInput(@event);
+		if (_memoLineEdit == null || _cue?.Memo != true) return;
+		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && mb.DoubleClick)
+		{
+			if (_isEditingMemo) return;
+			_memoLineEdit.Editable = true;
+			_memoLineEdit.FocusMode = FocusModeEnum.Click;
+			_memoLineEdit.GrabFocus();
+			_isEditingMemo = true;
+		}
+	}
+
+	private void OnMemoEditToggled(bool editing)
+	{
+		if (_cue == null || _memoLineEdit == null) return;
+		if (_isEditingMemo && editing == false)
+		{
+			_memoLineEdit.Editable = false;
+			string newNotes = _memoLineEdit.Text ?? string.Empty;
+			// Compare against flattened form so multi-line notes are not wiped by an unchanged display.
+			string flatCurrent = FlattenNotesForShell(_cue.Notes);
+			if (!string.Equals(flatCurrent, newNotes, System.StringComparison.Ordinal))
+			{
+				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue notes");
+				_cue.Notes = newNotes;
+				NotifyInspectorsOfCueEdit();
+			}
+			else
+			{
+				_memoLineEdit.Text = flatCurrent;
+			}
+			_memoLineEdit.FocusMode = FocusModeEnum.None;
+			_isEditingMemo = false;
+			_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue.Notes)
+				? "Memo cue — double-click to edit notes."
+				: _cue.Notes;
+		}
+		else if (_isEditingMemo && !editing)
+		{
+			_memoLineEdit.Editable = true;
+			_memoLineEdit.FocusMode = FocusModeEnum.Click;
+			_memoLineEdit.GrabFocus();
+			_isEditingMemo = true;
 		}
 	}
 

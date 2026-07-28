@@ -459,6 +459,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         float masterVol;
         lock (_lock) masterVol = _volume;
         float componentVol = (float)_audioComponent.Volume;
+        // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
+        float pan = SourceChannels == 2 ? _audioComponent.Pan : 0f;
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
 
         int declickRemainSnapshot = _declickFramesRemaining;
@@ -481,6 +483,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 outCh,
                 masterVol,
                 componentVol,
+                pan,
                 Routing,
                 Patch,
                 deviceName,
@@ -799,13 +802,116 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         lock (_lock)
         {
             if (_audioComponent.Loop) return -1.0;
-            double segmentDuration = (_endTimeUs - _startTimeUs) / 1_000_000.0;
+            double segmentDuration = GetSegmentDurationSecondsUnlocked();
             double posSec = GetPlaybackPositionUs() / 1_000_000.0;
             double startSec = _startTimeUs / 1_000_000.0;
             double remainingInSegment = Math.Max(0, segmentDuration - (posSec - startSec));
             int remainingCounts = Math.Max(0, EffectivePlayCount - _currentPlayCount);
             return remainingInSegment + remainingCounts * segmentDuration;
         }
+    }
+
+    /// <summary>
+    /// Content-local elapsed time including completed playcount iterations.
+    /// 0 at the start of the first play; continues past segment length on replay 2, 3, …
+    /// Infinite loop returns elapsed within the current segment only.
+    /// </summary>
+    /// <returns>Seconds of content progress for cue/component progress bars.</returns>
+    public double GetTotalElapsedContentSeconds()
+    {
+        lock (_lock)
+        {
+            double segmentDuration = GetSegmentDurationSecondsUnlocked();
+            if (segmentDuration <= 1e-12)
+                return 0;
+
+            double posSec = GetPlaybackPositionUs() / 1_000_000.0;
+            double startSec = _startTimeUs / 1_000_000.0;
+            double segmentElapsed = Math.Clamp(posSec - startSec, 0.0, segmentDuration);
+
+            // Infinite loop: do not accumulate unboundedly for UI.
+            if (_audioComponent.Loop || EffectivePlayCount >= int.MaxValue / 4)
+                return segmentElapsed;
+
+            int completed = Math.Max(0, _currentPlayCount - 1);
+            completed = Math.Min(completed, Math.Max(0, EffectivePlayCount - 1));
+            return completed * segmentDuration + segmentElapsed;
+        }
+    }
+
+    /// <summary>
+    /// Seeks into the multi-play content timeline (0 = start of first play).
+    /// Updates <see cref="CurrentPlayCount"/> so progress continues correctly after seek.
+    /// </summary>
+    /// <param name="contentSeconds">Elapsed content seconds across playcount iterations.</param>
+    public void SeekToTotalContentSeconds(double contentSeconds)
+    {
+        if (contentSeconds < 0) contentSeconds = 0;
+
+        double segmentDuration;
+        int effectiveCount;
+        bool isLoop;
+        lock (_lock)
+        {
+            segmentDuration = GetSegmentDurationSecondsUnlocked();
+            effectiveCount = EffectivePlayCount;
+            isLoop = _audioComponent.Loop;
+        }
+
+        if (segmentDuration <= 1e-12)
+        {
+            Seek(_startTimeUs);
+            return;
+        }
+
+        if (isLoop || effectiveCount >= int.MaxValue / 4)
+        {
+            double local = contentSeconds % segmentDuration;
+            if (local < 0) local += segmentDuration;
+            Seek(_startTimeUs + (long)(local * 1_000_000.0));
+            return;
+        }
+
+        double total = segmentDuration * Math.Max(1, effectiveCount);
+        contentSeconds = Math.Clamp(contentSeconds, 0.0, total);
+
+        int playIndex;
+        double localInSegment;
+        if (contentSeconds >= total - 1e-9)
+        {
+            playIndex = Math.Max(0, effectiveCount - 1);
+            localInSegment = segmentDuration;
+        }
+        else
+        {
+            playIndex = (int)Math.Floor(contentSeconds / segmentDuration);
+            playIndex = Math.Clamp(playIndex, 0, Math.Max(0, effectiveCount - 1));
+            localInSegment = contentSeconds - playIndex * segmentDuration;
+            localInSegment = Math.Clamp(localInSegment, 0.0, segmentDuration);
+        }
+
+        lock (_lock)
+        {
+            _currentPlayCount = playIndex + 1;
+        }
+
+        long targetUs = _startTimeUs + (long)(localInSegment * 1_000_000.0);
+        if (_endTimeUs < long.MaxValue)
+            targetUs = Math.Min(targetUs, _endTimeUs);
+        Seek(targetUs);
+    }
+
+    /// <summary>Single play segment length in seconds (StartTime…EndTime).</summary>
+    private double GetSegmentDurationSecondsUnlocked()
+    {
+        if (_endTimeUs == long.MaxValue || _endTimeUs <= _startTimeUs)
+        {
+            // Fall back to component duration when end is open-ended.
+            if (_audioComponent.Duration > 0)
+                return _audioComponent.Duration;
+            return 0;
+        }
+        return (_endTimeUs - _startTimeUs) / 1_000_000.0;
     }
 
     public long GetPlaybackTimeMs()

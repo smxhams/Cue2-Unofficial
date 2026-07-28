@@ -33,30 +33,33 @@ theme_override_constants/margin_bottom = 4
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer" unique_id=1983524718]
 layout_mode = 2
 
-[node name="GridContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer" unique_id=1505719586]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/ScrollContainer" unique_id=5682332]
+layout_mode = 2
+
+[node name="GridContainer" type="VBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer" unique_id=1505719586]
 custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 size_flags_horizontal = 2
 size_flags_vertical = 3
 
-[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer/GridContainer" unique_id=209245282]
+[node name="GridContainer" type="GridContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer" unique_id=209245282]
 layout_mode = 2
 columns = 2
 
-[node name="CueId" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1991043765]
+[node name="CueId" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1991043765]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ParentCueLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1938100783]
+[node name="ParentCueLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1938100783]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="CueNumLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=164424969]
+[node name="CueNumLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=164424969]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Number:"
 
-[node name="CueNum" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=869757138]
+[node name="CueNum" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=869757138]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
@@ -65,30 +68,30 @@ tooltip_text = "Cue numbers, shorthand identifier. Does not need to be unique. M
 placeholder_text = "No Selection"
 max_length = 5
 
-[node name="CueNameLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1155908889]
+[node name="CueNameLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1155908889]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Name:"
 
-[node name="ShellName" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1107311686]
+[node name="ShellName" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1107311686]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 placeholder_text = "No Selection"
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=538649934]
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=538649934]
 layout_mode = 2
 theme_override_constants/separation = 16
 theme_override_styles/separator = SubResource("StyleBoxEmpty_frsqn")
 
-[node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=61423710]
+[node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=61423710]
 layout_mode = 2
 
-[node name="ColourLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=552059970]
+[node name="ColourLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=552059970]
 layout_mode = 2
 text = "Colour:"
 
-[node name="ColourPickerButton" type="ColorPickerButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1545370151]
+[node name="ColourPickerButton" type="ColorPickerButton" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1545370151]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
@@ -99,47 +102,47 @@ text = "Shell Colour"
 color = Color(1, 1, 1, 1)
 edit_alpha = false
 
-[node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1558728979]
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1558728979]
 layout_mode = 2
 theme_override_constants/separation = 16
 theme_override_styles/separator = SubResource("StyleBoxEmpty_tpxeo")
 
-[node name="Control" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1213666058]
+[node name="Control" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1213666058]
 layout_mode = 2
 
-[node name="PreWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1630940266]
+[node name="PreWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1630940266]
 layout_mode = 2
 text = "Pre-wait:"
 
-[node name="PreWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=531261277]
+[node name="PreWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=531261277]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "How long to wait between this cue being triggered and activating the cue's components. "
 
-[node name="DurationLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1075776128]
+[node name="DurationLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1075776128]
 layout_mode = 2
 text = "Duration:"
 
-[node name="DurationValue" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1506119913]
+[node name="DurationValue" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1506119913]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait."
 editable = false
 
-[node name="PostWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1130441441]
+[node name="PostWaitLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1130441441]
 layout_mode = 2
 text = "Post-wait:"
 
-[node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=2072409607]
+[node name="PostWaitInput" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=2072409607]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment."
 
-[node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=446303217]
+[node name="FollowLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=446303217]
 layout_mode = 2
 text = "Continue:"
 
-[node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1799703030]
+[node name="FollowOption" type="OptionButton" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1799703030]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Cue sequence mode for the next cue at the same nesting level.
@@ -148,19 +151,19 @@ Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Contin
 Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
 focus_mode = 0
 
-[node name="HSeparatorArmed" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1362657741]
+[node name="HSeparatorArmed" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1362657741]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="ArmedSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=2008075599]
+[node name="ArmedSpacer" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=2008075599]
 layout_mode = 2
 
-[node name="ArmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1190050071]
+[node name="ArmedLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1190050071]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Armed:"
 
-[node name="ArmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1136285070]
+[node name="ArmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1136285070]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -169,12 +172,12 @@ focus_mode = 0
 button_pressed = true
 text = "Armed"
 
-[node name="SkipIfDisarmedLabel" type="Label" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=528501857]
+[node name="SkipIfDisarmedLabel" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=528501857]
 layout_mode = 2
 size_flags_horizontal = 0
 text = "Skip if disarmed:"
 
-[node name="SkipIfDisarmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=995786737]
+[node name="SkipIfDisarmedCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=995786737]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -182,14 +185,14 @@ tooltip_text = "When armed is off and this is on, GO on a prior cue bypasses thi
 focus_mode = 0
 text = "Skip if disarmed"
 
-[node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1607308950]
+[node name="HSeparatorDelete" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1607308950]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="DeleteSpacer" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=307789548]
+[node name="DeleteSpacer" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=307789548]
 layout_mode = 2
 
-[node name="DeleteCueButton" type="Button" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1480297068]
+[node name="DeleteCueButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1480297068]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
@@ -201,27 +204,23 @@ theme_override_constants/icon_max_width = 14
 text = "Delete Cue"
 expand_icon = true
 
-[node name="DeleteButtonTrail" type="Control" parent="MarginContainer/ScrollContainer/GridContainer/GridContainer" unique_id=1809849642]
+[node name="DeleteButtonTrail" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1809849642]
 layout_mode = 2
 
-[node name="Triggers" type="VBoxContainer" parent="." unique_id=1335561062]
+[node name="Triggers" type="VBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer" unique_id=1335561062]
 clip_contents = true
-layout_mode = 0
-offset_left = 350.0
-offset_top = 4.0
-offset_right = 620.0
-offset_bottom = 380.0
+layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="TriggersHeader" type="Label" parent="Triggers" unique_id=1612944111]
+[node name="TriggersHeader" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=1612944111]
 layout_mode = 2
 text = "Triggers"
 
-[node name="HotkeyRow" type="HBoxContainer" parent="Triggers" unique_id=1429318585]
+[node name="HotkeyRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=1429318585]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="HotkeyEnabledCheckBox" type="CheckBox" parent="Triggers/HotkeyRow" unique_id=449910776]
+[node name="HotkeyEnabledCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/HotkeyRow" unique_id=449910776]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -229,7 +228,7 @@ tooltip_text = "When checked and a key is bound, pressing the hotkey triggers th
 focus_mode = 0
 text = "Hotkey"
 
-[node name="HotkeyBindingButton" type="Button" parent="Triggers/HotkeyRow" unique_id=832099194]
+[node name="HotkeyBindingButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/HotkeyRow" unique_id=832099194]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
@@ -241,7 +240,7 @@ text = "None"
 text_overrun_behavior = 1
 clip_text = true
 
-[node name="HotkeyResetButton" type="Button" parent="Triggers/HotkeyRow" unique_id=1512495216]
+[node name="HotkeyResetButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/HotkeyRow" unique_id=1512495216]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(18, 18)
@@ -251,11 +250,11 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
 
-[node name="ClockRow" type="HBoxContainer" parent="Triggers"]
+[node name="ClockRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=1185224780]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="ClockEnabledCheckBox" type="CheckBox" parent="Triggers/ClockRow"]
+[node name="ClockEnabledCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/ClockRow" unique_id=600674901]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -263,16 +262,16 @@ tooltip_text = "When checked and a time is set, this cue GO's when local real-wo
 focus_mode = 0
 text = "Clock"
 
-[node name="ClockTimeInput" type="LineEdit" parent="Triggers/ClockRow"]
+[node name="ClockTimeInput" type="LineEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/ClockRow" unique_id=851955445]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none."
-placeholder_text = "HH:mm:ss"
 theme_override_font_sizes/font_size = 10
+placeholder_text = "HH:mm:ss"
 
-[node name="ClockDaysButton" type="Button" parent="Triggers/ClockRow"]
+[node name="ClockDaysButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/ClockRow" unique_id=58778950]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(72, 0)
 layout_mode = 2
@@ -281,10 +280,10 @@ tooltip_text = "Choose which weekdays the clock trigger may fire."
 focus_mode = 0
 theme_override_font_sizes/font_size = 10
 text = "Every day"
-clip_text = true
 text_overrun_behavior = 1
+clip_text = true
 
-[node name="ClockResetButton" type="Button" parent="Triggers/ClockRow"]
+[node name="ClockResetButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/ClockRow" unique_id=1649563242]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(18, 18)
@@ -294,11 +293,11 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
 
-[node name="MidiRow" type="HBoxContainer" parent="Triggers"]
+[node name="MidiRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=1498182190]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="MidiEnabledCheckBox" type="CheckBox" parent="Triggers/MidiRow"]
+[node name="MidiEnabledCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiRow" unique_id=1435547894]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
@@ -306,7 +305,7 @@ tooltip_text = "When checked and a MIDI pattern is set, matching MIDI input GO's
 focus_mode = 0
 text = "MIDI"
 
-[node name="MidiCaptureButton" type="Button" parent="Triggers/MidiRow"]
+[node name="MidiCaptureButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiRow" unique_id=1426726067]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(56, 0)
 layout_mode = 2
@@ -315,7 +314,7 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 10
 text = "Capture"
 
-[node name="MidiResetButton" type="Button" parent="Triggers/MidiRow"]
+[node name="MidiResetButton" type="Button" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiRow" unique_id=460525821]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(18, 18)
@@ -325,11 +324,11 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
 
-[node name="MidiFieldsRow" type="HBoxContainer" parent="Triggers"]
+[node name="MidiFieldsRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=547047032]
 layout_mode = 2
 theme_override_constants/separation = 3
 
-[node name="MidiTypeOption" type="OptionButton" parent="Triggers/MidiFieldsRow"]
+[node name="MidiTypeOption" type="OptionButton" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiFieldsRow" unique_id=1102248204]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(72, 0)
 layout_mode = 2
@@ -338,44 +337,61 @@ tooltip_text = "MIDI message type to match."
 focus_mode = 0
 theme_override_font_sizes/font_size = 10
 
-[node name="MidiChannelSpin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+[node name="MidiChannelSpin" type="SpinBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiFieldsRow" unique_id=138553355]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(52, 0)
 layout_mode = 2
 tooltip_text = "MIDI channel 1–16. Set to 0 for any channel."
-focus_mode = 0
-min_value = 0.0
 max_value = 16.0
 rounded = true
 prefix = "ch"
-theme_override_font_sizes/font_size = 10
 
-[node name="MidiData1Spin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+[node name="MidiData1Spin" type="SpinBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiFieldsRow" unique_id=953440178]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(52, 0)
 layout_mode = 2
 tooltip_text = "Note number, CC number, or program (0–127)."
-focus_mode = 0
-min_value = 0.0
 max_value = 127.0
 rounded = true
-theme_override_font_sizes/font_size = 10
 
-[node name="MidiMatchValueCheck" type="CheckBox" parent="Triggers/MidiFieldsRow"]
+[node name="MidiMatchValueCheck" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiFieldsRow" unique_id=1374251830]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "When checked, velocity / CC value must match exactly."
 focus_mode = 0
-text = "Val"
 theme_override_font_sizes/font_size = 10
+text = "Val"
 
-[node name="MidiData2Spin" type="SpinBox" parent="Triggers/MidiFieldsRow"]
+[node name="MidiData2Spin" type="SpinBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/MidiFieldsRow" unique_id=472919542]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
 tooltip_text = "Velocity or CC value (0–127). Only used when Val is checked."
-focus_mode = 0
-min_value = 0.0
 max_value = 127.0
 rounded = true
-theme_override_font_sizes/font_size = 10
+
+[node name="NotesHeaderRow" type="HBoxContainer" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NotesHeader" type="Label" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/NotesHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Notes"
+
+[node name="MemoCheckBox" type="CheckBox" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers/NotesHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "When enabled, the cuelist shell shows notes instead of number, name, and wait/duration fields."
+focus_mode = 0
+text = "Memo"
+
+[node name="NotesTextEdit" type="TextEdit" parent="MarginContainer/ScrollContainer/HBoxContainer/Triggers" unique_id=1150462599]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+tooltip_text = "Free-form notes for this cue. Not used during playback."
+placeholder_text = "Cue notes…"
+wrap_mode = 1
