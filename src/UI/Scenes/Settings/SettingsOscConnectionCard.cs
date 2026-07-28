@@ -1,3 +1,10 @@
+//==================================================================================//
+// SettingsOscConnectionCard.cs                                                     //
+// This file is part of Cue2                                                        //
+// http://cue2.live/                                                                //
+//==================================================================================//
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -6,69 +13,107 @@ using Cue2.Base.Classes.Connections;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot;
-using Godot.Collections;
 
 namespace Cue2.UI.Scenes.Settings;
 
+/// <summary>
+/// Editable row for a single OSC send connection (name, interface, destination, port).
+/// </summary>
 public partial class SettingsOscConnectionCard : HBoxContainer
 {
     private GlobalSignals _globalSignals;
-    
+    private GlobalData _globalData;
+    private HistoryManager _historyManager;
+
     public CueOscConnection CueOscConnection;
-    
-    // Ui Properties
-    private Button _rearrangeButton;
+
     private LineEdit _nameLineEdit;
     private OptionButton _interfaceOptionButton;
     private LineEdit _destinationLineEdit;
     private LineEdit _portLineEdit;
     private Button _deleteButton;
 
-    // Previous values for validation and revert
     private bool _nameEditing;
     private bool _destinationEditing;
     private bool _portEditing;
+    private bool _isSyncingUi;
+
+    /// <summary>
+    /// Raised before a user mutation so the parent panel can record settings history.
+    /// </summary>
+    public event Action<string> HistoryRecordRequested;
 
     public override void _Ready()
     {
-        _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
+        _historyManager = _globalData?.HistoryManager;
 
-        // Assign Ui nodes
-        _rearrangeButton = GetNode<Button>("%RearrangeButton");
-        _nameLineEdit = GetNode<LineEdit>("%NameLineEdit");
-        _interfaceOptionButton = GetNode<OptionButton>("%InterfaceOptionButton");
-        _destinationLineEdit = GetNode<LineEdit>("%DestinationLineEdit");
-        _portLineEdit = GetNode<LineEdit>("%PortLineEdit");
-        _deleteButton = GetNode<Button>("%DeleteButton");
+        _nameLineEdit = GetNodeOrNull<LineEdit>("%NameLineEdit");
+        _interfaceOptionButton = GetNodeOrNull<OptionButton>("%InterfaceOptionButton");
+        _destinationLineEdit = GetNodeOrNull<LineEdit>("%DestinationLineEdit");
+        _portLineEdit = GetNodeOrNull<LineEdit>("%PortLineEdit");
+        _deleteButton = GetNodeOrNull<Button>("%DeleteButton");
 
-        // Connect signals for user input handling
-        _nameLineEdit.EditingToggled += OnNameEditingToggled;
-        _nameLineEdit.TextSubmitted += OnNameTextSubmitted;
-        _interfaceOptionButton.Pressed += LoadInterfaceOptions;
-        _interfaceOptionButton.ItemSelected += OnInterfaceItemSelected;
-        _destinationLineEdit.EditingToggled += OnDestinationEditingToggled;
-        _destinationLineEdit.TextSubmitted += OnDestinationTextSubmitted;
-        _portLineEdit.EditingToggled += OnPortEditingToggled;
-        _portLineEdit.TextSubmitted += OnPortTextSubmitted;
-        _deleteButton.Pressed += OnDeletePressed;
-        
-        
-        _rearrangeButton.Icon = GetThemeIcon("Rearrange", "AtlasIcons");
-        _deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        if (_nameLineEdit != null)
+        {
+            _nameLineEdit.EditingToggled += OnNameEditingToggled;
+            _nameLineEdit.TextSubmitted += OnNameTextSubmitted;
+        }
+        if (_interfaceOptionButton != null)
+        {
+            _interfaceOptionButton.Pressed += LoadInterfaceOptions;
+            _interfaceOptionButton.ItemSelected += OnInterfaceItemSelected;
+        }
+        if (_destinationLineEdit != null)
+        {
+            _destinationLineEdit.EditingToggled += OnDestinationEditingToggled;
+            _destinationLineEdit.TextSubmitted += OnDestinationTextSubmitted;
+        }
+        if (_portLineEdit != null)
+        {
+            _portLineEdit.EditingToggled += OnPortEditingToggled;
+            _portLineEdit.TextSubmitted += OnPortTextSubmitted;
+        }
+        if (_deleteButton != null)
+            _deleteButton.Pressed += OnDeletePressed;
 
+        try
+        {
+            if (_deleteButton != null)
+                _deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
+        }
+        catch { /* icons optional */ }
     }
 
+    /// <summary>
+    /// Binds this card to a live <see cref="CueOscConnection"/> and refreshes fields.
+    /// </summary>
     public void SetCueOscConnection(CueOscConnection connection)
     {
         CueOscConnection = connection;
-        _nameLineEdit.Text = connection.Name;
-        _destinationLineEdit.Text = connection.Address.ToString();
-        _portLineEdit.Text = connection.Port.ToString();
-        LoadInterfaceOptions();
-
+        _isSyncingUi = true;
+        try
+        {
+            if (_nameLineEdit != null)
+                _nameLineEdit.Text = connection?.Name ?? string.Empty;
+            if (_destinationLineEdit != null)
+                _destinationLineEdit.Text = connection?.Address?.ToString() ?? string.Empty;
+            if (_portLineEdit != null)
+                _portLineEdit.Text = (connection?.Port ?? 7002).ToString();
+            LoadInterfaceOptions();
+        }
+        finally
+        {
+            _isSyncingUi = false;
+        }
     }
 
-    
+    private void RequestHistory(string description)
+    {
+        if (_historyManager?.IsRestoring == true) return;
+        HistoryRecordRequested?.Invoke(description);
+    }
 
     private void OnNameEditingToggled(bool editing)
     {
@@ -76,61 +121,64 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         else
         {
             _nameEditing = false;
-            _nameLineEdit.ReleaseFocus();
-            OnNameTextSubmitted(_nameLineEdit.Text);
+            _nameLineEdit?.ReleaseFocus();
+            OnNameTextSubmitted(_nameLineEdit?.Text ?? string.Empty);
         }
     }
 
     private void OnNameTextSubmitted(string newText)
     {
-        if (CueOscConnection != null && !string.IsNullOrWhiteSpace(newText))
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        if (!string.IsNullOrWhiteSpace(newText))
         {
-            CueOscConnection.Name = newText;
+            string trimmed = newText.Trim();
+            if (CueOscConnection.Name == trimmed) return;
+            RequestHistory($"Rename OSC connection to '{trimmed}'");
+            CueOscConnection.Name = trimmed;
         }
         else
         {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to submit new name for Osc Connection", 1);
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC Connection: name cannot be empty.", (int)LogType.Warning);
+            if (_nameLineEdit != null)
+                _nameLineEdit.Text = CueOscConnection.Name;
         }
     }
 
     private void OnInterfaceItemSelected(long index)
     {
-        if (CueOscConnection != null)
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        string previous = CueOscConnection.NetworkInterface ?? string.Empty;
+        string next;
+
+        if (index == 0)
         {
-            if (index == 0)
-            {
-                CueOscConnection.NetworkInterface = "";
-            }
-            else
-            {
-                var interfaces = NetworkInterface.GetAllNetworkInterfaces()
-                    .Where(ni => (ni.OperationalStatus == OperationalStatus.Up ||
-                                  ni.OperationalStatus == OperationalStatus.Down ||
-                                  ni.OperationalStatus == OperationalStatus.NotPresent) &&
-                                 (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
-                                  ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
-                                  ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
-                                  ni.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet))
-                    .OrderBy(ni => ni.OperationalStatus == OperationalStatus.Up ? 0 :
-                                   ni.OperationalStatus == OperationalStatus.Down ? 1 : 2)
-                    .ToList();
-                var interfaceNames = new List<string>();
-                foreach (var ni in interfaces)
-                {
-                    interfaceNames.Add(ni.Name);
-                }
-                // Include stored if not found
-                if (CueOscConnection != null && !string.IsNullOrEmpty(CueOscConnection.NetworkInterface) && !interfaceNames.Contains(CueOscConnection.NetworkInterface))
-                {
-                    interfaceNames.Add(CueOscConnection.NetworkInterface);
-                }
-                if (index - 1 < interfaceNames.Count)
-                {
-                    CueOscConnection.NetworkInterface = interfaceNames[(int)index - 1];
-                }
-            }
-            CueOscConnection.Reconnect();
+            next = string.Empty;
         }
+        else
+        {
+            var interfaceNames = EnumerateInterfaceNames();
+            if (CueOscConnection != null
+                && !string.IsNullOrEmpty(CueOscConnection.NetworkInterface)
+                && !interfaceNames.Contains(CueOscConnection.NetworkInterface))
+            {
+                interfaceNames.Add(CueOscConnection.NetworkInterface);
+            }
+
+            if (index - 1 < interfaceNames.Count)
+                next = interfaceNames[(int)index - 1];
+            else
+                return;
+        }
+
+        if (previous == next) return;
+        RequestHistory("Change OSC connection interface");
+        CueOscConnection.NetworkInterface = next;
+        CueOscConnection.Reconnect();
     }
 
     private void OnDestinationEditingToggled(bool editing)
@@ -139,25 +187,28 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         else
         {
             _destinationEditing = false;
-            _destinationLineEdit.ReleaseFocus();
-            OnDestinationTextSubmitted(_destinationLineEdit.Text);
+            _destinationLineEdit?.ReleaseFocus();
+            OnDestinationTextSubmitted(_destinationLineEdit?.Text ?? string.Empty);
         }
     }
 
     private void OnDestinationTextSubmitted(string newText)
     {
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
 
-        if (CueOscConnection != null)
+        if (IPAddress.TryParse(newText, out var ip))
         {
-            if (IPAddress.TryParse(newText, out var ip))
-            {
-                CueOscConnection.Address = ip;
-                CueOscConnection.Reconnect();
-            }
-            else
-            {
-                _destinationLineEdit.Text = CueOscConnection.Address.ToString();
-            }
+            if (CueOscConnection.Address != null && CueOscConnection.Address.Equals(ip)) return;
+            RequestHistory($"Set OSC destination to {ip}");
+            CueOscConnection.Address = ip;
+            CueOscConnection.Reconnect();
+        }
+        else if (_destinationLineEdit != null)
+        {
+            _destinationLineEdit.Text = CueOscConnection.Address?.ToString() ?? string.Empty;
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "OSC Connection: invalid IP address.", (int)LogType.Warning);
         }
     }
 
@@ -167,36 +218,47 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         else
         {
             _portEditing = false;
-            _portLineEdit.ReleaseFocus();
-            OnPortTextSubmitted(_portLineEdit.Text);
+            _portLineEdit?.ReleaseFocus();
+            OnPortTextSubmitted(_portLineEdit?.Text ?? string.Empty);
         }
     }
 
     private void OnPortTextSubmitted(string newText)
     {
-        if (CueOscConnection != null)
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        var port = UiUtilities.ValidatePort(newText);
+        if (port != -1)
         {
-            var port = UiUtilities.ValidatePort(newText);
-            if (port != -1)
-            {
-                CueOscConnection.Port = port;
-                CueOscConnection.Reconnect();
-            }
-            else _portLineEdit.Text = CueOscConnection.Port.ToString();
+            if (CueOscConnection.Port == port) return;
+            RequestHistory($"Set OSC port to {port}");
+            CueOscConnection.Port = port;
+            CueOscConnection.Reconnect();
+        }
+        else if (_portLineEdit != null)
+        {
+            _portLineEdit.Text = CueOscConnection.Port.ToString();
         }
     }
 
     private void OnDeletePressed()
     {
-        if (CueOscConnection != null)
-        {
-            OscConnections.DeleteConnection(CueOscConnection.Id);
-            QueueFree();
-        }
+        if (CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        string name = CueOscConnection.Name;
+        RequestHistory($"Delete OSC connection '{name}'");
+        OscConnections.DeleteConnection(CueOscConnection.Id);
+        QueueFree();
     }
 
+    /// <summary>
+    /// Applies stretch ratios from parent column headers.
+    /// </summary>
     public void UpdateRatios(Godot.Collections.Dictionary ratios)
     {
+        if (ratios == null) return;
         foreach (var key in ratios.Keys)
         {
             string keyStr = key.ToString();
@@ -204,26 +266,45 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             switch (keyStr)
             {
                 case "Name":
-                    _nameLineEdit.SizeFlagsStretchRatio = value;
+                    if (_nameLineEdit != null)
+                        _nameLineEdit.SizeFlagsStretchRatio = value;
                     break;
                 case "Interface":
-                    _interfaceOptionButton.SizeFlagsStretchRatio = value;
+                    if (_interfaceOptionButton != null)
+                        _interfaceOptionButton.SizeFlagsStretchRatio = value;
                     break;
                 case "Destination":
-                    _destinationLineEdit.SizeFlagsStretchRatio = value;
+                    if (_destinationLineEdit != null)
+                        _destinationLineEdit.SizeFlagsStretchRatio = value;
                     break;
                 case "Port":
-                    _portLineEdit.SizeFlagsStretchRatio = value;
-                    break;
-                default:
-                    GD.Print($"Unknown ratio key: {keyStr}");
+                    if (_portLineEdit != null)
+                        _portLineEdit.SizeFlagsStretchRatio = value;
                     break;
             }
         }
     }
-    
+
+    private static List<string> EnumerateInterfaceNames()
+    {
+        return NetworkInterface.GetAllNetworkInterfaces()
+            .Where(ni => (ni.OperationalStatus == OperationalStatus.Up ||
+                          ni.OperationalStatus == OperationalStatus.Down ||
+                          ni.OperationalStatus == OperationalStatus.NotPresent) &&
+                         (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                          ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                          ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
+                          ni.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet))
+            .OrderBy(ni => ni.OperationalStatus == OperationalStatus.Up ? 0 :
+                ni.OperationalStatus == OperationalStatus.Down ? 1 : 2)
+            .Select(ni => ni.Name)
+            .ToList();
+    }
+
     private void LoadInterfaceOptions()
     {
+        if (_interfaceOptionButton == null) return;
+
         _interfaceOptionButton.Clear();
         _interfaceOptionButton.AddItem("Automatic", 0);
 
@@ -236,47 +317,45 @@ public partial class SettingsOscConnectionCard : HBoxContainer
                           ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ||
                           ni.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet))
             .OrderBy(ni => ni.OperationalStatus == OperationalStatus.Up ? 0 :
-                           ni.OperationalStatus == OperationalStatus.Down ? 1 : 2)
+                ni.OperationalStatus == OperationalStatus.Down ? 1 : 2)
             .ToList();
+
         var interfaceNames = new List<string>();
         foreach (var ni in interfaces)
         {
             string ipAddress = "";
             foreach (var ip in ni.GetIPProperties().UnicastAddresses)
             {
-                if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) // IPv4
+                if (ip.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
                 {
                     ipAddress = ip.Address.ToString();
                     break;
                 }
             }
             string status = ni.OperationalStatus == OperationalStatus.Up ? "" : " (inactive)";
-
             string itemText = $"{ni.Name}: {ipAddress}{status}";
             _interfaceOptionButton.AddItem(itemText, interfaceNames.Count + 1);
             interfaceNames.Add(ni.Name);
         }
 
-        // If stored interface not found, add it as not found
-        if (CueOscConnection != null && !string.IsNullOrEmpty(CueOscConnection.NetworkInterface) && !interfaceNames.Contains(CueOscConnection.NetworkInterface))
+        if (CueOscConnection != null
+            && !string.IsNullOrEmpty(CueOscConnection.NetworkInterface)
+            && !interfaceNames.Contains(CueOscConnection.NetworkInterface))
         {
             string itemText = $"{CueOscConnection.NetworkInterface} (not found)";
             _interfaceOptionButton.AddItem(itemText, interfaceNames.Count + 1);
             interfaceNames.Add(CueOscConnection.NetworkInterface);
         }
 
-        // Set selected based on connection's NetworkInterface
         if (CueOscConnection != null && !string.IsNullOrEmpty(CueOscConnection.NetworkInterface))
         {
             int index = interfaceNames.IndexOf(CueOscConnection.NetworkInterface);
             if (index >= 0)
-            {
-                _interfaceOptionButton.Select(index + 1); // +1 because 0 is Automatic
-            }
+                _interfaceOptionButton.Select(index + 1);
         }
         else
         {
-            _interfaceOptionButton.Select(0); // Default to Automatic
+            _interfaceOptionButton.Select(0);
         }
     }
 }

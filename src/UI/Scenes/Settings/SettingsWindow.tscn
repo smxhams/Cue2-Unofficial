@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" uid="uid://frcr4kkc1rrl" path="res://src/UI/Scenes/Settings/SettingsCueDefaults.tscn" id="12_cuedef"]
 [ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidi.tscn" id="13_midi"]
 [ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidiInputMap.tscn" id="14_midi_map"]
+[ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsOscInputMap.tscn" id="15_osc_map"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -187,6 +188,11 @@ visible = false
 layout_mode = 2
 
 [node name="SettingsOscListen" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=508370765 instance=ExtResource("5_1s07i")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsOscInputMap" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("15_osc_map")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

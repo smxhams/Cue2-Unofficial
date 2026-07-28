@@ -81,7 +81,7 @@ public partial class InputActionsListener : Node
 
     /// <summary>
     /// Invokes the same handler as the keyboard InputMap for <paramref name="actionName"/>
-    /// (used by MIDI Input Map bindings). Undo/Redo always fire even when typing-focused.
+    /// (used by MIDI / OSC Input Map bindings). Undo/Redo always fire even when typing-focused.
     /// Other actions respect the text-field listen gate.
     /// </summary>
     /// <param name="actionName">Project InputMap action name (e.g. "Go").</param>
@@ -93,13 +93,13 @@ public partial class InputActionsListener : Node
         // Undo/Redo always available (same as keyboard path).
         if (actionName == "Undo")
         {
-            GD.Print("InputActionsListener:TryTriggerAction - MIDI Action: Undo");
+            GD.Print("InputActionsListener:TryTriggerAction - External Action: Undo");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Undo));
             return true;
         }
         if (actionName == "Redo")
         {
-            GD.Print("InputActionsListener:TryTriggerAction - MIDI Action: Redo");
+            GD.Print("InputActionsListener:TryTriggerAction - External Action: Redo");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Redo));
             return true;
         }

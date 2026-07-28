@@ -122,8 +122,10 @@ public partial class SettingsMidi : Control
 
     private void OnVisibilityChanged()
     {
-        if (Visible)
-            SyncFromModel();
+        if (!Visible) return;
+        SyncFromModel();
+        // Buffered lines keep accumulating while hidden; push them into the CodeEdit now.
+        RefreshMonitorLogUi(stickToBottom: true);
     }
 
     private void OnMidiStateChanged()
@@ -596,7 +598,7 @@ public partial class SettingsMidi : Control
 
     private void OnMidiMonitorLine(string line)
     {
-        if (_monitorLog == null || string.IsNullOrEmpty(line)) return;
+        if (string.IsNullOrEmpty(line)) return;
 
         if (_logLineCount >= MaxUiLogLines)
         {
@@ -627,14 +629,23 @@ public partial class SettingsMidi : Control
         if (!Visible) return;
 
         bool stickToBottom = true;
-        if (_monitorLog.GetLineCount() > 0)
+        if (_monitorLog != null && _monitorLog.GetLineCount() > 0)
         {
             int lastVisible = _monitorLog.GetLastFullVisibleLine();
             stickToBottom = lastVisible >= _monitorLog.GetLineCount() - 2;
         }
 
+        RefreshMonitorLogUi(stickToBottom);
+    }
+
+    /// <summary>
+    /// Pushes the in-memory monitor buffer into the CodeEdit (e.g. when the panel opens).
+    /// </summary>
+    private void RefreshMonitorLogUi(bool stickToBottom)
+    {
+        if (_monitorLog == null) return;
         _monitorLog.Text = _logBuilder.ToString();
-        if (stickToBottom)
+        if (stickToBottom && _monitorLog.GetLineCount() > 0)
             _monitorLog.SetCaretLine(_monitorLog.GetLineCount());
     }
 }

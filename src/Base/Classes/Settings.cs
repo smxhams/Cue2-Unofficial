@@ -449,7 +449,13 @@ public partial class Settings : Node
         saveTable.Add("CueLightBrightness", CueLightBrightness);
         
         // Osc Listen
-        saveTable.Add("OscListen", GetNode<OscListen>("/root/OscListen").GetData());
+        var oscListen = GetNodeOrNull<OscListen>("/root/OscListen");
+        if (oscListen != null)
+        {
+            saveTable.Add("OscListen", oscListen.GetData());
+            // Project-action OSC bindings (Go, Save, …) — show-scoped, separate undo slice.
+            saveTable.Add("OscInputMap", oscListen.GetInputMapBindingsData());
+        }
         
         // Osc Connections
         saveTable.Add("OscConnections", GetNode<OscConnections>("/root/OscConnections").GetData());
@@ -559,7 +565,15 @@ public partial class Settings : Node
         {
             GD.Print($"Settings:LoadSettings - Loading OscListen");
             var oscListenAsDict = oscListen.AsGodotDictionary();
-            GetNode<OscListen>("/root/OscListen").LoadFromData(oscListenAsDict);
+            GetNodeOrNull<OscListen>("/root/OscListen")?.LoadFromData(oscListenAsDict);
+        }
+
+        if (settingsData.TryGetValue("OscInputMap", out var oscInputMap) &&
+            oscInputMap.VariantType == Variant.Type.Dictionary)
+        {
+            GD.Print("Settings:LoadSettings - Loading OscInputMap");
+            GetNodeOrNull<OscListen>("/root/OscListen")
+                ?.LoadInputMapBindingsData(oscInputMap.AsGodotDictionary());
         }
         
         // Osc Connections
@@ -701,13 +715,20 @@ public partial class Settings : Node
         if (settingsData.TryGetValue("OscListen", out var oscListen))
         {
             var oscListenAsDict = oscListen.AsGodotDictionary();
-            GetNode<OscListen>("/root/OscListen").LoadFromData(oscListenAsDict);
+            GetNodeOrNull<OscListen>("/root/OscListen")?.LoadFromData(oscListenAsDict);
         }
 
         if (settingsData.TryGetValue("OscConnections", out var oscConnections))
         {
             var oscConnectionsAsDict = oscConnections.AsGodotDictionary();
-            GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
+            GetNodeOrNull<OscConnections>("/root/OscConnections")?.LoadFromData(oscConnectionsAsDict);
+        }
+
+        if (TryGetSettingsValue(settingsData, "OscInputMap", out var oscInputMapSlice)
+            && oscInputMapSlice.VariantType == Variant.Type.Dictionary)
+        {
+            GetNodeOrNull<OscListen>("/root/OscListen")
+                ?.LoadInputMapBindingsData(oscInputMapSlice.AsGodotDictionary());
         }
 
         if (TryGetSettingsValue(settingsData, "Midi", out var midiSlice)
@@ -790,9 +811,24 @@ public partial class Settings : Node
                 var midi = GetNodeOrNull<MidiManager>("/root/MidiManager");
                 slice[key] = midi != null ? midi.GetInputMapBindingsData() : new Dictionary();
             }
+            else if (key == "OscListen")
+            {
+                var osc = GetNodeOrNull<OscListen>("/root/OscListen");
+                slice[key] = osc != null ? osc.GetData() : new Dictionary();
+            }
+            else if (key == "OscInputMap")
+            {
+                var osc = GetNodeOrNull<OscListen>("/root/OscListen");
+                slice[key] = osc != null ? osc.GetInputMapBindingsData() : new Dictionary();
+            }
+            else if (key == "OscConnections")
+            {
+                var oscConn = GetNodeOrNull<OscConnections>("/root/OscConnections");
+                slice[key] = oscConn != null ? oscConn.GetData() : new Dictionary();
+            }
             else
             {
-                // Fallback for other complex keys (CueLights, OscListen, …)
+                // Fallback for other complex keys (CueLights, …)
                 var full = GetData();
                 if (full.ContainsKey(key))
                     slice[key] = full[key];

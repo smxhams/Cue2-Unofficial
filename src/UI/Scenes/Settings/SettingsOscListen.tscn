@@ -1,8 +1,9 @@
-[gd_scene load_steps=2 format=3 uid="uid://ci4ndmhqsbvlh"]
+[gd_scene format=3 uid="uid://ci4ndmhqsbvlh"]
 
 [ext_resource type="Script" uid="uid://njfyern1ut55" path="res://src/UI/Scenes/Settings/SettingsOscListen.cs" id="1_2j2x1"]
 
-[node name="SettingsOscListen" type="ScrollContainer"]
+[node name="SettingsOscListen" type="Control"]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -12,120 +13,183 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1_2j2x1")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
+[node name="RootVBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 6
 
-[node name="Header" type="Label" parent="VBoxContainer"]
+[node name="Header" type="Label" parent="RootVBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "OSC Listener"
 vertical_alignment = 1
 uppercase = true
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="RootVBox"]
 layout_mode = 2
 
-[node name="Row1" type="HBoxContainer" parent="VBoxContainer"]
+[node name="VSplit" type="VSplitContainer" parent="RootVBox"]
 layout_mode = 2
+size_flags_vertical = 3
+split_offsets = PackedInt32Array(280)
+split_offset = 280
 
-[node name="EnableLabel" type="Label" parent="VBoxContainer/Row1"]
+[node name="SettingsPane" type="VBoxContainer" parent="RootVBox/VSplit"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="EnableRow" type="HBoxContainer" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EnableLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/EnableRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = "Enable OSC Listener "
+text = "Enable OSC Listener"
+vertical_alignment = 1
 
-[node name="EnabledCheckButton" type="CheckButton" parent="VBoxContainer/Row1"]
+[node name="EnabledCheckButton" type="CheckButton" parent="RootVBox/VSplit/SettingsPane/EnableRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Bind the UDP receive port and process incoming OSC messages."
+focus_mode = 0
+
+[node name="StatusLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/EnableRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "Listener off"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="PortRow" type="HBoxContainer" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PortLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/PortRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Listen port"
+vertical_alignment = 1
+
+[node name="PortLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/PortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+alignment = 1
+tooltip_text = "UDP port to receive OSC (1–65535)."
+
+[node name="SessionNameLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/PortRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Session name"
+vertical_alignment = 1
+
+[node name="SessionNameLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/PortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+max_length = 20
+tooltip_text = "Optional label for documentation / path examples (not required for Input Map)."
+
+[node name="IpRow" type="HBoxContainer" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="IpTitle" type="Label" parent="RootVBox/VSplit/SettingsPane/IpRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Local IPv4"
+vertical_alignment = 1
+
+[node name="IpAddressLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/IpRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 11
+text = "—"
+autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.55, 1)
+theme_override_font_sizes/font_size = 10
+text = "Enable the listener to receive OSC. Built-in GO paths fire cues directly. Map other addresses to app actions under OSC Input Map. Incoming messages appear in the monitor when Listen is checked."
+autowrap_mode = 3
+
+[node name="CommandsHeader" type="Label" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Built-in commands"
+vertical_alignment = 1
+
+[node name="CommandsHint" type="Label" parent="RootVBox/VSplit/SettingsPane"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.55, 1)
+theme_override_font_sizes/font_size = 10
+text = "Fixed paths (not editable). Hover a pattern for details. Paths take precedence over OSC Input Map bindings."
+autowrap_mode = 3
+
+[node name="CommandsScroll" type="ScrollContainer" parent="RootVBox/VSplit/SettingsPane"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="CommandsList" type="VBoxContainer" parent="RootVBox/VSplit/SettingsPane/CommandsScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="MonitorPane" type="VBoxContainer" parent="RootVBox/VSplit"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="MonitorHeaderRow" type="HBoxContainer" parent="RootVBox/VSplit/MonitorPane"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MonitorHeader" type="Label" parent="RootVBox/VSplit/MonitorPane/MonitorHeaderRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "OSC Receive Monitor"
+vertical_alignment = 1
+
+[node name="ListenCheckBox" type="CheckBox" parent="RootVBox/VSplit/MonitorPane/MonitorHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "When checked, incoming OSC messages are printed in the log below."
+focus_mode = 0
+button_pressed = true
+text = "Listen"
+
+[node name="MonitorSpacer" type="Control" parent="RootVBox/VSplit/MonitorPane/MonitorHeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ClearLogButton" type="Button" parent="RootVBox/VSplit/MonitorPane/MonitorHeaderRow"]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
+text = "Clear"
 
-[node name="Control" type="Control" parent="VBoxContainer/Row1"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="IpAddressLabel" type="Label" parent="VBoxContainer/Row1"]
+[node name="MonitorLog" type="CodeEdit" parent="RootVBox/VSplit/MonitorPane"]
 unique_name_in_owner = true
 layout_mode = 2
-
-[node name="Row2" type="HBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="SessionNameLabel" type="Label" parent="VBoxContainer/Row2"]
-custom_minimum_size = Vector2(120, 0)
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Session Name"
-vertical_alignment = 1
-
-[node name="SessionNameLineEdit" type="LineEdit" parent="VBoxContainer/Row2"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 0)
-layout_mode = 2
-alignment = 1
-max_length = 20
-
-[node name="Control" type="Control" parent="VBoxContainer/Row2"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="PortLabel" type="Label" parent="VBoxContainer/Row2"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Port:"
-
-[node name="PortLineEdit" type="LineEdit" parent="VBoxContainer/Row2"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="Row3" type="HBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="ExampleOscMessageLabel" type="Label" parent="VBoxContainer/Row3"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 10
-text = "/SessionName/Play/1"
-
-[node name="Control" type="Control" parent="VBoxContainer"]
-custom_minimum_size = Vector2(0, 50)
-layout_mode = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="OscCommandsLabel" type="Label" parent="VBoxContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "Osc Commands"
-
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="Row5" type="HBoxContainer" parent="VBoxContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="GoStandbyLabel" type="Label" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row5"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Go cues in Standby:"
-
-[node name="GoStandbyLineEdit" type="LineEdit" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row5"]
-layout_mode = 2
-text = "/Go"
-editable = false
-
-[node name="Row4" type="HBoxContainer" parent="VBoxContainer/VBoxContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="GoCueIdLabel" type="Label" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row4"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Go cue by ID"
-
-[node name="GoCueIdLineEdit" type="LineEdit" parent="VBoxContainer/VBoxContainer/HBoxContainer/Row4"]
-custom_minimum_size = Vector2(150, 0)
-layout_mode = 2
-text = "/Go/Id/###"
+size_flags_vertical = 3
 editable = false
