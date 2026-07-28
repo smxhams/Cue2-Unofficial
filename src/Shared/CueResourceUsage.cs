@@ -208,6 +208,6 @@ public static class CueResourceUsage
 		if (lines.Count == 0)
 			return string.Empty;
 
-		return "Cues using this resource:\n" + string.Join("\n", lines);
+		return "Cues using this resource: " + string.Join("\n", lines);
 	}
 }
