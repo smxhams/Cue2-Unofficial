@@ -38,6 +38,8 @@ public partial class ActiveTextPlayback : Node
     private bool _completedEmitted;
     private bool _isFadingOut;
     private bool _isFadingIn;
+    /// <summary>True once natural end-fade has been scheduled (prevents repeated arms).</summary>
+    private bool _naturalEndFadeArmed;
     private CancellationTokenSource _fadeCts;
 
     /// <summary>
@@ -190,12 +192,47 @@ public partial class ActiveTextPlayback : Node
         double elapsed = _elapsedAtPause + _wallClock.Elapsed.TotalSeconds;
         EmitSignal(SignalName.TimeUpdated, elapsed);
 
-        // Do not auto-complete while stop-fading — let Stop finish the fade.
+        // Do not auto-complete while stop-fading — let Stop/FadeOut finish the fade.
         if (_isFadingOut)
             return;
 
-        if (_holdDurationSec > 1e-9 && elapsed >= _holdDurationSec)
-            CallDeferred(nameof(CompleteFromEnd));
+        // Finite hold only: arm end-fade when remaining time enters FadeOutDuration window
+        // (e.g. 10s hold + 4s fade → fade begins at t=6s).
+        if (_holdDurationSec > 1e-9)
+        {
+            TryArmNaturalEndFade(elapsed);
+            if (_isFadingOut)
+                return;
+
+            if (elapsed >= _holdDurationSec)
+                CallDeferred(nameof(CompleteFromEnd));
+        }
+    }
+
+    /// <summary>
+    /// Starts component end-fade when remaining hold time is within <see cref="TextComponent.FadeOutDuration"/>.
+    /// </summary>
+    /// <param name="elapsed">Elapsed presentation seconds.</param>
+    private void TryArmNaturalEndFade(double elapsed)
+    {
+        if (IsStopped || IsPaused || _isExiting || _isFadingOut || _isFadingIn
+            || _naturalEndFadeArmed || !_isPlaying)
+            return;
+
+        double configured = _textComponent?.FadeOutDuration ?? 0;
+        if (configured <= 1e-9 || _holdDurationSec <= 1e-9)
+            return;
+
+        double remaining = _holdDurationSec - elapsed;
+        if (remaining > configured)
+            return;
+
+        _naturalEndFadeArmed = true;
+        double fadeDuration = Math.Max(remaining, 1e-3);
+        fadeDuration = Math.Min(fadeDuration, configured);
+
+        GD.Print($"ActiveTextPlayback:TryArmNaturalEndFade - Starting end fade ({fadeDuration:F3}s)");
+        _ = FadeOutAsync(fadeDuration);
     }
 
     /// <summary>
@@ -547,10 +584,18 @@ public partial class ActiveTextPlayback : Node
     {
         if (IsStopped || _isExiting || _isFadingOut)
             return;
-        // Natural end: no stop-fade (same as video segment end using Stop(0) with no component fade).
-        // If the component has its own FadeOutDuration, honour it.
-        double fade = _textComponent?.FadeOutDuration ?? 0;
-        _ = Stop(fade);
+
+        // Safety net if hold ended without early arm (timing miss).
+        double residual = Math.Max(0, _textComponent?.FadeOutDuration ?? 0);
+        if (residual > 1e-9)
+        {
+            GD.Print($"ActiveTextPlayback:CompleteFromEnd - Residual end fade ({residual:F3}s)");
+            _ = FadeOutAsync(residual);
+            return;
+        }
+
+        // Natural end without fade: hard stop (session stop-fade is only for user Stop).
+        HardStop();
     }
 
     private void EmitCompletedOnce()

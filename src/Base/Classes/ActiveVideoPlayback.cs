@@ -109,6 +109,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private bool _routingIsPrivate;
     private bool _isFadingOut;
     private bool _isFadingIn;
+    /// <summary>True once natural end-fade has been scheduled (prevents repeated arms).</summary>
+    private bool _naturalEndFadeArmed;
     public bool IsStopped;
     public bool IsPaused;
     public bool IsSeeking;
@@ -548,11 +550,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     {
         lock (_lock)
         {
-            if (IsStopped || _isExiting) return;
+            if (IsStopped || _isExiting || _isFadingOut) return;
 
             if (_videoComponent.Loop || _currentPlayCount < EffectivePlayCount)
             {
                 _currentPlayCount++;
+                _naturalEndFadeArmed = false;
                 GD.Print($"ActiveVideoPlayback:HandleSegmentEnd - Loop/play {_currentPlayCount}/{EffectivePlayCount}");
                 SeekInternal(_startTimeUs, restartClock: true);
                 return;
@@ -563,9 +566,62 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         CallDeferred(nameof(CompleteFromEnd));
     }
 
+    /// <summary>
+    /// Starts component end-fade when remaining content is within <see cref="VideoComponent.FadeOutDuration"/>.
+    /// </summary>
+    /// <param name="masterUs">Current master-clock media time in microseconds.</param>
+    private void TryArmNaturalEndFade(long masterUs)
+    {
+        double fadeDuration;
+        lock (_lock)
+        {
+            if (IsStopped || IsPaused || _isExiting || _isFadingOut || _isFadingIn
+                || _naturalEndFadeArmed || !_isPlaying)
+                return;
+            if (_videoComponent.Loop || _currentPlayCount < EffectivePlayCount)
+                return;
+
+            double configured = _videoComponent.FadeOutDuration;
+            if (configured <= 1e-9 || _endTimeUs == long.MaxValue)
+                return;
+
+            long remainingUs = _endTimeUs - masterUs;
+            long fadeUs = (long)(configured * 1_000_000.0);
+            if (remainingUs > fadeUs)
+                return;
+
+            _naturalEndFadeArmed = true;
+            double remainingSec = Math.Max(0, remainingUs / 1_000_000.0);
+            fadeDuration = Math.Max(remainingSec, 1e-3);
+            fadeDuration = Math.Min(fadeDuration, configured);
+        }
+
+        GD.Print($"ActiveVideoPlayback:TryArmNaturalEndFade - Starting end fade ({fadeDuration:F3}s)");
+        _ = FadeOutAsync(fadeDuration);
+    }
+
     private void CompleteFromEnd()
     {
-        _ = Stop(0);
+        if (_isFadingOut || IsStopped || _isExiting)
+            return;
+
+        // Safety net if end was hit without early arm (seek into tail, etc.).
+        double residual = 0;
+        lock (_lock)
+        {
+            if (!_videoComponent.Loop && _currentPlayCount >= EffectivePlayCount)
+                residual = Math.Max(0, _videoComponent.FadeOutDuration);
+        }
+
+        if (residual > 1e-9)
+        {
+            GD.Print($"ActiveVideoPlayback:CompleteFromEnd - Residual end fade ({residual:F3}s)");
+            _ = FadeOutAsync(residual);
+            return;
+        }
+
+        // Natural end without fade: hard stop (session stop-fade is only for user Stop).
+        HardStop();
     }
 
     private void OnLayerExited(TextureRect layer)
@@ -661,8 +717,21 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         EmitSignal(SignalName.TimeUpdated, masterUs / (double)MicrosecondsPerSecond);
         UpdateLinkedSubtitles(masterUs);
 
+        // Arm end-fade early so FadeOutDuration runs inside the last seconds of content
+        // (e.g. 10s segment + 4s fade → fade begins at t=6s).
+        TryArmNaturalEndFade(masterUs);
+
+        bool fadingOut;
+        lock (_lock) fadingOut = _isFadingOut;
+
         if (masterUs >= _endTimeUs)
         {
+            // While end-fading, hold the last frame until FadeOutAsync HardStops.
+            if (fadingOut)
+            {
+                ApplyOpacityModulate();
+                return;
+            }
             HandleSegmentEnd();
             return;
         }

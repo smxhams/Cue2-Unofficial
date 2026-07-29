@@ -48,6 +48,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     private float _volume = 1.0f;
     private bool _isFadingOut;
     private bool _isFadingIn;
+    /// <summary>True once natural end-fade has been scheduled (prevents repeated deferred arms).</summary>
+    private bool _naturalEndFadeArmed;
     public bool IsStopped;
     public bool IsPaused;
     public bool IsSeeking;
@@ -411,8 +413,22 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
                 // Respect custom end time
                 long posUs = Decoder.PositionUs;
+
+                // Arm end-fade early so FadeOutDuration runs inside the last seconds of content
+                // (e.g. 10s segment + 4s fade → fade begins at t=6s).
+                TryArmNaturalEndFade(posUs);
+
+                bool fadingOut;
+                lock (_lock) fadingOut = _isFadingOut;
+
                 if (posUs >= _endTimeUs)
                 {
+                    // While end-fading, keep the fill loop alive until FadeOutAsync HardStops.
+                    if (fadingOut)
+                    {
+                        Thread.Sleep(FillLoopSleepMs);
+                        continue;
+                    }
                     HandleSegmentEnd();
                     continue;
                 }
@@ -437,7 +453,16 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 {
                     if (Decoder.EndOfStream || Decoder.PositionUs >= _endTimeUs)
                     {
-                        HandleSegmentEnd();
+                        bool fading;
+                        lock (_lock) fading = _isFadingOut;
+                        if (fading)
+                        {
+                            Thread.Sleep(FillLoopSleepMs);
+                        }
+                        else
+                        {
+                            HandleSegmentEnd();
+                        }
                     }
                     else
                     {
@@ -627,11 +652,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         lock (_lock)
         {
             // _completedEmitted also covers "already finishing"
-            if (IsStopped || _completedEmitted) return;
+            if (IsStopped || _completedEmitted || _isFadingOut) return;
 
             if (_audioComponent.Loop || _currentPlayCount < EffectivePlayCount)
             {
                 _currentPlayCount++;
+                _naturalEndFadeArmed = false;
                 GD.Print($"ActiveAudioPlayback:HandleSegmentEnd - Loop/play {_currentPlayCount}/{EffectivePlayCount}");
                 _fillSuspended = true;
             }
@@ -679,15 +705,109 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         }
     }
 
+    /// <summary>
+    /// Starts component end-fade when remaining content time is within <see cref="AudioComponent.FadeOutDuration"/>.
+    /// Runs on the fill thread via deferred call so fade timing stays on the main thread.
+    /// </summary>
+    /// <param name="posUs">Current decoder/media position in microseconds.</param>
+    private void TryArmNaturalEndFade(long posUs)
+    {
+        lock (_lock)
+        {
+            if (IsStopped || IsPaused || _isFadingOut || _isFadingIn || _completedEmitted
+                || _naturalEndFadeArmed)
+                return;
+            // Only the last playcount of a finite cue ends with a fade (infinite loop never auto-fades).
+            if (_audioComponent.Loop || _currentPlayCount < EffectivePlayCount)
+                return;
+            double fadeSec = _audioComponent.FadeOutDuration;
+            if (fadeSec <= 1e-9 || _endTimeUs == long.MaxValue)
+                return;
+
+            long remainingUs = _endTimeUs - posUs;
+            long fadeUs = (long)(fadeSec * 1_000_000.0);
+            if (remainingUs > fadeUs)
+                return;
+
+            _naturalEndFadeArmed = true;
+        }
+
+        try
+        {
+            CallDeferred(nameof(BeginNaturalEndFade));
+        }
+        catch
+        {
+            lock (_lock) _naturalEndFadeArmed = false;
+        }
+    }
+
+    /// <summary>
+    /// Main-thread entry for natural end-fade (last seconds of content).
+    /// Fade length is clamped to remaining content so the cue still ends at the out point.
+    /// </summary>
+    private void BeginNaturalEndFade()
+    {
+        if (!IsInstanceValid(this)) return;
+
+        double fadeDuration;
+        lock (_lock)
+        {
+            if (IsStopped || IsPaused || _isFadingOut || _completedEmitted)
+            {
+                _naturalEndFadeArmed = false;
+                return;
+            }
+            if (_audioComponent.Loop || _currentPlayCount < EffectivePlayCount)
+            {
+                _naturalEndFadeArmed = false;
+                return;
+            }
+
+            double configured = _audioComponent.FadeOutDuration;
+            if (configured <= 1e-9 || _endTimeUs == long.MaxValue)
+            {
+                _naturalEndFadeArmed = false;
+                return;
+            }
+
+            long remainingUs = Math.Max(0, _endTimeUs - GetPlaybackPositionUs());
+            double remainingSec = remainingUs / 1_000_000.0;
+
+            // Clamp to remaining content so fade completes at the natural end (not after).
+            fadeDuration = Math.Max(remainingSec, 1e-3);
+            fadeDuration = Math.Min(fadeDuration, configured);
+        }
+
+        GD.Print($"ActiveAudioPlayback:BeginNaturalEndFade - Starting end fade ({fadeDuration:F3}s)");
+        _ = FadeOutAsync(fadeDuration);
+    }
+
     private void CompleteFromEnd()
     {
         if (!IsInstanceValid(this)) return;
-        // Natural end: always Clean (do not use Stop — it treats IsStopped/fade paths)
-        // Reset flag so Clean emits Completed once and frees
+
+        // End-fade already in progress — FadeOutAsync will HardStop when done.
+        if (IsFadingOut) return;
+
+        double residualFade = 0;
         lock (_lock)
         {
+            if (IsStopped) return;
+            // Safety net if end was hit without early arm (seek into tail, timing miss).
+            if (!_audioComponent.Loop && _currentPlayCount >= EffectivePlayCount)
+                residualFade = Math.Max(0, _audioComponent.FadeOutDuration);
             _completedEmitted = false;
         }
+
+        if (residualFade > 1e-9)
+        {
+            GD.Print($"ActiveAudioPlayback:CompleteFromEnd - Residual end fade ({residualFade:F3}s)");
+            _ = FadeOutAsync(residualFade);
+            return;
+        }
+
+        // Natural end without fade: Clean (do not use Stop — session stop-fade is for user Stop).
         Clean();
     }
 

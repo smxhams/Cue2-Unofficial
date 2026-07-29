@@ -47,6 +47,8 @@ public partial class VideoInspector : Control
 	private Control _loopPlayCountRow;
 	private CheckBox _loopInput;
 	private LineEdit _playCountInput;
+	private LineEdit _fadeInInput;
+	private LineEdit _fadeOutInput;
 
 	private Label _fileMetadataLabel;
 	private OptionButton _targetLayerOptionButton;
@@ -148,6 +150,16 @@ public partial class VideoInspector : Control
 		_loopInput.Toggled += OnLoopToggled;
 		_playCountInput.TextSubmitted += OnPlayCountSubmitted;
 		_playCountInput.FocusExited += () => OnPlayCountSubmitted(_playCountInput.Text);
+		if (_fadeInInput != null)
+		{
+			_fadeInInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: true);
+			_fadeInInput.FocusExited += () => OnFadeSubmitted(_fadeInInput.Text, isIn: true);
+		}
+		if (_fadeOutInput != null)
+		{
+			_fadeOutInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: false);
+			_fadeOutInput.FocusExited += () => OnFadeSubmitted(_fadeOutInput.Text, isIn: false);
+		}
 		_scaleWidthLineEdit.TextSubmitted += newText => OnScaleWidthSubmitted(newText);
 		_scaleHeightLineEdit.TextSubmitted += newText => OnScaleHeightSubmitted(newText);
 		_offsetXLineEdit.TextSubmitted += newText => OnOffsetXSubmitted(newText);
@@ -231,6 +243,8 @@ public partial class VideoInspector : Control
 		_loopInput = GetNode<CheckBox>("%LoopInput");
 		_playCountInput  = GetNode<LineEdit>("%PlayCountInput");
 		_loopPlayCountRow = _loopInput?.GetParent() as Control;
+		_fadeInInput = GetNodeOrNull<LineEdit>("%FadeInInput");
+		_fadeOutInput = GetNodeOrNull<LineEdit>("%FadeOutInput");
 		
 		_fileMetadataLabel = GetNode<Label>("%FileMetadataLabel");
 		_targetLayerOptionButton = GetNode<OptionButton>("%TargetLayerOptionButton");
@@ -800,7 +814,12 @@ public partial class VideoInspector : Control
 				existingVideo.StartTime = 0.0;
 				existingVideo.EndTime = -1.0;
 				if (isImage)
-					existingVideo.Duration = 0.0; // until stopped
+				{
+					// Prefer show image-hold default when becoming / replacing an image.
+					double hold = _globalData?.Settings?.VideoDefaultImageDuration ?? 0.0;
+					existingVideo.Duration = Math.Max(0.0, hold);
+					existingVideo.TotalDuration = hold <= 0 ? -1.0 : hold;
+				}
 			}
 		}
 		else
@@ -829,7 +848,13 @@ public partial class VideoInspector : Control
 			_focusedVideoComponent.Metadata = fileMetadata;
 			_focusedVideoComponent.IsImage = isImage;
 			_focusedVideoComponent.HasAudio = !isImage && fileMetadata.AudioChannels > 0;
-			_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
+			// New components already have UseAudio from show VideoDefaults — only enable if the file has audio.
+			// File replacements default to using audio when present (previous behaviour).
+			if (isNewComponent)
+				_focusedVideoComponent.UseAudio =
+					_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio;
+			else
+				_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
 			_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
 			_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
 
@@ -840,7 +865,8 @@ public partial class VideoInspector : Control
 				_focusedVideoComponent.StartTime = 0.0;
 				_focusedVideoComponent.EndTime = -1.0;
 				// Preserve user Duration when replacing image-for-image unless forced reset.
-				if (resetInOutPoints || isNewComponent)
+				// New components keep ApplyVideoDefaults image-hold; do not force 0 here.
+				if (resetInOutPoints)
 					_focusedVideoComponent.Duration = 0.0;
 				GD.Print($"VideoInspector:SetVideoFile - Image loaded: {fileMetadata.Width}x{fileMetadata.Height}, hold={_focusedVideoComponent.Duration}s");
 			}
@@ -1056,6 +1082,12 @@ public partial class VideoInspector : Control
 			_loopInput.SetPressedNoSignal(_focusedVideoComponent.Loop);
 			_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
 		}
+
+		// Fades apply to both video and still images.
+		if (_fadeInInput != null)
+			_fadeInInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.FadeInDuration);
+		if (_fadeOutInput != null)
+			_fadeOutInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.FadeOutDuration);
 		
 		// Update metadata label
 		var meta = _focusedVideoComponent.Metadata;
@@ -1757,6 +1789,57 @@ public partial class VideoInspector : Control
 		}
 		if (_playCountInput.HasFocus())
 			_playCountInput.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Commits fade-in or fade-out duration from a time LineEdit.
+	/// </summary>
+	/// <param name="text">User-entered time string.</param>
+	/// <param name="isIn">True for fade-in; false for fade-out.</param>
+	private void OnFadeSubmitted(string text, bool isIn)
+	{
+		if (_focusedCue == null || _focusedVideoComponent == null) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var field = isIn ? _fadeInInput : _fadeOutInput;
+		if (field == null) return;
+
+		var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
+		if (string.IsNullOrEmpty(formatted))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Invalid video fade time: {text}", 1);
+			double current = isIn
+				? _focusedVideoComponent.FadeInDuration
+				: _focusedVideoComponent.FadeOutDuration;
+			field.Text = UiUtilities.FormatTime(current);
+			if (field.HasFocus()) field.ReleaseFocus();
+			return;
+		}
+
+		seconds = Math.Max(0.0, seconds);
+		field.Text = formatted;
+		field.TooltipText = labeled + (isIn
+			? " (fade-in at play start)"
+			: " (fade-out on stop)");
+
+		double existing = isIn
+			? _focusedVideoComponent.FadeInDuration
+			: _focusedVideoComponent.FadeOutDuration;
+		if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+		{
+			if (field.HasFocus()) field.ReleaseFocus();
+			return;
+		}
+
+		_globalData?.HistoryManager?.RecordCueChange(
+			_focusedCue.Id, isIn ? "Edit video fade-in" : "Edit video fade-out");
+		if (isIn)
+			_focusedVideoComponent.FadeInDuration = seconds;
+		else
+			_focusedVideoComponent.FadeOutDuration = seconds;
+
+		if (field.HasFocus()) field.ReleaseFocus();
 	}
 
 	/// <summary>

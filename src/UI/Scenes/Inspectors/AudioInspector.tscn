@@ -251,6 +251,37 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "The number of times the audio loops then stops."
 
+[node name="FadeRow" type="HBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent"]
+layout_mode = 2
+
+[node name="FadeInLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/FadeRow"]
+layout_mode = 2
+tooltip_text = "Fade-in duration at play start (0 = immediate)."
+mouse_filter = 1
+text = "Fade in:"
+
+[node name="FadeInInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/FadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+tooltip_text = "Fade-in duration at play start (0 = immediate)."
+text = "0:00.000"
+alignment = 1
+
+[node name="FadeOutLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/FadeRow"]
+layout_mode = 2
+tooltip_text = "Fade-out duration on stop (0 = immediate / session stop fade)."
+mouse_filter = 1
+text = "Fade out:"
+
+[node name="FadeOutInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/FadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+tooltip_text = "Fade-out duration on stop (0 = immediate / session stop fade)."
+text = "0:00.000"
+alignment = 1
+
 [node name="HBoxContainer5" type="HBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent" unique_id=1603489166]
 layout_mode = 2
 

@@ -2150,10 +2150,10 @@ public partial class CueList : Control
 		// Key is child order, value is cueId
 		foreach (Cue cue in CueIndex.Values)
 		{
-			// Assign child shellbars to parents (reparent only; ordering done after)
+			// Assign child shellbars to parents (reparent only; ordering done after).
+			// Intentionally silent: load/rebuild can reparent many cues and would spam the log.
 			if (cue.ParentId != -1)
 			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"CueList:StructureCuelist - REPARENTING {cue.Name}", (int)LogType.Info);
 				var parentShell = FetchCueFromId(cue.ParentId)?.ShellBar;
 				var childContainer = parentShell?.GetNode<VBoxContainer>("%ShellChildContainer");
 				if (childContainer != null && cue.ShellBar != null && cue.ShellBar.GetParent() != childContainer)

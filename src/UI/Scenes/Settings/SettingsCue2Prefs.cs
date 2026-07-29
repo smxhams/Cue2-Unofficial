@@ -4,7 +4,7 @@ using Godot;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// Cue2 Preferences panel: startup, autosave, backup depth, and undo depth settings.
+/// Cue2 Preferences panel: startup, autosave, backup depth, undo depth, and log session depth.
 /// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
 /// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
@@ -18,6 +18,8 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	private Button _backupResetButton;
 	private SpinBox _undoDepth;
 	private Button _undoDepthResetButton;
+	private SpinBox _logSessionDepth;
+	private Button _logSessionDepthResetButton;
 
 	public override void _Ready()
 	{
@@ -53,6 +55,15 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_undoDepthResetButton.Pressed += OnUndoDepthResetButtonPressed;
 		_undoDepthResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
+		_logSessionDepth = GetNode<SpinBox>("%LogSessionDepth");
+		_logSessionDepth.MinValue = UserDataManager.MinLogSessionDepth;
+		_logSessionDepth.MaxValue = UserDataManager.MaxLogSessionDepth;
+		_logSessionDepth.ValueChanged += OnLogSessionDepthChanged;
+
+		_logSessionDepthResetButton = GetNode<Button>("%LogSessionDepthResetButton");
+		_logSessionDepthResetButton.Pressed += OnLogSessionDepthResetButtonPressed;
+		_logSessionDepthResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+
 		SyncSettings();
 	}
 
@@ -65,10 +76,12 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			_autosaveInterval.Value = udm.AutosaveInterval;
 			_backupDepth.Value = udm.BackupDepth;
 			_undoDepth.Value = udm.UndoDepth;
+			_logSessionDepth.Value = udm.LogSessionDepth;
 			UpdateStartupResetButton();
 			UpdateAutosaveResetButton();
 			UpdateBackupResetButton();
 			UpdateUndoDepthResetButton();
+			UpdateLogSessionDepthResetButton();
 		}
 	}
 
@@ -202,6 +215,42 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		if (!atDefault)
 		{
 			_undoDepthResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUndoDepth}";
+		}
+	}
+
+	private void OnLogSessionDepthChanged(double value)
+	{
+		if (_globalData?.UserDataManager != null)
+		{
+			_globalData.UserDataManager.LogSessionDepth = (int)value;
+			GetNodeOrNull<EventLogger>("/root/EventLogger")
+				?.ApplyLogSessionDepth(_globalData.UserDataManager.LogSessionDepth);
+			UpdateLogSessionDepthResetButton();
+		}
+	}
+
+	private void OnLogSessionDepthResetButtonPressed()
+	{
+		if (_globalData?.UserDataManager != null)
+		{
+			_globalData.UserDataManager.LogSessionDepth = UserDataManager.DefaultLogSessionDepth;
+			GetNodeOrNull<EventLogger>("/root/EventLogger")
+				?.ApplyLogSessionDepth(_globalData.UserDataManager.LogSessionDepth);
+			SyncSettings();
+		}
+	}
+
+	private void UpdateLogSessionDepthResetButton()
+	{
+		if (_logSessionDepthResetButton == null || _globalData?.UserDataManager == null) return;
+
+		bool atDefault = _globalData.UserDataManager.LogSessionDepth == UserDataManager.DefaultLogSessionDepth;
+		_logSessionDepthResetButton.Visible = !atDefault;
+
+		if (!atDefault)
+		{
+			_logSessionDepthResetButton.TooltipText =
+				$"Reset to default: {UserDataManager.DefaultLogSessionDepth}";
 		}
 	}
 }

@@ -168,7 +168,33 @@ public partial class TimelineInspector : Control
             _scrollContainer.GuiInput -= OnScrollContainerGuiInput;
 
         VisibilityChanged -= LoadTimeline;
+
+        // Explicitly free dynamic timeline nodes so CanvasItem RIDs are not leaked on exit
+        // (playhead / bars may have been detached from the tree by clear/rebuild paths).
+        ClearTimelineVisuals();
+        FreeNodeIfValid(ref _playheadLine);
+        FreeNodeIfValid(ref _timeGrid);
+        FreeNodeIfValid(ref _ruler);
+        FreeNodeIfValid(ref _sidebarSeparator);
+        FreeNodeIfValid(ref _sidebarContent);
+
         base._ExitTree();
+    }
+
+    /// <summary>
+    /// Detaches and frees a dynamically created node, clearing the field reference.
+    /// </summary>
+    private static void FreeNodeIfValid<T>(ref T node) where T : Node
+    {
+        if (node == null) return;
+        if (IsInstanceValid(node))
+        {
+            var parent = node.GetParent();
+            if (parent != null)
+                parent.RemoveChild(node);
+            node.QueueFree();
+        }
+        node = null;
     }
 
     private void WireToolbar()
@@ -304,14 +330,19 @@ public partial class TimelineInspector : Control
         _ruler.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _ruler.GuiInput += OnRulerGuiInput;
 
+        // Create and parent playhead immediately so it is never an orphaned ObjectDB instance.
+        // (Previously created unparented here and only added in EnsurePlayheadLine.)
         _playheadLine = new ColorRect
         {
             Name = "PlayheadLine",
             Color = new Color(0.95f, 0.35f, 0.15f, 0.95f),
             MouseFilter = MouseFilterEnum.Ignore,
             ZIndex = 50,
-            Size = new Vector2(2, RowHeight)
+            Size = new Vector2(2, RowHeight),
+            Visible = false
         };
+        if (_timelineArea != null)
+            _timelineArea.AddChild(_playheadLine);
     }
 
     /// <summary>
@@ -763,11 +794,19 @@ public partial class TimelineInspector : Control
     private void EnsurePlayheadLine()
     {
         if (_timelineArea == null) return;
-        if (_playheadLine != null && IsInstanceValid(_playheadLine) && _playheadLine.GetParent() == _timelineArea)
-            return;
 
+        // Reuse existing valid line when already under the timeline area.
         if (_playheadLine != null && IsInstanceValid(_playheadLine))
+        {
+            if (_playheadLine.GetParent() == _timelineArea)
+                return;
+
+            // Orphaned / wrong parent from older code paths — free before recreating.
+            if (_playheadLine.GetParent() != null)
+                _playheadLine.GetParent().RemoveChild(_playheadLine);
             _playheadLine.QueueFree();
+            _playheadLine = null;
+        }
 
         _playheadLine = new ColorRect
         {
@@ -1073,11 +1112,11 @@ public partial class TimelineInspector : Control
         }
         _cueToSidebarRow.Clear();
 
+        // Keep the playhead node parented under _timelineArea (do NOT RemoveChild without free —
+        // that orphaned ColorRect "PlayheadLine" and leaked a CanvasItem RID on exit).
+        // Hide until the next rebuild repositions it.
         if (_playheadLine != null && IsInstanceValid(_playheadLine))
-        {
-            if (_playheadLine.GetParent() == _timelineArea)
-                _timelineArea.RemoveChild(_playheadLine);
-        }
+            _playheadLine.Visible = false;
 
         // Keep time grid; just detach references that will be recreated
         _visibleItems.Clear();

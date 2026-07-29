@@ -16,6 +16,9 @@
 [ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidi.tscn" id="13_midi"]
 [ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsMidiInputMap.tscn" id="14_midi_map"]
 [ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsOscInputMap.tscn" id="15_osc_map"]
+[ext_resource type="PackedScene" uid="uid://t1ccfinhqoye" path="res://src/UI/Scenes/Settings/SettingsAudioDefaults.tscn" id="16_audiodef"]
+[ext_resource type="PackedScene" uid="uid://cpxapul4025nc" path="res://src/UI/Scenes/Settings/SettingsVideoDefaults.tscn" id="17_videodef"]
+[ext_resource type="PackedScene" uid="uid://b1bwv107ue24w" path="res://src/UI/Scenes/Settings/SettingsTextDefaults.tscn" id="18_textdef"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -271,6 +274,21 @@ layout_mode = 2
 
 [node name="SettingsCueDefaults" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=1372115871 instance=ExtResource("12_cuedef")]
 unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SettingsAudioDefaults" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("16_audiodef")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsVideoDefaults" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("17_videodef")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsTextDefaults" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("18_textdef")]
+unique_name_in_owner = true
+visible = false
 layout_mode = 2
 
 [node name="DropMenuFilter" type="PanelContainer" parent="Control" unique_id=791895030]

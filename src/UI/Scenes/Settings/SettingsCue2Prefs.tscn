@@ -164,3 +164,35 @@ theme_override_constants/icon_max_width = 12
 expand_icon = true
 visible = false
 tooltip_text = "Reset to default"
+
+[node name="LogSessionDepthRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="LogSessionDepthLabel" type="Label" parent="VBoxContainer/LogSessionDepthRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Log Session Depth"
+vertical_alignment = 1
+tooltip_text = "How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only."
+
+[node name="LogSessionDepth" type="SpinBox" parent="VBoxContainer/LogSessionDepthRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 50.0
+value = 5.0
+allow_greater = false
+allow_lesser = false
+tooltip_text = "How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only."
+
+[node name="LogSessionDepthResetButton" type="Button" parent="VBoxContainer/LogSessionDepthRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"

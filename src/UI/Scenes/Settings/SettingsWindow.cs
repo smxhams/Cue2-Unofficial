@@ -891,6 +891,9 @@ public partial class SettingsWindow : Window
 			"MIDI" => "SettingsMidi",
 			"MIDI Input Map" => "SettingsMidiInputMap",
 			"Cue Defaults" => "SettingsCueDefaults",
+			"Audio Defaults" => "SettingsAudioDefaults",
+			"Video Defaults" => "SettingsVideoDefaults",
+			"Text Defaults" => "SettingsTextDefaults",
 			"Cue2 Preferences" => "SettingsCue2Prefs",
 			_ => null
 		};
@@ -946,16 +949,19 @@ public partial class SettingsWindow : Window
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);
 		tiArtNet.SetText(0, "Art-Net");
 
-		// Cue defaults (shell defaults applied to newly created cues)
+		// Cue defaults (shell + component defaults applied to newly created cues/components)
 		TreeItem tiDefaults = _setTree.CreateItem(root);
 		tiDefaults.SetText(0, "Cue Defaults");
 		tiDefaults.SetTooltipText(0, "Default shell properties for newly created cues (pre-wait, colour, arming, etc.).");
 		TreeItem tiAudioCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiAudioCueDefaults.SetText(0, "Audio Cues");
-		tiAudioCueDefaults.SetTooltipText(0, "Set defaults for audio cues (coming soon).");
+		tiAudioCueDefaults.SetText(0, "Audio Defaults");
+		tiAudioCueDefaults.SetTooltipText(0, "Default volume, pan, loop, play count, and fades for new audio components.");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiVideoCueDefaults.SetText(0, "Video Defaults");
-		tiVideoCueDefaults.SetTooltipText(0, "Set defaults for video cues (coming soon).");
+		tiVideoCueDefaults.SetTooltipText(0, "Default layout, opacity, loop, embedded audio, image hold, and fades for new video components.");
+		TreeItem tiTextCueDefaults = _setTree.CreateItem(tiDefaults);
+		tiTextCueDefaults.SetText(0, "Text Defaults");
+		tiTextCueDefaults.SetTooltipText(0, "Default typography, alignment, duration, outline/background, and fades for new text components.");
 
 		// App preferences (user:// — not stored in the showfile)
 		TreeItem tiCue2Preferences = _setTree.CreateItem(root);

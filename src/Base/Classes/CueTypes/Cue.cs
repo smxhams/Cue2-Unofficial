@@ -2,6 +2,7 @@ using System;
 using Godot;
 using System.Collections.Generic;
 using System.Linq;
+using Cue2.Base.Classes;
 using Cue2.Shared;
 using Godot.Collections;
 using Array = Godot.Collections.Array;
@@ -611,8 +612,8 @@ public class Cue : ICue
     /// </summary>
     /// <param name="audioFile">Path to the audio media file (show-relative or absolute).</param>
     /// <param name="patch">
-    /// Optional output patch. When null, the show's preferred patch is used
-    /// (typically "Default Patch" on a new session).
+    /// Optional output patch override. When null, show audio defaults choose the output
+    /// (Preferred Default Patch, a specific patch, direct device, or none).
     /// </param>
     /// <returns>The new or existing audio component.</returns>
     public AudioComponent AddAudioComponent(string audioFile, AudioOutputPatch patch = null)
@@ -623,13 +624,15 @@ public class Cue : ICue
             return existing;
         }
 
-        patch ??= ResolvePreferredAudioPatch();
-        var audioComp = new AudioComponent
+        var audioComp = new AudioComponent { AudioFile = audioFile };
+        // Show defaults (volume, pan, fades, output, …). Explicit patch param wins after.
+        ResolveSettings()?.ApplyAudioDefaults(audioComp);
+        if (patch != null)
         {
-            AudioFile = audioFile,
-            Patch = patch,
-            PatchId = patch?.Id ?? -1
-        };
+            audioComp.Patch = patch;
+            audioComp.PatchId = patch.Id;
+            audioComp.DirectOutput = null;
+        }
         Components.Add(audioComp);
         return audioComp;
     }
@@ -658,8 +661,8 @@ public class Cue : ICue
     /// </summary>
     /// <returns>The new or existing text component.</returns>
     /// <remarks>
-    /// Defaults: first available target layer, empty content, duration 0 (until stopped),
-    /// centered white text at size 48.
+    /// Defaults come from show Text Defaults (target layer, typography, duration, fades, …).
+    /// Content starts empty.
     /// </remarks>
     public TextComponent AddTextComponent()
     {
@@ -670,8 +673,8 @@ public class Cue : ICue
         }
 
         var textComp = new TextComponent();
-        if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
-            textComp.TargetLayerId = DisplaysManager.Layers[0].LayerId;
+        // Includes target layer default (First available / specific / No Output).
+        ResolveSettings()?.ApplyTextDefaults(textComp);
         textComp.RecalculateDuration();
         Components.Add(textComp);
         return textComp;
@@ -683,8 +686,8 @@ public class Cue : ICue
     /// <param name="videoFile">Path to the video/image media file (show-relative or absolute).</param>
     /// <returns>The new or existing video component.</returns>
     /// <remarks>
-    /// Assigns the first available target layer and the show's preferred audio output patch
-    /// (Default Patch when present) so new media cues are playable without extra setup.
+    /// Target layer and embedded-audio output come from show Video Defaults
+    /// (First available / Preferred by factory default).
     /// </remarks>
     public VideoComponent AddVideoComponent(string videoFile)
     {
@@ -697,26 +700,12 @@ public class Cue : ICue
         videoComp.RefreshIsImageFromPath();
         if (videoComp.IsImage)
         {
-            // Still images: no in/out points; default hold is until stopped.
+            // Still images: no in/out points; hold duration comes from video defaults.
             videoComp.StartTime = 0;
             videoComp.EndTime = -1;
-            videoComp.Duration = 0;
-            videoComp.TotalDuration = -1;
-            videoComp.UseAudio = false;
-            videoComp.HasAudio = false;
         }
-        // Prefer a real layer when one exists so new media cues are playable;
-        // user can still choose "No Output" (-1) in the inspector.
-        if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
-            videoComp.TargetLayerId = DisplaysManager.Layers[0].LayerId;
-
-        // Prefer Default Patch (or first available) for embedded audio, matching audio cues.
-        var preferredPatch = ResolvePreferredAudioPatch();
-        if (preferredPatch != null)
-        {
-            videoComp.Patch = preferredPatch;
-            videoComp.PatchId = preferredPatch.Id;
-        }
+        // Apply show defaults (layout, loop, audio, fades, image hold, target layer, output, etc.).
+        ResolveSettings()?.ApplyVideoDefaults(videoComp);
 
         //videoComp.ExtractAudioIfPresent(videoFile, globalSignals);
         Components.Add(videoComp);
@@ -724,21 +713,20 @@ public class Cue : ICue
     }
 
     /// <summary>
-    /// Resolves the show's preferred audio output patch via GlobalData/Settings.
+    /// Resolves the live <see cref="Settings"/> instance from the scene tree, if available.
     /// </summary>
-    /// <returns>Preferred patch, or null when none exist or GlobalData is unavailable.</returns>
-    private static AudioOutputPatch ResolvePreferredAudioPatch()
+    /// <returns>Settings node, or null when the tree / GlobalData is unavailable.</returns>
+    private static Settings ResolveSettings()
     {
         try
         {
             if (Engine.GetMainLoop() is not SceneTree tree)
                 return null;
-            var settings = tree.Root?.GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
-            return settings?.GetPreferredAudioOutputPatch();
+            return tree.Root?.GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"Cue:ResolvePreferredAudioPatch - {ex.Message}");
+            GD.PrintErr($"Cue:ResolveSettings - {ex.Message}");
             return null;
         }
     }

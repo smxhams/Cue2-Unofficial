@@ -52,6 +52,8 @@ public partial class AudioInspector : Control
     private CheckBox _loopInput;
     private LineEdit _playCountInput;
     private LineEdit _volumeInput;
+    private LineEdit _fadeInInput;
+    private LineEdit _fadeOutInput;
     private Label _panLabel;
     private HSlider _panSlider;
     private LineEdit _panInput;
@@ -132,6 +134,8 @@ public partial class AudioInspector : Control
         _loopInput = GetNode<CheckBox>("%LoopInput");
         _playCountInput = GetNode<LineEdit>("%PlayCountInput");
         _volumeInput = GetNode<LineEdit>("%VolumeInput");
+        _fadeInInput = GetNodeOrNull<LineEdit>("%FadeInInput");
+        _fadeOutInput = GetNodeOrNull<LineEdit>("%FadeOutInput");
         _panLabel = GetNodeOrNull<Label>("%PanLabel");
         _panSlider = GetNodeOrNull<HSlider>("%PanSlider");
         _panInput = GetNodeOrNull<LineEdit>("%PanInput");
@@ -199,6 +203,16 @@ public partial class AudioInspector : Control
         _loopInput.Toggled += OnLoopToggled;
         _playCountInput.TextSubmitted += OnPlayCountSubmitted;
         _playCountInput.FocusExited += () => OnPlayCountSubmitted(_playCountInput.Text);
+        if (_fadeInInput != null)
+        {
+            _fadeInInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: true);
+            _fadeInInput.FocusExited += () => OnFadeSubmitted(_fadeInInput.Text, isIn: true);
+        }
+        if (_fadeOutInput != null)
+        {
+            _fadeOutInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: false);
+            _fadeOutInput.FocusExited += () => OnFadeSubmitted(_fadeOutInput.Text, isIn: false);
+        }
         _outputOptionButton.ItemSelected += OutputOptionSelected;
 
         // Undo/redo and other model restores push this signal; rebind component + refresh UI.
@@ -622,6 +636,57 @@ public partial class AudioInspector : Control
         }
         if (_playCountInput.HasFocus())
             _playCountInput.ReleaseFocus();
+    }
+
+    /// <summary>
+    /// Commits fade-in or fade-out duration from a time LineEdit.
+    /// </summary>
+    /// <param name="text">User-entered time string.</param>
+    /// <param name="isIn">True for fade-in; false for fade-out.</param>
+    private void OnFadeSubmitted(string text, bool isIn)
+    {
+        if (_focusedCue == null || _focusedAudioComponent == null) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+        var field = isIn ? _fadeInInput : _fadeOutInput;
+        if (field == null) return;
+
+        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
+        if (string.IsNullOrEmpty(formatted))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Invalid audio fade time: {text}", 1);
+            double current = isIn
+                ? _focusedAudioComponent.FadeInDuration
+                : _focusedAudioComponent.FadeOutDuration;
+            field.Text = UiUtilities.FormatTime(current);
+            if (field.HasFocus()) field.ReleaseFocus();
+            return;
+        }
+
+        seconds = Math.Max(0.0, seconds);
+        field.Text = formatted;
+        field.TooltipText = labeled + (isIn
+            ? " (fade-in at play start)"
+            : " (fade-out on stop)");
+
+        double existing = isIn
+            ? _focusedAudioComponent.FadeInDuration
+            : _focusedAudioComponent.FadeOutDuration;
+        if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+        {
+            if (field.HasFocus()) field.ReleaseFocus();
+            return;
+        }
+
+        _globalData?.HistoryManager?.RecordCueChange(
+            _focusedCue.Id, isIn ? "Edit audio fade-in" : "Edit audio fade-out");
+        if (isIn)
+            _focusedAudioComponent.FadeInDuration = seconds;
+        else
+            _focusedAudioComponent.FadeOutDuration = seconds;
+
+        if (field.HasFocus()) field.ReleaseFocus();
     }
     
     private void PopulateOutputOptions()
@@ -1314,6 +1379,10 @@ public partial class AudioInspector : Control
         _playCountInput.Text = _focusedAudioComponent.PlayCount.ToString();
         var volumeDb = UiUtilities.LinearToDb((float)_focusedAudioComponent.Volume);
         _volumeInput.Text = $"{volumeDb}dB";
+        if (_fadeInInput != null)
+            _fadeInInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.FadeInDuration);
+        if (_fadeOutInput != null)
+            _fadeOutInput.Text = UiUtilities.FormatTime(_focusedAudioComponent.FadeOutDuration);
         UpdatePanUiVisibilityAndValues();
     }
 

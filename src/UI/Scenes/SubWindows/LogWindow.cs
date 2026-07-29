@@ -6,8 +6,11 @@ using Godot;
 namespace Cue2.UI.Scenes.SubWindows;
 
 /// <summary>
-/// Floating log viewer window. Loads the most recent page of logs on open,
-/// with optional load-older pagination and clear (memory + disk).
+/// Floating log viewer window for the <b>current session only</b>.
+/// Loads the most recent page of session logs on open, with optional load-older
+/// pagination within this session and clear (current session memory + current file).
+/// Historical session files on disk are not shown here; they are retained/pruned
+/// via <see cref="UserDataManager.LogSessionDepth"/>.
 /// </summary>
 public partial class LogWindow : Window
 {
@@ -113,7 +116,9 @@ public partial class LogWindow : Window
 	}
 
 	/// <summary>
-	/// Clears logs from memory and disk, empties the UI, then records a single confirmation entry.
+	/// Clears the current session logs from memory and the current session file,
+	/// empties the UI, then records a single confirmation entry.
+	/// Historical rotated session files on disk are not deleted.
 	/// </summary>
 	private void OnClearLogsPressed()
 	{
@@ -131,7 +136,7 @@ public partial class LogWindow : Window
 		UpdatePaginationUi();
 
 		// One new entry so the footer session count and this window stay consistent.
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Logs cleared.", (int)LogType.Info);
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Current session logs cleared.", (int)LogType.Info);
 	}
 
 	/// <summary>

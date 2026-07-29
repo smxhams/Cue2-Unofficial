@@ -9,6 +9,34 @@ using Godot.Collections;
 namespace Cue2.Base.Classes;
 
 /// <summary>
+/// How component defaults resolve audio output (standalone audio or video embedded audio).
+/// </summary>
+public enum ComponentAudioOutputDefaultMode
+{
+    /// <summary>Use Default Patch when present, otherwise the first available patch.</summary>
+    Preferred = 0,
+    /// <summary>Use a specific patch by id.</summary>
+    Patch = 1,
+    /// <summary>Use a named direct output device.</summary>
+    Direct = 2,
+    /// <summary>No audio output assigned.</summary>
+    None = 3
+}
+
+/// <summary>
+/// How component defaults resolve a video target layer.
+/// </summary>
+public enum ComponentTargetLayerDefaultMode
+{
+    /// <summary>Use the first layer in <see cref="DisplaysManager.Layers"/> when any exist.</summary>
+    FirstAvailable = 0,
+    /// <summary>Use a specific layer by id.</summary>
+    Layer = 1,
+    /// <summary>No output (TargetLayerId = -1).</summary>
+    None = 2
+}
+
+/// <summary>
 /// Manages storing of settings data
 /// Child of GlobalData
 /// </summary>
@@ -63,6 +91,129 @@ public partial class Settings : Node
 
     /// <summary>System default skip-if-disarmed for newly created cues.</summary>
     public const bool SystemDefaultCueSkipIfDisarmed = false;
+
+    // ── Audio component defaults (system factory values) ───────────────────
+
+    /// <summary>System default linear volume for new audio components (1.0 = 0 dB).</summary>
+    public const double SystemDefaultAudioVolume = 1.0;
+
+    /// <summary>System default stereo pan for new audio components (0 = center).</summary>
+    public const float SystemDefaultAudioPan = 0f;
+
+    /// <summary>System default loop for new audio components.</summary>
+    public const bool SystemDefaultAudioLoop = false;
+
+    /// <summary>System default play count for new audio components.</summary>
+    public const int SystemDefaultAudioPlayCount = 1;
+
+    /// <summary>System default fade-in seconds for new audio components.</summary>
+    public const double SystemDefaultAudioFadeIn = 0.0;
+
+    /// <summary>System default fade-out seconds for new audio components.</summary>
+    public const double SystemDefaultAudioFadeOut = 0.0;
+
+    /// <summary>System default audio output mode for new audio components.</summary>
+    public const ComponentAudioOutputDefaultMode SystemDefaultAudioOutputMode =
+        ComponentAudioOutputDefaultMode.Preferred;
+
+    // ── Video component defaults (system factory values) ───────────────────
+
+    /// <summary>System default TextureRect expand mode for new video components.</summary>
+    public const TextureRect.ExpandModeEnum SystemDefaultVideoExpandMode =
+        TextureRect.ExpandModeEnum.IgnoreSize;
+
+    /// <summary>System default TextureRect stretch mode for new video components.</summary>
+    public const TextureRect.StretchModeEnum SystemDefaultVideoStretchMode =
+        TextureRect.StretchModeEnum.KeepAspectCentered;
+
+    /// <summary>System default opacity for new video components (0–1).</summary>
+    public const float SystemDefaultVideoOpacity = 1f;
+
+    /// <summary>System default loop for new video components.</summary>
+    public const bool SystemDefaultVideoLoop = false;
+
+    /// <summary>System default play count for new video components.</summary>
+    public const int SystemDefaultVideoPlayCount = 1;
+
+    /// <summary>System default use-embedded-audio for new video components.</summary>
+    public const bool SystemDefaultVideoUseAudio = true;
+
+    /// <summary>System default linear audio volume for new video components.</summary>
+    public const float SystemDefaultVideoAudioVolume = 1f;
+
+    /// <summary>System default stereo pan for new video components.</summary>
+    public const float SystemDefaultVideoPan = 0f;
+
+    /// <summary>System default fade-in seconds for new video components.</summary>
+    public const double SystemDefaultVideoFadeIn = 0.0;
+
+    /// <summary>System default fade-out seconds for new video components.</summary>
+    public const double SystemDefaultVideoFadeOut = 0.0;
+
+    /// <summary>System default still-image hold duration (0 = until stopped).</summary>
+    public const double SystemDefaultVideoImageDuration = 0.0;
+
+    /// <summary>System default embedded-audio output mode for new video components.</summary>
+    public const ComponentAudioOutputDefaultMode SystemDefaultVideoOutputMode =
+        ComponentAudioOutputDefaultMode.Preferred;
+
+    /// <summary>System default target-layer mode for new video components.</summary>
+    public const ComponentTargetLayerDefaultMode SystemDefaultVideoTargetLayerMode =
+        ComponentTargetLayerDefaultMode.FirstAvailable;
+
+    // ── Text component defaults (system factory values) ────────────────────
+
+    /// <summary>System default hold duration for new text components (0 = until stopped).</summary>
+    public const double SystemDefaultTextDuration = 0.0;
+
+    /// <summary>System default opacity for new text components (0–1).</summary>
+    public const float SystemDefaultTextOpacity = 1f;
+
+    /// <summary>System default BBCode flag for new text components.</summary>
+    public const bool SystemDefaultTextUseBbcode = false;
+
+    /// <summary>System default font size for new text components.</summary>
+    public const int SystemDefaultTextFontSize = 48;
+
+    /// <summary>System default system font family name (empty = theme default).</summary>
+    public const string SystemDefaultTextFontName = "";
+
+    /// <summary>System default font colour for new text components.</summary>
+    public static readonly Color SystemDefaultTextFontColor = Colors.White;
+
+    /// <summary>System default horizontal alignment for new text components.</summary>
+    public const HorizontalAlignment SystemDefaultTextHAlign = HorizontalAlignment.Center;
+
+    /// <summary>System default vertical alignment for new text components.</summary>
+    public const VerticalAlignment SystemDefaultTextVAlign = VerticalAlignment.Center;
+
+    /// <summary>System default autowrap for new text components.</summary>
+    public const bool SystemDefaultTextAutowrap = true;
+
+    /// <summary>System default margins (px) for new text components.</summary>
+    public const int SystemDefaultTextMargins = 16;
+
+    /// <summary>System default outline size for new text components.</summary>
+    public const int SystemDefaultTextOutlineSize = 0;
+
+    /// <summary>System default outline colour for new text components.</summary>
+    public static readonly Color SystemDefaultTextOutlineColor = Colors.Black;
+
+    /// <summary>System default background-enabled for new text components.</summary>
+    public const bool SystemDefaultTextBackgroundEnabled = false;
+
+    /// <summary>System default background colour for new text components.</summary>
+    public static readonly Color SystemDefaultTextBackgroundColor = new Color(0f, 0f, 0f, 0.55f);
+
+    /// <summary>System default fade-in seconds for new text components.</summary>
+    public const double SystemDefaultTextFadeIn = 0.0;
+
+    /// <summary>System default fade-out seconds for new text components.</summary>
+    public const double SystemDefaultTextFadeOut = 0.0;
+
+    /// <summary>System default target-layer mode for new text components.</summary>
+    public const ComponentTargetLayerDefaultMode SystemDefaultTextTargetLayerMode =
+        ComponentTargetLayerDefaultMode.FirstAvailable;
 
     public float UiScale = DefaultUiScale;
     public float GoScale = DefaultGoScale;
@@ -119,6 +270,143 @@ public partial class Settings : Node
 
     /// <summary>Default skip-if-disarmed applied when a new cue is created.</summary>
     public bool CueDefaultSkipIfDisarmed = SystemDefaultCueSkipIfDisarmed;
+
+    // ── Audio component defaults (show-scoped; applied on new AudioComponent) ─
+
+    /// <summary>Default linear volume (0–1) for new audio components.</summary>
+    public double AudioDefaultVolume = SystemDefaultAudioVolume;
+
+    /// <summary>Default stereo pan (−1…+1) for new audio components.</summary>
+    public float AudioDefaultPan = SystemDefaultAudioPan;
+
+    /// <summary>Default loop flag for new audio components.</summary>
+    public bool AudioDefaultLoop = SystemDefaultAudioLoop;
+
+    /// <summary>Default play count for new audio components.</summary>
+    public int AudioDefaultPlayCount = SystemDefaultAudioPlayCount;
+
+    /// <summary>Default fade-in duration (seconds) for new audio components.</summary>
+    public double AudioDefaultFadeIn = SystemDefaultAudioFadeIn;
+
+    /// <summary>Default fade-out duration (seconds) for new audio components.</summary>
+    public double AudioDefaultFadeOut = SystemDefaultAudioFadeOut;
+
+    /// <summary>Default audio output mode for new audio components.</summary>
+    public ComponentAudioOutputDefaultMode AudioDefaultOutputMode = SystemDefaultAudioOutputMode;
+
+    /// <summary>Default patch id when <see cref="AudioDefaultOutputMode"/> is <see cref="ComponentAudioOutputDefaultMode.Patch"/>.</summary>
+    public int AudioDefaultPatchId = -1;
+
+    /// <summary>Default direct device name when mode is <see cref="ComponentAudioOutputDefaultMode.Direct"/>.</summary>
+    public string AudioDefaultDirectOutput = string.Empty;
+
+    // ── Video component defaults (show-scoped; applied on new VideoComponent) ─
+
+    /// <summary>Default TextureRect expand mode for new video components.</summary>
+    public TextureRect.ExpandModeEnum VideoDefaultExpandMode = SystemDefaultVideoExpandMode;
+
+    /// <summary>Default TextureRect stretch mode for new video components.</summary>
+    public TextureRect.StretchModeEnum VideoDefaultStretchMode = SystemDefaultVideoStretchMode;
+
+    /// <summary>Default opacity (0–1) for new video components.</summary>
+    public float VideoDefaultOpacity = SystemDefaultVideoOpacity;
+
+    /// <summary>Default loop flag for new video components.</summary>
+    public bool VideoDefaultLoop = SystemDefaultVideoLoop;
+
+    /// <summary>Default play count for new video components.</summary>
+    public int VideoDefaultPlayCount = SystemDefaultVideoPlayCount;
+
+    /// <summary>Default use-embedded-audio for new video (non-image) components.</summary>
+    public bool VideoDefaultUseAudio = SystemDefaultVideoUseAudio;
+
+    /// <summary>Default linear audio volume for new video components.</summary>
+    public float VideoDefaultAudioVolume = SystemDefaultVideoAudioVolume;
+
+    /// <summary>Default stereo pan for new video components.</summary>
+    public float VideoDefaultPan = SystemDefaultVideoPan;
+
+    /// <summary>Default fade-in duration (seconds) for new video components.</summary>
+    public double VideoDefaultFadeIn = SystemDefaultVideoFadeIn;
+
+    /// <summary>Default fade-out duration (seconds) for new video components.</summary>
+    public double VideoDefaultFadeOut = SystemDefaultVideoFadeOut;
+
+    /// <summary>Default still-image hold duration in seconds (0 = until stopped).</summary>
+    public double VideoDefaultImageDuration = SystemDefaultVideoImageDuration;
+
+    /// <summary>Default embedded-audio output mode for new video components.</summary>
+    public ComponentAudioOutputDefaultMode VideoDefaultOutputMode = SystemDefaultVideoOutputMode;
+
+    /// <summary>Default patch id when <see cref="VideoDefaultOutputMode"/> is Patch.</summary>
+    public int VideoDefaultPatchId = -1;
+
+    /// <summary>Default direct device name when video audio mode is Direct.</summary>
+    public string VideoDefaultDirectOutput = string.Empty;
+
+    /// <summary>Default target-layer mode for new video components.</summary>
+    public ComponentTargetLayerDefaultMode VideoDefaultTargetLayerMode =
+        SystemDefaultVideoTargetLayerMode;
+
+    /// <summary>Default layer id when <see cref="VideoDefaultTargetLayerMode"/> is Layer.</summary>
+    public int VideoDefaultTargetLayerId = -1;
+
+    // ── Text component defaults (show-scoped; applied on new TextComponent) ──
+
+    /// <summary>Default hold duration (seconds) for new text components (0 = until stopped).</summary>
+    public double TextDefaultDuration = SystemDefaultTextDuration;
+
+    /// <summary>Default opacity (0–1) for new text components.</summary>
+    public float TextDefaultOpacity = SystemDefaultTextOpacity;
+
+    /// <summary>Default BBCode interpretation for new text components.</summary>
+    public bool TextDefaultUseBbcode = SystemDefaultTextUseBbcode;
+
+    /// <summary>Default font size (px) for new text components.</summary>
+    public int TextDefaultFontSize = SystemDefaultTextFontSize;
+
+    /// <summary>Default system font family name for new text components (empty = theme).</summary>
+    public string TextDefaultFontName = SystemDefaultTextFontName;
+
+    /// <summary>Default font colour for new text components.</summary>
+    public Color TextDefaultFontColor = SystemDefaultTextFontColor;
+
+    /// <summary>Default horizontal alignment for new text components.</summary>
+    public HorizontalAlignment TextDefaultHAlign = SystemDefaultTextHAlign;
+
+    /// <summary>Default vertical alignment for new text components.</summary>
+    public VerticalAlignment TextDefaultVAlign = SystemDefaultTextVAlign;
+
+    /// <summary>Default autowrap for new text components.</summary>
+    public bool TextDefaultAutowrap = SystemDefaultTextAutowrap;
+
+    /// <summary>Default margins (px) for new text components.</summary>
+    public int TextDefaultMargins = SystemDefaultTextMargins;
+
+    /// <summary>Default outline size (px) for new text components.</summary>
+    public int TextDefaultOutlineSize = SystemDefaultTextOutlineSize;
+
+    /// <summary>Default outline colour for new text components.</summary>
+    public Color TextDefaultOutlineColor = SystemDefaultTextOutlineColor;
+
+    /// <summary>Default background panel enabled for new text components.</summary>
+    public bool TextDefaultBackgroundEnabled = SystemDefaultTextBackgroundEnabled;
+
+    /// <summary>Default background panel colour for new text components.</summary>
+    public Color TextDefaultBackgroundColor = SystemDefaultTextBackgroundColor;
+
+    /// <summary>Default fade-in duration (seconds) for new text components.</summary>
+    public double TextDefaultFadeIn = SystemDefaultTextFadeIn;
+
+    /// <summary>Default fade-out duration (seconds) for new text components.</summary>
+    public double TextDefaultFadeOut = SystemDefaultTextFadeOut;
+
+    /// <summary>Default target-layer mode for new text components.</summary>
+    public ComponentTargetLayerDefaultMode TextDefaultTargetLayerMode =
+        SystemDefaultTextTargetLayerMode;
+
+    /// <summary>Default layer id when <see cref="TextDefaultTargetLayerMode"/> is Layer.</summary>
+    public int TextDefaultTargetLayerId = -1;
 
     public bool VerbosePrint = true;
     
@@ -382,6 +670,9 @@ public partial class Settings : Node
 
         // Cue shell defaults for newly created cues
         ResetCueDefaultsToSystem();
+        ResetAudioDefaultsToSystem();
+        ResetVideoDefaultsToSystem();
+        ResetTextDefaultsToSystem();
 
         // Cue light appearance defaults
         CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
@@ -440,6 +731,9 @@ public partial class Settings : Node
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
+        saveTable.Add("AudioDefaults", CaptureAudioDefaultsDict());
+        saveTable.Add("VideoDefaults", CaptureVideoDefaultsDict());
+        saveTable.Add("TextDefaults", CaptureTextDefaultsDict());
         
         // Cuelights
         saveTable.Add("CueLightIdleColour", CueLightIdleColour.ToHtml());
@@ -553,6 +847,21 @@ public partial class Settings : Node
             ApplyCueDefaultsFromDict(value.AsGodotDictionary());
         else
             ResetCueDefaultsToSystem();
+
+        if (settingsData.TryGetValue("AudioDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
+            ApplyAudioDefaultsFromDict(value.AsGodotDictionary());
+        else
+            ResetAudioDefaultsToSystem();
+
+        if (settingsData.TryGetValue("VideoDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
+            ApplyVideoDefaultsFromDict(value.AsGodotDictionary());
+        else
+            ResetVideoDefaultsToSystem();
+
+        if (settingsData.TryGetValue("TextDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
+            ApplyTextDefaultsFromDict(value.AsGodotDictionary());
+        else
+            ResetTextDefaultsToSystem();
         
         CueLightIdleColour = settingsData.TryGetValue("CueLightIdleColour", out value) ? Color.FromString(value.AsString(), CueLightIdleColour) : CueLightIdleColour;
         CueLightGoColour = settingsData.TryGetValue("CueLightGoColour", out value) ? Color.FromString(value.AsString(), CueLightGoColour) : CueLightGoColour;
@@ -701,6 +1010,24 @@ public partial class Settings : Node
             ApplyCueDefaultsFromDict(value.AsGodotDictionary());
         }
 
+        if (TryGetSettingsValue(settingsData, "AudioDefaults", out value)
+            && value.VariantType == Variant.Type.Dictionary)
+        {
+            ApplyAudioDefaultsFromDict(value.AsGodotDictionary());
+        }
+
+        if (TryGetSettingsValue(settingsData, "VideoDefaults", out value)
+            && value.VariantType == Variant.Type.Dictionary)
+        {
+            ApplyVideoDefaultsFromDict(value.AsGodotDictionary());
+        }
+
+        if (TryGetSettingsValue(settingsData, "TextDefaults", out value)
+            && value.VariantType == Variant.Type.Dictionary)
+        {
+            ApplyTextDefaultsFromDict(value.AsGodotDictionary());
+        }
+
         if (settingsData.TryGetValue("CueLightIdleColour", out value))
             CueLightIdleColour = Color.FromString(value.AsString(), CueLightIdleColour);
         if (settingsData.TryGetValue("CueLightGoColour", out value))
@@ -800,6 +1127,18 @@ public partial class Settings : Node
             else if (key == "CueDefaults")
             {
                 slice[key] = CaptureCueDefaultsDict();
+            }
+            else if (key == "AudioDefaults")
+            {
+                slice[key] = CaptureAudioDefaultsDict();
+            }
+            else if (key == "VideoDefaults")
+            {
+                slice[key] = CaptureVideoDefaultsDict();
+            }
+            else if (key == "TextDefaults")
+            {
+                slice[key] = CaptureTextDefaultsDict();
             }
             else if (key == "Midi")
             {
@@ -958,6 +1297,478 @@ public partial class Settings : Node
                && CueDefaultColor.IsEqualApprox(SystemDefaultCueColor)
                && CueDefaultArmed == SystemDefaultCueArmed
                && CueDefaultSkipIfDisarmed == SystemDefaultCueSkipIfDisarmed;
+    }
+
+    // ── Audio component defaults ───────────────────────────────────────────
+
+    /// <summary>
+    /// Resets all audio component defaults to system factory values.
+    /// </summary>
+    public void ResetAudioDefaultsToSystem()
+    {
+        AudioDefaultVolume = SystemDefaultAudioVolume;
+        AudioDefaultPan = SystemDefaultAudioPan;
+        AudioDefaultLoop = SystemDefaultAudioLoop;
+        AudioDefaultPlayCount = SystemDefaultAudioPlayCount;
+        AudioDefaultFadeIn = SystemDefaultAudioFadeIn;
+        AudioDefaultFadeOut = SystemDefaultAudioFadeOut;
+        AudioDefaultOutputMode = SystemDefaultAudioOutputMode;
+        AudioDefaultPatchId = -1;
+        AudioDefaultDirectOutput = string.Empty;
+    }
+
+    /// <summary>
+    /// Applies show audio defaults to a newly constructed audio component.
+    /// Does not change file path, routing matrix, metadata, or in/out times.
+    /// Includes default audio output assignment.
+    /// </summary>
+    /// <param name="comp">Audio component to configure.</param>
+    public void ApplyAudioDefaults(AudioComponent comp)
+    {
+        if (comp == null) return;
+        comp.Volume = Math.Clamp(AudioDefaultVolume, 0.0, 1.0);
+        comp.Pan = AudioDefaultPan;
+        comp.Loop = AudioDefaultLoop;
+        comp.PlayCount = Math.Max(1, AudioDefaultPlayCount);
+        comp.FadeInDuration = Math.Max(0.0, AudioDefaultFadeIn);
+        comp.FadeOutDuration = Math.Max(0.0, AudioDefaultFadeOut);
+        ApplyResolvedAudioOutput(
+            AudioDefaultOutputMode,
+            AudioDefaultPatchId,
+            AudioDefaultDirectOutput,
+            out var patch,
+            out int patchId,
+            out string direct);
+        comp.Patch = patch;
+        comp.PatchId = patchId;
+        comp.DirectOutput = direct;
+    }
+
+    /// <summary>
+    /// Serializes audio component defaults for showfile / history.
+    /// </summary>
+    public Dictionary CaptureAudioDefaultsDict()
+    {
+        return new Dictionary
+        {
+            ["Volume"] = AudioDefaultVolume,
+            ["Pan"] = AudioDefaultPan,
+            ["Loop"] = AudioDefaultLoop ? 1 : 0,
+            ["PlayCount"] = AudioDefaultPlayCount,
+            ["FadeIn"] = AudioDefaultFadeIn,
+            ["FadeOut"] = AudioDefaultFadeOut,
+            ["OutputMode"] = (int)AudioDefaultOutputMode,
+            ["PatchId"] = AudioDefaultPatchId,
+            ["DirectOutput"] = AudioDefaultDirectOutput ?? string.Empty
+        };
+    }
+
+    /// <summary>
+    /// Loads audio component defaults from a dictionary. Missing keys keep current values.
+    /// </summary>
+    /// <param name="data">Dictionary with Volume, Pan, Loop, PlayCount, FadeIn, FadeOut, output fields.</param>
+    public void ApplyAudioDefaultsFromDict(Dictionary data)
+    {
+        if (data == null) return;
+
+        if (TryGetSettingsValue(data, "Volume", out var v))
+            AudioDefaultVolume = Math.Clamp(v.AsDouble(), 0.0, 1.0);
+        if (TryGetSettingsValue(data, "Pan", out v))
+            AudioDefaultPan = Mathf.Clamp(v.AsSingle(), -1f, 1f);
+        if (TryGetSettingsValue(data, "Loop", out v))
+            AudioDefaultLoop = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "PlayCount", out v))
+            AudioDefaultPlayCount = Math.Max(1, v.AsInt32());
+        if (TryGetSettingsValue(data, "FadeIn", out v))
+            AudioDefaultFadeIn = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "FadeOut", out v))
+            AudioDefaultFadeOut = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "OutputMode", out v))
+            AudioDefaultOutputMode = ParseAudioOutputMode(v.AsInt32());
+        if (TryGetSettingsValue(data, "PatchId", out v))
+            AudioDefaultPatchId = v.AsInt32();
+        if (TryGetSettingsValue(data, "DirectOutput", out v))
+            AudioDefaultDirectOutput = v.AsString() ?? string.Empty;
+    }
+
+    // ── Video component defaults ───────────────────────────────────────────
+
+    /// <summary>
+    /// Resets all video component defaults to system factory values.
+    /// </summary>
+    public void ResetVideoDefaultsToSystem()
+    {
+        VideoDefaultExpandMode = SystemDefaultVideoExpandMode;
+        VideoDefaultStretchMode = SystemDefaultVideoStretchMode;
+        VideoDefaultOpacity = SystemDefaultVideoOpacity;
+        VideoDefaultLoop = SystemDefaultVideoLoop;
+        VideoDefaultPlayCount = SystemDefaultVideoPlayCount;
+        VideoDefaultUseAudio = SystemDefaultVideoUseAudio;
+        VideoDefaultAudioVolume = SystemDefaultVideoAudioVolume;
+        VideoDefaultPan = SystemDefaultVideoPan;
+        VideoDefaultFadeIn = SystemDefaultVideoFadeIn;
+        VideoDefaultFadeOut = SystemDefaultVideoFadeOut;
+        VideoDefaultImageDuration = SystemDefaultVideoImageDuration;
+        VideoDefaultOutputMode = SystemDefaultVideoOutputMode;
+        VideoDefaultPatchId = -1;
+        VideoDefaultDirectOutput = string.Empty;
+        VideoDefaultTargetLayerMode = SystemDefaultVideoTargetLayerMode;
+        VideoDefaultTargetLayerId = -1;
+    }
+
+    /// <summary>
+    /// Applies show video defaults to a newly constructed video component.
+    /// Does not change file path, routing matrix, or metadata.
+    /// Includes default target layer and embedded-audio output.
+    /// Still-image path still forces UseAudio/HasAudio off after this call.
+    /// </summary>
+    /// <param name="comp">Video component to configure.</param>
+    public void ApplyVideoDefaults(VideoComponent comp)
+    {
+        if (comp == null) return;
+        comp.TextureExpandMode = VideoDefaultExpandMode;
+        comp.TextureStretchMode = VideoDefaultStretchMode;
+        comp.Opacity = Mathf.Clamp(VideoDefaultOpacity, 0f, 1f);
+        comp.Loop = VideoDefaultLoop;
+        comp.PlayCount = Math.Max(1, VideoDefaultPlayCount);
+        comp.UseAudio = VideoDefaultUseAudio;
+        comp.AudioVolume = Mathf.Clamp(VideoDefaultAudioVolume, 0f, 1f);
+        comp.Volume = comp.AudioVolume;
+        comp.Pan = VideoDefaultPan;
+        comp.FadeInDuration = Math.Max(0.0, VideoDefaultFadeIn);
+        comp.FadeOutDuration = Math.Max(0.0, VideoDefaultFadeOut);
+        comp.TargetLayerId = ResolveTargetLayerId(
+            VideoDefaultTargetLayerMode, VideoDefaultTargetLayerId);
+        ApplyResolvedAudioOutput(
+            VideoDefaultOutputMode,
+            VideoDefaultPatchId,
+            VideoDefaultDirectOutput,
+            out var patch,
+            out int patchId,
+            out string direct);
+        comp.Patch = patch;
+        comp.PatchId = patchId;
+        comp.DirectOutput = direct;
+        if (comp.IsImage)
+        {
+            double hold = Math.Max(0.0, VideoDefaultImageDuration);
+            comp.Duration = hold;
+            comp.TotalDuration = hold <= 0 ? -1.0 : hold * (comp.Loop ? 1 : Math.Max(1, comp.PlayCount));
+            if (comp.Loop)
+                comp.TotalDuration = -1.0;
+            // Images never use embedded audio.
+            comp.UseAudio = false;
+            comp.HasAudio = false;
+        }
+    }
+
+    /// <summary>
+    /// Serializes video component defaults for showfile / history.
+    /// </summary>
+    public Dictionary CaptureVideoDefaultsDict()
+    {
+        return new Dictionary
+        {
+            ["ExpandMode"] = (int)VideoDefaultExpandMode,
+            ["StretchMode"] = (int)VideoDefaultStretchMode,
+            ["Opacity"] = VideoDefaultOpacity,
+            ["Loop"] = VideoDefaultLoop ? 1 : 0,
+            ["PlayCount"] = VideoDefaultPlayCount,
+            ["UseAudio"] = VideoDefaultUseAudio ? 1 : 0,
+            ["AudioVolume"] = VideoDefaultAudioVolume,
+            ["Pan"] = VideoDefaultPan,
+            ["FadeIn"] = VideoDefaultFadeIn,
+            ["FadeOut"] = VideoDefaultFadeOut,
+            ["ImageDuration"] = VideoDefaultImageDuration,
+            ["OutputMode"] = (int)VideoDefaultOutputMode,
+            ["PatchId"] = VideoDefaultPatchId,
+            ["DirectOutput"] = VideoDefaultDirectOutput ?? string.Empty,
+            ["TargetLayerMode"] = (int)VideoDefaultTargetLayerMode,
+            ["TargetLayerId"] = VideoDefaultTargetLayerId
+        };
+    }
+
+    /// <summary>
+    /// Loads video component defaults from a dictionary. Missing keys keep current values.
+    /// </summary>
+    /// <param name="data">Dictionary of video default fields.</param>
+    public void ApplyVideoDefaultsFromDict(Dictionary data)
+    {
+        if (data == null) return;
+
+        if (TryGetSettingsValue(data, "ExpandMode", out var v))
+        {
+            int mode = v.AsInt32();
+            if (Enum.IsDefined(typeof(TextureRect.ExpandModeEnum), mode))
+                VideoDefaultExpandMode = (TextureRect.ExpandModeEnum)mode;
+        }
+        if (TryGetSettingsValue(data, "StretchMode", out v))
+        {
+            int mode = v.AsInt32();
+            if (Enum.IsDefined(typeof(TextureRect.StretchModeEnum), mode))
+                VideoDefaultStretchMode = (TextureRect.StretchModeEnum)mode;
+        }
+        if (TryGetSettingsValue(data, "Opacity", out v))
+            VideoDefaultOpacity = VideoComponent.ParseOpacity(v);
+        if (TryGetSettingsValue(data, "Loop", out v))
+            VideoDefaultLoop = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "PlayCount", out v))
+            VideoDefaultPlayCount = Math.Max(1, v.AsInt32());
+        if (TryGetSettingsValue(data, "UseAudio", out v))
+            VideoDefaultUseAudio = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "AudioVolume", out v))
+            VideoDefaultAudioVolume = Mathf.Clamp(v.AsSingle(), 0f, 1f);
+        if (TryGetSettingsValue(data, "Pan", out v))
+            VideoDefaultPan = Mathf.Clamp(v.AsSingle(), -1f, 1f);
+        if (TryGetSettingsValue(data, "FadeIn", out v))
+            VideoDefaultFadeIn = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "FadeOut", out v))
+            VideoDefaultFadeOut = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "ImageDuration", out v))
+            VideoDefaultImageDuration = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "OutputMode", out v))
+            VideoDefaultOutputMode = ParseAudioOutputMode(v.AsInt32());
+        if (TryGetSettingsValue(data, "PatchId", out v))
+            VideoDefaultPatchId = v.AsInt32();
+        if (TryGetSettingsValue(data, "DirectOutput", out v))
+            VideoDefaultDirectOutput = v.AsString() ?? string.Empty;
+        if (TryGetSettingsValue(data, "TargetLayerMode", out v))
+            VideoDefaultTargetLayerMode = ParseTargetLayerMode(v.AsInt32());
+        if (TryGetSettingsValue(data, "TargetLayerId", out v))
+            VideoDefaultTargetLayerId = v.AsInt32();
+    }
+
+    // ── Text component defaults ────────────────────────────────────────────
+
+    /// <summary>
+    /// Resets all text component defaults to system factory values.
+    /// </summary>
+    public void ResetTextDefaultsToSystem()
+    {
+        TextDefaultDuration = SystemDefaultTextDuration;
+        TextDefaultOpacity = SystemDefaultTextOpacity;
+        TextDefaultUseBbcode = SystemDefaultTextUseBbcode;
+        TextDefaultFontSize = SystemDefaultTextFontSize;
+        TextDefaultFontName = SystemDefaultTextFontName;
+        TextDefaultFontColor = SystemDefaultTextFontColor;
+        TextDefaultHAlign = SystemDefaultTextHAlign;
+        TextDefaultVAlign = SystemDefaultTextVAlign;
+        TextDefaultAutowrap = SystemDefaultTextAutowrap;
+        TextDefaultMargins = SystemDefaultTextMargins;
+        TextDefaultOutlineSize = SystemDefaultTextOutlineSize;
+        TextDefaultOutlineColor = SystemDefaultTextOutlineColor;
+        TextDefaultBackgroundEnabled = SystemDefaultTextBackgroundEnabled;
+        TextDefaultBackgroundColor = SystemDefaultTextBackgroundColor;
+        TextDefaultFadeIn = SystemDefaultTextFadeIn;
+        TextDefaultFadeOut = SystemDefaultTextFadeOut;
+        TextDefaultTargetLayerMode = SystemDefaultTextTargetLayerMode;
+        TextDefaultTargetLayerId = -1;
+    }
+
+    /// <summary>
+    /// Applies show text defaults to a newly constructed text component.
+    /// Does not change content. Includes default target layer assignment.
+    /// </summary>
+    /// <param name="comp">Text component to configure.</param>
+    public void ApplyTextDefaults(TextComponent comp)
+    {
+        if (comp == null) return;
+        comp.Duration = Math.Max(0.0, TextDefaultDuration);
+        comp.Opacity = Mathf.Clamp(TextDefaultOpacity, 0f, 1f);
+        comp.UseBbcode = TextDefaultUseBbcode;
+        comp.FontSize = Math.Max(1, TextDefaultFontSize);
+        comp.FontName = TextDefaultFontName ?? string.Empty;
+        comp.FontColor = TextDefaultFontColor;
+        comp.HorizontalAlignment = TextDefaultHAlign;
+        comp.VerticalAlignment = TextDefaultVAlign;
+        comp.Autowrap = TextDefaultAutowrap;
+        comp.Margins = Math.Max(0, TextDefaultMargins);
+        comp.OutlineSize = Math.Max(0, TextDefaultOutlineSize);
+        comp.OutlineColor = TextDefaultOutlineColor;
+        comp.BackgroundEnabled = TextDefaultBackgroundEnabled;
+        comp.BackgroundColor = TextDefaultBackgroundColor;
+        comp.FadeInDuration = Math.Max(0.0, TextDefaultFadeIn);
+        comp.FadeOutDuration = Math.Max(0.0, TextDefaultFadeOut);
+        comp.TargetLayerId = ResolveTargetLayerId(
+            TextDefaultTargetLayerMode, TextDefaultTargetLayerId);
+        comp.RecalculateDuration();
+    }
+
+    /// <summary>
+    /// Serializes text component defaults for showfile / history.
+    /// </summary>
+    public Dictionary CaptureTextDefaultsDict()
+    {
+        return new Dictionary
+        {
+            ["Duration"] = TextDefaultDuration,
+            ["Opacity"] = TextDefaultOpacity,
+            ["UseBbcode"] = TextDefaultUseBbcode ? 1 : 0,
+            ["FontSize"] = TextDefaultFontSize,
+            ["FontName"] = TextDefaultFontName ?? string.Empty,
+            ["FontColor"] = TextDefaultFontColor.ToHtml(true),
+            ["HAlign"] = (int)TextDefaultHAlign,
+            ["VAlign"] = (int)TextDefaultVAlign,
+            ["Autowrap"] = TextDefaultAutowrap ? 1 : 0,
+            ["Margins"] = TextDefaultMargins,
+            ["OutlineSize"] = TextDefaultOutlineSize,
+            ["OutlineColor"] = TextDefaultOutlineColor.ToHtml(true),
+            ["BackgroundEnabled"] = TextDefaultBackgroundEnabled ? 1 : 0,
+            ["BackgroundColor"] = TextDefaultBackgroundColor.ToHtml(true),
+            ["FadeIn"] = TextDefaultFadeIn,
+            ["FadeOut"] = TextDefaultFadeOut,
+            ["TargetLayerMode"] = (int)TextDefaultTargetLayerMode,
+            ["TargetLayerId"] = TextDefaultTargetLayerId
+        };
+    }
+
+    /// <summary>
+    /// Loads text component defaults from a dictionary. Missing keys keep current values.
+    /// </summary>
+    /// <param name="data">Dictionary of text default fields.</param>
+    public void ApplyTextDefaultsFromDict(Dictionary data)
+    {
+        if (data == null) return;
+
+        if (TryGetSettingsValue(data, "Duration", out var v))
+            TextDefaultDuration = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "Opacity", out v))
+            TextDefaultOpacity = VideoComponent.ParseOpacity(v);
+        if (TryGetSettingsValue(data, "UseBbcode", out v))
+            TextDefaultUseBbcode = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "FontSize", out v))
+            TextDefaultFontSize = Math.Max(1, v.AsInt32());
+        if (TryGetSettingsValue(data, "FontName", out v))
+            TextDefaultFontName = v.AsString() ?? string.Empty;
+        if (TryGetSettingsValue(data, "FontColor", out v))
+            TextDefaultFontColor = Color.FromString(v.AsString(), TextDefaultFontColor);
+        if (TryGetSettingsValue(data, "HAlign", out v))
+        {
+            int align = v.AsInt32();
+            if (Enum.IsDefined(typeof(HorizontalAlignment), align))
+                TextDefaultHAlign = (HorizontalAlignment)align;
+        }
+        if (TryGetSettingsValue(data, "VAlign", out v))
+        {
+            int align = v.AsInt32();
+            if (Enum.IsDefined(typeof(VerticalAlignment), align))
+                TextDefaultVAlign = (VerticalAlignment)align;
+        }
+        if (TryGetSettingsValue(data, "Autowrap", out v))
+            TextDefaultAutowrap = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "Margins", out v))
+            TextDefaultMargins = Math.Max(0, v.AsInt32());
+        if (TryGetSettingsValue(data, "OutlineSize", out v))
+            TextDefaultOutlineSize = Math.Max(0, v.AsInt32());
+        if (TryGetSettingsValue(data, "OutlineColor", out v))
+            TextDefaultOutlineColor = Color.FromString(v.AsString(), TextDefaultOutlineColor);
+        if (TryGetSettingsValue(data, "BackgroundEnabled", out v))
+            TextDefaultBackgroundEnabled = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "BackgroundColor", out v))
+            TextDefaultBackgroundColor = Color.FromString(v.AsString(), TextDefaultBackgroundColor);
+        if (TryGetSettingsValue(data, "FadeIn", out v))
+            TextDefaultFadeIn = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "FadeOut", out v))
+            TextDefaultFadeOut = Math.Max(0.0, v.AsDouble());
+        if (TryGetSettingsValue(data, "TargetLayerMode", out v))
+            TextDefaultTargetLayerMode = ParseTargetLayerMode(v.AsInt32());
+        if (TryGetSettingsValue(data, "TargetLayerId", out v))
+            TextDefaultTargetLayerId = v.AsInt32();
+    }
+
+    // ── Shared output / layer resolution for component defaults ────────────
+
+    /// <summary>
+    /// Resolves an audio output assignment from defaults mode + patch id / direct name.
+    /// Preferred falls back to <see cref="GetPreferredAudioOutputPatch"/>; missing patch → none.
+    /// </summary>
+    public void ApplyResolvedAudioOutput(
+        ComponentAudioOutputDefaultMode mode,
+        int patchId,
+        string directOutput,
+        out AudioOutputPatch patch,
+        out int resolvedPatchId,
+        out string resolvedDirect)
+    {
+        patch = null;
+        resolvedPatchId = -1;
+        resolvedDirect = null;
+
+        switch (mode)
+        {
+            case ComponentAudioOutputDefaultMode.None:
+                return;
+
+            case ComponentAudioOutputDefaultMode.Patch:
+                if (patchId >= 0
+                    && _audioOutputPatches.TryGetValue(patchId, out var byId)
+                    && byId != null
+                    && GodotObject.IsInstanceValid(byId))
+                {
+                    patch = byId;
+                    resolvedPatchId = byId.Id;
+                }
+                return;
+
+            case ComponentAudioOutputDefaultMode.Direct:
+                if (!string.IsNullOrEmpty(directOutput))
+                    resolvedDirect = directOutput;
+                return;
+
+            case ComponentAudioOutputDefaultMode.Preferred:
+            default:
+                var preferred = GetPreferredAudioOutputPatch();
+                if (preferred != null)
+                {
+                    patch = preferred;
+                    resolvedPatchId = preferred.Id;
+                }
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a target layer id from defaults mode + stored layer id.
+    /// FirstAvailable uses the first entry in <see cref="DisplaysManager.Layers"/>; missing layer → -1.
+    /// </summary>
+    /// <param name="mode">Default mode.</param>
+    /// <param name="layerId">Stored layer id when mode is Layer.</param>
+    /// <returns>Resolved layer id, or -1 for no output.</returns>
+    public static int ResolveTargetLayerId(ComponentTargetLayerDefaultMode mode, int layerId)
+    {
+        switch (mode)
+        {
+            case ComponentTargetLayerDefaultMode.None:
+                return -1;
+
+            case ComponentTargetLayerDefaultMode.Layer:
+                if (layerId >= 0 && DisplaysManager.GetLayerById(layerId) != null)
+                    return layerId;
+                // Missing layer: fall back to first available when possible.
+                if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
+                    return DisplaysManager.Layers[0].LayerId;
+                return -1;
+
+            case ComponentTargetLayerDefaultMode.FirstAvailable:
+            default:
+                if (DisplaysManager.Layers != null && DisplaysManager.Layers.Count > 0)
+                    return DisplaysManager.Layers[0].LayerId;
+                return -1;
+        }
+    }
+
+    private static ComponentAudioOutputDefaultMode ParseAudioOutputMode(int value)
+    {
+        return Enum.IsDefined(typeof(ComponentAudioOutputDefaultMode), value)
+            ? (ComponentAudioOutputDefaultMode)value
+            : ComponentAudioOutputDefaultMode.Preferred;
+    }
+
+    private static ComponentTargetLayerDefaultMode ParseTargetLayerMode(int value)
+    {
+        return Enum.IsDefined(typeof(ComponentTargetLayerDefaultMode), value)
+            ? (ComponentTargetLayerDefaultMode)value
+            : ComponentTargetLayerDefaultMode.FirstAvailable;
     }
 
     /// <summary>

@@ -32,6 +32,8 @@ public partial class TextInspector : Control
 
     private OptionButton _targetLayerOption;
     private LineEdit _durationLineEdit;
+    private LineEdit _fadeInInput;
+    private LineEdit _fadeOutInput;
     private TextEdit _contentTextEdit;
     private CheckBox _useBbcodeCheck;
     private OptionButton _fontOption;
@@ -122,6 +124,8 @@ public partial class TextInspector : Control
         _textPreviewer = GetNodeOrNull<TextPreviewer>("%TextPreviewer");
         _targetLayerOption = GetNode<OptionButton>("%TargetLayerOptionButton");
         _durationLineEdit = GetNode<LineEdit>("%DurationLineEdit");
+        _fadeInInput = GetNodeOrNull<LineEdit>("%FadeInInput");
+        _fadeOutInput = GetNodeOrNull<LineEdit>("%FadeOutInput");
         _contentTextEdit = GetNode<TextEdit>("%ContentTextEdit");
         _useBbcodeCheck = GetNode<CheckBox>("%UseBbcodeCheck");
         _fontOption = GetNodeOrNull<OptionButton>("%FontOptionButton");
@@ -159,6 +163,17 @@ public partial class TextInspector : Control
         _targetLayerOption.ItemSelected += OnTargetLayerSelected;
         _durationLineEdit.TextSubmitted += OnDurationSubmitted;
         _durationLineEdit.FocusExited += () => OnDurationSubmitted(_durationLineEdit.Text);
+
+        if (_fadeInInput != null)
+        {
+            _fadeInInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: true);
+            _fadeInInput.FocusExited += () => OnFadeSubmitted(_fadeInInput.Text, isIn: true);
+        }
+        if (_fadeOutInput != null)
+        {
+            _fadeOutInput.TextSubmitted += text => OnFadeSubmitted(text, isIn: false);
+            _fadeOutInput.FocusExited += () => OnFadeSubmitted(_fadeOutInput.Text, isIn: false);
+        }
 
         _contentTextEdit.TextChanged += OnContentChanged;
         _contentTextEdit.FocusExited += OnContentFocusExited;
@@ -615,6 +630,11 @@ public partial class TextInspector : Control
             _outlineColorPicker.Color = _focusedText.OutlineColor;
             _backgroundCheck.ButtonPressed = _focusedText.BackgroundEnabled;
             _backgroundColorPicker.Color = _focusedText.BackgroundColor;
+
+            if (_fadeInInput != null)
+                _fadeInInput.Text = UiUtilities.FormatTime(_focusedText.FadeInDuration);
+            if (_fadeOutInput != null)
+                _fadeOutInput.Text = UiUtilities.FormatTime(_focusedText.FadeOutDuration);
         }
         finally
         {
@@ -817,6 +837,59 @@ public partial class TextInspector : Control
         SyncDurationFieldOnly();
         if (_durationLineEdit != null && _durationLineEdit.HasFocus())
             _durationLineEdit.ReleaseFocus();
+    }
+
+    /// <summary>
+    /// Commits fade-in or fade-out duration from a time LineEdit.
+    /// </summary>
+    /// <param name="text">User-entered time string.</param>
+    /// <param name="isIn">True for fade-in; false for fade-out.</param>
+    private void OnFadeSubmitted(string text, bool isIn)
+    {
+        var field = isIn ? _fadeInInput : _fadeOutInput;
+        if (field == null) return;
+
+        if (!CanEdit())
+        {
+            if (field.HasFocus()) field.ReleaseFocus();
+            return;
+        }
+
+        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
+        if (string.IsNullOrEmpty(formatted))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Invalid text fade time: {text}", 1);
+            double current = isIn
+                ? _focusedText.FadeInDuration
+                : _focusedText.FadeOutDuration;
+            field.Text = UiUtilities.FormatTime(current);
+            if (field.HasFocus()) field.ReleaseFocus();
+            return;
+        }
+
+        seconds = Math.Max(0.0, seconds);
+        field.Text = formatted;
+        field.TooltipText = labeled + (isIn
+            ? " (fade-in at play start)"
+            : " (fade-out on stop)");
+
+        double existing = isIn
+            ? _focusedText.FadeInDuration
+            : _focusedText.FadeOutDuration;
+        if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+        {
+            if (field.HasFocus()) field.ReleaseFocus();
+            return;
+        }
+
+        Record(isIn ? "Edit text fade-in" : "Edit text fade-out");
+        if (isIn)
+            _focusedText.FadeInDuration = seconds;
+        else
+            _focusedText.FadeOutDuration = seconds;
+
+        if (field.HasFocus()) field.ReleaseFocus();
     }
 
     private void SyncDurationFieldOnly()

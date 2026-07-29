@@ -139,6 +139,40 @@ size_flags_stretch_ratio = 0.7
 value = 100.0
 rounded = true
 
+[node name="FadeRow" type="HBoxContainer" parent="ContentRoot/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FadeInLabel" type="Label" parent="ContentRoot/VBox/FadeRow"]
+layout_mode = 2
+tooltip_text = "Fade-in duration at play start (0 = immediate)."
+mouse_filter = 1
+text = "Fade in"
+
+[node name="FadeInInput" type="LineEdit" parent="ContentRoot/VBox/FadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Fade-in duration at play start (0 = immediate)."
+text = "0:00.000"
+alignment = 1
+
+[node name="FadeOutLabel" type="Label" parent="ContentRoot/VBox/FadeRow"]
+layout_mode = 2
+tooltip_text = "Fade-out duration on stop (0 = immediate / session stop fade)."
+mouse_filter = 1
+text = "Fade out"
+
+[node name="FadeOutInput" type="LineEdit" parent="ContentRoot/VBox/FadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Fade-out duration on stop (0 = immediate / session stop fade)."
+text = "0:00.000"
+alignment = 1
+
 [node name="EditorSplit" type="HBoxContainer" parent="ContentRoot/VBox" unique_id=2125154186]
 layout_mode = 2
 size_flags_vertical = 3

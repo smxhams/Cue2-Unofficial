@@ -35,6 +35,7 @@ public partial class UserDataManager : Node
 	private int _autosaveInterval = 5; // minutes, 0 = disabled
 	private int _backupDepth = DefaultBackupDepth;
 	private int _undoDepth = DefaultUndoDepth;
+	private int _logSessionDepth = DefaultLogSessionDepth;
 
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
@@ -68,6 +69,20 @@ public partial class UserDataManager : Node
 
 	/// <summary>Maximum allowed undo history depth.</summary>
 	public const int MaxUndoDepth = 200;
+
+	/// <summary>
+	/// The production default number of session log files to retain (including the current session).
+	/// Matches a Godot-like file_logging max depth.
+	/// </summary>
+	public static readonly int DefaultLogSessionDepth = 5;
+
+	/// <summary>
+	/// Minimum allowed log session depth. 1 keeps only the current session file (no history).
+	/// </summary>
+	public const int MinLogSessionDepth = 1;
+
+	/// <summary>Maximum allowed log session depth.</summary>
+	public const int MaxLogSessionDepth = 50;
 
 	/// <summary>
 	/// Defines the startup behavior when the application launches without a file argument.
@@ -188,6 +203,28 @@ public partial class UserDataManager : Node
 			if (_undoDepth != clamped)
 			{
 				_undoDepth = clamped;
+				SaveUserData();
+			}
+		}
+	}
+
+	/// <summary>
+	/// Number of session log files to retain on disk (including the current session).
+	/// Clamped to <see cref="MinLogSessionDepth"/>–<see cref="MaxLogSessionDepth"/>.
+	/// </summary>
+	/// <value>
+	/// Godot-style log session depth used by <c>EventLogger</c>.
+	/// 1 = current session only; higher values keep that many total session files.
+	/// </value>
+	public int LogSessionDepth
+	{
+		get => _logSessionDepth;
+		set
+		{
+			int clamped = Math.Clamp(value, MinLogSessionDepth, MaxLogSessionDepth);
+			if (_logSessionDepth != clamped)
+			{
+				_logSessionDepth = clamped;
 				SaveUserData();
 			}
 		}
@@ -606,6 +643,10 @@ public partial class UserDataManager : Node
 			{
 				_undoDepth = Math.Clamp(undoDepthVal.AsInt32(), MinUndoDepth, MaxUndoDepth);
 			}
+			if (data.TryGetValue("LogSessionDepth", out var logSessionDepthVal))
+			{
+				_logSessionDepth = Math.Clamp(logSessionDepthVal.AsInt32(), MinLogSessionDepth, MaxLogSessionDepth);
+			}
 
 			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
 			{
@@ -625,7 +666,7 @@ public partial class UserDataManager : Node
 			}
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
 		}
 		catch (Exception ex)
 		{
@@ -685,6 +726,7 @@ public partial class UserDataManager : Node
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;
 			data["UndoDepth"] = _undoDepth;
+			data["LogSessionDepth"] = _logSessionDepth;
 
 			if (_shellNumberColumnWidth > 0)
 				data["ShellNumberColumnWidth"] = _shellNumberColumnWidth;
