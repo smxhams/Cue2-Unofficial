@@ -347,6 +347,30 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
+    /// Enumerates live audio playback instances on this active cue (not descendants).
+    /// </summary>
+    public IEnumerable<ActiveAudioPlayback> EnumerateAudioPlaybacks()
+    {
+        foreach (var playback in _activeAudioComponents.Values)
+        {
+            if (playback != null && IsInstanceValid(playback))
+                yield return playback;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates live video playback instances on this active cue (not descendants).
+    /// </summary>
+    public IEnumerable<ActiveVideoPlayback> EnumerateVideoPlaybacks()
+    {
+        foreach (var playback in _activeVideoComponents.Values)
+        {
+            if (playback != null && IsInstanceValid(playback))
+                yield return playback;
+        }
+    }
+
+    /// <summary>
     /// Re-applies text content and style on live RichTextLabels for a text component.
     /// </summary>
     /// <param name="component">Text component whose active playback should refresh.</param>

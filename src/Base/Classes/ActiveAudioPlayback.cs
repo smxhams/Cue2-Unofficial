@@ -52,6 +52,19 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     public bool IsPaused;
     public bool IsSeeking;
 
+    /// <summary>
+    /// When set, replaces <see cref="AudioComponent.Volume"/> for this playback only (control fades).
+    /// </summary>
+    private float? _runtimeLevelLinear;
+
+    /// <summary>
+    /// When set, replaces <see cref="AudioComponent.Pan"/> for this playback only (control fades).
+    /// </summary>
+    private float? _runtimePan;
+
+    /// <summary>True when <see cref="Routing"/> is a private clone (safe to mutate for control fades).</summary>
+    private bool _routingIsPrivate;
+
     private CancellationTokenSource _fadeCts;
     private CancellationTokenSource _fillCts;
     private Task _fillTask;
@@ -167,6 +180,103 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     public float CurrentVolume
     {
         get { lock (_lock) return _volume; }
+    }
+
+    /// <summary>
+    /// Effective component-level volume for mixing (runtime control-fade override or cue component).
+    /// </summary>
+    public float EffectiveLevelLinear
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_runtimeLevelLinear.HasValue)
+                    return _runtimeLevelLinear.Value;
+            }
+            return Mathf.Clamp((float)_audioComponent.Volume, 0f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// Effective pan for mixing (runtime control-fade override or cue component). Non-stereo → 0.
+    /// </summary>
+    public float EffectivePan
+    {
+        get
+        {
+            if (SourceChannels != 2) return 0f;
+            lock (_lock)
+            {
+                if (_runtimePan.HasValue)
+                    return _runtimePan.Value;
+            }
+            return Mathf.Clamp(_audioComponent.Pan, -1f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// Sets a playback-only volume level (does not mutate the cue component).
+    /// </summary>
+    /// <param name="linear">Linear volume 0…1.</param>
+    public void SetRuntimeLevelLinear(float linear)
+    {
+        lock (_lock)
+            _runtimeLevelLinear = Mathf.Clamp(linear, 0f, 1f);
+    }
+
+    /// <summary>
+    /// Sets a playback-only pan (does not mutate the cue component).
+    /// </summary>
+    /// <param name="pan">Pan −1…1.</param>
+    public void SetRuntimePan(float pan)
+    {
+        lock (_lock)
+            _runtimePan = Mathf.Clamp(pan, -1f, 1f);
+    }
+
+    /// <summary>
+    /// Ensures <see cref="Routing"/> is a private clone, then sets one matrix cell for this playback only.
+    /// </summary>
+    /// <param name="inputCh">Input channel index.</param>
+    /// <param name="outputCh">Output channel index.</param>
+    /// <param name="linear">Linear volume 0…1.</param>
+    /// <returns><c>true</c> when the cell was written.</returns>
+    public bool SetRuntimeMatrixCell(int inputCh, int outputCh, float linear)
+    {
+        lock (_lock)
+        {
+            if (!_routingIsPrivate)
+            {
+                if (Routing == null)
+                    return false;
+                Routing = Routing.Clone();
+                _routingIsPrivate = true;
+            }
+
+            if (Routing == null) return false;
+            if (inputCh < 0 || inputCh >= Routing.InputChannels) return false;
+            if (outputCh < 0 || outputCh >= Routing.OutputChannels) return false;
+            Routing.SetVolume(inputCh, outputCh, Mathf.Clamp(linear, 0f, 1f));
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reads the current matrix cell (private runtime copy or shared component routing).
+    /// </summary>
+    public bool TryGetMatrixCell(int inputCh, int outputCh, out float linear)
+    {
+        linear = 0f;
+        lock (_lock)
+        {
+            var routing = Routing;
+            if (routing == null) return false;
+            if (inputCh < 0 || inputCh >= routing.InputChannels) return false;
+            if (outputCh < 0 || outputCh >= routing.OutputChannels) return false;
+            linear = routing.GetVolume(inputCh, outputCh);
+            return true;
+        }
     }
 
     public int CurrentPlayCount
@@ -457,10 +567,17 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         if (DeviceStreams == null) return;
 
         float masterVol;
-        lock (_lock) masterVol = _volume;
-        float componentVol = (float)_audioComponent.Volume;
-        // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
-        float pan = SourceChannels == 2 ? _audioComponent.Pan : 0f;
+        float componentVol;
+        float pan;
+        lock (_lock)
+        {
+            masterVol = _volume;
+            componentVol = _runtimeLevelLinear ?? Mathf.Clamp((float)_audioComponent.Volume, 0f, 1f);
+            // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
+            pan = SourceChannels == 2
+                ? (_runtimePan ?? Mathf.Clamp(_audioComponent.Pan, -1f, 1f))
+                : 0f;
+        }
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
 
         int declickRemainSnapshot = _declickFramesRemaining;

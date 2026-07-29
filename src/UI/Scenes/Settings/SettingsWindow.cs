@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Cue2.Base.Classes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot;
@@ -11,6 +14,10 @@ namespace Cue2.UI.Scenes.Settings;
 /// subsequent open/close. Disk is only updated when <see cref="UserDataManager"/> persists
 /// (typically app exit).
 /// </summary>
+/// <remarks>
+/// Also hosts independent show-settings save/load (.c2settings) with a multi-select filter
+/// so users can export or import subsets (e.g. Audio Output Patches only).
+/// </remarks>
 public partial class SettingsWindow : Window
 {
 	private GlobalSignals _globalSignals;
@@ -34,6 +41,15 @@ public partial class SettingsWindow : Window
 	private Timer _resizeSaveTimer;
 	private Vector2I _lastKnownPosition;
 
+	// ── Settings file filter / save-load ───────────────────────────────────
+	private Button _filterButton;
+	private PanelContainer _filterMenu;
+	private VBoxContainer _filterContainer;
+	private CheckBox _filterAllCheckBox;
+	private readonly System.Collections.Generic.Dictionary<string, CheckBox> _filterCheckBoxes = new();
+	private bool _isUpdatingFilterUi;
+	private FileDialog _settingsFileDialog;
+
 	/// <summary>
 	/// Initializes the settings UI, restores last window geometry and sub-menu, and wires signals.
 	/// Stays hidden until geometry is applied so the default scene size never flashes on screen.
@@ -49,8 +65,6 @@ public partial class SettingsWindow : Window
 		GD.Print($"SettingsWindow:_Ready - UI Scale: " + _globalData.Settings.UiScale);
 
 		MinSize = MinWindowSize;
-
-		GetNode<Button>("%SaveWithShow").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.SettingsSaveUserDir), _getFilters());
 
 		// Seed session state first so we can apply the correct size in one step (no intermediate resize).
 		EnsureSessionStateSeeded();
@@ -74,6 +88,7 @@ public partial class SettingsWindow : Window
 		_generateTree();
 		RestoreSelectedMenu();
 		_connectSignals();
+		SetupSettingsFileFilterUi();
 
 		// Reveal only after size, position, scale, and menu are ready — avoids open-time flicker.
 		Show();
@@ -335,21 +350,458 @@ public partial class SettingsWindow : Window
 	private void _connectSignals()
 	{
 		_globalSignals.UiScaleChanged += ScaleUi;
-		GetNode<Button>("%SaveFilterOptionButton").Pressed += () =>
-		{
-			GetNode<PanelContainer>("%DropMenuFilter").Visible = true;
-			GetNode<Button>("%SaveFilterOptionButton").Disabled = true;
-		};
-		GetNode<PanelContainer>("%DropMenuFilter").MouseExited += () =>
-		{
-			GetNode<PanelContainer>("%DropMenuFilter").Visible = false;
-			GetNode<Button>("%SaveFilterOptionButton").Disabled = false;
-		};
+
+		_filterButton = GetNodeOrNull<Button>("%SaveFilterOptionButton");
+		_filterMenu = GetNodeOrNull<PanelContainer>("%DropMenuFilter");
+		if (_filterButton != null)
+			_filterButton.Pressed += ToggleFilterMenu;
+
+		var saveAs = GetNodeOrNull<Button>("%SettingsSaveAs");
+		if (saveAs != null)
+			saveAs.Pressed += OnSaveSettingsPressed;
+
+		var load = GetNodeOrNull<Button>("%SettingsLoad");
+		if (load != null)
+			load.Pressed += OnLoadSettingsPressed;
 	}
 
-	private string _getFilters()
+	// ──────────────────────────────────────────────────────────────────────
+	// Settings file filter UI
+	// ──────────────────────────────────────────────────────────────────────
+
+	/// <summary>
+	/// Builds per-category checkboxes under the filter dropdown (All is in the scene).
+	/// Default selection is All / every category.
+	/// </summary>
+	private void SetupSettingsFileFilterUi()
 	{
-		return "";
+		_filterContainer = GetNodeOrNull<VBoxContainer>("%dmSaveFilterContainer");
+		_filterAllCheckBox = GetNodeOrNull<CheckBox>("%FilterAllCheckBox");
+		if (_filterContainer == null || _filterAllCheckBox == null)
+		{
+			GD.PrintErr("SettingsWindow:SetupSettingsFileFilterUi - Filter UI nodes missing.");
+			return;
+		}
+
+		_filterAllCheckBox.Toggled += OnFilterAllToggled;
+
+		foreach (var cat in SettingsExport.Categories)
+		{
+			var box = new CheckBox
+			{
+				Text = cat.Label,
+				ButtonPressed = true,
+				FocusMode = Control.FocusModeEnum.None,
+				MouseFilter = Control.MouseFilterEnum.Stop
+			};
+			box.SetMeta("category_id", cat.Id);
+			box.Toggled += pressed => OnFilterCategoryToggled(cat.Id, pressed);
+			_filterContainer.AddChild(box);
+			_filterCheckBoxes[cat.Id] = box;
+		}
+
+		UpdateFilterButtonLabel();
+	}
+
+	private void ToggleFilterMenu()
+	{
+		if (_filterMenu == null || _filterButton == null)
+			return;
+
+		if (_filterMenu.Visible)
+		{
+			HideFilterMenu();
+			return;
+		}
+
+		// Position the popup above the filter button so it sits over the left column.
+		var btnRect = _filterButton.GetGlobalRect();
+		float menuWidth = Mathf.Max(_filterMenu.CustomMinimumSize.X, btnRect.Size.X);
+		float menuHeight = _filterMenu.GetCombinedMinimumSize().Y;
+		if (menuHeight < 80f)
+			menuHeight = 240f;
+
+		// Convert to local coords of the popup's parent (Control under this Window).
+		var parent = _filterMenu.GetParent() as Control;
+		Vector2 localTopLeft;
+		if (parent != null)
+		{
+			// Prefer below the button when there is room; otherwise above.
+			float spaceBelow = parent.Size.Y - (btnRect.Position.Y - parent.GlobalPosition.Y + btnRect.Size.Y);
+			float yOffset = spaceBelow >= menuHeight + 4f
+				? btnRect.Size.Y + 2f
+				: -menuHeight - 2f;
+			localTopLeft = parent.GetGlobalTransformWithCanvas().AffineInverse()
+				* (btnRect.Position + new Vector2(0, yOffset));
+		}
+		else
+		{
+			localTopLeft = new Vector2(btnRect.Position.X, btnRect.Position.Y - menuHeight);
+		}
+
+		_filterMenu.Position = localTopLeft;
+		_filterMenu.Size = new Vector2(menuWidth, menuHeight);
+		_filterMenu.Visible = true;
+		_filterMenu.MoveToFront();
+	}
+
+	private void HideFilterMenu()
+	{
+		if (_filterMenu != null)
+			_filterMenu.Visible = false;
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		// Close filter popup when clicking outside it.
+		if (_filterMenu != null && _filterMenu.Visible &&
+		    @event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb)
+		{
+			var local = _filterMenu.GetGlobalTransformWithCanvas().AffineInverse() * mb.GlobalPosition;
+			bool overMenu = new Rect2(Vector2.Zero, _filterMenu.Size).HasPoint(local);
+			bool overButton = false;
+			if (_filterButton != null)
+			{
+				var btnLocal = _filterButton.GetGlobalTransformWithCanvas().AffineInverse() * mb.GlobalPosition;
+				overButton = new Rect2(Vector2.Zero, _filterButton.Size).HasPoint(btnLocal);
+			}
+
+			if (!overMenu && !overButton)
+				HideFilterMenu();
+		}
+
+		base._Input(@event);
+	}
+
+	private void OnFilterAllToggled(bool pressed)
+	{
+		if (_isUpdatingFilterUi)
+			return;
+
+		_isUpdatingFilterUi = true;
+		foreach (var box in _filterCheckBoxes.Values)
+			box.ButtonPressed = pressed;
+		_isUpdatingFilterUi = false;
+		UpdateFilterButtonLabel();
+	}
+
+	private void OnFilterCategoryToggled(string categoryId, bool pressed)
+	{
+		if (_isUpdatingFilterUi)
+			return;
+
+		_isUpdatingFilterUi = true;
+		if (_filterAllCheckBox != null)
+		{
+			bool allOn = _filterCheckBoxes.Values.All(b => b.ButtonPressed);
+			bool anyOn = _filterCheckBoxes.Values.Any(b => b.ButtonPressed);
+			// All is only fully checked when every category is on; unchecked otherwise.
+			_filterAllCheckBox.SetPressedNoSignal(allOn);
+			// If user unchecked the last category, leave All off (GetSelectedCategoryIds handles empty).
+			if (!anyOn)
+				_filterAllCheckBox.SetPressedNoSignal(false);
+		}
+		_isUpdatingFilterUi = false;
+		UpdateFilterButtonLabel();
+	}
+
+	/// <summary>
+	/// Updates the filter button caption to summarise the current selection.
+	/// </summary>
+	private void UpdateFilterButtonLabel()
+	{
+		if (_filterButton == null)
+			return;
+
+		var selected = GetSelectedCategoryIds();
+		if (selected.Count == 0)
+		{
+			_filterButton.Text = "None";
+			return;
+		}
+
+		if (selected.Count == SettingsExport.Categories.Length)
+		{
+			_filterButton.Text = "All";
+			return;
+		}
+
+		if (selected.Count == 1)
+		{
+			var cat = SettingsExport.Categories.FirstOrDefault(c => c.Id == selected[0]);
+			_filterButton.Text = string.IsNullOrEmpty(cat.Label) ? selected[0] : cat.Label;
+			return;
+		}
+
+		_filterButton.Text = $"{selected.Count} selected";
+	}
+
+	/// <summary>
+	/// Category ids currently checked in the filter dropdown.
+	/// When All is pressed, returns every known category id.
+	/// </summary>
+	private List<string> GetSelectedCategoryIds()
+	{
+		// Prefer explicit category boxes so partial selections stay accurate.
+		if (_filterCheckBoxes.Count > 0)
+		{
+			return _filterCheckBoxes
+				.Where(kv => kv.Value.ButtonPressed)
+				.Select(kv => kv.Key)
+				.ToList();
+		}
+
+		if (_filterAllCheckBox != null && _filterAllCheckBox.ButtonPressed)
+			return SettingsExport.Categories.Select(c => c.Id).ToList();
+
+		return new List<string>();
+	}
+
+	// ──────────────────────────────────────────────────────────────────────
+	// Save / Load settings file
+	// ──────────────────────────────────────────────────────────────────────
+
+	private void OnSaveSettingsPressed()
+	{
+		HideFilterMenu();
+		var categories = GetSelectedCategoryIds();
+		if (categories.Count == 0)
+		{
+			LogSettingsFile("Select at least one filter category before saving settings.", LogType.Warning);
+			return;
+		}
+
+		OpenSettingsFileDialog(FileDialog.FileModeEnum.SaveFile, path => SaveSettingsToPath(path, categories));
+	}
+
+	private void OnLoadSettingsPressed()
+	{
+		HideFilterMenu();
+		var categories = GetSelectedCategoryIds();
+		if (categories.Count == 0)
+		{
+			LogSettingsFile("Select at least one filter category before loading settings.", LogType.Warning);
+			return;
+		}
+
+		OpenSettingsFileDialog(FileDialog.FileModeEnum.OpenFile, path => LoadSettingsFromPath(path, categories));
+	}
+
+	/// <summary>
+	/// Opens a native filesystem dialog for .c2settings files.
+	/// </summary>
+	private void OpenSettingsFileDialog(FileDialog.FileModeEnum mode, Action<string> onSelected)
+	{
+		ClearSettingsFileDialog();
+
+		_settingsFileDialog = new FileDialog
+		{
+			FileMode = mode,
+			Access = FileDialog.AccessEnum.Filesystem,
+			Title = mode == FileDialog.FileModeEnum.SaveFile ? "Save Settings" : "Load Settings",
+			UseNativeDialog = true
+		};
+		_settingsFileDialog.AddFilter(SettingsExport.FileDialogFilter);
+		_settingsFileDialog.AddFilter("*.json ; JSON");
+
+		// Prefer the active show folder when available.
+		if (!string.IsNullOrEmpty(_globalData?.SessionPath))
+		{
+			try
+			{
+				string baseDir = _globalData.SessionPath.GetBaseDir();
+				if (DirAccess.DirExistsAbsolute(baseDir))
+					_settingsFileDialog.CurrentDir = baseDir;
+			}
+			catch (Exception ex)
+			{
+				GD.Print($"SettingsWindow:OpenSettingsFileDialog - Could not set initial dir: {ex.Message}");
+			}
+		}
+
+		if (mode == FileDialog.FileModeEnum.SaveFile)
+			_settingsFileDialog.CurrentFile = $"settings.{SettingsExport.FileExtension}";
+
+		AddChild(_settingsFileDialog);
+		_settingsFileDialog.FileSelected += path =>
+		{
+			try
+			{
+				onSelected?.Invoke(path);
+			}
+			finally
+			{
+				ClearSettingsFileDialog();
+			}
+		};
+		_settingsFileDialog.Canceled += ClearSettingsFileDialog;
+		_settingsFileDialog.PopupCenteredClamped(new Vector2I(900, 600));
+	}
+
+	private void ClearSettingsFileDialog()
+	{
+		if (_settingsFileDialog == null)
+			return;
+
+		if (GodotObject.IsInstanceValid(_settingsFileDialog))
+			_settingsFileDialog.QueueFree();
+		_settingsFileDialog = null;
+	}
+
+	/// <summary>
+	/// Writes the selected settings categories to a plain JSON .c2settings file.
+	/// </summary>
+	private void SaveSettingsToPath(string path, List<string> categoryIds)
+	{
+		if (string.IsNullOrWhiteSpace(path) || _globalData?.Settings == null)
+			return;
+
+		try
+		{
+			path = EnsureSettingsExtension(path);
+			var keys = SettingsExport.ResolveKeys(categoryIds);
+			if (keys.Length == 0)
+			{
+				LogSettingsFile("No settings keys resolved for the selected filter.", LogType.Warning);
+				return;
+			}
+
+			var slice = _globalData.Settings.CaptureHistorySlice(keys);
+			// Deep-clone via JSON so the document does not alias live dictionaries.
+			string sliceJson = Json.Stringify(slice);
+			using var sliceParser = new Json();
+			if (sliceParser.Parse(sliceJson) != Error.Ok)
+			{
+				LogSettingsFile("Failed to serialise settings for export.", LogType.Error);
+				return;
+			}
+
+			var document = SettingsExport.BuildDocument(categoryIds, sliceParser.Data.AsGodotDictionary());
+			string json = Json.Stringify(document, "\t");
+
+			using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
+			if (file == null)
+			{
+				Error err = FileAccess.GetOpenError();
+				LogSettingsFile($"Failed to write settings file: {path} ({err})", LogType.Error);
+				return;
+			}
+
+			file.StoreString(json);
+			LogSettingsFile($"Settings saved to {path} ({categoryIds.Count} categor{(categoryIds.Count == 1 ? "y" : "ies")}).", LogType.Info);
+			GD.Print($"SettingsWindow:SaveSettingsToPath - Wrote {keys.Length} key(s) → {path}");
+		}
+		catch (Exception ex)
+		{
+			LogSettingsFile($"Error saving settings: {ex.Message}", LogType.Error);
+			GD.PrintErr($"SettingsWindow:SaveSettingsToPath - {ex}");
+		}
+	}
+
+	/// <summary>
+	/// Loads a .c2settings (or bare settings JSON) file and applies only the selected categories.
+	/// Records a single undo step covering the keys that will change.
+	/// </summary>
+	private void LoadSettingsFromPath(string path, List<string> categoryIds)
+	{
+		if (string.IsNullOrWhiteSpace(path) || _globalData?.Settings == null)
+			return;
+
+		try
+		{
+			if (!FileAccess.FileExists(path))
+			{
+				LogSettingsFile($"Settings file not found: {path}", LogType.Error);
+				return;
+			}
+
+			using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+			if (file == null)
+			{
+				Error err = FileAccess.GetOpenError();
+				LogSettingsFile($"Failed to open settings file: {path} ({err})", LogType.Error);
+				return;
+			}
+
+			string json = file.GetAsText();
+			using var parser = new Json();
+			var parseErr = parser.Parse(json);
+			if (parseErr != Error.Ok)
+			{
+				LogSettingsFile($"Invalid JSON in settings file: {parseErr}", LogType.Error);
+				return;
+			}
+
+			if (parser.Data.VariantType != Variant.Type.Dictionary)
+			{
+				LogSettingsFile("Settings file root must be a JSON object.", LogType.Error);
+				return;
+			}
+
+			var root = parser.Data.AsGodotDictionary();
+			if (!SettingsExport.TryParseDocument(root, out var fileSettings, out var catsInFile, out var parseError))
+			{
+				LogSettingsFile(parseError ?? "Could not parse settings file.", LogType.Error);
+				return;
+			}
+
+			var toApply = SettingsExport.FilterSettingsByCategories(fileSettings, categoryIds);
+			if (toApply.Count == 0)
+			{
+				string hint = catsInFile is { Length: > 0 }
+					? $" File contains: {string.Join(", ", catsInFile)}."
+					: string.Empty;
+				LogSettingsFile(
+					"No matching settings found for the selected filter." + hint,
+					LogType.Warning);
+				return;
+			}
+
+			// Keys actually present after filtering — record those for undo.
+			var appliedKeys = new List<string>();
+			foreach (var k in toApply.Keys)
+				appliedKeys.Add(k.AsString());
+
+			var history = _globalData.HistoryManager;
+			history?.RecordSettingsChange(
+				$"Load settings ({string.Join(", ", categoryIds)})",
+				null,
+				appliedKeys.ToArray());
+
+			_globalData.Settings.ApplyPartialFromHistory(toApply);
+			history?.NotifySettingsApplied(appliedKeys.ToArray());
+
+			LogSettingsFile(
+				$"Settings loaded from {path} ({appliedKeys.Count} key(s): {string.Join(", ", appliedKeys)}).",
+				LogType.Info);
+			GD.Print($"SettingsWindow:LoadSettingsFromPath - Applied [{string.Join(", ", appliedKeys)}] from {path}");
+		}
+		catch (Exception ex)
+		{
+			LogSettingsFile($"Error loading settings: {ex.Message}", LogType.Error);
+			GD.PrintErr($"SettingsWindow:LoadSettingsFromPath - {ex}");
+		}
+	}
+
+	/// <summary>
+	/// Ensures the path ends with .<see cref="SettingsExport.FileExtension"/> when saving
+	/// without an extension (or with a bare name).
+	/// </summary>
+	private static string EnsureSettingsExtension(string path)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+			return path;
+
+		string ext = path.GetExtension().TrimStart('.').ToLowerInvariant();
+		if (ext is SettingsExport.FileExtension or "json")
+			return path;
+
+		return path + "." + SettingsExport.FileExtension;
+	}
+
+	private void LogSettingsFile(string message, LogType type)
+	{
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), message, (int)type);
 	}
 
 	private void ScaleUi(float value)
@@ -522,6 +974,7 @@ public partial class SettingsWindow : Window
 		SizeChanged -= OnWindowSizeChanged;
 		_resizeSaveTimer?.Stop();
 		SaveCurrentWindowState();
+		ClearSettingsFileDialog();
 
 		// Ensure last visible page is cached even if selection signal didn't fire again.
 		if (!string.IsNullOrEmpty(_sessionMenuKey))
@@ -533,5 +986,8 @@ public partial class SettingsWindow : Window
 		{
 			_globalSignals.UiScaleChanged -= ScaleUi;
 		}
+
+		if (_filterButton != null)
+			_filterButton.Pressed -= ToggleFilterMenu;
 	}
 }

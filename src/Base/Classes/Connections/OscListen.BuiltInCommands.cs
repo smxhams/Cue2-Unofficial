@@ -590,6 +590,7 @@ public partial class OscListen
                 TargetCueId = cue.Id,
                 PropertyFadeDuration = fade,
                 FadeMode = ControlFadeMode.Absolute,
+                FadeProperty = volume ? ControlFadeProperty.Volume : ControlFadeProperty.Opacity,
                 FadeAudioVolumeEnabled = volume,
                 FadeVideoOpacityEnabled = !volume,
                 FadeAudioDb = volume ? UiUtilities.LinearToDb((float)level) : 0f,

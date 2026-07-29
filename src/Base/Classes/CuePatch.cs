@@ -106,6 +106,17 @@ public class CuePatch
         data.Add("VolumeMatrix", matrixData);
         return data;
     }
+
+    /// <summary>
+    /// Deep-clones this routing matrix (used for per-playback runtime copies).
+    /// </summary>
+    /// <returns>Independent <see cref="CuePatch"/> with the same dimensions and levels.</returns>
+    public CuePatch Clone()
+    {
+        var clone = new CuePatch();
+        clone.LoadFromData(GetData());
+        return clone;
+    }
     
     
     /// <summary>

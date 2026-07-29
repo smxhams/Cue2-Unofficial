@@ -19,6 +19,7 @@ public partial class SettingsCueLights : ScrollContainer
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
     private CueLightManager _cueLightManager;
+    private HistoryManager _historyManager;
     private Base.Classes.Settings _settings;
     
     private Godot.Collections.Dictionary<CueLight, Callable> _cueLightHandlers = new Godot.Collections.Dictionary<CueLight, Callable>();
@@ -53,12 +54,15 @@ public partial class SettingsCueLights : ScrollContainer
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _cueLightManager = _globalData.CueLightManager;
         _settings = _globalData.Settings;
+        _historyManager = _globalData?.HistoryManager;
 
         _cueLightInstanceScene = SceneLoader.LoadPackedScene("uid://6vou7cplmgmo", out string _);
 
         VisibilityChanged += OnVisible;
         if (_globalSignals != null)
             _globalSignals.NewSession += OnNewSession;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
         
         // UI
         _cueLightsContainer = GetNode<VBoxContainer>("%CueLightsContainer");
@@ -120,6 +124,17 @@ public partial class SettingsCueLights : ScrollContainer
 
     private void OnNewSession()
     {
+        RebuildCueLightList();
+        OnVisible();
+    }
+
+    /// <summary>
+    /// Rebuilds the cue-light list and colour fields after undo/redo or settings-file load.
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Settings)
+            return;
         RebuildCueLightList();
         OnVisible();
     }
@@ -398,6 +413,8 @@ public partial class SettingsCueLights : ScrollContainer
     {
         if (_globalSignals != null)
             _globalSignals.NewSession -= OnNewSession;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
         VisibilityChanged -= OnVisible;
 
         foreach (var pair in _cueLightHandlers)

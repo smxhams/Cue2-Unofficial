@@ -89,6 +89,24 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     private readonly object _lock = new object();
     private float _volume = 1.0f;
+
+    /// <summary>
+    /// When set, replaces component audio level for this playback only (control fades).
+    /// </summary>
+    private float? _runtimeLevelLinear;
+
+    /// <summary>
+    /// When set, replaces <see cref="VideoComponent.Pan"/> for this playback only (control fades).
+    /// </summary>
+    private float? _runtimePan;
+
+    /// <summary>
+    /// When set, replaces <see cref="VideoComponent.Opacity"/> for this playback only (control fades).
+    /// </summary>
+    private float? _runtimeOpacity;
+
+    /// <summary>True when <see cref="Routing"/> is a private clone (safe to mutate for control fades).</summary>
+    private bool _routingIsPrivate;
     private bool _isFadingOut;
     private bool _isFadingIn;
     public bool IsStopped;
@@ -358,7 +376,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     private void ApplyOpacityModulate()
     {
-        float opacity = Mathf.Clamp(_videoComponent?.Opacity ?? 1f, 0f, 1f);
+        float opacity;
+        lock (_lock)
+        {
+            opacity = _runtimeOpacity ?? Mathf.Clamp(_videoComponent?.Opacity ?? 1f, 0f, 1f);
+        }
+        opacity = Mathf.Clamp(opacity, 0f, 1f);
         var modulate = new Color(1f, 1f, 1f, opacity * _fadeAlpha);
 
         foreach (var layer in _targetLayers)
@@ -366,6 +389,124 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (layer.Value == null || !IsInstanceValid(layer.Value))
                 continue;
             layer.Value.Modulate = modulate;
+        }
+    }
+
+    /// <summary>
+    /// Effective embedded-audio level for mixing (runtime control-fade override or cue component).
+    /// </summary>
+    public float EffectiveLevelLinear
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_runtimeLevelLinear.HasValue)
+                    return _runtimeLevelLinear.Value;
+            }
+            return ControlComponent.GetVideoAudioLinear(_videoComponent);
+        }
+    }
+
+    /// <summary>
+    /// Effective pan for mixing (runtime override or component). Non-stereo → 0.
+    /// </summary>
+    public float EffectivePan
+    {
+        get
+        {
+            if (SourceChannels != 2) return 0f;
+            lock (_lock)
+            {
+                if (_runtimePan.HasValue)
+                    return _runtimePan.Value;
+            }
+            return Mathf.Clamp(_videoComponent?.Pan ?? 0f, -1f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// Effective opacity for visuals (runtime control-fade override or cue component).
+    /// </summary>
+    public float EffectiveOpacity
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_runtimeOpacity.HasValue)
+                    return _runtimeOpacity.Value;
+            }
+            return Mathf.Clamp(_videoComponent?.Opacity ?? 1f, 0f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// Sets a playback-only audio level (does not mutate the cue component).
+    /// </summary>
+    public void SetRuntimeLevelLinear(float linear)
+    {
+        lock (_lock)
+            _runtimeLevelLinear = Mathf.Clamp(linear, 0f, 1f);
+    }
+
+    /// <summary>
+    /// Sets a playback-only pan (does not mutate the cue component).
+    /// </summary>
+    public void SetRuntimePan(float pan)
+    {
+        lock (_lock)
+            _runtimePan = Mathf.Clamp(pan, -1f, 1f);
+    }
+
+    /// <summary>
+    /// Sets a playback-only opacity and refreshes layer modulate (does not mutate the cue component).
+    /// </summary>
+    public void SetRuntimeOpacity(float opacity)
+    {
+        lock (_lock)
+            _runtimeOpacity = Mathf.Clamp(opacity, 0f, 1f);
+        // Visual update must run on the main thread.
+        CallDeferred(nameof(ApplyOpacityModulate));
+    }
+
+    /// <summary>
+    /// Ensures <see cref="Routing"/> is a private clone, then sets one matrix cell for this playback only.
+    /// </summary>
+    public bool SetRuntimeMatrixCell(int inputCh, int outputCh, float linear)
+    {
+        lock (_lock)
+        {
+            if (!_routingIsPrivate)
+            {
+                if (Routing == null)
+                    return false;
+                Routing = Routing.Clone();
+                _routingIsPrivate = true;
+            }
+
+            if (Routing == null) return false;
+            if (inputCh < 0 || inputCh >= Routing.InputChannels) return false;
+            if (outputCh < 0 || outputCh >= Routing.OutputChannels) return false;
+            Routing.SetVolume(inputCh, outputCh, Mathf.Clamp(linear, 0f, 1f));
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reads the current matrix cell (private runtime copy or shared component routing).
+    /// </summary>
+    public bool TryGetMatrixCell(int inputCh, int outputCh, out float linear)
+    {
+        linear = 0f;
+        lock (_lock)
+        {
+            var routing = Routing;
+            if (routing == null) return false;
+            if (inputCh < 0 || inputCh >= routing.InputChannels) return false;
+            if (outputCh < 0 || outputCh >= routing.OutputChannels) return false;
+            linear = routing.GetVolume(inputCh, outputCh);
+            return true;
         }
     }
 
@@ -1063,13 +1204,23 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         if (DeviceStreams == null || _isExiting) return;
 
         float masterVol;
-        lock (_lock) masterVol = _volume;
-        // Prefer dedicated embedded-audio volume when UseAudio is enabled (inspector writes AudioVolume).
-        float componentVol = _videoComponent.UseAudio
-            ? Mathf.Clamp(_videoComponent.AudioVolume, 0f, 1f)
-            : Mathf.Clamp((float)_videoComponent.Volume, 0f, 1f);
-        // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
-        float pan = SourceChannels == 2 ? _videoComponent.Pan : 0f;
+        float componentVol;
+        float pan;
+        lock (_lock)
+        {
+            masterVol = _volume;
+            // Prefer runtime control-fade override, else component audio level.
+            if (_runtimeLevelLinear.HasValue)
+                componentVol = _runtimeLevelLinear.Value;
+            else if (_videoComponent.UseAudio)
+                componentVol = Mathf.Clamp(_videoComponent.AudioVolume, 0f, 1f);
+            else
+                componentVol = Mathf.Clamp((float)_videoComponent.Volume, 0f, 1f);
+            // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
+            pan = SourceChannels == 2
+                ? (_runtimePan ?? Mathf.Clamp(_videoComponent.Pan, -1f, 1f))
+                : 0f;
+        }
         bool isDirect = !string.IsNullOrEmpty(DirectOutput);
 
         // Snapshot de-click state so multi-device push uses the same ramp positions.

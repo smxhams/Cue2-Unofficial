@@ -31,7 +31,7 @@ public enum ControlAction
     StartNow = 4,
 
     /// <summary>
-    /// Fade target cue properties (audio volume and/or video opacity) over time.
+    /// Fade a single target-cue property over time (volume, pan, opacity, or a routing-matrix cell).
     /// </summary>
     Fade = 5,
 
@@ -56,6 +56,25 @@ public enum ControlFadeMode
 
     /// <summary>Fade by a relative offset from the current level.</summary>
     Relative = 1
+}
+
+/// <summary>
+/// Which single target-cue property a <see cref="ControlAction.Fade"/> component animates.
+/// One fade component controls exactly one property (use multiple fade components for parallel fades).
+/// </summary>
+public enum ControlFadeProperty
+{
+    /// <summary>Overall audio volume (dedicated audio and/or video embedded audio).</summary>
+    Volume = 0,
+
+    /// <summary>Video opacity (0–100%).</summary>
+    Opacity = 1,
+
+    /// <summary>Stereo pan/balance (−1…1) for stereo audio sources.</summary>
+    Pan = 2,
+
+    /// <summary>A single routing-matrix crosspoint level (input → output).</summary>
+    RoutingMatrix = 3
 }
 
 /// <summary>
@@ -248,17 +267,24 @@ public class ControlComponent : ICueComponent
     public ControlFadeMode FadeMode { get; set; } = ControlFadeMode.Absolute;
 
     /// <summary>
-    /// When true, fade the target cue's audio overall volume (if it has an audio component).
+    /// Which single property this fade animates on the target cue.
+    /// </summary>
+    /// <value>Default <see cref="ControlFadeProperty.Volume"/>.</value>
+    public ControlFadeProperty FadeProperty { get; set; } = ControlFadeProperty.Volume;
+
+    /// <summary>
+    /// Legacy dual-enable flag (volume). Kept for save/load migration; execution uses <see cref="FadeProperty"/>.
     /// </summary>
     public bool FadeAudioVolumeEnabled { get; set; } = true;
 
     /// <summary>
-    /// When true, fade the target cue's video opacity (if it has a video component).
+    /// Legacy dual-enable flag (opacity). Kept for save/load migration; execution uses <see cref="FadeProperty"/>.
     /// </summary>
     public bool FadeVideoOpacityEnabled { get; set; } = true;
 
     /// <summary>
-    /// Audio level for Fade: absolute target dB (−60…0) or relative delta dB.
+    /// Level for Volume fades: absolute target dB (−60…0) or relative delta dB.
+    /// Also used as legacy single-cell matrix level when migrating old saves.
     /// </summary>
     /// <value>Default <c>0</c> dB (full / no change when relative).</value>
     public float FadeAudioDb { get; set; }
@@ -268,6 +294,110 @@ public class ControlComponent : ICueComponent
     /// </summary>
     /// <value>Default <c>100</c> for absolute full opacity; treat as delta when relative.</value>
     public float FadeOpacityPercent { get; set; } = 100f;
+
+    /// <summary>
+    /// Pan for Fade: absolute (−1…1) or relative delta when <see cref="FadeMode"/> is Relative.
+    /// </summary>
+    /// <value>Default <c>0</c> (center / no relative change).</value>
+    public float FadePan { get; set; }
+
+    /// <summary>
+    /// Legacy single routing-matrix input index (migrated into <see cref="FadeMatrixCellTargets"/>).
+    /// </summary>
+    public int FadeMatrixInputIndex { get; set; }
+
+    /// <summary>
+    /// Legacy single routing-matrix output index (migrated into <see cref="FadeMatrixCellTargets"/>).
+    /// </summary>
+    public int FadeMatrixOutputIndex { get; set; }
+
+    /// <summary>
+    /// Sparse set of routing-matrix cells to fade in one component.
+    /// Key = packed <c>(input &lt;&lt; 16) | output</c>, value = absolute dB or relative Δ dB.
+    /// </summary>
+    /// <remarks>
+    /// Empty means no cells are targeted (fade is a no-op for matrix). Multiple cells fade in parallel.
+    /// </remarks>
+    public System.Collections.Generic.Dictionary<int, float> FadeMatrixCellTargets { get; set; } = new();
+
+    /// <summary>
+    /// Packs input/output indices into a single dictionary key for <see cref="FadeMatrixCellTargets"/>.
+    /// </summary>
+    public static int PackMatrixCellKey(int inputIndex, int outputIndex) =>
+        (inputIndex << 16) | (outputIndex & 0xFFFF);
+
+    /// <summary>
+    /// Unpacks a <see cref="PackMatrixCellKey"/> value.
+    /// </summary>
+    public static void UnpackMatrixCellKey(int key, out int inputIndex, out int outputIndex)
+    {
+        inputIndex = key >> 16;
+        outputIndex = key & 0xFFFF;
+    }
+
+    /// <summary>
+    /// True when this cell is included in the multi-cell matrix fade set.
+    /// </summary>
+    public bool HasMatrixCellTarget(int inputIndex, int outputIndex) =>
+        FadeMatrixCellTargets != null &&
+        FadeMatrixCellTargets.ContainsKey(PackMatrixCellKey(inputIndex, outputIndex));
+
+    /// <summary>
+    /// Gets the stored target dB for a matrix cell, if any.
+    /// </summary>
+    public bool TryGetMatrixCellTargetDb(int inputIndex, int outputIndex, out float db)
+    {
+        db = 0f;
+        if (FadeMatrixCellTargets == null) return false;
+        return FadeMatrixCellTargets.TryGetValue(PackMatrixCellKey(inputIndex, outputIndex), out db);
+    }
+
+    /// <summary>
+    /// Adds or updates a matrix cell fade target.
+    /// </summary>
+    public void SetMatrixCellTarget(int inputIndex, int outputIndex, float db)
+    {
+        FadeMatrixCellTargets ??= new System.Collections.Generic.Dictionary<int, float>();
+        FadeMatrixCellTargets[PackMatrixCellKey(inputIndex, outputIndex)] = db;
+        // Keep legacy fields pointed at the most recently edited cell for old tools.
+        FadeMatrixInputIndex = Math.Max(0, inputIndex);
+        FadeMatrixOutputIndex = Math.Max(0, outputIndex);
+        FadeAudioDb = db;
+    }
+
+    /// <summary>
+    /// Removes a matrix cell from the multi-cell fade set.
+    /// </summary>
+    public bool RemoveMatrixCellTarget(int inputIndex, int outputIndex)
+    {
+        if (FadeMatrixCellTargets == null) return false;
+        return FadeMatrixCellTargets.Remove(PackMatrixCellKey(inputIndex, outputIndex));
+    }
+
+    /// <summary>
+    /// Clears all matrix cell fade targets.
+    /// </summary>
+    public void ClearMatrixCellTargets()
+    {
+        FadeMatrixCellTargets?.Clear();
+    }
+
+    /// <summary>
+    /// Short UI label for a fade property.
+    /// </summary>
+    /// <param name="property">Fade property.</param>
+    /// <returns>Display string.</returns>
+    public static string GetFadePropertyDisplayName(ControlFadeProperty property)
+    {
+        return property switch
+        {
+            ControlFadeProperty.Volume => "Volume",
+            ControlFadeProperty.Opacity => "Opacity",
+            ControlFadeProperty.Pan => "Pan",
+            ControlFadeProperty.RoutingMatrix => "Routing Matrix",
+            _ => property.ToString()
+        };
+    }
 
     /// <summary>
     /// Absolute vs relative interpretation of <see cref="SeekTimeSeconds"/>.
@@ -531,6 +661,108 @@ public class ControlComponent : ICueComponent
         video != null && video.HasAudio && video.UseAudio;
 
     /// <summary>
+    /// True when the cue has stereo audio (dedicated or embedded) that can be panned.
+    /// </summary>
+    public static bool CueHasFadablePan(Cue cue)
+    {
+        if (cue == null) return false;
+        var audio = cue.GetAudioComponent();
+        if (audio?.Metadata != null && audio.Metadata.Channels == 2)
+            return true;
+        var video = cue.GetVideoComponent();
+        if (VideoHasEmbeddedAudio(video) && video.Metadata != null && video.Metadata.AudioChannels == 2)
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True when the cue has a routing matrix (dedicated audio and/or embedded video audio).
+    /// </summary>
+    public static bool CueHasFadableRouting(Cue cue)
+    {
+        if (cue == null) return false;
+        if (HasUsableRouting(cue.GetAudioComponent()?.Routing))
+            return true;
+        if (VideoHasEmbeddedAudio(cue.GetVideoComponent()) &&
+            HasUsableRouting(cue.GetVideoComponent()?.Routing))
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="routing"/> has at least one input and one output channel.
+    /// </summary>
+    public static bool HasUsableRouting(CuePatch routing) =>
+        routing != null && routing.InputChannels > 0 && routing.OutputChannels > 0;
+
+    /// <summary>
+    /// Returns whether <paramref name="property"/> can be faded on <paramref name="cue"/>.
+    /// </summary>
+    public static bool CueSupportsFadeProperty(Cue cue, ControlFadeProperty property)
+    {
+        return property switch
+        {
+            ControlFadeProperty.Volume => CueHasFadableAudio(cue),
+            ControlFadeProperty.Opacity => CueHasFadableOpacity(cue),
+            ControlFadeProperty.Pan => CueHasFadablePan(cue),
+            ControlFadeProperty.RoutingMatrix => CueHasFadableRouting(cue),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Lists fade properties available on <paramref name="cue"/> (stable order for UI).
+    /// </summary>
+    public static System.Collections.Generic.List<ControlFadeProperty> GetAvailableFadeProperties(Cue cue)
+    {
+        var list = new System.Collections.Generic.List<ControlFadeProperty>(4);
+        if (CueHasFadableAudio(cue)) list.Add(ControlFadeProperty.Volume);
+        if (CueHasFadablePan(cue)) list.Add(ControlFadeProperty.Pan);
+        if (CueHasFadableRouting(cue)) list.Add(ControlFadeProperty.RoutingMatrix);
+        if (CueHasFadableOpacity(cue)) list.Add(ControlFadeProperty.Opacity);
+        return list;
+    }
+
+    /// <summary>
+    /// Prefer the dedicated audio routing matrix; fall back to video embedded audio routing.
+    /// </summary>
+    public static CuePatch GetPrimaryRouting(Cue cue)
+    {
+        if (cue == null) return null;
+        var audioRoute = cue.GetAudioComponent()?.Routing;
+        if (HasUsableRouting(audioRoute))
+            return audioRoute;
+        var video = cue.GetVideoComponent();
+        if (VideoHasEmbeddedAudio(video) && HasUsableRouting(video.Routing))
+            return video.Routing;
+        return null;
+    }
+
+    /// <summary>
+    /// Linear volume used for embedded video audio playback (prefers <see cref="VideoComponent.AudioVolume"/>).
+    /// </summary>
+    public static float GetVideoAudioLinear(VideoComponent video)
+    {
+        if (video == null) return 0f;
+        if (video.UseAudio)
+            return Mathf.Clamp(video.AudioVolume, 0f, 1f);
+        return Mathf.Clamp((float)video.Volume, 0f, 1f);
+    }
+
+    /// <summary>
+    /// Writes embedded video audio linear volume to the field used by playback.
+    /// </summary>
+    public static void SetVideoAudioLinear(VideoComponent video, float linear)
+    {
+        if (video == null) return;
+        linear = Mathf.Clamp(linear, 0f, 1f);
+        if (video.UseAudio)
+            video.AudioVolume = linear;
+        else
+            video.Volume = linear;
+    }
+
+    /// <summary>
     /// True when <paramref name="cue"/> (or any nested child) has audio/video media that can be seeked while playing.
     /// Groups are seekable when they contain seekable descendants — parent timeline seek propagates to children.
     /// </summary>
@@ -553,9 +785,41 @@ public class ControlComponent : ICueComponent
         return false;
     }
 
+    /// <summary>
+    /// Serializes <see cref="FadeMatrixCellTargets"/> for save/history.
+    /// </summary>
+    private Godot.Collections.Array SerializeMatrixCellTargets()
+    {
+        var cells = new Godot.Collections.Array();
+        if (FadeMatrixCellTargets == null || FadeMatrixCellTargets.Count == 0)
+            return cells;
+
+        foreach (var kvp in FadeMatrixCellTargets)
+        {
+            UnpackMatrixCellKey(kvp.Key, out int inIdx, out int outIdx);
+            cells.Add(new Dictionary
+            {
+                { "In", inIdx },
+                { "Out", outIdx },
+                { "Db", kvp.Value }
+            });
+        }
+        return cells;
+    }
+
     /// <inheritdoc />
     public Dictionary GetData()
     {
+        // Keep legacy single-cell fields aligned with the first multi-cell entry when present.
+        if (FadeMatrixCellTargets != null && FadeMatrixCellTargets.Count > 0)
+        {
+            var first = FadeMatrixCellTargets.First();
+            UnpackMatrixCellKey(first.Key, out int inIdx, out int outIdx);
+            FadeMatrixInputIndex = inIdx;
+            FadeMatrixOutputIndex = outIdx;
+            FadeAudioDb = first.Value;
+        }
+
         return new Dictionary
         {
             { "Action", (int)Action },
@@ -566,10 +830,16 @@ public class ControlComponent : ICueComponent
             { "GoFadeInDuration", GoFadeInDuration },
             { "PropertyFadeDuration", PropertyFadeDuration },
             { "FadeMode", (int)FadeMode },
-            { "FadeAudioVolumeEnabled", FadeAudioVolumeEnabled },
-            { "FadeVideoOpacityEnabled", FadeVideoOpacityEnabled },
+            { "FadeProperty", (int)FadeProperty },
+            // Legacy dual-enable mirrors (derived from FadeProperty) for older builds / migration.
+            { "FadeAudioVolumeEnabled", FadeProperty == ControlFadeProperty.Volume },
+            { "FadeVideoOpacityEnabled", FadeProperty == ControlFadeProperty.Opacity },
             { "FadeAudioDb", FadeAudioDb },
             { "FadeOpacityPercent", FadeOpacityPercent },
+            { "FadePan", FadePan },
+            { "FadeMatrixInputIndex", FadeMatrixInputIndex },
+            { "FadeMatrixOutputIndex", FadeMatrixOutputIndex },
+            { "FadeMatrixCells", SerializeMatrixCellTargets() },
             { "SeekMode", (int)SeekMode },
             { "SeekTimeSeconds", SeekTimeSeconds },
             { "TargetLayerId", TargetLayerId },
@@ -636,6 +906,24 @@ public class ControlComponent : ICueComponent
         else
             FadeVideoOpacityEnabled = true;
 
+        // Prefer explicit FadeProperty; migrate legacy dual-enable when missing.
+        if (data.TryGetValue("FadeProperty", out var fadePropVal))
+        {
+            FadeProperty = (ControlFadeProperty)fadePropVal.AsInt32();
+        }
+        else
+        {
+            // Old saves could enable volume and/or opacity together — pick one primary.
+            if (FadeVideoOpacityEnabled && !FadeAudioVolumeEnabled)
+                FadeProperty = ControlFadeProperty.Opacity;
+            else
+                FadeProperty = ControlFadeProperty.Volume;
+        }
+
+        // Keep legacy flags aligned with the single property.
+        FadeAudioVolumeEnabled = FadeProperty == ControlFadeProperty.Volume;
+        FadeVideoOpacityEnabled = FadeProperty == ControlFadeProperty.Opacity;
+
         if (data.TryGetValue("FadeAudioDb", out var audDb))
             FadeAudioDb = audDb.AsSingle();
         else
@@ -645,6 +933,44 @@ public class ControlComponent : ICueComponent
             FadeOpacityPercent = opPct.AsSingle();
         else
             FadeOpacityPercent = 100f;
+
+        if (data.TryGetValue("FadePan", out var fadePanVal))
+            FadePan = Mathf.Clamp(fadePanVal.AsSingle(), -2f, 2f); // allow relative beyond ±1
+        else
+            FadePan = 0f;
+
+        if (data.TryGetValue("FadeMatrixInputIndex", out var matInVal))
+            FadeMatrixInputIndex = Math.Max(0, matInVal.AsInt32());
+        else
+            FadeMatrixInputIndex = 0;
+
+        if (data.TryGetValue("FadeMatrixOutputIndex", out var matOutVal))
+            FadeMatrixOutputIndex = Math.Max(0, matOutVal.AsInt32());
+        else
+            FadeMatrixOutputIndex = 0;
+
+        FadeMatrixCellTargets = new System.Collections.Generic.Dictionary<int, float>();
+        if (data.TryGetValue("FadeMatrixCells", out var cellsVal) &&
+            cellsVal.VariantType == Variant.Type.Array)
+        {
+            foreach (var item in cellsVal.AsGodotArray())
+            {
+                if (item.VariantType != Variant.Type.Dictionary) continue;
+                var cell = item.AsGodotDictionary();
+                if (!cell.TryGetValue("In", out var inV) || !cell.TryGetValue("Out", out var outV))
+                    continue;
+                int inIdx = Math.Max(0, inV.AsInt32());
+                int outIdx = Math.Max(0, outV.AsInt32());
+                float db = cell.TryGetValue("Db", out var dbV) ? dbV.AsSingle() : 0f;
+                FadeMatrixCellTargets[PackMatrixCellKey(inIdx, outIdx)] = db;
+            }
+        }
+        else if (FadeProperty == ControlFadeProperty.RoutingMatrix)
+        {
+            // Legacy single-cell matrix fade → one multi-cell entry.
+            FadeMatrixCellTargets[PackMatrixCellKey(FadeMatrixInputIndex, FadeMatrixOutputIndex)] =
+                FadeAudioDb;
+        }
 
         if (data.TryGetValue("SeekMode", out var seekModeVal))
             SeekMode = (ControlFadeMode)seekModeVal.AsInt32();

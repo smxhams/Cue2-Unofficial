@@ -49,6 +49,7 @@ public sealed class OscActionBinding
             "StopAll" => "/StopAll",
             "PauseAll" => "/PauseAll",
             "ResumeAll" => "/ResumeAll",
+            "SelectAll" => "/SelectAll",
             "SelectNext" => "/SelectNext",
             "SelectPrevious" => "/SelectPrevious",
             "SaveSession" => "/Save",

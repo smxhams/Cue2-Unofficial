@@ -175,6 +175,7 @@ public partial class GlobalData : Node
 		"StopAll",
 		"CreateCue",
 		"GroupSelectedCues",
+		"SelectAll",
 		"SelectNext",
 		"SelectPrevious",
 		"PauseAll",
@@ -202,7 +203,7 @@ public partial class GlobalData : Node
 		("Session", new[] { "NewSession", "OpenSession", "SaveSession", "SaveAsSession" }),
 		("Playback", new[] { "Go", "StopAll", "PauseAll", "ResumeAll" }),
 		("Cue Editing", new[] { "CreateCue", "GroupSelectedCues", "DeleteCue", "DuplicateSelectedCues", "CutSelectedCues", "CopySelectedCues", "PasteCues" }),
-		("Navigation", new[] { "SelectNext", "SelectPrevious", "ExpandOneLayer", "CollapseOneLayer", "ToggleExpandAll" }),
+		("Navigation", new[] { "SelectAll", "SelectNext", "SelectPrevious", "ExpandOneLayer", "CollapseOneLayer", "ToggleExpandAll" }),
 		("Windows", new[] { "ToggleSettings", "ToggleLog" }),
 		("History", new[] { "Undo", "Redo" }),
 	};

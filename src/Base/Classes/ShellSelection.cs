@@ -20,9 +20,12 @@ public partial class ShellSelection : Node
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 
+        _globalSignals.SelectAllCues += OnSelectAllCues;
         _globalSignals.SelectNextCue += SelectNextCue;
         _globalSignals.SelectPreviousCue += SelectPreviousCue;
     }
+
+    private void OnSelectAllCues() => SelectAllShells();
 
     /// <summary>
     /// Replaces the selection with a single cue (standard click).

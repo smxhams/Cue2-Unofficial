@@ -536,9 +536,8 @@ public partial class CueCommandExectutor : Node
     }
 
     /// <summary>
-    /// Fades target cue audio volume and/or video opacity per the control component settings.
-    /// Volume applies to a dedicated <see cref="AudioComponent"/> and/or video embedded audio
-    /// when <see cref="VideoComponent.HasAudio"/> and <see cref="VideoComponent.UseAudio"/> are set.
+    /// Fades a single property on <b>active playback only</b> (does not mutate stored cue components).
+    /// Requires a currently playing instance of the target cue.
     /// </summary>
     private async Task ApplyPropertyFadeAsync(ControlComponent control)
     {
@@ -550,51 +549,67 @@ public partial class CueCommandExectutor : Node
             return;
         }
 
-        var audio = cue.GetAudioComponent();
-        var video = cue.GetVideoComponent();
-        bool videoEmbeddedAudio = ControlComponent.VideoHasEmbeddedAudio(video);
-
-        bool doDedicatedAudio = control.FadeAudioVolumeEnabled && audio != null;
-        bool doVideoAudio = control.FadeAudioVolumeEnabled && videoEmbeddedAudio;
-        bool doOpacity = control.FadeVideoOpacityEnabled && video != null;
-
-        if (!doDedicatedAudio && !doVideoAudio && !doOpacity)
+        var activeMatches = FindActiveCuesById(control.TargetCueId).ToList();
+        if (activeMatches.Count == 0)
         {
-            GD.Print($"CueCommandExecutor:ApplyPropertyFadeAsync - Nothing to fade on \"{cue.Name}\"");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Control Fade: no playing instance of \"{cue.Name}\"", (int)LogType.Warning);
+            GD.Print(
+                $"CueCommandExecutor:ApplyPropertyFadeAsync - No active playback for \"{cue.Name}\"");
             return;
         }
 
-        float startDedicatedLin = doDedicatedAudio ? Mathf.Clamp((float)audio.Volume, 0f, 1f) : 0f;
-        float endDedicatedLin = startDedicatedLin;
-        if (doDedicatedAudio)
-            endDedicatedLin = ResolveFadeAudioLinear(startDedicatedLin, control);
-
-        float startVideoAudLin = doVideoAudio ? Mathf.Clamp((float)video.Volume, 0f, 1f) : 0f;
-        float endVideoAudLin = startVideoAudLin;
-        if (doVideoAudio)
-            endVideoAudLin = ResolveFadeAudioLinear(startVideoAudLin, control);
-
-        float startOpacity = doOpacity ? Mathf.Clamp(video.Opacity, 0f, 1f) : 1f;
-        float endOpacity = startOpacity;
-        if (doOpacity)
+        var audioPlaybacks = new List<ActiveAudioPlayback>();
+        var videoPlaybacks = new List<ActiveVideoPlayback>();
+        foreach (var active in activeMatches)
         {
-            float startPct = startOpacity * 100f;
-            float endPct = control.FadeMode == ControlFadeMode.Absolute
-                ? control.FadeOpacityPercent
-                : startPct + control.FadeOpacityPercent;
-            endPct = Mathf.Clamp(endPct, 0f, 100f);
-            endOpacity = endPct / 100f;
+            if (active == null || !GodotObject.IsInstanceValid(active)) continue;
+            audioPlaybacks.AddRange(active.EnumerateAudioPlaybacks());
+            videoPlaybacks.AddRange(active.EnumerateVideoPlaybacks());
         }
 
         double duration = Math.Max(0.0, control.PropertyFadeDuration);
         GD.Print(
-            $"CueCommandExecutor:ApplyPropertyFadeAsync - \"{cue.Name}\" mode={control.FadeMode} " +
-            $"dur={duration:0.###}s audioComp={doDedicatedAudio} videoAud={doVideoAudio} opacity={doOpacity}");
+            $"CueCommandExecutor:ApplyPropertyFadeAsync - \"{cue.Name}\" " +
+            $"prop={control.FadeProperty} mode={control.FadeMode} dur={duration:0.###}s " +
+            $"audioPb={audioPlaybacks.Count} videoPb={videoPlaybacks.Count}");
 
+        switch (control.FadeProperty)
+        {
+            case ControlFadeProperty.Volume:
+                await FadeRuntimeVolumeAsync(control, audioPlaybacks, videoPlaybacks, duration);
+                break;
+
+            case ControlFadeProperty.Opacity:
+                await FadeRuntimeOpacityAsync(control, videoPlaybacks, duration);
+                break;
+
+            case ControlFadeProperty.Pan:
+                await FadeRuntimePanAsync(control, audioPlaybacks, videoPlaybacks, duration);
+                break;
+
+            case ControlFadeProperty.RoutingMatrix:
+                await FadeRuntimeMatrixAsync(control, audioPlaybacks, videoPlaybacks, duration);
+                break;
+
+            default:
+                GD.PrintErr(
+                    $"CueCommandExecutor:ApplyPropertyFadeAsync - Unknown property {control.FadeProperty}");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Interpolates a single float over <paramref name="duration"/> seconds, applying <paramref name="apply"/> each tick.
+    /// </summary>
+    private static async Task RunScalarFadeAsync(
+        double duration,
+        (float start, float end) range,
+        Action<float> apply)
+    {
         if (duration <= 1e-9)
         {
-            ApplyPropertyFadeSample(audio, video, doDedicatedAudio, endDedicatedLin,
-                doVideoAudio, endVideoAudLin, doOpacity, endOpacity);
+            apply(range.end);
             return;
         }
 
@@ -602,55 +617,265 @@ public partial class CueCommandExectutor : Node
         while (timer.Elapsed.TotalSeconds < duration)
         {
             float t = (float)Math.Clamp(timer.Elapsed.TotalSeconds / duration, 0.0, 1.0);
-            ApplyPropertyFadeSample(
-                audio, video,
-                doDedicatedAudio, Mathf.Lerp(startDedicatedLin, endDedicatedLin, t),
-                doVideoAudio, Mathf.Lerp(startVideoAudLin, endVideoAudLin, t),
-                doOpacity, Mathf.Lerp(startOpacity, endOpacity, t));
+            apply(Mathf.Lerp(range.start, range.end, t));
             await Task.Delay(16);
         }
 
-        ApplyPropertyFadeSample(audio, video, doDedicatedAudio, endDedicatedLin,
-            doVideoAudio, endVideoAudLin, doOpacity, endOpacity);
+        apply(range.end);
+    }
+
+    private static async Task FadeRuntimeVolumeAsync(
+        ControlComponent control,
+        List<ActiveAudioPlayback> audioPlaybacks,
+        List<ActiveVideoPlayback> videoPlaybacks,
+        double duration)
+    {
+        // Capture per-playback start → end so each instance fades from its own current level.
+        var audioTargets = new List<(ActiveAudioPlayback pb, float start, float end)>();
+        foreach (var pb in audioPlaybacks)
+        {
+            if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+            float start = pb.EffectiveLevelLinear;
+            audioTargets.Add((pb, start, ResolveFadeAudioLinear(start, control)));
+        }
+
+        var videoTargets = new List<(ActiveVideoPlayback pb, float start, float end)>();
+        foreach (var pb in videoPlaybacks)
+        {
+            if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+            // Only video playings that actually mix embedded audio.
+            if (pb.SourceChannels <= 0) continue;
+            float start = pb.EffectiveLevelLinear;
+            videoTargets.Add((pb, start, ResolveFadeAudioLinear(start, control)));
+        }
+
+        if (audioTargets.Count == 0 && videoTargets.Count == 0)
+        {
+            GD.Print("CueCommandExecutor:FadeRuntimeVolumeAsync - No audio streams on active playback");
+            return;
+        }
+
+        await RunMultiTargetFadeAsync(duration, t =>
+        {
+            foreach (var (pb, start, end) in audioTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimeLevelLinear(Mathf.Lerp(start, end, t));
+            }
+            foreach (var (pb, start, end) in videoTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimeLevelLinear(Mathf.Lerp(start, end, t));
+            }
+        });
+    }
+
+    private static async Task FadeRuntimeOpacityAsync(
+        ControlComponent control,
+        List<ActiveVideoPlayback> videoPlaybacks,
+        double duration)
+    {
+        var targets = new List<(ActiveVideoPlayback pb, float start, float end)>();
+        foreach (var pb in videoPlaybacks)
+        {
+            if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+            float start = pb.EffectiveOpacity;
+            float startPct = start * 100f;
+            float endPct = control.FadeMode == ControlFadeMode.Absolute
+                ? control.FadeOpacityPercent
+                : startPct + control.FadeOpacityPercent;
+            endPct = Mathf.Clamp(endPct, 0f, 100f);
+            targets.Add((pb, start, endPct / 100f));
+        }
+
+        if (targets.Count == 0)
+        {
+            GD.Print("CueCommandExecutor:FadeRuntimeOpacityAsync - No video playback to fade");
+            return;
+        }
+
+        await RunMultiTargetFadeAsync(duration, t =>
+        {
+            foreach (var (pb, start, end) in targets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimeOpacity(Mathf.Lerp(start, end, t));
+            }
+        });
+    }
+
+    private static async Task FadeRuntimePanAsync(
+        ControlComponent control,
+        List<ActiveAudioPlayback> audioPlaybacks,
+        List<ActiveVideoPlayback> videoPlaybacks,
+        double duration)
+    {
+        var audioTargets = new List<(ActiveAudioPlayback pb, float start, float end)>();
+        foreach (var pb in audioPlaybacks)
+        {
+            if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+            if (pb.SourceChannels != 2) continue;
+            float start = pb.EffectivePan;
+            float end = control.FadeMode == ControlFadeMode.Absolute
+                ? control.FadePan
+                : start + control.FadePan;
+            audioTargets.Add((pb, start, Mathf.Clamp(end, -1f, 1f)));
+        }
+
+        var videoTargets = new List<(ActiveVideoPlayback pb, float start, float end)>();
+        foreach (var pb in videoPlaybacks)
+        {
+            if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+            if (pb.SourceChannels != 2) continue;
+            float start = pb.EffectivePan;
+            float end = control.FadeMode == ControlFadeMode.Absolute
+                ? control.FadePan
+                : start + control.FadePan;
+            videoTargets.Add((pb, start, Mathf.Clamp(end, -1f, 1f)));
+        }
+
+        if (audioTargets.Count == 0 && videoTargets.Count == 0)
+        {
+            GD.Print("CueCommandExecutor:FadeRuntimePanAsync - No stereo streams on active playback");
+            return;
+        }
+
+        await RunMultiTargetFadeAsync(duration, t =>
+        {
+            foreach (var (pb, start, end) in audioTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimePan(Mathf.Lerp(start, end, t));
+            }
+            foreach (var (pb, start, end) in videoTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimePan(Mathf.Lerp(start, end, t));
+            }
+        });
+    }
+
+    private static async Task FadeRuntimeMatrixAsync(
+        ControlComponent control,
+        List<ActiveAudioPlayback> audioPlaybacks,
+        List<ActiveVideoPlayback> videoPlaybacks,
+        double duration)
+    {
+        // Multi-cell: each stored target fades in parallel on every matching playback.
+        var cellTargets = control.FadeMatrixCellTargets;
+        if (cellTargets == null || cellTargets.Count == 0)
+        {
+            // Legacy fallback: single cell fields.
+            if (control.FadeProperty == ControlFadeProperty.RoutingMatrix)
+            {
+                cellTargets = new Dictionary<int, float>
+                {
+                    {
+                        ControlComponent.PackMatrixCellKey(
+                            control.FadeMatrixInputIndex,
+                            control.FadeMatrixOutputIndex),
+                        control.FadeAudioDb
+                    }
+                };
+            }
+            else
+            {
+                GD.Print("CueCommandExecutor:FadeRuntimeMatrixAsync - No matrix cells targeted");
+                return;
+            }
+        }
+
+        // (playback, in, out, start, end) for audio and video separately.
+        var audioTargets = new List<(ActiveAudioPlayback pb, int inIdx, int outIdx, float start, float end)>();
+        var videoTargets = new List<(ActiveVideoPlayback pb, int inIdx, int outIdx, float start, float end)>();
+
+        foreach (var kvp in cellTargets)
+        {
+            ControlComponent.UnpackMatrixCellKey(kvp.Key, out int inIdx, out int outIdx);
+            float targetDb = kvp.Value;
+
+            foreach (var pb in audioPlaybacks)
+            {
+                if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+                if (!pb.TryGetMatrixCell(inIdx, outIdx, out float start)) continue;
+                audioTargets.Add((pb, inIdx, outIdx, start, ResolveFadeAudioLinear(start, targetDb, control.FadeMode)));
+            }
+
+            foreach (var pb in videoPlaybacks)
+            {
+                if (pb == null || !GodotObject.IsInstanceValid(pb)) continue;
+                if (!pb.TryGetMatrixCell(inIdx, outIdx, out float start)) continue;
+                videoTargets.Add((pb, inIdx, outIdx, start, ResolveFadeAudioLinear(start, targetDb, control.FadeMode)));
+            }
+        }
+
+        if (audioTargets.Count == 0 && videoTargets.Count == 0)
+        {
+            GD.Print(
+                $"CueCommandExecutor:FadeRuntimeMatrixAsync - No valid matrix cells " +
+                $"(targets={cellTargets.Count})");
+            return;
+        }
+
+        GD.Print(
+            $"CueCommandExecutor:FadeRuntimeMatrixAsync - Fading {cellTargets.Count} cell(s) " +
+            $"across {audioTargets.Count} audio + {videoTargets.Count} video cell-instances");
+
+        await RunMultiTargetFadeAsync(duration, t =>
+        {
+            foreach (var (pb, inIdx, outIdx, start, end) in audioTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimeMatrixCell(inIdx, outIdx, Mathf.Lerp(start, end, t));
+            }
+            foreach (var (pb, inIdx, outIdx, start, end) in videoTargets)
+            {
+                if (pb != null && GodotObject.IsInstanceValid(pb))
+                    pb.SetRuntimeMatrixCell(inIdx, outIdx, Mathf.Lerp(start, end, t));
+            }
+        });
     }
 
     /// <summary>
-    /// Computes end linear volume for absolute/relative audio fade from a start linear level.
+    /// Runs a multi-target fade: <paramref name="apply"/> receives t in 0…1 each tick.
     /// </summary>
-    private static float ResolveFadeAudioLinear(float startLinear, ControlComponent control)
+    private static async Task RunMultiTargetFadeAsync(double duration, Action<float> apply)
+    {
+        if (duration <= 1e-9)
+        {
+            apply(1f);
+            return;
+        }
+
+        var timer = Stopwatch.StartNew();
+        while (timer.Elapsed.TotalSeconds < duration)
+        {
+            float t = (float)Math.Clamp(timer.Elapsed.TotalSeconds / duration, 0.0, 1.0);
+            apply(t);
+            await Task.Delay(16);
+        }
+
+        apply(1f);
+    }
+
+    /// <summary>
+    /// Computes end linear volume for absolute/relative audio fade from a start linear level
+    /// using the control's volume <see cref="ControlComponent.FadeAudioDb"/>.
+    /// </summary>
+    private static float ResolveFadeAudioLinear(float startLinear, ControlComponent control) =>
+        ResolveFadeAudioLinear(startLinear, control.FadeAudioDb, control.FadeMode);
+
+    /// <summary>
+    /// Computes end linear volume for absolute/relative fade from a start linear level and target/delta dB.
+    /// </summary>
+    private static float ResolveFadeAudioLinear(float startLinear, float targetOrDeltaDb, ControlFadeMode mode)
     {
         float startDb = UiUtilities.LinearToDb(Mathf.Clamp(startLinear, 0f, 1f));
-        float endDb = control.FadeMode == ControlFadeMode.Absolute
-            ? control.FadeAudioDb
-            : startDb + control.FadeAudioDb;
+        float endDb = mode == ControlFadeMode.Absolute
+            ? targetOrDeltaDb
+            : startDb + targetOrDeltaDb;
         endDb = Mathf.Clamp(endDb, -60f, 0f);
         return UiUtilities.DbToLinear(endDb);
-    }
-
-    /// <summary>
-    /// Writes one sample of a property fade to components and refreshes live video visuals.
-    /// </summary>
-    private void ApplyPropertyFadeSample(
-        AudioComponent audio,
-        VideoComponent video,
-        bool doDedicatedAudio,
-        float dedicatedAudioLinear,
-        bool doVideoAudio,
-        float videoAudioLinear,
-        bool doOpacity,
-        float opacity)
-    {
-        if (doDedicatedAudio && audio != null)
-            audio.Volume = Mathf.Clamp(dedicatedAudioLinear, 0f, 1f);
-
-        if (doVideoAudio && video != null)
-            video.Volume = Mathf.Clamp(videoAudioLinear, 0f, 1f);
-
-        if (doOpacity && video != null)
-        {
-            video.Opacity = Mathf.Clamp(opacity, 0f, 1f);
-            RefreshPlayingVideoVisuals(video);
-        }
     }
 
     /// <summary>

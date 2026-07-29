@@ -58,6 +58,7 @@ public partial class InputActionsListener : Node
         Register("CopySelectedCues", nameof(GlobalSignals.CopySelectedCues), "Copy Selected Cues", true);
         Register("PasteCues", nameof(GlobalSignals.PasteCues), "Paste Cues", true);
         Register("GroupSelectedCues", nameof(GlobalSignals.GroupSelectedCues), "Group Selected Cues", true);
+        Register("SelectAll", nameof(GlobalSignals.SelectAllCues), "Select All Cues", true);
         Register("SelectNext", nameof(GlobalSignals.SelectNextCue), "Select Next Cue", true);
         Register("SelectPrevious", nameof(GlobalSignals.SelectPreviousCue), "Select Previous Cue", true);
         Register("PauseAll", nameof(GlobalSignals.PauseAll), "Pause All Cues", true);

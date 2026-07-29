@@ -120,13 +120,14 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 0
 
-[node name="SaveOptionsContainer" type="GridContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container" unique_id=1385716909]
+[node name="SaveOptionsContainer" type="VBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container" unique_id=1385716909]
 layout_mode = 2
-columns = 2
+theme_override_constants/separation = 4
 
 [node name="SaveFilterLabel" type="Label" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=743799126]
 layout_mode = 2
-text = "Save filter:"
+tooltip_text = "Choose which settings categories are included when saving or loading a settings file"
+text = "Save / Load filter"
 horizontal_alignment = 1
 
 [node name="SaveFilterOptionButton" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1998735305]
@@ -134,31 +135,28 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 theme_override_styles/normal = SubResource("StyleBoxFlat_gmb81")
-text = "Select Here"
+tooltip_text = "Select categories to include when saving or loading settings"
+text = "All"
 
-[node name="SettingsSaveAs" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1263377314]
+[node name="SaveLoadButtons" type="HBoxContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1263377314]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="SettingsSaveAs" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer/SaveLoadButtons" unique_id=1201490685]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Save a settings.conf file in a chosen location"
-text = "Save As"
+focus_mode = 0
+tooltip_text = "Save selected settings categories to a .c2settings file"
+text = "Save As…"
 
-[node name="SaveWithShow" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1201490685]
+[node name="SettingsLoad" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer/SaveLoadButtons" unique_id=1672747791]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Saves settings with show data and overrides settings "
-text = "Save with Show"
-
-[node name="Button3" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1205186812]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Save for All"
-
-[node name="Button4" type="Button" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Container/SaveOptionsContainer" unique_id=1672747791]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Load"
+focus_mode = 0
+tooltip_text = "Load selected settings categories from a .c2settings file (undoable)"
+text = "Load…"
 
 [node name="Panel" type="Panel" parent="Control/VBoxContainer/MarginContainer/HSplitContainer" unique_id=1457761424]
 layout_mode = 2
@@ -278,49 +276,38 @@ layout_mode = 2
 [node name="DropMenuFilter" type="PanelContainer" parent="Control" unique_id=791895030]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(100, 78)
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 25.0
-offset_top = -165.0
-offset_right = 165.0
-offset_bottom = -81.0
-grow_vertical = 0
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 0
+offset_left = 10.0
+offset_top = 200.0
+offset_right = 190.0
+offset_bottom = 420.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_jdmuw")
 
 [node name="MarginContainer" type="MarginContainer" parent="Control/DropMenuFilter" unique_id=1207696284]
 layout_mode = 2
-theme_override_constants/margin_left = 1
-theme_override_constants/margin_top = 1
-theme_override_constants/margin_right = 1
-theme_override_constants/margin_bottom = 1
+theme_override_constants/margin_left = 4
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 4
 
-[node name="dmSaveFilterContainer" type="VBoxContainer" parent="Control/DropMenuFilter/MarginContainer" unique_id=476435388]
+[node name="ScrollContainer" type="ScrollContainer" parent="Control/DropMenuFilter/MarginContainer" unique_id=1207696285]
+custom_minimum_size = Vector2(160, 220)
 layout_mode = 2
+horizontal_scroll_mode = 0
 
-[node name="FilterAllCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer" unique_id=506631013]
+[node name="dmSaveFilterContainer" type="VBoxContainer" parent="Control/DropMenuFilter/MarginContainer/ScrollContainer" unique_id=476435388]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FilterAllCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/ScrollContainer/dmSaveFilterContainer" unique_id=506631013]
 unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 mouse_filter = 1
 button_pressed = true
 text = "All"
-
-[node name="FilterGeneralSettingsCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer" unique_id=88886622]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "General Settings"
-
-[node name="FilterAudioPatchCheckBox" type="CheckBox" parent="Control/DropMenuFilter/MarginContainer/dmSaveFilterContainer" unique_id=9450949]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Audio Patch"
 
 [node name="SubWindowHandles" parent="." unique_id=253011151 instance=ExtResource("11_51xpo")]
 

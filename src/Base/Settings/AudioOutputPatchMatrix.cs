@@ -71,6 +71,7 @@ public partial class AudioOutputPatchMatrix : Control
         _patchName = GetNode<LineEdit>("%PatchName");
         _patchName.Text = Patch?.Name ?? "Unnamed";
         _patchName.TextChanged += PatchNameOnTextChanged;
+        _patchName.TextSubmitted += _ => _patchName.ReleaseFocus();
         _patchName.FocusExited += OnPatchNameFocusExited;
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
@@ -348,6 +349,7 @@ public partial class AudioOutputPatchMatrix : Control
                 GD.PrintErr($"AudioOutputPatchMatrix:NewChannelRow - Rename exception: {ex}");
             }
         };
+        channelLabel.TextSubmitted += _ => channelLabel.ReleaseFocus();
         channelLabel.FocusExited += () =>
             _globalData?.HistoryManager?.EndCoalesceSession(chCoalesceKey);
     }
@@ -436,6 +438,7 @@ public partial class AudioOutputPatchMatrix : Control
                     }
                 }
             };
+            outputNameEdit.TextSubmitted += _ => outputNameEdit.ReleaseFocus();
             outputNameEdit.FocusExited += () =>
                 _globalData?.HistoryManager?.EndCoalesceSession(outCoalesceKey);
         }

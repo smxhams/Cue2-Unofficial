@@ -222,6 +222,26 @@ public partial class HistoryManager : Node
 	}
 
 	/// <summary>
+	/// After an external settings import (e.g. loading a .c2settings file).
+	/// Relinks cue components when audio patches were replaced and notifies UI panels
+	/// via <see cref="HistoryRestored"/> (same path as undo/redo of settings).
+	/// </summary>
+	/// <remarks>
+	/// Call after <see cref="RecordSettingsChange"/> + <see cref="Settings.ApplyPartialFromHistory"/>.
+	/// Does not push history — the caller is responsible for the pre-change memento.
+	/// </remarks>
+	/// <param name="keys">Settings keys that were applied (used to decide whether to relink patches).</param>
+	public void NotifySettingsApplied(params string[] keys)
+	{
+		if (keys != null && keys.Any(k => string.Equals(k, "AudioPatch", StringComparison.Ordinal)))
+			RelinkAllCueComponents();
+
+		EmitSignal(SignalName.HistoryChanged);
+		EmitSignal(SignalName.HistoryRestored, (int)HistoryScope.Settings);
+		GD.Print($"HistoryManager:NotifySettingsApplied - keys=[{string.Join(", ", keys ?? System.Array.Empty<string>())}]");
+	}
+
+	/// <summary>
 	/// Ends a continuous edit session so the next change (even with the same field key)
 	/// becomes a new undo step. Call on text focus exit, mouse-up after a drag, etc.
 	/// </summary>

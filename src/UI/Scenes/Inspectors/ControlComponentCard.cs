@@ -10,12 +10,13 @@ using System.Linq;
 namespace Cue2.UI.Scenes.Inspectors;
 
 /// <summary>
-/// Inspector card for a single <see cref="ControlComponent"/> (GO / Pause / Stop target).
+/// Inspector card for a single <see cref="ControlComponent"/> (GO / Pause / Stop / Fade / etc.).
 /// </summary>
 /// <remarks>
 /// User may edit target by id or cue number; the other field and name label update when a match is found.
 /// Hold the pick-target button and release over a shell to assign the target from the cuelist.
 /// Stop/GO cards expose fade times with per-field reset buttons.
+/// Fade cards pick exactly one property (volume, pan, opacity, or a routing-matrix cell).
 /// Multiple controls on one cue run in list order (reorder with up/down).
 /// </remarks>
 public partial class ControlComponentCard : PanelContainer
@@ -37,16 +38,23 @@ public partial class ControlComponentCard : PanelContainer
 
     private Label _modeCaption;
     private OptionButton _fadeModeOption;
+    private Label _propertyCaption;
+    private OptionButton _fadePropertyOption;
     private Label _noFadableLabel;
     private Control _noFadableSpacer;
     private Label _audioFadeCaption;
     private Control _audioFadeRow;
-    private CheckBox _audioFadeEnable;
     private LineEdit _audioFadeLineEdit;
     private Label _opacityFadeCaption;
     private Control _opacityFadeRow;
-    private CheckBox _opacityFadeEnable;
     private LineEdit _opacityFadeLineEdit;
+    private Label _panFadeCaption;
+    private Control _panFadeRow;
+    private HSlider _panFadeSlider;
+    private LineEdit _panFadeLineEdit;
+    private Control _matrixContainer;
+    private Label _matrixHint;
+    private GridContainer _matrixGrid;
     private Label _seekTimeCaption;
     private LineEdit _seekTimeLineEdit;
     private Label _layerCaption;
@@ -76,6 +84,9 @@ public partial class ControlComponentCard : PanelContainer
     private bool _fadeEditing;
     private bool _audioFadeEditing;
     private bool _opacityFadeEditing;
+    private bool _panFadeEditing;
+    private bool _isUpdatingPanUi;
+    private bool _matrixCellEditing;
     private bool _seekTimeEditing;
     private bool _sizeEditing;
     private bool _posEditing;
@@ -112,16 +123,23 @@ public partial class ControlComponentCard : PanelContainer
 
         _modeCaption = GetNodeOrNull<Label>("%ModeCaption");
         _fadeModeOption = GetNodeOrNull<OptionButton>("%FadeModeOption");
+        _propertyCaption = GetNodeOrNull<Label>("%PropertyCaption");
+        _fadePropertyOption = GetNodeOrNull<OptionButton>("%FadePropertyOption");
         _noFadableLabel = GetNodeOrNull<Label>("%NoFadableLabel");
         _noFadableSpacer = GetNodeOrNull<Control>("%NoFadableSpacer");
         _audioFadeCaption = GetNodeOrNull<Label>("%AudioFadeCaption");
         _audioFadeRow = GetNodeOrNull<Control>("%AudioFadeRow");
-        _audioFadeEnable = GetNodeOrNull<CheckBox>("%AudioFadeEnable");
         _audioFadeLineEdit = GetNodeOrNull<LineEdit>("%AudioFadeLineEdit");
         _opacityFadeCaption = GetNodeOrNull<Label>("%OpacityFadeCaption");
         _opacityFadeRow = GetNodeOrNull<Control>("%OpacityFadeRow");
-        _opacityFadeEnable = GetNodeOrNull<CheckBox>("%OpacityFadeEnable");
         _opacityFadeLineEdit = GetNodeOrNull<LineEdit>("%OpacityFadeLineEdit");
+        _panFadeCaption = GetNodeOrNull<Label>("%PanFadeCaption");
+        _panFadeRow = GetNodeOrNull<Control>("%PanFadeRow");
+        _panFadeSlider = GetNodeOrNull<HSlider>("%PanFadeSlider");
+        _panFadeLineEdit = GetNodeOrNull<LineEdit>("%PanFadeLineEdit");
+        _matrixContainer = GetNodeOrNull<Control>("%MatrixContainer");
+        _matrixHint = GetNodeOrNull<Label>("%MatrixHint");
+        _matrixGrid = GetNodeOrNull<GridContainer>("%MatrixGrid");
 
         if (_fadeModeOption != null)
         {
@@ -131,10 +149,8 @@ public partial class ControlComponentCard : PanelContainer
             _fadeModeOption.ItemSelected += OnFadeModeSelected;
         }
 
-        if (_audioFadeEnable != null)
-            _audioFadeEnable.Toggled += OnAudioFadeEnableToggled;
-        if (_opacityFadeEnable != null)
-            _opacityFadeEnable.Toggled += OnOpacityFadeEnableToggled;
+        if (_fadePropertyOption != null)
+            _fadePropertyOption.ItemSelected += OnFadePropertySelected;
 
         if (_audioFadeLineEdit != null)
         {
@@ -148,6 +164,19 @@ public partial class ControlComponentCard : PanelContainer
             _opacityFadeLineEdit.TextSubmitted += OnOpacityFadeSubmitted;
             _opacityFadeLineEdit.FocusExited += OnOpacityFadeFocusExited;
             _opacityFadeLineEdit.TextChanged += _ => _opacityFadeEditing = true;
+        }
+
+        if (_panFadeSlider != null)
+        {
+            _panFadeSlider.ValueChanged += OnPanFadeSliderChanged;
+            _panFadeSlider.DragEnded += OnPanFadeSliderDragEnded;
+        }
+
+        if (_panFadeLineEdit != null)
+        {
+            _panFadeLineEdit.TextSubmitted += OnPanFadeSubmitted;
+            _panFadeLineEdit.FocusExited += OnPanFadeFocusExited;
+            _panFadeLineEdit.TextChanged += _ => _panFadeEditing = true;
         }
 
         _seekTimeCaption = GetNodeOrNull<Label>("%SeekTimeCaption");
@@ -413,6 +442,9 @@ public partial class ControlComponentCard : PanelContainer
             _fadeEditing = false;
             _audioFadeEditing = false;
             _opacityFadeEditing = false;
+            _panFadeEditing = false;
+            _isUpdatingPanUi = false;
+            _matrixCellEditing = false;
             _seekTimeEditing = false;
             _sizeEditing = false;
             _posEditing = false;
@@ -448,7 +480,7 @@ public partial class ControlComponentCard : PanelContainer
     }
 
     /// <summary>
-    /// Shows Absolute/Relative mode and audio/opacity rows for Fade controls (contextual to target).
+    /// Shows Absolute/Relative mode, property picker, and the single value row for Fade controls.
     /// </summary>
     private void RefreshPropertyFadeUi(bool isPropertyFade)
     {
@@ -462,10 +494,7 @@ public partial class ControlComponentCard : PanelContainer
                 if (_fadeModeOption != null) _fadeModeOption.Visible = false;
             }
 
-            if (_audioFadeCaption != null) _audioFadeCaption.Visible = false;
-            if (_audioFadeRow != null) _audioFadeRow.Visible = false;
-            if (_opacityFadeCaption != null) _opacityFadeCaption.Visible = false;
-            if (_opacityFadeRow != null) _opacityFadeRow.Visible = false;
+            HideAllFadePropertyRows();
             if (_component?.Action is not (ControlAction.Seek or ControlAction.TranslateLayer))
             {
                 if (_noFadableLabel != null) _noFadableLabel.Visible = false;
@@ -482,23 +511,19 @@ public partial class ControlComponentCard : PanelContainer
             _fadeModeOption.Select((int)_component.FadeMode);
         }
 
-        // Volume / opacity rows only appear once a real target is set and has that media.
-        // Volume: dedicated AudioComponent and/or video with embedded audio (HasAudio + UseAudio).
-        bool targetHasAudio = false;
-        bool targetHasOpacity = false;
+        // Resolve target + available properties once a real target is set.
+        Cue target = null;
+        System.Collections.Generic.List<ControlFadeProperty> available = null;
         if (_component.TargetCueId >= 0)
         {
-            var target = CueList.FetchCueFromId(_component.TargetCueId);
+            target = CueList.FetchCueFromId(_component.TargetCueId);
             if (target != null)
-            {
-                targetHasAudio = ControlComponent.CueHasFadableAudio(target);
-                targetHasOpacity = ControlComponent.CueHasFadableOpacity(target);
-            }
+                available = ControlComponent.GetAvailableFadeProperties(target);
         }
 
-        bool showAudio = targetHasAudio;
-        bool showOpacity = targetHasOpacity;
-        bool showNoFadable = _component.TargetCueId >= 0 && !targetHasAudio && !targetHasOpacity;
+        bool hasTarget = _component.TargetCueId >= 0;
+        bool showNoFadable = hasTarget && (available == null || available.Count == 0);
+        bool showPropertyPicker = hasTarget && available != null && available.Count > 0;
 
         if (_noFadableLabel != null)
         {
@@ -509,46 +534,357 @@ public partial class ControlComponentCard : PanelContainer
         if (_noFadableSpacer != null)
             _noFadableSpacer.Visible = showNoFadable;
 
-        if (_audioFadeCaption != null)
-            _audioFadeCaption.Visible = showAudio;
-        if (_audioFadeRow != null)
-            _audioFadeRow.Visible = showAudio;
-        if (_opacityFadeCaption != null)
-            _opacityFadeCaption.Visible = showOpacity;
-        if (_opacityFadeRow != null)
-            _opacityFadeRow.Visible = showOpacity;
+        if (_propertyCaption != null)
+            _propertyCaption.Visible = showPropertyPicker;
+        if (_fadePropertyOption != null)
+            _fadePropertyOption.Visible = showPropertyPicker;
 
-        if (_audioFadeEnable != null)
-            _audioFadeEnable.SetPressedNoSignal(_component.FadeAudioVolumeEnabled);
-        if (_opacityFadeEnable != null)
-            _opacityFadeEnable.SetPressedNoSignal(_component.FadeVideoOpacityEnabled);
+        if (!showPropertyPicker)
+        {
+            HideAllFadeValueRows();
+            return;
+        }
+
+        // Ensure stored property is still valid; otherwise pick the first available.
+        if (!available.Contains(_component.FadeProperty))
+        {
+            _component.FadeProperty = available[0];
+            _component.FadeAudioVolumeEnabled = _component.FadeProperty == ControlFadeProperty.Volume;
+            _component.FadeVideoOpacityEnabled = _component.FadeProperty == ControlFadeProperty.Opacity;
+        }
+
+        PopulateFadePropertyOption(available, _component.FadeProperty);
+        ShowFadeValueRowsFor(_component.FadeProperty, target);
+    }
+
+    private void HideAllFadePropertyRows()
+    {
+        if (_propertyCaption != null) _propertyCaption.Visible = false;
+        if (_fadePropertyOption != null) _fadePropertyOption.Visible = false;
+        HideAllFadeValueRows();
+    }
+
+    private void HideAllFadeValueRows()
+    {
+        if (_audioFadeCaption != null) _audioFadeCaption.Visible = false;
+        if (_audioFadeRow != null) _audioFadeRow.Visible = false;
+        if (_opacityFadeCaption != null) _opacityFadeCaption.Visible = false;
+        if (_opacityFadeRow != null) _opacityFadeRow.Visible = false;
+        if (_panFadeCaption != null) _panFadeCaption.Visible = false;
+        if (_panFadeRow != null) _panFadeRow.Visible = false;
+        if (_matrixContainer != null) _matrixContainer.Visible = false;
+    }
+
+    private void PopulateFadePropertyOption(
+        System.Collections.Generic.List<ControlFadeProperty> available,
+        ControlFadeProperty selected)
+    {
+        if (_fadePropertyOption == null) return;
+
+        _fadePropertyOption.Clear();
+        int selectIdx = 0;
+        for (int i = 0; i < available.Count; i++)
+        {
+            var prop = available[i];
+            _fadePropertyOption.AddItem(ControlComponent.GetFadePropertyDisplayName(prop), i);
+            _fadePropertyOption.SetItemMetadata(i, (int)prop);
+            if (prop == selected)
+                selectIdx = i;
+        }
+        _fadePropertyOption.Select(selectIdx);
+    }
+
+    private void ShowFadeValueRowsFor(ControlFadeProperty property, Cue target)
+    {
+        HideAllFadeValueRows();
+        bool relative = _component.FadeMode == ControlFadeMode.Relative;
+
+        switch (property)
+        {
+            case ControlFadeProperty.Volume:
+                if (_audioFadeCaption != null)
+                {
+                    _audioFadeCaption.Visible = true;
+                    _audioFadeCaption.Text = "Volume:";
+                    _audioFadeCaption.TooltipText = "Overall audio volume (dB). Applies to active playback only.";
+                }
+                if (_audioFadeRow != null)
+                    _audioFadeRow.Visible = true;
+                SyncVolumeLevelLineEdit(relative);
+                break;
+
+            case ControlFadeProperty.RoutingMatrix:
+                BuildFadeRoutingMatrix(target);
+                break;
+
+            case ControlFadeProperty.Opacity:
+                if (_opacityFadeCaption != null)
+                    _opacityFadeCaption.Visible = true;
+                if (_opacityFadeRow != null)
+                    _opacityFadeRow.Visible = true;
+                if (_opacityFadeLineEdit != null)
+                {
+                    string pctText = relative && _component.FadeOpacityPercent > 0
+                        ? $"+{_component.FadeOpacityPercent:0.#}%"
+                        : $"{_component.FadeOpacityPercent:0.#}%";
+                    _opacityFadeLineEdit.Text = pctText;
+                    _opacityFadeLineEdit.PlaceholderText = relative ? "±%" : "100%";
+                    _opacityFadeLineEdit.TooltipText = relative
+                        ? "Relative change in opacity % (clamped to 0…100). Active playback only."
+                        : "Absolute opacity % (0…100). Active playback only.";
+                    _opacityFadeLineEdit.Editable = true;
+                }
+                break;
+
+            case ControlFadeProperty.Pan:
+                if (_panFadeCaption != null)
+                    _panFadeCaption.Visible = true;
+                if (_panFadeRow != null)
+                    _panFadeRow.Visible = true;
+                SyncPanFadeUiFromComponent();
+                break;
+        }
+    }
+
+    private void SyncVolumeLevelLineEdit(bool relative)
+    {
+        if (_audioFadeLineEdit == null || _component == null) return;
+        string dbText = $"{_component.FadeAudioDb:0.#}dB";
+        if (relative && _component.FadeAudioDb > 0)
+            dbText = $"+{_component.FadeAudioDb:0.#}dB";
+        _audioFadeLineEdit.Text = dbText;
+        _audioFadeLineEdit.PlaceholderText = relative ? "±dB" : "0dB";
+        _audioFadeLineEdit.TooltipText = relative
+            ? "Relative change in dB (clamped to −60…0). Active playback only."
+            : "Absolute target level in dB (−60…0). Active playback only.";
+        _audioFadeLineEdit.Editable = true;
+    }
+
+    /// <summary>
+    /// Syncs pan slider + text from the control component without firing handlers.
+    /// </summary>
+    private void SyncPanFadeUiFromComponent()
+    {
+        if (_component == null) return;
+        _isUpdatingPanUi = true;
+        try
+        {
+            float pan = Mathf.Clamp(_component.FadePan, -1f, 1f);
+            bool relative = _component.FadeMode == ControlFadeMode.Relative;
+
+            if (_panFadeSlider != null)
+                _panFadeSlider.SetValueNoSignal(Mathf.Round(pan * 100f));
+
+            if (_panFadeLineEdit != null && !_panFadeLineEdit.HasFocus())
+            {
+                if (relative)
+                {
+                    if (Mathf.IsZeroApprox(pan))
+                        _panFadeLineEdit.Text = "0";
+                    else if (pan > 0)
+                        _panFadeLineEdit.Text = $"+{UiUtilities.FormatPan(pan)}";
+                    else
+                        _panFadeLineEdit.Text = $"-{UiUtilities.FormatPan(Mathf.Abs(pan))}";
+                }
+                else
+                {
+                    _panFadeLineEdit.Text = UiUtilities.FormatPan(pan);
+                }
+
+                _panFadeLineEdit.PlaceholderText = relative ? "±C / ±L50" : "C";
+                _panFadeLineEdit.TooltipText = relative
+                    ? "Relative pan delta (result clamped to L…R). Active playback only."
+                    : "Absolute pan: C, L50, R100, or −100…100. Active playback only.";
+            }
+        }
+        finally
+        {
+            _isUpdatingPanUi = false;
+        }
+    }
+
+    /// <summary>
+    /// Builds a full routing matrix like the audio/video inspector.
+    /// Yellow cells are multi-selected fade targets (each with its own level).
+    /// Other cells show the target cue's current levels; edit one to add it to the fade set.
+    /// Clear a yellow cell (empty) to remove it from the set.
+    /// </summary>
+    private void BuildFadeRoutingMatrix(Cue target)
+    {
+        if (_matrixContainer == null || _matrixGrid == null || _component == null)
+            return;
+
+        foreach (var child in _matrixGrid.GetChildren())
+            child.QueueFree();
+
+        var routing = ControlComponent.GetPrimaryRouting(target);
+        if (!ControlComponent.HasUsableRouting(routing))
+        {
+            _matrixContainer.Visible = false;
+            return;
+        }
+
+        // Drop targets that fall outside the current matrix dimensions.
+        if (_component.FadeMatrixCellTargets != null && _component.FadeMatrixCellTargets.Count > 0)
+        {
+            var invalid = new System.Collections.Generic.List<int>();
+            foreach (var key in _component.FadeMatrixCellTargets.Keys)
+            {
+                ControlComponent.UnpackMatrixCellKey(key, out int inIdx, out int outIdx);
+                if (inIdx < 0 || inIdx >= routing.InputChannels ||
+                    outIdx < 0 || outIdx >= routing.OutputChannels)
+                    invalid.Add(key);
+            }
+            foreach (int key in invalid)
+                _component.FadeMatrixCellTargets.Remove(key);
+        }
+
+        _matrixContainer.Visible = true;
+        if (_matrixHint != null)
+        {
+            _matrixHint.Visible = true;
+            int n = _component.FadeMatrixCellTargets?.Count ?? 0;
+            string modeHint = _component.FadeMode == ControlFadeMode.Relative
+                ? "relative Δ dB"
+                : "absolute target dB";
+            _matrixHint.Text = n == 0
+                ? $"Edit cells to add fade targets ({modeHint}). Multiple cells fade together. Clear a yellow cell to remove it."
+                : $"{n} cell{(n == 1 ? "" : "s")} selected · {modeHint}. Edit more cells to add; clear a yellow cell to remove.";
+        }
+
+        int inCh = routing.InputChannels;
+        int outCh = routing.OutputChannels;
+        _matrixGrid.Columns = outCh + 1;
+
+        // Header row
+        _matrixGrid.AddChild(new Label { Text = "" });
+        for (int j = 0; j < outCh; j++)
+        {
+            string outLabel = routing.OutputLabels != null && j < routing.OutputLabels.Count &&
+                              !string.IsNullOrWhiteSpace(routing.OutputLabels[j])
+                ? routing.OutputLabels[j]
+                : $"Out {j + 1}";
+            _matrixGrid.AddChild(new Label { Text = outLabel });
+        }
 
         bool relative = _component.FadeMode == ControlFadeMode.Relative;
-        if (_audioFadeLineEdit != null)
+
+        for (int i = 0; i < inCh; i++)
         {
-            string dbText = $"{_component.FadeAudioDb:0.#}dB";
-            if (relative && _component.FadeAudioDb > 0)
-                dbText = $"+{_component.FadeAudioDb:0.#}dB";
-            _audioFadeLineEdit.Text = dbText;
-            _audioFadeLineEdit.PlaceholderText = relative ? "±dB" : "0dB";
-            _audioFadeLineEdit.TooltipText = relative
-                ? "Relative change in dB (clamped to −60…0)."
-                : "Absolute target level in dB (−60…0).";
-            _audioFadeLineEdit.Editable = _component.FadeAudioVolumeEnabled;
+            string inLabel = routing.InputLabels != null && i < routing.InputLabels.Count &&
+                             !string.IsNullOrWhiteSpace(routing.InputLabels[i])
+                ? routing.InputLabels[i]
+                : $"In {i + 1}";
+            _matrixGrid.AddChild(new Label { Text = inLabel });
+
+            for (int j = 0; j < outCh; j++)
+            {
+                var volumeEdit = new LineEdit();
+                volumeEdit.CustomMinimumSize = new Vector2(56, 0);
+                volumeEdit.Alignment = HorizontalAlignment.Center;
+
+                bool isTargeted = _component.TryGetMatrixCellTargetDb(i, j, out float targetDb);
+                if (isTargeted)
+                {
+                    string dbText = $"{targetDb:0.#}dB";
+                    if (relative && targetDb > 0)
+                        dbText = $"+{targetDb:0.#}dB";
+                    volumeEdit.Text = dbText;
+                    volumeEdit.TooltipText = relative
+                        ? "Fade target (relative Δ dB). Clear to remove from multi-cell set. Active playback only."
+                        : "Fade target (absolute dB). Clear to remove from multi-cell set. Active playback only.";
+                    volumeEdit.Modulate = new Color(1.15f, 1.05f, 0.75f, 1f);
+                }
+                else
+                {
+                    float linear = routing.GetVolume(i, j);
+                    volumeEdit.Text = linear > 0f
+                        ? $"{UiUtilities.LinearToDb(linear)}dB"
+                        : string.Empty;
+                    volumeEdit.TooltipText =
+                        "Cue's current level. Edit to add this cell to the multi-cell fade set.";
+                    volumeEdit.Modulate = new Color(0.75f, 0.75f, 0.78f, 1f);
+                }
+
+                int row = i;
+                int col = j;
+                volumeEdit.TextChanged += _ =>
+                {
+                    if (!_isSyncingUi)
+                        _matrixCellEditing = true;
+                };
+                volumeEdit.TextSubmitted += text =>
+                {
+                    _matrixCellEditing = true;
+                    OnMatrixCellSubmitted(text, volumeEdit, row, col, force: true);
+                };
+                volumeEdit.FocusExited += () =>
+                {
+                    if (_isSyncingUi) return;
+                    // Only commit on leave when the user actually typed (avoids focus-spam adds).
+                    if (!_matrixCellEditing) return;
+                    OnMatrixCellSubmitted(volumeEdit.Text, volumeEdit, row, col, force: false);
+                };
+
+                _matrixGrid.AddChild(volumeEdit);
+            }
+        }
+    }
+
+    private void OnMatrixCellSubmitted(string text, LineEdit field, int inputCh, int outputCh, bool force)
+    {
+        if (_isSyncingUi || _component == null || field == null) return;
+        if (_component.Action != ControlAction.Fade) return;
+        if (_component.FadeProperty != ControlFadeProperty.RoutingMatrix) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+        _matrixCellEditing = false;
+        bool wasTargeted = _component.TryGetMatrixCellTargetDb(inputCh, outputCh, out float existingDb);
+        string raw = (text ?? string.Empty).Trim();
+
+        // Empty on a targeted cell → remove from multi-cell set.
+        // Empty on an untargeted cell is a no-op.
+        if (string.IsNullOrWhiteSpace(raw) ||
+            string.Equals(raw, "dB", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!wasTargeted)
+            {
+                field.ReleaseFocus();
+                return;
+            }
+
+            RecordHistory("Remove control fade matrix cell");
+            _component.RemoveMatrixCellTarget(inputCh, outputCh);
+            RefreshFromComponent();
+            field.ReleaseFocus();
+            return;
         }
 
-        if (_opacityFadeLineEdit != null)
+        string parseText = raw.Replace("dB", "", StringComparison.OrdinalIgnoreCase).Trim();
+        if (parseText.StartsWith('+'))
+            parseText = parseText[1..].Trim();
+
+        if (!float.TryParse(parseText, out float db))
         {
-            string pctText = relative && _component.FadeOpacityPercent > 0
-                ? $"+{_component.FadeOpacityPercent:0.#}%"
-                : $"{_component.FadeOpacityPercent:0.#}%";
-            _opacityFadeLineEdit.Text = pctText;
-            _opacityFadeLineEdit.PlaceholderText = relative ? "±%" : "100%";
-            _opacityFadeLineEdit.TooltipText = relative
-                ? "Relative change in opacity % (clamped to 0…100)."
-                : "Absolute opacity % (0…100).";
-            _opacityFadeLineEdit.Editable = _component.FadeVideoOpacityEnabled;
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "Control card: invalid matrix fade level", (int)LogType.Warning);
+            RefreshFromComponent();
+            return;
         }
+
+        if (_component.FadeMode == ControlFadeMode.Absolute)
+            db = Mathf.Clamp(db, -60f, 0f);
+
+        if (wasTargeted && Math.Abs(existingDb - db) < 1e-4f)
+        {
+            field.ReleaseFocus();
+            return;
+        }
+
+        RecordHistory(wasTargeted ? "Edit control fade matrix cell" : "Add control fade matrix cell");
+        _component.SetMatrixCellTarget(inputCh, outputCh, db);
+        RefreshFromComponent();
+        field.ReleaseFocus();
     }
 
     /// <summary>
@@ -838,11 +1174,13 @@ public partial class ControlComponentCard : PanelContainer
             {
                 _component.FadeAudioDb = 0f;
                 _component.FadeOpacityPercent = 0f;
+                _component.FadePan = 0f;
             }
             else
             {
                 _component.FadeAudioDb = 0f;
                 _component.FadeOpacityPercent = 100f;
+                _component.FadePan = 0f;
             }
 
             RefreshFromComponent();
@@ -1193,28 +1531,97 @@ public partial class ControlComponentCard : PanelContainer
         RefreshFromComponent();
     }
 
-    private void OnAudioFadeEnableToggled(bool pressed)
+    private void OnFadePropertySelected(long index)
     {
         if (_isSyncingUi || _component == null) return;
         if (_component.Action != ControlAction.Fade) return;
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
-        if (_component.FadeAudioVolumeEnabled == pressed) return;
+        if (_fadePropertyOption == null) return;
 
-        RecordHistory("Edit control fade audio enable");
-        _component.FadeAudioVolumeEnabled = pressed;
+        var property = (ControlFadeProperty)_fadePropertyOption.GetItemMetadata((int)index).AsInt32();
+        if (_component.FadeProperty == property) return;
+
+        RecordHistory("Edit control fade property");
+        _component.FadeProperty = property;
+        _component.FadeAudioVolumeEnabled = property == ControlFadeProperty.Volume;
+        _component.FadeVideoOpacityEnabled = property == ControlFadeProperty.Opacity;
+
+        // Sensible defaults when switching property under absolute mode.
+        if (_component.FadeMode == ControlFadeMode.Absolute)
+        {
+            switch (property)
+            {
+                case ControlFadeProperty.Volume:
+                case ControlFadeProperty.RoutingMatrix:
+                    // Keep current dB if already set; otherwise full / unity.
+                    break;
+                case ControlFadeProperty.Opacity:
+                    if (Math.Abs(_component.FadeOpacityPercent) < 1e-4f)
+                        _component.FadeOpacityPercent = 100f;
+                    break;
+                case ControlFadeProperty.Pan:
+                    // Leave pan as-is (0 = center is a fine absolute default).
+                    break;
+            }
+        }
+
         RefreshFromComponent();
     }
 
-    private void OnOpacityFadeEnableToggled(bool pressed)
+    private void OnPanFadeSliderChanged(double value)
     {
-        if (_isSyncingUi || _component == null) return;
+        if (_isUpdatingPanUi || _isSyncingUi || _component == null) return;
         if (_component.Action != ControlAction.Fade) return;
+        if (_component.FadeProperty != ControlFadeProperty.Pan) return;
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
-        if (_component.FadeVideoOpacityEnabled == pressed) return;
 
-        RecordHistory("Edit control fade opacity enable");
-        _component.FadeVideoOpacityEnabled = pressed;
-        RefreshFromComponent();
+        float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
+        if (Math.Abs(_component.FadePan - pan) < 1e-6f) return;
+
+        // Coalesce continuous drag into one undo step.
+        int cueId = GetOwnerCueId();
+        if (cueId >= 0)
+        {
+            string key = $"cue:{cueId}:control-fade-pan";
+            _globalData?.HistoryManager?.RecordCueChange(cueId, "Edit control fade pan", key);
+        }
+
+        _component.FadePan = pan;
+        _isUpdatingPanUi = true;
+        try
+        {
+            if (_panFadeLineEdit != null && !_panFadeLineEdit.HasFocus())
+            {
+                bool relative = _component.FadeMode == ControlFadeMode.Relative;
+                if (relative)
+                {
+                    if (Mathf.IsZeroApprox(pan))
+                        _panFadeLineEdit.Text = "0";
+                    else if (pan > 0)
+                        _panFadeLineEdit.Text = $"+{UiUtilities.FormatPan(pan)}";
+                    else
+                        _panFadeLineEdit.Text = $"-{UiUtilities.FormatPan(Mathf.Abs(pan))}";
+                }
+                else
+                {
+                    _panFadeLineEdit.Text = UiUtilities.FormatPan(pan);
+                }
+            }
+        }
+        finally
+        {
+            _isUpdatingPanUi = false;
+        }
+    }
+
+    private void OnPanFadeSliderDragEnded(bool valueChanged)
+    {
+        if (_component == null) return;
+        int cueId = GetOwnerCueId();
+        if (cueId >= 0)
+            _globalData?.HistoryManager?.EndCoalesceSession($"cue:{cueId}:control-fade-pan");
+        if (valueChanged)
+            SyncPanFadeUiFromComponent();
     }
 
     private void OnAudioFadeSubmitted(string text)
@@ -1241,17 +1648,33 @@ public partial class ControlComponentCard : PanelContainer
             CommitOpacityFade(_opacityFadeLineEdit?.Text ?? string.Empty);
     }
 
+    private void OnPanFadeSubmitted(string text)
+    {
+        CommitPanFade(text);
+        _panFadeLineEdit?.ReleaseFocus();
+    }
+
+    private void OnPanFadeFocusExited()
+    {
+        if (_panFadeEditing)
+            CommitPanFade(_panFadeLineEdit?.Text ?? string.Empty);
+    }
+
     private void CommitAudioFade(string text)
     {
         if (_isSyncingUi || _component == null) return;
         if (_component.Action != ControlAction.Fade) return;
+        if (_component.FadeProperty is not (ControlFadeProperty.Volume or ControlFadeProperty.RoutingMatrix))
+            return;
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
         text = (text ?? string.Empty).Replace("dB", "", StringComparison.OrdinalIgnoreCase).Trim();
+        if (text.StartsWith('+'))
+            text = text[1..].Trim();
         if (!float.TryParse(text, out float db))
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                "Control card: invalid audio fade dB", (int)LogType.Warning);
+                "Control card: invalid fade level dB", (int)LogType.Warning);
             RefreshFromComponent();
             return;
         }
@@ -1266,7 +1689,9 @@ public partial class ControlComponentCard : PanelContainer
             return;
         }
 
-        RecordHistory("Edit control fade audio level");
+        RecordHistory(_component.FadeProperty == ControlFadeProperty.RoutingMatrix
+            ? "Edit control fade matrix level"
+            : "Edit control fade volume");
         _component.FadeAudioDb = db;
         _audioFadeEditing = false;
         RefreshFromComponent();
@@ -1276,9 +1701,12 @@ public partial class ControlComponentCard : PanelContainer
     {
         if (_isSyncingUi || _component == null) return;
         if (_component.Action != ControlAction.Fade) return;
+        if (_component.FadeProperty != ControlFadeProperty.Opacity) return;
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
         text = (text ?? string.Empty).Replace("%", "", StringComparison.Ordinal).Trim();
+        if (text.StartsWith('+'))
+            text = text[1..].Trim();
         if (!float.TryParse(text, out float pct))
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
@@ -1300,6 +1728,68 @@ public partial class ControlComponentCard : PanelContainer
         RecordHistory("Edit control fade opacity");
         _component.FadeOpacityPercent = pct;
         _opacityFadeEditing = false;
+        RefreshFromComponent();
+    }
+
+    private void CommitPanFade(string text)
+    {
+        if (_isSyncingUi || _component == null) return;
+        if (_component.Action != ControlAction.Fade) return;
+        if (_component.FadeProperty != ControlFadeProperty.Pan) return;
+        if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+        text = (text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            if (Math.Abs(_component.FadePan) < 1e-6f)
+            {
+                _panFadeEditing = false;
+                RefreshFromComponent();
+                return;
+            }
+
+            RecordHistory("Edit control fade pan");
+            _component.FadePan = 0f;
+            _panFadeEditing = false;
+            RefreshFromComponent();
+            return;
+        }
+
+        // Allow relative signed values: +L50 / -R25 / +0.5
+        bool negative = text.StartsWith('-');
+        if (text.StartsWith('+') || text.StartsWith('-'))
+            text = text[1..].Trim();
+
+        if (!UiUtilities.TryParsePan(text, out float pan) &&
+            !float.TryParse(text, out pan))
+        {
+            // Numeric −100…100 without L/R prefix
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "Control card: invalid pan value", (int)LogType.Warning);
+            RefreshFromComponent();
+            return;
+        }
+
+        // If user typed a bare number outside −1…1, treat as percent (−100…100).
+        if (Math.Abs(pan) > 1f + 1e-4f)
+            pan = Mathf.Clamp(pan, -100f, 100f) / 100f;
+
+        if (negative)
+            pan = -Mathf.Abs(pan);
+
+        if (_component.FadeMode == ControlFadeMode.Absolute)
+            pan = Mathf.Clamp(pan, -1f, 1f);
+
+        if (Math.Abs(_component.FadePan - pan) < 1e-6f)
+        {
+            _panFadeEditing = false;
+            RefreshFromComponent();
+            return;
+        }
+
+        RecordHistory("Edit control fade pan");
+        _component.FadePan = pan;
+        _panFadeEditing = false;
         RefreshFromComponent();
     }
 

@@ -196,6 +196,20 @@ layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
 
+[node name="PropertyCaption" type="Label" parent="MarginContainer/VBoxContainer/TargetGrid"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Which single property this fade controls."
+text = "Property:"
+
+[node name="FadePropertyOption" type="OptionButton" parent="MarginContainer/VBoxContainer/TargetGrid"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+
 [node name="NoFadableLabel" type="Label" parent="MarginContainer/VBoxContainer/TargetGrid"]
 unique_name_in_owner = true
 visible = false
@@ -225,13 +239,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="AudioFadeEnable" type="CheckBox" parent="MarginContainer/VBoxContainer/TargetGrid/AudioFadeRow"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Fade audio overall volume"
-focus_mode = 0
-button_pressed = true
-
 [node name="AudioFadeLineEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/TargetGrid/AudioFadeRow"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -254,19 +261,48 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="OpacityFadeEnable" type="CheckBox" parent="MarginContainer/VBoxContainer/TargetGrid/OpacityFadeRow"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Fade video opacity"
-focus_mode = 0
-button_pressed = true
-
 [node name="OpacityFadeLineEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/TargetGrid/OpacityFadeRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Absolute: target % (0–100). Relative: delta %."
 placeholder_text = "100%"
+caret_blink = true
+
+[node name="PanFadeCaption" type="Label" parent="MarginContainer/VBoxContainer/TargetGrid"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Stereo pan/balance."
+text = "Pan:"
+
+[node name="PanFadeRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TargetGrid"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="PanFadeSlider" type="HSlider" parent="MarginContainer/VBoxContainer/TargetGrid/PanFadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+tooltip_text = "Stereo pan: L ← C → R"
+min_value = -100.0
+max_value = 100.0
+step = 1.0
+value = 0.0
+scrollable = false
+
+[node name="PanFadeLineEdit" type="LineEdit" parent="MarginContainer/VBoxContainer/TargetGrid/PanFadeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 0)
+layout_mode = 2
+tooltip_text = "Absolute: C / L50 / R100. Relative: ± pan delta."
+placeholder_text = "C"
+alignment = 1
 caret_blink = true
 
 [node name="SeekTimeCaption" type="Label" parent="MarginContainer/VBoxContainer/TargetGrid"]
@@ -365,3 +401,32 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Y"
 caret_blink = true
+
+[node name="MatrixContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="MatrixHint" type="Label" parent="MarginContainer/VBoxContainer/MatrixContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.48, 0.55, 1)
+theme_override_font_sizes/font_size = 11
+text = "Select a cell to set the fade target level."
+autowrap_mode = 2
+
+[node name="MatrixScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/MatrixContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 80)
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 1
+
+[node name="MatrixGrid" type="GridContainer" parent="MarginContainer/VBoxContainer/MatrixContainer/MatrixScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
+columns = 2

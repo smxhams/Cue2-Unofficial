@@ -89,6 +89,9 @@ public partial class GlobalSignals : Node
 	
 	[Signal] public delegate void GroupSelectedCuesEventHandler();
 
+	/// <summary>Select all currently visible cues in the cuelist.</summary>
+	[Signal] public delegate void SelectAllCuesEventHandler();
+
 	[Signal] public delegate void SelectNextCueEventHandler();
 	[Signal] public delegate void SelectPreviousCueEventHandler();
 	
@@ -116,11 +119,7 @@ public partial class GlobalSignals : Node
 
 	/// <summary>Fired when the Timeline Inspector waveform display setting changes.</summary>
 	[Signal] public delegate void ShowTimelineWaveformsChangedEventHandler(bool enabled);
-	[Signal] public delegate void SettingsSaveAsEventHandler(string filters, string url);
-	[Signal] public delegate void SettingsSaveWithShowEventHandler(string filters);
-	[Signal] public delegate void SettingsSaveUserDirEventHandler(string filters);
-	
-	
+
 	// Signals associated with devices
 	[Signal] public delegate void AudioDevicesChangedEventHandler();
 	[Signal] public delegate void DisplaysChangedEventHandler();
