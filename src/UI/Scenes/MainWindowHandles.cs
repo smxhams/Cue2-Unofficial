@@ -8,8 +8,10 @@ namespace Cue2.UI.Scenes;
 /// Borderless main-window title drag, edge/corner resize, maximize toggle, and geometry persistence.
 /// </summary>
 /// <remarks>
-/// Interactive resize/drag must leave maximized/fullscreen first. Starting an OS resize while still
-/// maximized leaves a hybrid "maximized but not full-screen" state and breaks UI layout.
+/// Maximize button / title double-click restore the pre-maximize rect.
+/// Edge-resize out of maximize only leaves maximized mode and keeps the current size
+/// (no snap back to the pre-maximize rect). Drag out of maximize restores the pre-maximize rect
+/// under the cursor (standard desktop behaviour).
 /// </remarks>
 public partial class MainWindowHandles : Control
 {
@@ -18,9 +20,19 @@ public partial class MainWindowHandles : Control
 
 	private static readonly Vector2I MinWindowSize = new Vector2I(600, 370);
 
-	// Debounce timer for window geometry saves (persist after resize/move settles)
 	private Timer _resizeSaveTimer;
 	private Vector2I _lastKnownPosition;
+
+	/// <summary>Pre-maximize size/position used only by the maximize toggle (and title drag un-max).</summary>
+	private Vector2I _restoreSize = Vector2I.Zero;
+	private Vector2I _restorePosition = Vector2I.Zero;
+	private bool _hasRestoreRect;
+
+	/// <summary>True while chrome-maximized (engine Mode can lag or go hybrid on borderless).</summary>
+	private bool _isMaximized;
+
+	/// <summary>Skip persistence for one frame while mode/geometry is being applied.</summary>
+	private bool _suppressGeometrySave;
 
 	private Color _originalBorderColor;
 	private bool _isFading;
@@ -38,9 +50,7 @@ public partial class MainWindowHandles : Control
 	private Control _topRightHandle;
 	private Control _topLeftHandle;
 
-	/// <summary>
-	/// Wires handles, restores last geometry/maximized state, and starts persistence listeners.
-	/// </summary>
+	/// <inheritdoc />
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
@@ -115,7 +125,6 @@ public partial class MainWindowHandles : Control
 
 	/// <summary>
 	/// Restores previous size / position / maximized state from persistent user data.
-	/// Position is relative to the display that currently contains the mouse cursor.
 	/// </summary>
 	private void RestoreWindowFromUserData(Window window)
 	{
@@ -123,21 +132,22 @@ public partial class MainWindowHandles : Control
 		if (udm == null)
 			return;
 
-		bool hasNormalSize = udm.LastWindowSize.X >= MinWindowSize.X
-			&& udm.LastWindowSize.Y >= MinWindowSize.Y;
-
-		// Apply normal geometry first so un-maximize (or engine restore rect) is sensible.
-		if (hasNormalSize)
+		if (udm.LastWindowSize.X >= MinWindowSize.X && udm.LastWindowSize.Y >= MinWindowSize.Y)
 		{
-			window.Size = udm.LastWindowSize;
+			RememberRestoreRect(udm.LastWindowSize,
+				UiUtilities.ClampWindowPositionToScreen(
+					UiUtilities.FindScreenAtPoint(DisplayServer.MouseGetPosition()),
+					udm.LastWindowPosition));
 
-			int targetScreen = UiUtilities.FindScreenAtPoint(DisplayServer.MouseGetPosition());
-			window.Position = UiUtilities.ClampWindowPositionToScreen(
-				targetScreen, udm.LastWindowPosition);
+			window.Size = _restoreSize;
+			window.Position = _restorePosition;
 		}
 
 		if (udm.WasMaximized)
-			window.Mode = Window.ModeEnum.Maximized;
+		{
+			_isMaximized = true;
+			SetWindowMode(window, DisplayServer.WindowMode.Maximized);
+		}
 	}
 
 	private async void OnAlertReceived()
@@ -158,19 +168,7 @@ public partial class MainWindowHandles : Control
 
 		if (mouseEvent.DoubleClick && mouseEvent.ButtonIndex == MouseButton.Left)
 		{
-			var window = GetWindow();
-			if (window == null)
-				return;
-
-			// Save normal size before maximizing so restore-on-resize has a real rect.
-			if (!UiUtilities.IsWindowFillScreen(window))
-			{
-				_resizeSaveTimer.Stop();
-				SaveCurrentWindowState();
-			}
-
-			UiUtilities.ToggleMaximize(window);
-			SaveCurrentWindowState();
+			ToggleMaximizeFromChrome();
 			return;
 		}
 
@@ -227,7 +225,7 @@ public partial class MainWindowHandles : Control
 	}
 
 	/// <summary>
-	/// Begins an OS edge resize after ensuring the window is not maximized/fullscreen.
+	/// Begins an OS edge resize. Leaves maximized without snapping to the pre-maximize rect.
 	/// </summary>
 	private void StartResize(DisplayServer.WindowResizeEdge edge)
 	{
@@ -235,7 +233,8 @@ public partial class MainWindowHandles : Control
 		if (window == null || !IsInstanceValid(window))
 			return;
 
-		RestoreWindowedIfNeeded(window);
+		// Keep current (full) size so the edge drag continues naturally.
+		LeaveMaximized(window, applyRestoreRect: false);
 
 		int windowId = window.GetWindowId();
 		if (windowId >= 0)
@@ -243,7 +242,7 @@ public partial class MainWindowHandles : Control
 	}
 
 	/// <summary>
-	/// Begins an OS window drag after ensuring the window is not maximized/fullscreen.
+	/// Begins an OS window drag. Leaves maximized and restores the pre-maximize rect (desktop convention).
 	/// </summary>
 	private void StartDrag()
 	{
@@ -251,7 +250,7 @@ public partial class MainWindowHandles : Control
 		if (window == null || !IsInstanceValid(window))
 			return;
 
-		RestoreWindowedIfNeeded(window);
+		LeaveMaximized(window, applyRestoreRect: true);
 
 		int windowId = window.GetWindowId();
 		if (windowId >= 0)
@@ -259,8 +258,7 @@ public partial class MainWindowHandles : Control
 	}
 
 	/// <summary>
-	/// Toggle maximize from chrome buttons. Saves normal geometry before maximizing so
-	/// later edge-resize can restore a real windowed rect.
+	/// Toggle maximize from chrome buttons or title double-click.
 	/// </summary>
 	public void ToggleMaximizeFromChrome()
 	{
@@ -268,51 +266,163 @@ public partial class MainWindowHandles : Control
 		if (window == null || !IsInstanceValid(window))
 			return;
 
-		if (!UiUtilities.IsWindowFillScreen(window))
+		if (IsEffectivelyMaximized(window))
 		{
-			_resizeSaveTimer.Stop();
-			SaveCurrentWindowState();
+			LeaveMaximized(window, applyRestoreRect: true);
+			return;
 		}
 
-		UiUtilities.ToggleMaximize(window);
-		SaveCurrentWindowState();
+		// Snapshot before mode change — SizeChanged during maximize must not overwrite this.
+		_resizeSaveTimer.Stop();
+		RememberRestoreRect(window.Size, window.Position);
+		PersistWindowState(maximized: false);
+
+		_suppressGeometrySave = true;
+		_isMaximized = true;
+		SetWindowMode(window, DisplayServer.WindowMode.Maximized);
+		PersistWindowState(maximized: true);
+		CallDeferred(nameof(EndGeometrySaveSuppression));
 	}
 
 	/// <summary>
-	/// If the window is maximized or fullscreen, restore last normal geometry and go windowed
-	/// before interactive drag/resize. Prevents hybrid maximized layout glitches.
+	/// Leaves maximized/fullscreen. Optionally restores the pre-maximize rect (button / drag),
+	/// or keeps the current size (edge-resize).
 	/// </summary>
-	private void RestoreWindowedIfNeeded(Window window)
+	/// <param name="window">Target window.</param>
+	/// <param name="applyRestoreRect">True to apply remembered pre-maximize size/position.</param>
+	private void LeaveMaximized(Window window, bool applyRestoreRect)
 	{
-		if (!UiUtilities.IsWindowFillScreen(window))
+		if (!IsEffectivelyMaximized(window))
 			return;
 
-		Vector2I? restoreSize = null;
-		Vector2I? restorePos = null;
-		var udm = _globalData?.UserDataManager;
-		if (udm != null
-			&& udm.LastWindowSize.X >= MinWindowSize.X
-			&& udm.LastWindowSize.Y >= MinWindowSize.Y)
-		{
-			restoreSize = udm.LastWindowSize;
-			// Prefer the screen the maximized window currently occupies.
-			int screen = window.CurrentScreen;
-			if (screen < 0)
-				screen = UiUtilities.FindScreenAtPoint(DisplayServer.MouseGetPosition());
-			restorePos = UiUtilities.ClampWindowPositionToScreen(screen, udm.LastWindowPosition);
-		}
+		_resizeSaveTimer.Stop();
+		_suppressGeometrySave = true;
+		_isMaximized = false;
 
-		UiUtilities.EnsureWindowedForInteraction(window, restoreSize, restorePos);
-		// Mode is no longer maximized — persist immediately so later saves stay consistent.
-		SaveCurrentWindowState();
-		_lastKnownPosition = window.Position;
+		SetWindowMode(window, DisplayServer.WindowMode.Windowed);
+
+		if (applyRestoreRect && _hasRestoreRect)
+		{
+			ApplyGeometry(window, _restoreSize, _restorePosition);
+			_lastKnownPosition = _restorePosition;
+			// Borderless: engine often overwrites size on the next frame.
+			CallDeferred(nameof(ReapplyRestoreRectDeferred));
+		}
+		else
+		{
+			// Free-size path (edge resize): current dimensions stay; next save captures them.
+			_lastKnownPosition = window.Position;
+			PersistWindowState(maximized: false);
+			CallDeferred(nameof(EndGeometrySaveSuppression));
+		}
 	}
 
+	/// <summary>
+	/// Re-applies the restore rect after the display server finishes leaving maximized mode.
+	/// </summary>
+	private void ReapplyRestoreRectDeferred()
+	{
+		var window = GetWindow();
+		if (window != null && IsInstanceValid(window) && _hasRestoreRect)
+		{
+			if (UiUtilities.IsWindowFillScreen(window))
+				SetWindowMode(window, DisplayServer.WindowMode.Windowed);
+
+			ApplyGeometry(window, _restoreSize, _restorePosition);
+			_lastKnownPosition = _restorePosition;
+			PersistWindowState(maximized: false);
+		}
+
+		_suppressGeometrySave = false;
+	}
+
+	private void EndGeometrySaveSuppression()
+	{
+		_suppressGeometrySave = false;
+	}
+
+	private bool IsEffectivelyMaximized(Window window) =>
+		_isMaximized || UiUtilities.IsWindowFillScreen(window);
+
+	private void RememberRestoreRect(Vector2I size, Vector2I globalPosition)
+	{
+		if (size.X < MinWindowSize.X || size.Y < MinWindowSize.Y)
+			return;
+
+		_restoreSize = size;
+		_restorePosition = globalPosition;
+		_hasRestoreRect = true;
+	}
+
+	private static void SetWindowMode(Window window, DisplayServer.WindowMode mode)
+	{
+		int id = window.GetWindowId();
+		if (id >= 0)
+			DisplayServer.WindowSetMode(mode, id);
+		else
+			window.Mode = mode switch
+			{
+				DisplayServer.WindowMode.Maximized => Window.ModeEnum.Maximized,
+				DisplayServer.WindowMode.Fullscreen => Window.ModeEnum.Fullscreen,
+				DisplayServer.WindowMode.ExclusiveFullscreen => Window.ModeEnum.ExclusiveFullscreen,
+				DisplayServer.WindowMode.Minimized => Window.ModeEnum.Minimized,
+				_ => Window.ModeEnum.Windowed
+			};
+	}
+
+	private static void ApplyGeometry(Window window, Vector2I size, Vector2I globalPosition)
+	{
+		int id = window.GetWindowId();
+		if (id >= 0)
+		{
+			if (size.X > 0 && size.Y > 0)
+				DisplayServer.WindowSetSize(size, id);
+			DisplayServer.WindowSetPosition(globalPosition, id);
+			return;
+		}
+
+		if (size.X > 0 && size.Y > 0)
+			window.Size = size;
+		window.Position = globalPosition;
+	}
+
+	/// <summary>
+	/// Persists restore rect (when known) and maximized flag. Uses session restore fields while
+	/// maximized so transitional full-screen sizes never overwrite the pre-maximize rect.
+	/// </summary>
+	private void PersistWindowState(bool maximized)
+	{
+		Vector2I size;
+		Vector2I relPos;
+
+		if (maximized && _hasRestoreRect)
+		{
+			size = _restoreSize;
+			relPos = UiUtilities.ToScreenRelativePosition(_restorePosition, size);
+		}
+		else
+		{
+			var win = GetWindow();
+			if (win == null || !IsInstanceValid(win))
+				return;
+
+			size = win.Size;
+			relPos = UiUtilities.ToScreenRelativePosition(win.Position, size);
+
+			if (!maximized && size.X >= MinWindowSize.X && size.Y >= MinWindowSize.Y)
+				RememberRestoreRect(size, win.Position);
+		}
+
+		// SetWindowState only writes size/position when not maximized.
+		_globalData?.UserDataManager?.SetWindowState(size, relPos, maximized);
+	}
+
+	/// <inheritdoc />
 	public override void _Process(double delta)
 	{
 		if (_isFading && _borderStylebox != null)
 		{
-			_fadeProgress += (float)delta / 1.0f; // 1-second fade duration
+			_fadeProgress += (float)delta / 1.0f;
 			if (_fadeProgress >= 1.0f)
 			{
 				_fadeProgress = 1.0f;
@@ -322,17 +432,18 @@ public partial class MainWindowHandles : Control
 			_borderStylebox.BorderColor = _highlightColor.Lerp(_originalBorderColor, _fadeProgress);
 		}
 
-		// Debounce save for window moves (position changes during drag)
 		CheckAndDebounceWindowPosition();
 	}
 
 	private void OnWindowSizeChanged()
 	{
+		if (_suppressGeometrySave)
+			return;
+
 		var win = GetWindow();
-		if (UiUtilities.IsWindowFillScreen(win))
+		if (IsEffectivelyMaximized(win))
 		{
-			// Persist maximized/fullscreen flag only (SetWindowState skips size while maximized).
-			SaveCurrentWindowState();
+			PersistWindowState(maximized: true);
 			return;
 		}
 
@@ -340,28 +451,27 @@ public partial class MainWindowHandles : Control
 	}
 
 	/// <summary>
-	/// Saves the current window size, relative position (to its display), and maximized state.
+	/// Saves the current window size, relative position, and maximized state.
 	/// </summary>
 	private void SaveCurrentWindowState()
 	{
+		if (_suppressGeometrySave)
+			return;
+
 		var win = GetWindow();
 		if (win == null || !IsInstanceValid(win))
 			return;
 
-		bool isMax = UiUtilities.IsWindowFillScreen(win);
-		Vector2I size = win.Size;
-		Vector2I globalPos = win.Position;
-		Vector2I relPos = isMax
-			? globalPos
-			: UiUtilities.ToScreenRelativePosition(globalPos, size);
-
-		_globalData?.UserDataManager?.SetWindowState(size, relPos, isMax);
+		PersistWindowState(IsEffectivelyMaximized(win));
 	}
 
 	private void CheckAndDebounceWindowPosition()
 	{
+		if (_suppressGeometrySave)
+			return;
+
 		var win = GetWindow();
-		if (UiUtilities.IsWindowFillScreen(win))
+		if (IsEffectivelyMaximized(win))
 			return;
 
 		Vector2I currentPos = win.Position;
@@ -372,6 +482,7 @@ public partial class MainWindowHandles : Control
 		}
 	}
 
+	/// <inheritdoc />
 	public override void _ExitTree()
 	{
 		var window = GetWindow();

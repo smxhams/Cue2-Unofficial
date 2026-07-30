@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" uid="uid://t1ccfinhqoye" path="res://src/UI/Scenes/Settings/SettingsAudioDefaults.tscn" id="16_audiodef"]
 [ext_resource type="PackedScene" uid="uid://cpxapul4025nc" path="res://src/UI/Scenes/Settings/SettingsVideoDefaults.tscn" id="17_videodef"]
 [ext_resource type="PackedScene" uid="uid://b1bwv107ue24w" path="res://src/UI/Scenes/Settings/SettingsTextDefaults.tscn" id="18_textdef"]
+[ext_resource type="PackedScene" path="res://src/UI/Scenes/Settings/SettingsVideoOutput.tscn" id="19_vidout"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -263,6 +264,11 @@ visible = false
 layout_mode = 2
 
 [node name="CanvasEditor" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=1453730116 instance=ExtResource("10_cxve1")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsVideoOutput" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("19_vidout")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

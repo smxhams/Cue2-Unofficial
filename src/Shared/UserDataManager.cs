@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using Cue2.Base.Classes;
 using Godot;
 using Godot.Collections;
 
@@ -36,6 +37,12 @@ public partial class UserDataManager : Node
 	private int _backupDepth = DefaultBackupDepth;
 	private int _undoDepth = DefaultUndoDepth;
 	private int _logSessionDepth = DefaultLogSessionDepth;
+
+	// Machine-dependent video performance preferences (not stored in the showfile).
+	private VideoQualityMode _videoQualityMode = DefaultVideoQualityMode;
+	private HardwareDecodePreference _hardwareDecodePreference = DefaultHardwareDecodePreference;
+	private VideoPreviewQuality _videoPreviewQuality = DefaultVideoPreviewQuality;
+	private OutputVSyncMode _outputVSyncMode = DefaultOutputVSyncMode;
 
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
@@ -83,6 +90,19 @@ public partial class UserDataManager : Node
 
 	/// <summary>Maximum allowed log session depth.</summary>
 	public const int MaxLogSessionDepth = 50;
+
+	/// <summary>Default decode/present quality mode (matches historical ActiveVideoPlayback hardcodes).</summary>
+	public static readonly VideoQualityMode DefaultVideoQualityMode = VideoQualityMode.Balanced;
+
+	/// <summary>Default hardware-decode preference (software until HWAccel lands).</summary>
+	public static readonly HardwareDecodePreference DefaultHardwareDecodePreference =
+		HardwareDecodePreference.Auto;
+
+	/// <summary>Default inspector video preview quality.</summary>
+	public static readonly VideoPreviewQuality DefaultVideoPreviewQuality = VideoPreviewQuality.Full;
+
+	/// <summary>Default output window vsync mode.</summary>
+	public static readonly OutputVSyncMode DefaultOutputVSyncMode = OutputVSyncMode.PreferVSync;
 
 	/// <summary>
 	/// Defines the startup behavior when the application launches without a file argument.
@@ -228,6 +248,83 @@ public partial class UserDataManager : Node
 				SaveUserData();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Soft decode/present quality for live video outputs (machine preference).
+	/// </summary>
+	public VideoQualityMode VideoQualityMode
+	{
+		get => _videoQualityMode;
+		set
+		{
+			if (_videoQualityMode == value)
+				return;
+			_videoQualityMode = value;
+			SaveUserData();
+			NotifyVideoPlaybackPrefsChanged();
+		}
+	}
+
+	/// <summary>
+	/// Hardware decode preference. Reserved until FFmpeg HWAccel is wired; UI is live, decode path is software.
+	/// </summary>
+	public HardwareDecodePreference HardwareDecodePreference
+	{
+		get => _hardwareDecodePreference;
+		set
+		{
+			if (_hardwareDecodePreference == value)
+				return;
+			_hardwareDecodePreference = value;
+			SaveUserData();
+			NotifyVideoPlaybackPrefsChanged();
+		}
+	}
+
+	/// <summary>
+	/// Inspector video preview resolution scale (never affects house outputs).
+	/// </summary>
+	public VideoPreviewQuality VideoPreviewQuality
+	{
+		get => _videoPreviewQuality;
+		set
+		{
+			if (_videoPreviewQuality == value)
+				return;
+			_videoPreviewQuality = value;
+			SaveUserData();
+			NotifyVideoPlaybackPrefsChanged();
+		}
+	}
+
+	/// <summary>
+	/// Vsync / frame-pacing preference for video output windows.
+	/// </summary>
+	public OutputVSyncMode OutputVSyncMode
+	{
+		get => _outputVSyncMode;
+		set
+		{
+			if (_outputVSyncMode == value)
+				return;
+			_outputVSyncMode = value;
+			SaveUserData();
+			// Apply immediately to open output windows.
+			GetNodeOrNull<DisplaysManager>("/root/DisplaysManager")?.ApplyOutputVSyncPreference();
+			NotifyVideoPlaybackPrefsChanged();
+		}
+	}
+
+	/// <summary>
+	/// Resolved present tuning for the current <see cref="VideoQualityMode"/>.
+	/// </summary>
+	public VideoPresentTuning GetVideoPresentTuning() =>
+		VideoPresentTuning.ForMode(_videoQualityMode);
+
+	private void NotifyVideoPlaybackPrefsChanged()
+	{
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.VideoPlaybackPrefsChanged));
 	}
 
 	/// <summary>
@@ -665,8 +762,17 @@ public partial class UserDataManager : Node
 					_inputMapBindings = mapDict;
 			}
 
+			if (data.TryGetValue("VideoQualityMode", out var vqm))
+				_videoQualityMode = ClampEnum(vqm.AsInt32(), VideoQualityMode.PreferQuality, VideoQualityMode.PreferPerformance, DefaultVideoQualityMode);
+			if (data.TryGetValue("HardwareDecodePreference", out var hdp))
+				_hardwareDecodePreference = ClampEnum(hdp.AsInt32(), HardwareDecodePreference.Auto, HardwareDecodePreference.ForceSoftware, DefaultHardwareDecodePreference);
+			if (data.TryGetValue("VideoPreviewQuality", out var vpq))
+				_videoPreviewQuality = ClampEnum(vpq.AsInt32(), VideoPreviewQuality.Full, VideoPreviewQuality.Quarter, DefaultVideoPreviewQuality);
+			if (data.TryGetValue("OutputVSyncMode", out var ovm))
+				_outputVSyncMode = ClampEnum(ovm.AsInt32(), OutputVSyncMode.PreferVSync, OutputVSyncMode.LowLatency, DefaultOutputVSyncMode);
+
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0} videoQuality:{_videoQualityMode} hwDecode:{_hardwareDecodePreference} previewQ:{_videoPreviewQuality} vsync:{_outputVSyncMode}");
 		}
 		catch (Exception ex)
 		{
@@ -741,6 +847,11 @@ public partial class UserDataManager : Node
 			else
 				data["InputMap"] = new Dictionary();
 
+			data["VideoQualityMode"] = (int)_videoQualityMode;
+			data["HardwareDecodePreference"] = (int)_hardwareDecodePreference;
+			data["VideoPreviewQuality"] = (int)_videoPreviewQuality;
+			data["OutputVSyncMode"] = (int)_outputVSyncMode;
+
 			data["Version"] = 1;
 			// Additional user-persistent keys can be added here in the future.
 
@@ -772,5 +883,18 @@ public partial class UserDataManager : Node
 		// Final safety save in case any in-memory changes were not persisted.
 		SaveUserData();
 		GD.Print("UserDataManager:_ExitTree - Final user data save attempted.");
+	}
+
+	/// <summary>
+	/// Clamps an integer into an enum range, falling back to <paramref name="fallback"/> when out of range.
+	/// </summary>
+	private static TEnum ClampEnum<TEnum>(int raw, TEnum min, TEnum max, TEnum fallback)
+		where TEnum : struct, Enum
+	{
+		int minI = Convert.ToInt32(min);
+		int maxI = Convert.ToInt32(max);
+		if (raw < minI || raw > maxI)
+			return fallback;
+		return (TEnum)Enum.ToObject(typeof(TEnum), raw);
 	}
 }

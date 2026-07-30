@@ -72,6 +72,9 @@ public partial class Settings : Node
     /// <summary>Default for drawing audio waveforms inside Timeline Inspector cue bars.</summary>
     public const bool DefaultShowTimelineWaveforms = true;
 
+    /// <summary>Default solid colour behind video layers on all output windows.</summary>
+    public static readonly Color DefaultOutputBackgroundColor = Colors.Black;
+
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
     /// <summary>System default pre-wait in seconds for newly created cues.</summary>
@@ -250,6 +253,12 @@ public partial class Settings : Node
     /// When false, bars show solid colour only. Persisted with the showfile.
     /// </summary>
     public bool ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
+
+    /// <summary>
+    /// Solid colour drawn behind all layers on every video output window.
+    /// Persisted with the showfile. Does not affect the inspector video previewer.
+    /// </summary>
+    public Color OutputBackgroundColor = DefaultOutputBackgroundColor;
 
     // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
 
@@ -666,7 +675,11 @@ public partial class Settings : Node
         MultiEditEnabled = DefaultMultiEditEnabled;
         SelectNewCues = DefaultSelectNewCues;
         ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
+        OutputBackgroundColor = DefaultOutputBackgroundColor;
         VerbosePrint = true;
+
+        // Operator runtime video controls should never carry across New Session.
+        _displaysManager?.ClearRuntimeOutputControls();
 
         // Cue shell defaults for newly created cues
         ResetCueDefaultsToSystem();
@@ -728,6 +741,7 @@ public partial class Settings : Node
         saveTable.Add("MultiEditEnabled", MultiEditEnabled);
         saveTable.Add("SelectNewCues", SelectNewCues);
         saveTable.Add("ShowTimelineWaveforms", ShowTimelineWaveforms);
+        saveTable.Add("OutputBackgroundColor", OutputBackgroundColor.ToHtml(true));
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -841,6 +855,13 @@ public partial class Settings : Node
         ShowTimelineWaveforms = settingsData.TryGetValue("ShowTimelineWaveforms", out value)
             ? value.AsBool()
             : DefaultShowTimelineWaveforms;
+        OutputBackgroundColor = settingsData.TryGetValue("OutputBackgroundColor", out value)
+            ? Color.FromString(value.AsString(), DefaultOutputBackgroundColor)
+            : DefaultOutputBackgroundColor;
+
+        // Loading a showfile should not keep the previous show's emergency disable/blackout.
+        _displaysManager?.ClearRuntimeOutputControls();
+        _displaysManager?.ApplyOutputBackgroundColor(OutputBackgroundColor);
 
         // Cue shell defaults (older shows without this key keep system defaults)
         if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
@@ -1003,6 +1024,11 @@ public partial class Settings : Node
             SelectNewCues = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "ShowTimelineWaveforms", out value))
             ShowTimelineWaveforms = ReadBoolVariant(value);
+        if (TryGetSettingsValue(settingsData, "OutputBackgroundColor", out value))
+        {
+            OutputBackgroundColor = Color.FromString(value.AsString(), DefaultOutputBackgroundColor);
+            _displaysManager?.ApplyOutputBackgroundColor(OutputBackgroundColor);
+        }
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
             && value.VariantType == Variant.Type.Dictionary)
@@ -1207,6 +1233,9 @@ public partial class Settings : Node
                 return true;
             case "ShowTimelineWaveforms":
                 value = ShowTimelineWaveforms ? 1 : 0;
+                return true;
+            case "OutputBackgroundColor":
+                value = OutputBackgroundColor.ToHtml(true);
                 return true;
             default:
                 value = default;
@@ -1496,17 +1525,15 @@ public partial class Settings : Node
     {
         if (data == null) return;
 
-        if (TryGetSettingsValue(data, "ExpandMode", out var v))
+        if (TryGetSettingsValue(data, "ExpandMode", out var v)
+            && TryParseEnum(v, out TextureRect.ExpandModeEnum expand))
         {
-            int mode = v.AsInt32();
-            if (Enum.IsDefined(typeof(TextureRect.ExpandModeEnum), mode))
-                VideoDefaultExpandMode = (TextureRect.ExpandModeEnum)mode;
+            VideoDefaultExpandMode = expand;
         }
-        if (TryGetSettingsValue(data, "StretchMode", out v))
+        if (TryGetSettingsValue(data, "StretchMode", out v)
+            && TryParseEnum(v, out TextureRect.StretchModeEnum stretch))
         {
-            int mode = v.AsInt32();
-            if (Enum.IsDefined(typeof(TextureRect.StretchModeEnum), mode))
-                VideoDefaultStretchMode = (TextureRect.StretchModeEnum)mode;
+            VideoDefaultStretchMode = stretch;
         }
         if (TryGetSettingsValue(data, "Opacity", out v))
             VideoDefaultOpacity = VideoComponent.ParseOpacity(v);
@@ -1642,17 +1669,15 @@ public partial class Settings : Node
             TextDefaultFontName = v.AsString() ?? string.Empty;
         if (TryGetSettingsValue(data, "FontColor", out v))
             TextDefaultFontColor = Color.FromString(v.AsString(), TextDefaultFontColor);
-        if (TryGetSettingsValue(data, "HAlign", out v))
+        if (TryGetSettingsValue(data, "HAlign", out v)
+            && TryParseEnum(v, out HorizontalAlignment hAlign))
         {
-            int align = v.AsInt32();
-            if (Enum.IsDefined(typeof(HorizontalAlignment), align))
-                TextDefaultHAlign = (HorizontalAlignment)align;
+            TextDefaultHAlign = hAlign;
         }
-        if (TryGetSettingsValue(data, "VAlign", out v))
+        if (TryGetSettingsValue(data, "VAlign", out v)
+            && TryParseEnum(v, out VerticalAlignment vAlign))
         {
-            int align = v.AsInt32();
-            if (Enum.IsDefined(typeof(VerticalAlignment), align))
-                TextDefaultVAlign = (VerticalAlignment)align;
+            TextDefaultVAlign = vAlign;
         }
         if (TryGetSettingsValue(data, "Autowrap", out v))
             TextDefaultAutowrap = ReadBoolVariant(v);
@@ -1759,17 +1784,73 @@ public partial class Settings : Node
 
     private static ComponentAudioOutputDefaultMode ParseAudioOutputMode(int value)
     {
-        return Enum.IsDefined(typeof(ComponentAudioOutputDefaultMode), value)
-            ? (ComponentAudioOutputDefaultMode)value
+        return TryParseEnum(value, out ComponentAudioOutputDefaultMode mode)
+            ? mode
             : ComponentAudioOutputDefaultMode.Preferred;
     }
 
     private static ComponentTargetLayerDefaultMode ParseTargetLayerMode(int value)
     {
-        return Enum.IsDefined(typeof(ComponentTargetLayerDefaultMode), value)
-            ? (ComponentTargetLayerDefaultMode)value
+        return TryParseEnum(value, out ComponentTargetLayerDefaultMode mode)
+            ? mode
             : ComponentTargetLayerDefaultMode.FirstAvailable;
     }
+
+    /// <summary>
+    /// Parses a numeric Variant into an enum, handling Godot long-backed enums
+    /// (e.g. <see cref="TextureRect.ExpandModeEnum"/>) where <see cref="Enum.IsDefined"/>
+    /// rejects a plain <see cref="int"/>.
+    /// </summary>
+    private static bool TryParseEnum<TEnum>(Variant value, out TEnum result) where TEnum : struct, Enum
+    {
+        result = default;
+        try
+        {
+            long raw = value.VariantType switch
+            {
+                Variant.Type.Int => value.AsInt64(),
+                Variant.Type.Float => (long)value.AsDouble(),
+                Variant.Type.String => long.TryParse(value.AsString(), out long p) ? p : long.MinValue,
+                _ => value.AsInt64()
+            };
+            if (raw == long.MinValue && value.VariantType == Variant.Type.String)
+                return false;
+            return TryParseEnum(raw, out result);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses an integer into an enum using the enum's actual underlying type
+    /// (int vs long) so <see cref="Enum.IsDefined"/> does not throw.
+    /// </summary>
+    private static bool TryParseEnum<TEnum>(long value, out TEnum result) where TEnum : struct, Enum
+    {
+        result = default;
+        try
+        {
+            Type enumType = typeof(TEnum);
+            Type underlying = Enum.GetUnderlyingType(enumType);
+            object boxed = Convert.ChangeType(value, underlying);
+            if (!Enum.IsDefined(enumType, boxed))
+                return false;
+            result = (TEnum)Enum.ToObject(enumType, boxed);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses a 32-bit int into an enum (convenience for non-Variant call sites).
+    /// </summary>
+    private static bool TryParseEnum<TEnum>(int value, out TEnum result) where TEnum : struct, Enum
+        => TryParseEnum((long)value, out result);
 
     /// <summary>
     /// TryGetValue that tolerates string / StringName keys after JSON history clones.

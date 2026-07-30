@@ -117,19 +117,28 @@ public class VideoComponent : ICueComponent
 
     /// <summary>
     /// Parses an int-like Variant to an enum value of type <typeparamref name="TEnum"/>.
+    /// Uses the enum's underlying type so Godot long-backed enums do not throw in
+    /// <see cref="Enum.IsDefined"/>.
     /// </summary>
     public static TEnum ParseEnumVariant<TEnum>(Variant value, TEnum fallback) where TEnum : struct, Enum
     {
         try
         {
-            int modeVal = value.VariantType switch
+            long modeVal = value.VariantType switch
             {
-                Variant.Type.Int => (int)value,
-                Variant.Type.Float => (int)(double)value,
-                Variant.Type.String => int.TryParse((string)value, out int parsed) ? parsed : Convert.ToInt32(fallback),
-                _ => (int)value
+                Variant.Type.Int => value.AsInt64(),
+                Variant.Type.Float => (long)value.AsDouble(),
+                Variant.Type.String => long.TryParse(value.AsString(), out long parsed)
+                    ? parsed
+                    : Convert.ToInt64(fallback),
+                _ => value.AsInt64()
             };
-            return Enum.IsDefined(typeof(TEnum), modeVal) ? (TEnum)(object)modeVal : fallback;
+            Type enumType = typeof(TEnum);
+            Type underlying = Enum.GetUnderlyingType(enumType);
+            object boxed = Convert.ChangeType(modeVal, underlying);
+            if (!Enum.IsDefined(enumType, boxed))
+                return fallback;
+            return (TEnum)Enum.ToObject(enumType, boxed);
         }
         catch
         {

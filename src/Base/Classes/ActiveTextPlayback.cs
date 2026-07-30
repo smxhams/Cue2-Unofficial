@@ -172,6 +172,8 @@ public partial class ActiveTextPlayback : Node
             }
         }
 
+        // Stay invisible until PlayAsync / FadeInAsync (content is applied at Init).
+        _fadeAlpha = 0f;
         RefreshVisualProperties();
         SetProcess(false);
 
@@ -251,6 +253,10 @@ public partial class ActiveTextPlayback : Node
             return;
         }
 
+        // Reveal at full opacity only when not mid fade-in (FadeInAsync pre-arms alpha to 0).
+        if (!_isFadingIn)
+            _fadeAlpha = 1f;
+
         _isPlaying = true;
         IsPaused = false;
         _elapsedAtPause = 0;
@@ -276,11 +282,12 @@ public partial class ActiveTextPlayback : Node
         _fadeCts = new CancellationTokenSource();
         var token = _fadeCts.Token;
 
+        // Arm zero opacity before PlayAsync enables process / presents.
         _isFadingIn = true;
         _isFadingOut = false;
         _fadeAlpha = 0f;
+        ApplyOpacityModulate();
         await PlayAsync();
-        CallDeferred(MethodName.ApplyOpacityModulate);
 
         var timer = Stopwatch.StartNew();
         try
@@ -289,14 +296,14 @@ public partial class ActiveTextPlayback : Node
             {
                 float t = (float)(timer.Elapsed.TotalSeconds / duration);
                 _fadeAlpha = Mathf.Clamp(t, 0f, 1f);
-                CallDeferred(MethodName.ApplyOpacityModulate);
+                ApplyOpacityModulate();
                 await Task.Delay(FadeUpdateIntervalMs, token);
             }
 
             if (!token.IsCancellationRequested && !IsStopped && !_isExiting)
             {
                 _fadeAlpha = 1f;
-                CallDeferred(MethodName.ApplyOpacityModulate);
+                ApplyOpacityModulate();
             }
         }
         catch (OperationCanceledException)

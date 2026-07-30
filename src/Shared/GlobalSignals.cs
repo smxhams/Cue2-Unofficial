@@ -126,6 +126,25 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
 
 	/// <summary>
+	/// Fired when master video output disable or blackout runtime state changes.
+	/// </summary>
+	/// <param name="disabled">True when all display windows are closed/hidden.</param>
+	/// <param name="blackout">True when layers are blacked out (windows still open).</param>
+	[Signal] public delegate void VideoOutputControlChangedEventHandler(bool disabled, bool blackout);
+
+	/// <summary>
+	/// Fired when the show-scoped output background colour changes.
+	/// </summary>
+	/// <param name="color">New background colour applied to output windows.</param>
+	[Signal] public delegate void OutputBackgroundColorChangedEventHandler(Color color);
+
+	/// <summary>
+	/// Fired when machine video performance prefs change (quality mode, preview, vsync, HW decode).
+	/// Listeners re-read from <c>UserDataManager</c>.
+	/// </summary>
+	[Signal] public delegate void VideoPlaybackPrefsChangedEventHandler();
+
+	/// <summary>
 	/// Fired when a single target layer's size or canvas position changes
 	/// (e.g. Translate Layer control animation). Lighter than <see cref="DisplaysChanged"/>.
 	/// </summary>
@@ -151,15 +170,25 @@ public partial class GlobalSignals : Node
 
 	public static event Action<string, int> Logger;
 
-	private HashSet<Node> _connectedTextFields = new HashSet<Node>();
+	/// <summary>Text fields wired for focus-gate + Esc/submit unfocus.</summary>
+	private readonly HashSet<Node> _connectedTextFields = new();
 
-	// The below checks all nodes for text edits and connects the signals for is they are focused. This is primarily to toggle input actions that clash with typing
+	/// <summary>Per-LineEdit hooks so they can be disconnected cleanly on free.</summary>
+	private readonly Dictionary<LineEdit, (Control.GuiInputEventHandler Gui, LineEdit.TextSubmittedEventHandler Submit)> _lineEditHooks = new();
+
+	/// <summary>Per-TextEdit Esc hooks.</summary>
+	private readonly Dictionary<TextEdit, Control.GuiInputEventHandler> _textEditHooks = new();
+
+	/// <summary>
+	/// Scans the tree for LineEdit/TextEdit and wires focus + Esc (and Enter unfocus for LineEdit).
+	/// Focus signals drive <see cref="InputActionsListener"/> so typing does not fire hotkeys.
+	/// </summary>
 	public override void _Ready()
 	{
 		// Scan for existing text fields at startup
 		ScanForTextFields(GetTree().Root);
 
-		// Listen for new nodes added dynamically
+		// Listen for new nodes added dynamically (inspectors, settings cards, SpinBox embeds, etc.)
 		GetTree().NodeAdded += OnNodeAdded;
 		GetTree().NodeRemoved += OnNodeRemoved;
 	}
@@ -169,66 +198,144 @@ public partial class GlobalSignals : Node
 		// TODO: This can be made static in the future, will require changing all calls everywhere though!
 		Logger?.Invoke("hi", 1);
 	}
-	
+
 	private void ScanForTextFields(Node node)
 	{
-		if (node is LineEdit || node is TextEdit)
-		{
+		if (node is LineEdit or TextEdit)
 			ConnectFocusSignals(node);
-		}
 
 		foreach (Node child in node.GetChildren())
-		{
 			ScanForTextFields(child);
-		}
 	}
 
 	private void OnNodeAdded(Node node)
 	{
 		if (node is LineEdit or TextEdit)
-		{
 			ConnectFocusSignals(node);
-		}
 	}
-	
+
 	private void OnNodeRemoved(Node node)
 	{
 		if (node is LineEdit or TextEdit)
-		{
-			DisonnectFocusSignals(node);
-		}
+			DisconnectFocusSignals(node);
 	}
 
+	/// <summary>
+	/// Wires focus tracking (hotkey gate) and keyboard unfocus helpers for a text field.
+	/// </summary>
 	private void ConnectFocusSignals(Node node)
 	{
-		if (node is Control textField && !_connectedTextFields.Contains(node))
+		if (node is not Control textField || _connectedTextFields.Contains(node))
+			return;
+
+		textField.FocusEntered += FocusEntered;
+		textField.FocusExited += FocusExited;
+
+		if (node is LineEdit lineEdit)
 		{
-			textField.FocusEntered += FocusEntered;
-			textField.FocusExited += FocusExited;
-			_connectedTextFields.Add(node);
+			// Esc → leave field; Enter/submit → leave field (consistent across the app).
+			Control.GuiInputEventHandler gui = @event => OnLineEditGuiInput(lineEdit, @event);
+			LineEdit.TextSubmittedEventHandler submit = _ => ReleaseLineEditFocus(lineEdit);
+			lineEdit.GuiInput += gui;
+			lineEdit.TextSubmitted += submit;
+			_lineEditHooks[lineEdit] = (gui, submit);
 		}
+		else if (node is TextEdit textEdit)
+		{
+			// Multi-line: Esc only (Enter inserts a newline).
+			Control.GuiInputEventHandler gui = @event => OnTextEditGuiInput(textEdit, @event);
+			textEdit.GuiInput += gui;
+			_textEditHooks[textEdit] = gui;
+		}
+
+		_connectedTextFields.Add(node);
 	}
-	
-	private void DisonnectFocusSignals(Node node)
+
+	/// <summary>
+	/// Unhooks focus and keyboard helpers when a text field leaves the tree.
+	/// </summary>
+	private void DisconnectFocusSignals(Node node)
 	{
-		if (_connectedTextFields.Contains(node) && node is Control textField)
+		if (!_connectedTextFields.Contains(node) || node is not Control textField)
+			return;
+
+		textField.FocusEntered -= FocusEntered;
+		textField.FocusExited -= FocusExited;
+
+		if (node is LineEdit lineEdit && _lineEditHooks.TryGetValue(lineEdit, out var lineHooks))
 		{
-			textField.FocusEntered -= FocusEntered;
-			textField.FocusExited -= FocusExited;
-			_connectedTextFields.Remove(node);
+			lineEdit.GuiInput -= lineHooks.Gui;
+			lineEdit.TextSubmitted -= lineHooks.Submit;
+			_lineEditHooks.Remove(lineEdit);
 		}
+		else if (node is TextEdit textEdit && _textEditHooks.TryGetValue(textEdit, out var textGui))
+		{
+			textEdit.GuiInput -= textGui;
+			_textEditHooks.Remove(textEdit);
+		}
+
+		_connectedTextFields.Remove(node);
+	}
+
+	private void OnLineEditGuiInput(LineEdit lineEdit, InputEvent @event)
+	{
+		if (!IsEscapePressed(@event) || !GodotObject.IsInstanceValid(lineEdit) || !lineEdit.HasFocus())
+			return;
+
+		ReleaseLineEditFocus(lineEdit);
+		lineEdit.GetViewport()?.SetInputAsHandled();
+	}
+
+	private void OnTextEditGuiInput(TextEdit textEdit, InputEvent @event)
+	{
+		if (!IsEscapePressed(@event) || !GodotObject.IsInstanceValid(textEdit) || !textEdit.HasFocus())
+			return;
+
+		textEdit.ReleaseFocus();
+		textEdit.GetViewport()?.SetInputAsHandled();
+	}
+
+	/// <summary>
+	/// True when Escape was just pressed (ignores key-repeat).
+	/// </summary>
+	private static bool IsEscapePressed(InputEvent @event)
+	{
+		if (@event is not InputEventKey key || !key.Pressed || key.Echo)
+			return false;
+
+		return key.Keycode == Key.Escape
+			|| key.PhysicalKeycode == Key.Escape
+			|| key.IsAction("ui_cancel");
+	}
+
+	/// <summary>
+	/// Ends edit mode and clears focus so InputMap listening can resume.
+	/// Deferred so Godot cannot re-grab focus on the same frame as TextSubmitted.
+	/// </summary>
+	/// <param name="lineEdit">LineEdit to unfocus.</param>
+	private static void ReleaseLineEditFocus(LineEdit lineEdit)
+	{
+		if (lineEdit == null || !GodotObject.IsInstanceValid(lineEdit))
+			return;
+
+		// Godot 4.4+: leave "editing" state explicitly (caret/IME), then clear focus.
+		if (lineEdit.HasMethod("unedit") && lineEdit.IsEditing())
+			lineEdit.Unedit();
+
+		if (lineEdit.HasFocus())
+			lineEdit.ReleaseFocus();
+
+		// Belt-and-braces: submit can race with engine re-focus on the same frame.
+		lineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 	}
 
 	private void FocusEntered()
 	{
 		EmitSignal(SignalName.TextEditFocusEntered);
-		GD.Print($"Not Listening");
 	}
 
 	private void FocusExited()
 	{
 		EmitSignal(SignalName.TextEditFocusExited);
-		GD.Print($"Listening");
 	}
-	
 }

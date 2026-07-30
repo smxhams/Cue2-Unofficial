@@ -422,7 +422,7 @@ public partial class SettingsOscListen : Control
 
     private void OnAllowlistTextSubmitted(string _)
     {
-        _allowlistLineEdit?.ReleaseFocus();
+        // Apply first (while still focused is fine); global LineEdit TextSubmitted also releases focus.
         OnAllowlistApplyPressed();
     }
 
@@ -431,7 +431,6 @@ public partial class SettingsOscListen : Control
         if (_isSyncingUi || _oscListen == null || _allowlistLineEdit == null) return;
         if (_historyManager?.IsRestoring == true) return;
 
-        _allowlistLineEdit.ReleaseFocus();
         string text = _allowlistLineEdit.Text ?? string.Empty;
         var parts = text.Split(new[] { ',', ';', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
         RecordHistory("Update OSC IP allowlist");
@@ -439,6 +438,11 @@ public partial class SettingsOscListen : Control
         // Refresh normalized display
         var list = _oscListen.AllowlistIps;
         _allowlistLineEdit.Text = list.Count == 0 ? string.Empty : string.Join(", ", list);
+        // Apply button has focus_mode=None so it does not take focus — release explicitly.
+        if (_allowlistLineEdit.IsEditing())
+            _allowlistLineEdit.Unedit();
+        _allowlistLineEdit.ReleaseFocus();
+        _allowlistLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             list.Count == 0
                 ? "OSC allowlist cleared (all IPs allowed)"

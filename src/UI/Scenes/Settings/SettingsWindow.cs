@@ -884,6 +884,9 @@ public partial class SettingsWindow : Window
 			"Audio" => "SettingsAudio",
 			"Audio Output Patch" => "AudioOutputPatch",
 			"Canvas Editor" => "CanvasEditor",
+			// Parent Video/Image hosts the general video output panel; legacy label kept for session restore.
+			"Video/Image" => "SettingsVideoOutput",
+			"Video Output" => "SettingsVideoOutput",
 			"Cue Lights" => "CueLights",
 			"OSC Connections" => "SettingsOscConnections",
 			"OSC Listener" => "SettingsOscListen",
@@ -918,9 +921,11 @@ public partial class SettingsWindow : Window
 		tiAudioOutputPatch.SetText(0, "Audio Output Patch");
 
 
-		// Output Devices
+		// Video / Image (parent shows general video output panel; Canvas Editor is topology)
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);
 		tiOutputDevices.SetText(0, "Video/Image");
+		tiOutputDevices.SetTooltipText(0,
+			"Disable/blackout, background colour, and machine video performance preferences.");
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
 		tiVideoDevice.SetText(0, "Canvas Editor");
 
@@ -958,7 +963,7 @@ public partial class SettingsWindow : Window
 		tiAudioCueDefaults.SetTooltipText(0, "Default volume, pan, loop, play count, and fades for new audio components.");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiVideoCueDefaults.SetText(0, "Video Defaults");
-		tiVideoCueDefaults.SetTooltipText(0, "Default layout, opacity, loop, embedded audio, image hold, and fades for new video components.");
+		tiVideoCueDefaults.SetTooltipText(0, "Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.");
 		TreeItem tiTextCueDefaults = _setTree.CreateItem(tiDefaults);
 		tiTextCueDefaults.SetText(0, "Text Defaults");
 		tiTextCueDefaults.SetTooltipText(0, "Default typography, alignment, duration, outline/background, and fades for new text components.");

@@ -37,12 +37,12 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     /// <summary>Short cosine fade-in after start/seek to avoid silence→sample discontinuities (pops).</summary>
     private const int DeclickRampMs = 8;
     private const int AudioSeekPrefetchMs = 800;
-    private const int VideoPrefetchTarget = 6;
-    private const int VideoPrefetchLowWater = 3;
-    /// <summary>Drop frames if more than this late vs master clock.</summary>
-    private const long MaxVideoLatenessUs = 80_000; // 80 ms
-    /// <summary>Present frame if within this early of master (half-frame-ish).</summary>
-    private const long PresentEarlyToleranceUs = 8_000;
+
+    /// <summary>
+    /// Soft quality knobs resolved from <see cref="UserDataManager.VideoQualityMode"/>.
+    /// Defaults match the previous hardcodes (Balanced).
+    /// </summary>
+    private VideoPresentTuning _presentTuning = VideoPresentTuning.ForMode(VideoQualityMode.Balanced);
 
     private VideoSourceDecoder _videoDecoder;
     private SubtitleSourceDecoder _subtitleDecoder;
@@ -88,7 +88,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private Dictionary<Control, TextureRect> _targetLayers = new();
 
     private readonly object _lock = new object();
-    private float _volume = 1.0f;
+    /// <summary>Master fade envelope (0–1). Held at 0 until PlayAsync / FadeInAsync arms presentation.</summary>
+    private float _volume = 0f;
 
     /// <summary>
     /// When set, replaces component audio level for this playback only (control fades).
@@ -115,7 +116,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     public bool IsPaused;
     public bool IsSeeking;
     public bool IsExiting;
-    private float _fadeAlpha = 1.0f;
+    /// <summary>Visual fade multiplier (0–1). Held at 0 until PlayAsync / FadeInAsync arms presentation.</summary>
+    private float _fadeAlpha = 0f;
     private CancellationTokenSource _fadeCts;
 
     private long _startTimeUs;
@@ -238,6 +240,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     public async Task InitAsync()
     {
         GD.Print("ActiveVideoPlayback:InitAsync - Initializing...");
+        RefreshPresentTuning();
         _currentPlayCount = 1;
 
         string mediaPath = ResolveMediaPath(_videoComponent.VideoFile);
@@ -250,7 +253,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         if (_startTimeUs > 0)
             _videoDecoder.Seek(_startTimeUs);
-        _videoDecoder.Prefetch(VideoPrefetchTarget);
+        _videoDecoder.Prefetch(_presentTuning.PrefetchTarget);
 
         int w = _videoDecoder.Info.Width;
         int h = _videoDecoder.Info.Height;
@@ -267,6 +270,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
         }
 
+        // Stay invisible until PlayAsync / FadeInAsync — Init assigns the shared texture early,
+        // so a non-zero modulate would flash the first decoded frame at full opacity.
+        _fadeAlpha = 0f;
+        SetVolume(0f);
         RefreshVisualProperties();
 
         if (_targetLayers.Count == 0)
@@ -316,6 +323,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         if (frame?.Rgba == null || _isExiting) return;
         if (!IsInstanceValid(_godotImage) || !IsInstanceValid(_godotTexture)) return;
 
+        // Apply fade/opacity BEFORE uploading pixels. TextureRects already hold this
+        // ImageTexture from Init — Update() would otherwise flash a full-opacity frame.
+        ApplyOpacityModulate();
+
         int needed = frame.Width * frame.Height * 4;
         if (_displayRgba == null || _displayRgba.Length < needed)
             _displayRgba = new byte[needed];
@@ -330,7 +341,6 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _godotImage.SetData(frame.Width, frame.Height, false, Image.Format.Rgba8, _displayRgba);
         _godotTexture.Update(_godotImage);
 
-        ApplyOpacityModulate();
         foreach (var layer in _targetLayers)
         {
             if (layer.Value == null || !IsInstanceValid(layer.Value))
@@ -680,12 +690,22 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             _wallClock.Restart();
             if (_videoComponent.IsImage)
                 _imageFramePresented = false;
+
+            // Reveal at full level only when not mid fade-in (FadeInAsync pre-arms alpha/volume to 0).
+            if (!_isFadingIn)
+            {
+                _fadeAlpha = 1f;
+                _volume = 1f;
+            }
         }
 
         if (!IsInsideTree())
         {
             GD.PrintErr("ActiveVideoPlayback:PlayAsync - Node is not in the scene tree; _Process will not run and video will not display. Parent must AddChild(this) before Play.");
         }
+
+        // Push modulate before any present/prefill so the first visible frame is not full-opacity.
+        ApplyOpacityModulate();
 
         SetProcess(true);
         StartVideoPrefetchLoop();
@@ -763,8 +783,11 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             return;
         }
 
+        // Re-read machine quality prefs cheaply each tick so mid-show changes apply without restart.
+        RefreshPresentTuning();
+
         int presented = 0;
-        const int maxPresentPerTick = 4;
+        int maxPresentPerTick = _presentTuning.MaxPresentPerTick;
         while (presented < maxPresentPerTick)
         {
             if (!_videoDecoder.TryPeekPts(out long nextPts))
@@ -775,13 +798,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             }
 
             long lateness = masterUs - nextPts;
-            if (lateness < -PresentEarlyToleranceUs)
+            if (lateness < -_presentTuning.PresentEarlyToleranceUs)
                 break;
 
             if (!_videoDecoder.ReadFrame(out VideoFrame frame))
                 break;
 
-            if (lateness > MaxVideoLatenessUs && _videoDecoder.TryPeekPts(out long peek2) && peek2 <= masterUs)
+            if (lateness > _presentTuning.MaxLatenessUs && _videoDecoder.TryPeekPts(out long peek2) && peek2 <= masterUs)
             {
                 _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
                 presented++;
@@ -791,6 +814,25 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             PresentFrame(frame);
             _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
             presented++;
+        }
+    }
+
+    /// <summary>
+    /// Pulls current machine quality mode into present/prefetch knobs.
+    /// </summary>
+    private void RefreshPresentTuning()
+    {
+        try
+        {
+            var udm = GetNodeOrNull<GlobalData>("/root/GlobalData")?.UserDataManager;
+            if (udm != null)
+                _presentTuning = udm.GetVideoPresentTuning();
+            else
+                _presentTuning = VideoPresentTuning.ForMode(VideoQualityMode.Balanced);
+        }
+        catch
+        {
+            _presentTuning = VideoPresentTuning.ForMode(VideoQualityMode.Balanced);
         }
     }
 
@@ -981,7 +1023,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             }
 
             _videoDecoder?.Seek(timestampUs);
-            _videoDecoder?.Prefetch(VideoPrefetchTarget);
+            _videoDecoder?.Prefetch(_presentTuning.PrefetchTarget);
 
             if (_audioDecoder != null)
             {
@@ -1036,10 +1078,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                     }
 
                     if (_videoDecoder != null &&
-                        _videoDecoder.BufferedFrames < VideoPrefetchLowWater &&
+                        _videoDecoder.BufferedFrames < _presentTuning.PrefetchLowWater &&
                         !_videoDecoder.EndOfStream)
                     {
-                        _videoDecoder.Prefetch(VideoPrefetchTarget);
+                        _videoDecoder.Prefetch(_presentTuning.PrefetchTarget);
                     }
                     Thread.Sleep(4);
                 }
@@ -1398,17 +1440,17 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (_isFadingIn || _isFadingOut) return;
             _isFadingIn = true;
             _fadeCts = new CancellationTokenSource();
+            // Arm silent state before PlayAsync presents or prefills audio.
+            _fadeAlpha = 0f;
+            _volume = 0f;
         }
 
         float startVol = 0f;
         float endVol = 1.0f;
-        // Start fully faded so volume + visual opacity both ramp up.
-        _fadeAlpha = 0f;
         float startAlpha = 0f;
-        Stopwatch timer = Stopwatch.StartNew();
-        SetVolume(0f);
-        await PlayAsync();
         ApplyOpacityModulate();
+        Stopwatch timer = Stopwatch.StartNew();
+        await PlayAsync();
 
         try
         {

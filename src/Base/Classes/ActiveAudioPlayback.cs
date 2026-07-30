@@ -45,7 +45,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     private readonly AudioDevices _audioDevices;
     private readonly object _lock = new object();
 
-    private float _volume = 1.0f;
+    /// <summary>Master fade envelope (0–1). Starts at 0 so streams cannot emit at full level before Play/FadeIn arms.</summary>
+    private float _volume = 0f;
     private bool _isFadingOut;
     private bool _isFadingIn;
     /// <summary>True once natural end-fade has been scheduled (prevents repeated deferred arms).</summary>
@@ -305,10 +306,14 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         double fadeIn = fadeInDuration ?? _audioComponent.FadeInDuration;
         if (fadeIn > 1e-9)
         {
+            // Zero master level before any PCM is pushed (FadeInAsync also sets this; do it here
+            // so a slow await cannot race a prefill path later).
+            SetVolume(0f);
             await FadeInAsync(fadeIn);
         }
         else
         {
+            SetVolume(1f);
             ArmDeclickRamp();
             PrefillStreams();
             StartFillLoop();
@@ -934,15 +939,15 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             if (_isFadingIn || _isFadingOut) return;
             _isFadingIn = true;
             _fadeCts = new CancellationTokenSource();
+            _volume = 0f;
         }
 
         float startVol = 0f;
         float endVol = 1.0f;
-        Stopwatch timer = Stopwatch.StartNew();
-        SetVolume(0f);
-        // Volume fade-in already starts at 0; still prime the queue to avoid underrun pops mid-fade.
+        // Master level is already 0 — prefill silence-level PCM, then ramp after the queue is armed.
         PrefillStreams();
         StartFillLoop();
+        Stopwatch timer = Stopwatch.StartNew();
 
         try
         {

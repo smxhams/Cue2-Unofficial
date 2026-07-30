@@ -196,20 +196,87 @@ public partial class VideoPreviewer : Control
     private void Present(VideoFrame frame)
     {
         if (frame?.Rgba == null || _isExiting) return;
-        int needed = frame.Width * frame.Height * 4;
-        if (_displayRgba == null || _displayRgba.Length < needed)
-            _displayRgba = new byte[needed];
-        Buffer.BlockCopy(frame.Rgba, 0, _displayRgba, 0, needed);
 
-        if (_godotImage.GetWidth() != frame.Width || _godotImage.GetHeight() != frame.Height)
+        // Inspector-only scale; house outputs never read this path.
+        float scale = ResolvePreviewScale();
+        int srcW = frame.Width;
+        int srcH = frame.Height;
+        int dstW = Math.Max(1, (int)Math.Round(srcW * scale));
+        int dstH = Math.Max(1, (int)Math.Round(srcH * scale));
+
+        // Full-quality path: present source buffer directly.
+        if (dstW == srcW && dstH == srcH)
         {
-            _godotImage = Image.CreateEmpty(frame.Width, frame.Height, false, Image.Format.Rgba8);
-            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
-            _previewTextRect.Texture = _godotTexture;
+            int needed = srcW * srcH * 4;
+            if (_displayRgba == null || _displayRgba.Length < needed)
+                _displayRgba = new byte[needed];
+            Buffer.BlockCopy(frame.Rgba, 0, _displayRgba, 0, needed);
+
+            if (_godotImage == null || !IsInstanceValid(_godotImage)
+                || _godotImage.GetWidth() != srcW || _godotImage.GetHeight() != srcH)
+            {
+                _godotImage = Image.CreateEmpty(srcW, srcH, false, Image.Format.Rgba8);
+                _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+                if (_previewTextRect != null && IsInstanceValid(_previewTextRect))
+                    _previewTextRect.Texture = _godotTexture;
+            }
+
+            _godotImage.SetData(srcW, srcH, false, Image.Format.Rgba8, _displayRgba);
+            _godotTexture.Update(_godotImage);
+            return;
         }
 
-        _godotImage.SetData(frame.Width, frame.Height, false, Image.Format.Rgba8, _displayRgba);
+        // Downscale for laptop programming sessions (nearest-neighbour, cheap).
+        int neededDst = dstW * dstH * 4;
+        if (_displayRgba == null || _displayRgba.Length < neededDst)
+            _displayRgba = new byte[neededDst];
+
+        byte[] src = frame.Rgba;
+        for (int y = 0; y < dstH; y++)
+        {
+            int srcY = Math.Min(srcH - 1, (y * srcH) / dstH);
+            int srcRow = srcY * srcW * 4;
+            int dstRow = y * dstW * 4;
+            for (int x = 0; x < dstW; x++)
+            {
+                int srcX = Math.Min(srcW - 1, (x * srcW) / dstW);
+                int si = srcRow + srcX * 4;
+                int di = dstRow + x * 4;
+                _displayRgba[di] = src[si];
+                _displayRgba[di + 1] = src[si + 1];
+                _displayRgba[di + 2] = src[si + 2];
+                _displayRgba[di + 3] = src[si + 3];
+            }
+        }
+
+        if (_godotImage == null || !IsInstanceValid(_godotImage)
+            || _godotImage.GetWidth() != dstW || _godotImage.GetHeight() != dstH)
+        {
+            _godotImage = Image.CreateEmpty(dstW, dstH, false, Image.Format.Rgba8);
+            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+            if (_previewTextRect != null && IsInstanceValid(_previewTextRect))
+                _previewTextRect.Texture = _godotTexture;
+        }
+
+        _godotImage.SetData(dstW, dstH, false, Image.Format.Rgba8, _displayRgba);
         _godotTexture.Update(_godotImage);
+    }
+
+    /// <summary>
+    /// Reads machine preview quality pref (defaults to full resolution).
+    /// </summary>
+    private float ResolvePreviewScale()
+    {
+        try
+        {
+            var quality = _globalData?.UserDataManager?.VideoPreviewQuality
+                ?? Cue2.Base.Classes.VideoPreviewQuality.Full;
+            return Cue2.Base.Classes.VideoPresentTuning.PreviewScale(quality);
+        }
+        catch
+        {
+            return 1f;
+        }
     }
 
     private void OnPlayPausePressed()

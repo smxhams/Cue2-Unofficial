@@ -1,6 +1,7 @@
 using Godot;
 using System;
 using System.Linq;
+using Cue2.Base.Classes;
 using Cue2.Shared;
 using Cue2.UI.Utilities;
 using Godot.Collections;
@@ -91,6 +92,12 @@ public partial class VideoOutputDevice : Window, IDisposable
 
     private Control _sceneRoot;
 
+    /// <summary>Solid colour behind all layers (show-scoped output background).</summary>
+    private ColorRect _backgroundRect;
+
+    /// <summary>Full-window blackout overlay above layers (runtime operator control).</summary>
+    private ColorRect _blackoutOverlay;
+
     private TestPattern _testPattern;
     private Dictionary<int, TestPattern> _layerTestPatterns = new();
     
@@ -137,6 +144,11 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// Last canvas-region size applied as <see cref="Window.ContentScaleSize"/> for portable windows.
     /// </summary>
     private Vector2I _lastPortableContentScaleSize = new Vector2I(int.MinValue, int.MinValue);
+
+    /// <summary>
+    /// Last requested vsync mode (re-applied after native window placement).
+    /// </summary>
+    private OutputVSyncMode _pendingVSyncMode = OutputVSyncMode.PreferVSync;
 
     public VideoOutputDevice()
     {
@@ -212,6 +224,14 @@ public partial class VideoOutputDevice : Window, IDisposable
         UpdateOutputRegion();
     }
 
+    /// <summary>
+    /// Hides this output window without changing assignment (used by master disable output).
+    /// </summary>
+    public void ForceHideForDisable()
+    {
+        HideScreenWindow();
+    }
+
     private void InitSceneRoot()
     {
         // Full-rect root so layer content always fills the Window content viewport.
@@ -223,6 +243,108 @@ public partial class VideoOutputDevice : Window, IDisposable
         };
         AddChild(_sceneRoot);
         _sceneRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
+        // Background sits under layers on the content root.
+        _backgroundRect = new ColorRect
+        {
+            Name = "OutputBackground",
+            Color = Colors.Black,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        _sceneRoot.AddChild(_backgroundRect);
+        _backgroundRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
+        // Blackout is a direct Window child so it also covers screen/layer test patterns.
+        _blackoutOverlay = new ColorRect
+        {
+            Name = "OutputBlackout",
+            Color = Colors.Black,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+            ZIndex = 4096,
+        };
+        AddChild(_blackoutOverlay);
+        _blackoutOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+    }
+
+    /// <summary>
+    /// Sets the solid colour drawn behind all video/text layers on this output.
+    /// </summary>
+    /// <param name="color">Background colour (alpha is honoured).</param>
+    public void SetOutputBackgroundColor(Color color)
+    {
+        if (_backgroundRect == null || !IsInstanceValid(_backgroundRect))
+            return;
+        _backgroundRect.Color = color;
+    }
+
+    /// <summary>
+    /// Shows or hides the full-window blackout overlay (layers stay loaded underneath).
+    /// </summary>
+    /// <param name="enabled">True to black out this output.</param>
+    public void SetBlackout(bool enabled)
+    {
+        if (_blackoutOverlay == null || !IsInstanceValid(_blackoutOverlay))
+            return;
+        _blackoutOverlay.Visible = enabled;
+        if (enabled)
+        {
+            // Keep blackout above scene root and any test-pattern children.
+            MoveChild(_blackoutOverlay, GetChildCount() - 1);
+        }
+    }
+
+    /// <summary>
+    /// Applies vsync / frame-pacing mode to this output window via DisplayServer.
+    /// </summary>
+    /// <param name="mode">Machine preference for output present behaviour.</param>
+    /// <remarks>
+    /// Godot exposes vsync per native window id (not as a Window node property in 4.6 Mono).
+    /// Effectiveness depends on the rendering backend; mailbox may fall back to enabled.
+    /// </remarks>
+    public void ApplyVSyncMode(OutputVSyncMode mode)
+    {
+        _pendingVSyncMode = mode;
+        ApplyPendingVSyncMode();
+    }
+
+    /// <summary>
+    /// Applies <see cref="_pendingVSyncMode"/> once a native window id exists.
+    /// </summary>
+    private void ApplyPendingVSyncMode()
+    {
+        if (!TryGetNativeWindowId(out int windowId))
+            return;
+
+        var dsMode = _pendingVSyncMode switch
+        {
+            OutputVSyncMode.Off => DisplayServer.VSyncMode.Disabled,
+            OutputVSyncMode.LowLatency => DisplayServer.VSyncMode.Mailbox,
+            _ => DisplayServer.VSyncMode.Enabled
+        };
+        try
+        {
+            DisplayServer.WindowSetVsyncMode(dsMode, windowId);
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"VideoOutputDevice:ApplyVSyncMode - DisplayServer vsync failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// True when global output disable is active (house displays must stay closed).
+    /// </summary>
+    private static bool IsGlobalOutputDisabled()
+    {
+        try
+        {
+            return DisplaysManager.OutputDisabled;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -272,8 +394,12 @@ public partial class VideoOutputDevice : Window, IDisposable
 
         // Also reorder children so draw order is deterministic even without z-index.
         // Bottom of stack first, top last (later siblings paint above).
+        // Background stays index 0 under layer hosts.
         if (_sceneRoot == null || !IsInstanceValid(_sceneRoot))
             return;
+
+        if (_backgroundRect != null && IsInstanceValid(_backgroundRect))
+            _sceneRoot.MoveChild(_backgroundRect, 0);
 
         var ordered = _activeLayers
             .Where(kv => kv.Key != null && IsInstanceValid(kv.Key))
@@ -286,7 +412,7 @@ public partial class VideoOutputDevice : Window, IDisposable
             .ToList();
 
         for (int i = 0; i < ordered.Count; i++)
-            _sceneRoot.MoveChild(ordered[i], i);
+            _sceneRoot.MoveChild(ordered[i], i + 1);
     }
 
     /// <summary>
@@ -520,6 +646,13 @@ public partial class VideoOutputDevice : Window, IDisposable
             return;
         }
 
+        // Master disable closes all house displays without destroying the canvas model.
+        if (IsGlobalOutputDisabled())
+        {
+            HideScreenWindow();
+            return;
+        }
+
         if (IsVirtual)
         {
             HideScreenWindow();
@@ -544,20 +677,22 @@ public partial class VideoOutputDevice : Window, IDisposable
             var intendedSize = (Vector2I)clippedRect.Size;
 
             // In-place test pattern update (shared by physical + window paths)
-            if (_testPattern != null)
-            {
-                _testPattern.PatternSize = OutputSize;
-                _testPattern.PatternPosition = Vector2I.Zero;
-                _testPattern.QueueRedraw();
-            }
+            if (_testPattern != null && GodotObject.IsInstanceValid(_testPattern))
+                _testPattern.ApplyLayout(OutputSize, Vector2I.Zero, OutputName);
 
             if (IsWindow)
             {
                 UpdatePortableWindowRegion(clippedRect, intendedSize);
-                return;
+            }
+            else
+            {
+                UpdatePhysicalMonitorRegion(clippedRect, intendedSize);
             }
 
-            UpdatePhysicalMonitorRegion(clippedRect, intendedSize);
+            // Native window id exists after placement — re-assert vsync + blackout stacking.
+            ApplyPendingVSyncMode();
+            if (_blackoutOverlay != null && IsInstanceValid(_blackoutOverlay) && _blackoutOverlay.Visible)
+                MoveChild(_blackoutOverlay, GetChildCount() - 1);
         }
         catch (Exception ex)
         {
@@ -932,76 +1067,103 @@ public partial class VideoOutputDevice : Window, IDisposable
         _lastWindowSize = windowSize;
     }
 
+    /// <summary>
+    /// Enables or disables the full-screen test pattern for this output.
+    /// </summary>
+    /// <param name="toggle">True to show; false to remove.</param>
     public void ToggleTestPattern(bool toggle)
     {
         SetTestPatternRect(toggle, new Rect2(Vector2.Zero, OutputSize));
     }
 
+    /// <summary>
+    /// Shows, updates, or removes the screen-level test pattern.
+    /// </summary>
+    /// <param name="enable">True to show/update; false to remove.</param>
+    /// <param name="rect">Local rect for the pattern (usually full <see cref="OutputSize"/>).</param>
     public void SetTestPatternRect(bool enable, Rect2 rect)
     {
         if (enable)
         {
-            if (_testPattern == null)
+            Vector2I size = (Vector2I)rect.Size;
+            Vector2I pos = (Vector2I)rect.Position;
+            if (_testPattern == null || !GodotObject.IsInstanceValid(_testPattern))
             {
-                GD.Print($"VideoOutputDevice:SetTestPatternRect - Adding test pattern to {OutputName} at {rect}.");
-                _testPattern = new TestPattern((Vector2I)rect.Size, (Vector2I)rect.Position, OutputName);
+                _testPattern = new TestPattern(size, pos, OutputName);
                 AddChild(_testPattern);
             }
             else
             {
-                _testPattern.PatternSize = (Vector2I)rect.Size;
-                _testPattern.PatternPosition = (Vector2I)rect.Position;
-                _testPattern.QueueRedraw();
-                GD.Print($"VideoOutputDevice:SetTestPatternRect - Updating test pattern to {rect}.");
+                _testPattern.ApplyLayout(size, pos, OutputName);
             }
         }
-        else
+        else if (_testPattern != null)
         {
-            if (_testPattern != null)
+            if (GodotObject.IsInstanceValid(_testPattern))
             {
-                RemoveChild(_testPattern);
+                if (_testPattern.GetParent() == this)
+                    RemoveChild(_testPattern);
                 _testPattern.QueueFree();
-                _testPattern = null;
-                GD.Print($"VideoOutputDevice:SetTestPatternRect - Removing test pattern from {OutputName}.");
             }
+            _testPattern = null;
         }
     }
 
+    /// <summary>
+    /// Adds or updates a layer test pattern at the given local rect.
+    /// </summary>
+    /// <param name="layerId">Layer identity.</param>
+    /// <param name="layerName">Label drawn on the pattern.</param>
+    /// <param name="rect">Rect in this output's local coordinates.</param>
     public void AddLayerTestPattern(int layerId, string layerName, Rect2 rect)
     {
-        if (!_layerTestPatterns.ContainsKey(layerId))
+        Vector2I size = (Vector2I)rect.Size;
+        Vector2I pos = (Vector2I)rect.Position;
+
+        if (_layerTestPatterns.TryGetValue(layerId, out var existing)
+            && existing != null && GodotObject.IsInstanceValid(existing))
         {
-            GD.Print($"VideoOutputDevice:AddLayerTestPattern - Adding layer test pattern '{layerName}' to {OutputName} at {rect}.");
-            var tp = new TestPattern((Vector2I)rect.Size, (Vector2I)rect.Position, layerName);
-            AddChild(tp);
-            _layerTestPatterns[layerId] = tp;
+            existing.ApplyLayout(size, pos, layerName);
+            return;
         }
-        else
-        {
-            var tp = _layerTestPatterns[layerId];
-            tp.PatternSize = (Vector2I)rect.Size;
-            tp.PatternPosition = (Vector2I)rect.Position;
-            tp.Position = (Vector2I)rect.Position;
-            tp.QueueRedraw();
-            GD.Print($"VideoOutputDevice:AddLayerTestPattern - Updating layer test pattern '{layerName}' to {rect}.");
-        }
+
+        var tp = new TestPattern(size, pos, layerName);
+        AddChild(tp);
+        _layerTestPatterns[layerId] = tp;
     }
 
+    /// <summary>
+    /// Removes a layer test pattern if present.
+    /// </summary>
+    /// <param name="layerId">Layer identity.</param>
     public void RemoveLayerTestPattern(int layerId)
     {
-        if (_layerTestPatterns.TryGetValue(layerId, out var tp))
+        if (!_layerTestPatterns.TryGetValue(layerId, out var tp))
+            return;
+
+        _layerTestPatterns.Remove(layerId);
+        if (tp != null && GodotObject.IsInstanceValid(tp))
         {
-            RemoveChild(tp);
+            if (tp.GetParent() == this)
+                RemoveChild(tp);
             tp.QueueFree();
-            _layerTestPatterns.Remove(layerId);
-            GD.Print($"VideoOutputDevice:RemoveLayerTestPattern - Removing layer test pattern for layer ID {layerId} from {OutputName}.");
         }
     }
 
-    public bool TestPatternStatus()
+    /// <summary>
+    /// True when the screen-level test pattern is currently shown.
+    /// </summary>
+    public bool TestPatternStatus() =>
+        _testPattern != null && GodotObject.IsInstanceValid(_testPattern);
+
+    /// <summary>
+    /// Refreshes the screen-level test pattern size to match <see cref="OutputSize"/> (if enabled).
+    /// </summary>
+    public void RefreshScreenTestPattern()
     {
-        if (_testPattern != null) return true;
-        return false;
+        if (!TestPatternStatus())
+            return;
+        SetTestPatternRect(true, new Rect2(Vector2.Zero, OutputSize));
     }
 
     public void SetTransparent(bool state)

@@ -230,14 +230,15 @@ layout_mode = 2
 [node name="ImageDurationLabel" type="Label" parent="VBoxContainer/ImageDurationRow" unique_id=39442860]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-text = "Image hold"
+text = "Image Duration"
 vertical_alignment = 1
+tooltip_text = "Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop."
 
 [node name="ImageDurationInput" type="LineEdit" parent="VBoxContainer/ImageDurationRow" unique_id=386622885]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-tooltip_text = "Default hold duration for still images (0 or 'Until stopped' = stay until stop)."
+tooltip_text = "Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop."
 text = "Until stopped"
 alignment = 1
 

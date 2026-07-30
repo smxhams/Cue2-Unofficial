@@ -68,6 +68,7 @@ public static class SettingsExport
             "CueDefaults", "AudioDefaults", "VideoDefaults", "TextDefaults"),
         new("AudioPatch", "Audio Output Patch", "AudioPatch", "AudioDevices"),
         new("Displays", "Canvas / Displays", "Displays"),
+        new("VideoOutput", "Video Output", "OutputBackgroundColor"),
         new("CueLights", "Cue Lights",
             "CueLights", "CueLightIdleColour", "CueLightGoColour",
             "CueLightStandbyColour", "CueLightCountInColour", "CueLightBrightness"),

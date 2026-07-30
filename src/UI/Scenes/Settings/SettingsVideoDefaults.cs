@@ -977,7 +977,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             return;
         }
 
-        RecordHistory("Change default image hold duration");
+        RecordHistory("Change default image duration");
         _globalData.Settings.VideoDefaultImageDuration = seconds;
         UpdateImageDurationResetButton();
     }
@@ -992,7 +992,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             return;
         }
 
-        RecordHistory("Reset default image hold duration");
+        RecordHistory("Reset default image duration");
         _globalData.Settings.VideoDefaultImageDuration = AppSettings.SystemDefaultVideoImageDuration;
         SyncSettings();
     }
@@ -1004,7 +1004,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             (float)AppSettings.SystemDefaultVideoImageDuration);
         _imageDurationResetButton.Visible = !atDefault;
         if (!atDefault)
-            _imageDurationResetButton.TooltipText = "Reset to default: Until stopped";
+            _imageDurationResetButton.TooltipText = "Reset to default: Until stopped (images only)";
     }
 
     // ── Fades ──────────────────────────────────────────────────────────────

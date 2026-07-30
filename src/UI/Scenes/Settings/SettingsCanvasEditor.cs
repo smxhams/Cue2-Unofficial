@@ -1059,8 +1059,9 @@ public partial class SettingsCanvasEditor : Control
                 return;
             screen.CanvasPosition = pos;
             screen.OutputSize = size;
-            // Defer OS window resize until drag ends, but keep live video rects in screen space.
+            // Defer OS window resize until drag ends, but keep live video + test patterns in sync.
             screen.UpdateAllLayerDisplayRects();
+            _displaysManager.RefreshTestPatternsLive(outputId: _selectedScreenId);
         }
         else if (_selectionKind == SelectionKind.Layer)
         {
@@ -1069,9 +1070,10 @@ public partial class SettingsCanvasEditor : Control
                 return;
             layer.CanvasPosition = pos;
             layer.Size = size;
-            // Push geometry to playing video TextureRects on every output (matches test patterns).
+            // Push geometry to playing video TextureRects and layer test patterns on every output.
             foreach (var output in DisplaysManager.Outputs)
                 output.UpdateLayerDisplayRect(_selectedLayerId);
+            _displaysManager.RefreshTestPatternsLive(layerId: _selectedLayerId);
         }
         else
         {

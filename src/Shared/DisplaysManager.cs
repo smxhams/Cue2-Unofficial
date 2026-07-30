@@ -30,7 +30,20 @@ public partial class DisplaysManager : Node
     public static Canvas Canvas;
     
     private GlobalSignals _globalSignals;
+    private GlobalData _globalData;
     private PackedScene _videoLayer;
+
+    /// <summary>
+    /// When true, all non-virtual output windows are forced closed/hidden without
+    /// destroying the canvas/screen model. Runtime-only (not saved with the show).
+    /// </summary>
+    public static bool OutputDisabled { get; private set; }
+
+    /// <summary>
+    /// When true, a full-window black overlay hides all layers on every output while
+    /// windows remain open. Runtime-only (not saved with the show).
+    /// </summary>
+    public static bool OutputBlackout { get; private set; }
 
     /// <summary>
     /// List of active screens (video output devices). Each screen maps a canvas region
@@ -51,6 +64,7 @@ public partial class DisplaysManager : Node
     public override void _Ready()
     {
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         Canvas = new Canvas();
 
         // Add default layer and a virtual screen
@@ -58,6 +72,147 @@ public partial class DisplaysManager : Node
         EnsureDefaultScreen();
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
+    }
+
+    /// <summary>
+    /// Enables or disables all house display windows (closes them without clearing topology).
+    /// </summary>
+    /// <param name="disabled">True to hide/close outputs; false to restore placement.</param>
+    public void SetOutputDisabled(bool disabled)
+    {
+        if (OutputDisabled == disabled)
+            return;
+
+        OutputDisabled = disabled;
+        if (disabled)
+        {
+            foreach (var output in Outputs.ToList())
+            {
+                if (output == null || !GodotObject.IsInstanceValid(output))
+                    continue;
+                output.ForceHideForDisable();
+            }
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "DisplaysManager: Output disabled — all display windows closed.", 1);
+        }
+        else
+        {
+            // Re-place physical / window outputs; virtual stays hidden.
+            foreach (var output in Outputs.ToList())
+            {
+                if (output == null || !GodotObject.IsInstanceValid(output))
+                    continue;
+                if (output.IsVirtual)
+                    continue;
+                if (output.IsWindow)
+                    output.ClearWindowDismissed();
+                output.ForceRefreshOutput();
+            }
+            ApplyOutputPresentationState();
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "DisplaysManager: Output re-enabled — display windows restored.", 0);
+        }
+
+        EmitOutputControlChanged();
+    }
+
+    /// <summary>
+    /// Enables or disables master blackout on all outputs (windows stay open).
+    /// </summary>
+    /// <param name="blackout">True to black out all layers; false to reveal them.</param>
+    public void SetOutputBlackout(bool blackout)
+    {
+        if (OutputBlackout == blackout)
+            return;
+
+        OutputBlackout = blackout;
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+            output.SetBlackout(blackout);
+        }
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            blackout
+                ? "DisplaysManager: Output blackout ON."
+                : "DisplaysManager: Output blackout OFF.",
+            blackout ? 1 : 0);
+        EmitOutputControlChanged();
+    }
+
+    /// <summary>
+    /// Clears runtime disable/blackout (e.g. new session / show load). Does not change topology.
+    /// </summary>
+    public void ClearRuntimeOutputControls()
+    {
+        bool changed = OutputDisabled || OutputBlackout;
+        OutputDisabled = false;
+        OutputBlackout = false;
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+            output.SetBlackout(false);
+        }
+
+        if (changed)
+            EmitOutputControlChanged();
+    }
+
+    /// <summary>
+    /// Applies show background colour and machine vsync prefs to every output window.
+    /// </summary>
+    public void ApplyOutputPresentationState()
+    {
+        Color bg = _globalData?.Settings?.OutputBackgroundColor ?? Colors.Black;
+        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+            ?? OutputVSyncMode.PreferVSync;
+
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+            output.SetOutputBackgroundColor(bg);
+            output.SetBlackout(OutputBlackout);
+            output.ApplyVSyncMode(vsync);
+        }
+    }
+
+    /// <summary>
+    /// Applies the show-scoped output background colour to all live windows.
+    /// </summary>
+    /// <param name="color">Background colour behind layers.</param>
+    public void ApplyOutputBackgroundColor(Color color)
+    {
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+            output.SetOutputBackgroundColor(color);
+        }
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.OutputBackgroundColorChanged), color);
+    }
+
+    /// <summary>
+    /// Re-applies machine vsync preference to all live output windows.
+    /// </summary>
+    public void ApplyOutputVSyncPreference()
+    {
+        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+            ?? OutputVSyncMode.PreferVSync;
+        foreach (var output in Outputs.ToList())
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+            output.ApplyVSyncMode(vsync);
+        }
+    }
+
+    private void EmitOutputControlChanged()
+    {
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.VideoOutputControlChanged),
+            OutputDisabled, OutputBlackout);
     }
 
     /// <summary>
@@ -103,6 +258,8 @@ public partial class DisplaysManager : Node
 
         UpdateAllLayerTestPatterns();
         ApplyLayerDrawOrderToOutputs();
+        ClearRuntimeOutputControls();
+        ApplyOutputPresentationState();
 
         _globalSignals?.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), Canvas.CanvasSize);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -163,17 +320,37 @@ public partial class DisplaysManager : Node
         
         Outputs.Add(output);
         // Virtual screens stay hidden; physical / window screens show via UpdateOutputRegion.
+        // Master disable keeps house windows closed even for newly added screens.
         if (output.IsWindow)
             output.ClearWindowDismissed();
-        if (!output.IsVirtual)
+        if (!output.IsVirtual && !OutputDisabled)
             output.Show();
         output.SetCanvasReference(Canvas);
+        ApplyPresentationToOutput(output);
         UpdateAllLayerTestPatterns();
 
         string dest = GetOutputDestinationLabel(output);
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"DisplaysManager: Added screen '{output.OutputName}' ({dest}).", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         return output;
+    }
+
+    /// <summary>
+    /// Applies background colour, blackout, and vsync prefs to a single output.
+    /// </summary>
+    private void ApplyPresentationToOutput(VideoOutputDevice output)
+    {
+        if (output == null || !GodotObject.IsInstanceValid(output))
+            return;
+
+        Color bg = _globalData?.Settings?.OutputBackgroundColor ?? Colors.Black;
+        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+            ?? OutputVSyncMode.PreferVSync;
+        output.SetOutputBackgroundColor(bg);
+        output.SetBlackout(OutputBlackout);
+        output.ApplyVSyncMode(vsync);
+        if (OutputDisabled)
+            output.ForceHideForDisable();
     }
 
     /// <summary>
@@ -190,7 +367,7 @@ public partial class DisplaysManager : Node
 
         output.TargetMonitor = monitorIndex;
         // Force a full region refresh when switching destinations
-        if (output.IsVirtual)
+        if (output.IsVirtual || OutputDisabled)
         {
             output.Hide();
         }
@@ -232,6 +409,7 @@ public partial class DisplaysManager : Node
         output.OutputName = newName.Trim();
         if (output.IsWindow)
             output.Title = output.OutputName;
+        output.RefreshScreenTestPattern();
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
             $"DisplaysManager: Renamed screen to '{output.OutputName}'.", 0);
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
@@ -430,6 +608,7 @@ public partial class DisplaysManager : Node
             if (output.IsWindow)
                 output.ClearWindowDismissed();
             output.UpdateOutputRegion();
+            output.RefreshScreenTestPattern();
             UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
@@ -550,6 +729,8 @@ public partial class DisplaysManager : Node
         if (layer != null)
         {
             layer.LayerName = newName;
+            if (layer.TestPatternEnabled)
+                UpdateLayerTestPatterns(layerId);
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer name to '{newName}'.", 0);
         }
     }
@@ -676,67 +857,92 @@ public partial class DisplaysManager : Node
         if (layer == null) return;
 
         layer.TestPatternEnabled = toggle;
-        Rect2 layerRect = new Rect2(layer.CanvasPosition, layer.Size);
-        Rect2 canvasRect = new Rect2(0, 0, Canvas.CanvasSize.X, Canvas.CanvasSize.Y);
-        foreach (var output in Outputs)
+        if (!toggle)
         {
-            Rect2 outputRect = new Rect2(output.CanvasPosition, output.OutputSize);
-            Rect2 intersection = layerRect.Intersection(outputRect);
-            if (intersection.Size.X > 0 && intersection.Size.Y > 0)
-            {
-                Rect2 clippedRect = canvasRect.Intersection(outputRect);
-                // Convert to output local coordinates
-                Vector2 localPos = layer.CanvasPosition - clippedRect.Position;
-                if (toggle)
-                {
-                    output.AddLayerTestPattern(layer.LayerId, layer.LayerName, new Rect2(localPos, layer.Size));
-                }
-                else
-                {
-                    output.RemoveLayerTestPattern(layer.LayerId);
-                }
-            }
+            foreach (var output in Outputs)
+                output.RemoveLayerTestPattern(layerId);
         }
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"{(toggle ? "Enabled" : "Disabled")} test pattern for layer '{layer.LayerName}'.", 0);
+        else
+        {
+            UpdateLayerTestPatterns(layerId);
+        }
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"{(toggle ? "Enabled" : "Disabled")} test pattern for layer '{layer.LayerName}'.", 0);
     }
 
     /// <summary>
-    /// Updates the test patterns for a layer on intersecting outputs.
+    /// Updates (or removes) the test pattern for a layer on every output based on canvas intersection.
     /// </summary>
     /// <param name="layerId">The layer ID.</param>
     public void UpdateLayerTestPatterns(int layerId)
     {
         var layer = Layers.Find(l => l.LayerId == layerId);
-        if (layer == null || !layer.TestPatternEnabled) return;
+        if (layer == null)
+            return;
+
+        if (!layer.TestPatternEnabled)
+        {
+            foreach (var output in Outputs)
+                output.RemoveLayerTestPattern(layerId);
+            return;
+        }
 
         Rect2 layerRect = new Rect2(layer.CanvasPosition, layer.Size);
         Rect2 canvasRect = new Rect2(0, 0, Canvas.CanvasSize.X, Canvas.CanvasSize.Y);
         foreach (var output in Outputs)
         {
             Rect2 outputRect = new Rect2(output.CanvasPosition, output.OutputSize);
-            Rect2 intersection = layerRect.Intersection(outputRect);
-            if (intersection.Size.X > 0 && intersection.Size.Y > 0)
+            if (layerRect.Intersection(outputRect).Size is { X: > 0, Y: > 0 })
             {
                 Rect2 clippedRect = canvasRect.Intersection(outputRect);
-                // Convert to output local coordinates
+                // Layer origin in this output's local space (full layer size; pattern may extend past clip).
                 Vector2 localPos = layer.CanvasPosition - clippedRect.Position;
                 output.AddLayerTestPattern(layer.LayerId, layer.LayerName, new Rect2(localPos, layer.Size));
+            }
+            else
+            {
+                // No longer overlaps this screen — drop stale pattern.
+                output.RemoveLayerTestPattern(layer.LayerId);
             }
         }
     }
 
     /// <summary>
-    /// Updates the test patterns for all layers on all outputs.
+    /// Updates enabled layer test patterns on all outputs.
     /// </summary>
     public void UpdateAllLayerTestPatterns()
     {
         foreach (var layer in Layers)
+            UpdateLayerTestPatterns(layer.LayerId);
+    }
+
+    /// <summary>
+    /// Live geometry pass: refresh screen + layer test patterns after canvas-editor drag without
+    /// committing OS window placement (that happens on drag end via <see cref="UpdateOutputRegion"/>).
+    /// </summary>
+    /// <param name="outputId">Screen being dragged/resized, or -1 for layer-only updates.</param>
+    /// <param name="layerId">Layer being dragged/resized, or -1 for screen-wide refresh.</param>
+    public void RefreshTestPatternsLive(int outputId = -1, int layerId = -1)
+    {
+        if (outputId >= 0)
         {
-            if (layer.TestPatternEnabled)
-            {
-                UpdateLayerTestPatterns(layer.LayerId);
-            }
+            var output = Outputs.Find(o => o.OutputId == outputId);
+            output?.RefreshScreenTestPattern();
+            // Screen move/resize changes local origins for every layer pattern on that output.
+            UpdateAllLayerTestPatterns();
+            return;
         }
+
+        if (layerId >= 0)
+        {
+            UpdateLayerTestPatterns(layerId);
+            return;
+        }
+
+        foreach (var output in Outputs)
+            output.RefreshScreenTestPattern();
+        UpdateAllLayerTestPatterns();
     }
 
     /// <summary>
@@ -1023,17 +1229,22 @@ public partial class DisplaysManager : Node
                 AddChild(output);
                 Outputs.Add(output);
                 // Virtual / missing monitors stay hidden; Window and available physical monitors show.
-                if (output.IsWindow)
+                // Respect master disable so undo/load does not force house screens open while disabled.
+                if (!OutputDisabled)
                 {
-                    output.ClearWindowDismissed();
-                    output.Show();
-                }
-                else if (output.IsPhysical && output.TargetMonitor < DisplayServer.GetScreenCount())
-                {
-                    output.Show();
+                    if (output.IsWindow)
+                    {
+                        output.ClearWindowDismissed();
+                        output.Show();
+                    }
+                    else if (output.IsPhysical && output.TargetMonitor < DisplayServer.GetScreenCount())
+                    {
+                        output.Show();
+                    }
                 }
                 output.SetCanvasReference(Canvas);
                 output.SetTransparent(output.OutputTransparent);
+                ApplyPresentationToOutput(output);
 
                 bool testPattern = outputData.ContainsKey("TestPatternEnabled")
                     && (bool)outputData["TestPatternEnabled"];
@@ -1060,6 +1271,7 @@ public partial class DisplaysManager : Node
 
         UpdateAllLayerTestPatterns();
         ApplyLayerDrawOrderToOutputs();
+        ApplyOutputPresentationState();
 
         _globalSignals?.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), Canvas.CanvasSize);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
