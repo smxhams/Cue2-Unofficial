@@ -48,27 +48,15 @@ public partial class MediaEngine : Node
     /// <summary>
     /// Dynamically links FFmpeg native libraries manually for cross-platform compatibility in Godot Mono.
     /// Ensures core shared libraries (avcodec, avformat, etc.) are resolved before any FFmpeg calls.
-    /// Layout under <c>res://bin/</c>:
-    /// <list type="bullet">
-    /// <item><description>win64 / winarm64 — avutil-60.dll, …</description></item>
-    /// <item><description>macos — libavutil.60.dylib, …</description></item>
-    /// <item><description>linux64 / linuxarm64 — libavutil.so.60, …</description></item>
-    /// </list>
+    /// Searches export-friendly paths then <c>res://bin/{platform}/</c> (see <see cref="NativeLibPaths"/>).
     /// </summary>
     private void LinkFFmpegLibraries()
     {
         try
         {
-            string platformDir = GetFFmpegPlatformDir(out string platformLabel);
-            string libPath = ProjectSettings.GlobalizePath($"res://bin/{platformDir}/");
-
-            GD.Print($"MediaEngine:LoadFFmpegLibraries - Using {platformLabel} libs from: {libPath}");
-
-            // FFmpeg.AutoGen resolves further loads from RootPath
-            ffmpeg.RootPath = libPath;
+            string platformDir = NativeLibPaths.GetPlatformDir(out string platformLabel);
 
             // Load order: avutil first (dependency of the rest). Major versions = FFmpeg 8.x.
-            // name stem without platform prefix/suffix: "avutil", major "60"
             (string name, string major)[] libs =
             {
                 ("avutil", "60"),
@@ -78,16 +66,27 @@ public partial class MediaEngine : Node
                 ("swscale", "9"),
             };
 
-            foreach (var (name, major) in libs)
+            var fileNames = new string[libs.Length];
+            for (int i = 0; i < libs.Length; i++)
+                fileNames[i] = NativeLibPaths.GetFFmpegLibraryFileName(libs[i].name, libs[i].major);
+
+            string libPath = NativeLibPaths.FindDirectoryContainingAll(fileNames, platformDir, out var tried);
+            if (string.IsNullOrEmpty(libPath))
             {
-                string fileName = GetFFmpegLibraryFileName(name, major);
+                string triedList = tried.Count > 0 ? string.Join("; ", tried) : "(no candidates)";
+                throw new DllNotFoundException(
+                    $"FFmpeg libraries not found for {platformLabel}. Looked in: {triedList}. " +
+                    "After export, copy bin/{platform} natives next to the app (see docs/export-packaging.md).");
+            }
+
+            GD.Print($"MediaEngine:LoadFFmpegLibraries - Using {platformLabel} libs from: {libPath}");
+
+            // FFmpeg.AutoGen resolves further loads from RootPath
+            ffmpeg.RootPath = libPath;
+
+            foreach (string fileName in fileNames)
+            {
                 string fullPath = Path.Combine(libPath, fileName);
-
-                if (!File.Exists(fullPath))
-                {
-                    throw new DllNotFoundException($"FFmpeg library not found: {fullPath}");
-                }
-
                 nint handle = NativeLibrary.Load(fullPath);
                 GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {fileName} (handle: {handle})");
             }
@@ -104,77 +103,6 @@ public partial class MediaEngine : Node
         }
     }
 
-    /// <summary>
-    /// Resolves the <c>bin/</c> subdirectory for the current OS and process architecture.
-    /// </summary>
-    private static string GetFFmpegPlatformDir(out string label)
-    {
-        Architecture arch = RuntimeInformation.ProcessArchitecture;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            if (arch == Architecture.Arm64)
-            {
-                label = "Windows ARM64";
-                return "winarm64";
-            }
-            if (arch == Architecture.X64)
-            {
-                label = "Windows x64";
-                return "win64";
-            }
-            label = $"Windows x64 (fallback for {arch})";
-            GD.PrintErr($"MediaEngine:GetFFmpegPlatformDir - Unsupported Windows arch {arch}; defaulting to win64.");
-            return "win64";
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // Single universal / platform folder currently ships both arches as needed
-            label = arch == Architecture.Arm64 ? "macOS ARM64" : "macOS x64";
-            return "macos";
-        }
-
-        // Linux (and other Unix-like)
-        if (arch == Architecture.Arm64)
-        {
-            label = "Linux ARM64";
-            return "linuxarm64";
-        }
-        if (arch == Architecture.X64)
-        {
-            label = "Linux x64";
-            return "linux64";
-        }
-
-        label = $"Linux x64 (fallback for {arch})";
-        GD.PrintErr($"MediaEngine:GetFFmpegPlatformDir - Unsupported Linux arch {arch}; defaulting to linux64.");
-        return "linux64";
-    }
-
-    /// <summary>
-    /// Builds the on-disk shared library file name for the current platform.
-    /// </summary>
-    /// <param name="name">Base name (e.g. avutil, avcodec).</param>
-    /// <param name="major">Soname / ABI major version (e.g. 60, 62).</param>
-    private static string GetFFmpegLibraryFileName(string name, string major)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // win64 / winarm64: avutil-60.dll
-            return $"{name}-{major}.dll";
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            // macos: libavutil.60.dylib
-            return $"lib{name}.{major}.dylib";
-        }
-
-        // linux64 / linuxarm64: libavutil.so.60 (ELF soname style from BtbN etc.)
-        return $"lib{name}.so.{major}";
-    } 
-    
     
     /// <summary>
     /// Gets metadata for an audio file using FFmpeg (duration, channels, sample rate, bit depth, codec/format).

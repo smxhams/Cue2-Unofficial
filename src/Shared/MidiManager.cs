@@ -44,8 +44,9 @@ public readonly struct MidiInputMessage
 /// </summary>
 /// <remarks>
 /// DryWetMidi ships native libs that NuGet copies next to the managed assembly under
-/// <c>.godot/mono/temp/bin/</c>. Godot's process DLL search path does not include that
-/// folder, so we load natives explicitly from <c>res://bin/{platform}/</c> (same pattern as FFmpeg).
+/// <c>.godot/mono/temp/bin/</c> (editor) or <c>data_Cue2_*/</c> (export). Godot's process
+/// DLL search path may not include those folders, so we load natives via
+/// <see cref="NativeLibPaths"/> (export dirs first, then <c>res://bin/{platform}/</c>).
 /// </remarks>
 public partial class MidiManager : Node
 {
@@ -548,7 +549,7 @@ public partial class MidiManager : Node
     // ── Native load (Godot path) ────────────────────────────────────────────
 
     /// <summary>
-    /// Loads <c>Melanchall_DryWetMidi_Native*</c> from <c>res://bin/{platform}/</c> and
+    /// Loads <c>Melanchall_DryWetMidi_Native*</c> via <see cref="NativeLibPaths"/> and
     /// registers a DllImport resolver so DryWetMidi P/Invoke finds it under Godot.
     /// </summary>
     private bool EnsureNativeLibraryLoaded()
@@ -561,7 +562,8 @@ public partial class MidiManager : Node
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
                 GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - Native library missing for {platformLabel}. " +
-                            $"Expected under res://bin/ (e.g. Melanchall_DryWetMidi_Native64.dll).");
+                            "Expected Melanchall_DryWetMidi_Native* beside the app or under res://bin/ " +
+                            "(see docs/export-packaging.md).");
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                     $"MIDI: native library not found for {platformLabel}", (int)LogType.Error);
                 return false;
@@ -622,32 +624,13 @@ public partial class MidiManager : Node
 
     private static string ResolveNativeLibraryPath(out string platformLabel)
     {
-        Architecture arch = RuntimeInformation.ProcessArchitecture;
-        string platformDir;
-        string fileName;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            platformDir = arch == Architecture.Arm64 ? "winarm64" : "win64";
-            fileName = IntPtr.Size == 4
-                ? "Melanchall_DryWetMidi_Native32.dll"
-                : "Melanchall_DryWetMidi_Native64.dll";
-            platformLabel = arch == Architecture.Arm64 ? "Windows ARM64" : "Windows x64";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            platformDir = "macos";
-            fileName = "Melanchall_DryWetMidi_Native64.dylib";
-            platformLabel = arch == Architecture.Arm64 ? "macOS ARM64" : "macOS x64";
-        }
-        else
-        {
-            platformLabel = "Linux (unsupported by DryWetMidi natives)";
+        string fileName = NativeLibPaths.GetDryWetMidiNativeFileName(out platformLabel);
+        if (string.IsNullOrEmpty(fileName))
             return string.Empty;
-        }
 
-        string libDir = ProjectSettings.GlobalizePath($"res://bin/{platformDir}/");
-        return Path.Combine(libDir, fileName);
+        string platformDir = NativeLibPaths.GetPlatformDir(out _);
+        string path = NativeLibPaths.FindLibraryFile(fileName, platformDir, out _, out _);
+        return path;
     }
 
     // ── Enumeration, hot-plug & session device list ─────────────────────────

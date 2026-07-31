@@ -28,6 +28,9 @@ Attribution is shown in the in-app About dialog.
 ## Installation & Building
 See the project wiki or `src/proposed_README.md` for build instructions.
 
+## Export packaging
+Godot export does **not** embed FFmpeg shared libraries into a single exe. After exporting, copy platform natives with `tools/copy-natives-for-export.ps1`. Details: [docs/export-packaging.md](docs/export-packaging.md).
+
 ## Platforms
 Cue-2 targets:
 - Windows 10+
