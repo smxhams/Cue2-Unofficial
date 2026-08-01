@@ -71,9 +71,10 @@ public static class SettingsExport
         new("Displays", "Canvas / Displays", "Displays"),
         new("VideoOutput", "Video Output",
             "OutputBackgroundColor", "VideoQualityMode", "VideoPreviewQuality", "OutputVSyncMode"),
-        new("CueLights", "Cue Lights",
-            "CueLights", "CueLightIdleColour", "CueLightGoColour",
-            "CueLightStandbyColour", "CueLightCountInColour", "CueLightBrightness"),
+        // Cue Lights not shipped in v1 — category retained for a later release.
+        // new("CueLights", "Cue Lights",
+        //     "CueLights", "CueLightIdleColour", "CueLightGoColour",
+        //     "CueLightStandbyColour", "CueLightCountInColour", "CueLightBrightness"),
         new("OscConnections", "OSC Connections", "OscConnections"),
         new("OscListen", "OSC Listener", "OscListen"),
         new("OscInputMap", "OSC Input Map", "OscInputMap"),

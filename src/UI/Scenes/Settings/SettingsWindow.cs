@@ -932,8 +932,9 @@ public partial class SettingsWindow : Window
 		// Connections
 		TreeItem tiConnections = _setTree.CreateItem(root);
 		tiConnections.SetText(0, "Connections");
-		TreeItem tiCueLights = _setTree.CreateItem(tiConnections);
-		tiCueLights.SetText(0, "Cue Lights");
+		// Cue Lights: kept in codebase (panel + TryGetMenuNode mapping) but not shipped in v1 UI.
+		// TreeItem tiCueLights = _setTree.CreateItem(tiConnections);
+		// tiCueLights.SetText(0, "Cue Lights");
 		TreeItem tiOscConnections = _setTree.CreateItem(tiConnections);
 		tiOscConnections.SetText(0, "OSC Connections");
 		tiOscConnections.SetTooltipText(0, "Named OSC send destinations and send monitor");

@@ -38,7 +38,6 @@ public partial class SaveManager : Node
 		_mediaBackupManager = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
 		
 		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
-		// TODO: _openDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
 
 		_globalSignals.NewSession += OnNewSession;
 		_globalSignals.Save += Save;
