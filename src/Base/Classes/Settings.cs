@@ -75,6 +75,30 @@ public partial class Settings : Node
     /// <summary>Default solid colour behind video layers on all output windows.</summary>
     public static readonly Color DefaultOutputBackgroundColor = Colors.Black;
 
+    /// <summary>Default decode/present quality mode for live video outputs.</summary>
+    public static readonly VideoQualityMode DefaultVideoQualityMode = VideoQualityMode.Balanced;
+
+    /// <summary>Default inspector video preview quality.</summary>
+    public static readonly VideoPreviewQuality DefaultVideoPreviewQuality = VideoPreviewQuality.Full;
+
+    /// <summary>Default output window vsync / frame-pacing mode.</summary>
+    public static readonly OutputVSyncMode DefaultOutputVSyncMode = OutputVSyncMode.PreferVSync;
+
+    /// <summary>Default audio latency / buffer preset.</summary>
+    public static readonly AudioLatencyMode DefaultAudioLatencyMode = AudioLatencyMode.Balanced;
+
+    /// <summary>Default de-click ramp after audio start/seek (milliseconds).</summary>
+    public const int DefaultAudioDeclickMs = 8;
+
+    /// <summary>Minimum allowed de-click ramp (milliseconds).</summary>
+    public const int MinAudioDeclickMs = 0;
+
+    /// <summary>Maximum allowed de-click ramp (milliseconds).</summary>
+    public const int MaxAudioDeclickMs = 50;
+
+    /// <summary>Default session master volume (linear 1.0 = 0 dB / 100%).</summary>
+    public const float DefaultAudioMasterVolume = 1f;
+
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
     /// <summary>System default pre-wait in seconds for newly created cues.</summary>
@@ -259,6 +283,54 @@ public partial class Settings : Node
     /// Persisted with the showfile. Does not affect the inspector video previewer.
     /// </summary>
     public Color OutputBackgroundColor = DefaultOutputBackgroundColor;
+
+    /// <summary>
+    /// Soft decode/present quality for live video outputs (prefetch ring, lateness drop).
+    /// Persisted with the showfile.
+    /// </summary>
+    public VideoQualityMode VideoQualityMode = DefaultVideoQualityMode;
+
+    /// <summary>
+    /// Inspector video preview resolution scale (never affects house outputs).
+    /// Persisted with the showfile.
+    /// </summary>
+    public VideoPreviewQuality VideoPreviewQuality = DefaultVideoPreviewQuality;
+
+    /// <summary>
+    /// Vsync / frame-pacing preference for video output windows.
+    /// Persisted with the showfile.
+    /// </summary>
+    public OutputVSyncMode OutputVSyncMode = DefaultOutputVSyncMode;
+
+    /// <summary>
+    /// Soft audio fill/prefetch latency mode for standalone and embedded audio.
+    /// Persisted with the showfile.
+    /// </summary>
+    public AudioLatencyMode AudioLatencyMode = DefaultAudioLatencyMode;
+
+    /// <summary>
+    /// Raised-cosine de-click ramp after audio start/seek, in milliseconds (0 = off).
+    /// Persisted with the showfile.
+    /// </summary>
+    public int AudioDeclickMs = DefaultAudioDeclickMs;
+
+    /// <summary>
+    /// Session master volume applied to all cue audio (linear 0–1). Persisted with the showfile.
+    /// Runtime mute is separate (see <see cref="AudioDevices.SessionMasterMuted"/>).
+    /// </summary>
+    public float AudioMasterVolume = DefaultAudioMasterVolume;
+
+    /// <summary>
+    /// Resolved present tuning for the current <see cref="VideoQualityMode"/>.
+    /// </summary>
+    public VideoPresentTuning GetVideoPresentTuning() =>
+        VideoPresentTuning.ForMode(VideoQualityMode);
+
+    /// <summary>
+    /// Resolved audio fill/prefetch/declick tuning for the current latency mode and declick ms.
+    /// </summary>
+    public AudioPresentTuning GetAudioPresentTuning() =>
+        AudioPresentTuning.ForMode(AudioLatencyMode, AudioDeclickMs);
 
     // ── Cue shell defaults (show-scoped; applied to newly created cues) ─────
 
@@ -676,10 +748,19 @@ public partial class Settings : Node
         SelectNewCues = DefaultSelectNewCues;
         ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
         OutputBackgroundColor = DefaultOutputBackgroundColor;
+        VideoQualityMode = DefaultVideoQualityMode;
+        VideoPreviewQuality = DefaultVideoPreviewQuality;
+        OutputVSyncMode = DefaultOutputVSyncMode;
+        AudioLatencyMode = DefaultAudioLatencyMode;
+        AudioDeclickMs = DefaultAudioDeclickMs;
+        AudioMasterVolume = DefaultAudioMasterVolume;
         VerbosePrint = true;
 
         // Operator runtime video controls should never carry across New Session.
         _displaysManager?.ClearRuntimeOutputControls();
+        _displaysManager?.ApplyOutputBackgroundColor(OutputBackgroundColor);
+        _displaysManager?.ApplyOutputVSyncPreference();
+        _audioDevices?.SyncSessionMasterFromSettings();
 
         // Cue shell defaults for newly created cues
         ResetCueDefaultsToSystem();
@@ -742,6 +823,12 @@ public partial class Settings : Node
         saveTable.Add("SelectNewCues", SelectNewCues);
         saveTable.Add("ShowTimelineWaveforms", ShowTimelineWaveforms);
         saveTable.Add("OutputBackgroundColor", OutputBackgroundColor.ToHtml(true));
+        saveTable.Add("VideoQualityMode", (int)VideoQualityMode);
+        saveTable.Add("VideoPreviewQuality", (int)VideoPreviewQuality);
+        saveTable.Add("OutputVSyncMode", (int)OutputVSyncMode);
+        saveTable.Add("AudioLatencyMode", (int)AudioLatencyMode);
+        saveTable.Add("AudioDeclickMs", AudioDeclickMs);
+        saveTable.Add("AudioMasterVolume", AudioMasterVolume);
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -858,10 +945,30 @@ public partial class Settings : Node
         OutputBackgroundColor = settingsData.TryGetValue("OutputBackgroundColor", out value)
             ? Color.FromString(value.AsString(), DefaultOutputBackgroundColor)
             : DefaultOutputBackgroundColor;
+        VideoQualityMode = settingsData.TryGetValue("VideoQualityMode", out value)
+            ? ClampEnum(value.AsInt32(), VideoQualityMode.PreferQuality, VideoQualityMode.PreferPerformance, DefaultVideoQualityMode)
+            : DefaultVideoQualityMode;
+        VideoPreviewQuality = settingsData.TryGetValue("VideoPreviewQuality", out value)
+            ? ClampEnum(value.AsInt32(), VideoPreviewQuality.Full, VideoPreviewQuality.Quarter, DefaultVideoPreviewQuality)
+            : DefaultVideoPreviewQuality;
+        OutputVSyncMode = settingsData.TryGetValue("OutputVSyncMode", out value)
+            ? ClampEnum(value.AsInt32(), OutputVSyncMode.PreferVSync, OutputVSyncMode.LowLatency, DefaultOutputVSyncMode)
+            : DefaultOutputVSyncMode;
+        AudioLatencyMode = settingsData.TryGetValue("AudioLatencyMode", out value)
+            ? ClampEnum(value.AsInt32(), AudioLatencyMode.PreferLowLatency, AudioLatencyMode.PreferStability, DefaultAudioLatencyMode)
+            : DefaultAudioLatencyMode;
+        AudioDeclickMs = settingsData.TryGetValue("AudioDeclickMs", out value)
+            ? Math.Clamp(value.AsInt32(), MinAudioDeclickMs, MaxAudioDeclickMs)
+            : DefaultAudioDeclickMs;
+        AudioMasterVolume = settingsData.TryGetValue("AudioMasterVolume", out value)
+            ? Math.Clamp(value.AsSingle(), 0f, 1f)
+            : DefaultAudioMasterVolume;
 
         // Loading a showfile should not keep the previous show's emergency disable/blackout.
         _displaysManager?.ClearRuntimeOutputControls();
         _displaysManager?.ApplyOutputBackgroundColor(OutputBackgroundColor);
+        _displaysManager?.ApplyOutputVSyncPreference();
+        _audioDevices?.SyncSessionMasterFromSettings();
 
         // Cue shell defaults (older shows without this key keep system defaults)
         if (settingsData.TryGetValue("CueDefaults", out value) && value.VariantType == Variant.Type.Dictionary)
@@ -1028,6 +1135,24 @@ public partial class Settings : Node
         {
             OutputBackgroundColor = Color.FromString(value.AsString(), DefaultOutputBackgroundColor);
             _displaysManager?.ApplyOutputBackgroundColor(OutputBackgroundColor);
+        }
+        if (TryGetSettingsValue(settingsData, "VideoQualityMode", out value))
+            VideoQualityMode = ClampEnum(value.AsInt32(), VideoQualityMode.PreferQuality, VideoQualityMode.PreferPerformance, DefaultVideoQualityMode);
+        if (TryGetSettingsValue(settingsData, "VideoPreviewQuality", out value))
+            VideoPreviewQuality = ClampEnum(value.AsInt32(), VideoPreviewQuality.Full, VideoPreviewQuality.Quarter, DefaultVideoPreviewQuality);
+        if (TryGetSettingsValue(settingsData, "OutputVSyncMode", out value))
+        {
+            OutputVSyncMode = ClampEnum(value.AsInt32(), OutputVSyncMode.PreferVSync, OutputVSyncMode.LowLatency, DefaultOutputVSyncMode);
+            _displaysManager?.ApplyOutputVSyncPreference();
+        }
+        if (TryGetSettingsValue(settingsData, "AudioLatencyMode", out value))
+            AudioLatencyMode = ClampEnum(value.AsInt32(), AudioLatencyMode.PreferLowLatency, AudioLatencyMode.PreferStability, DefaultAudioLatencyMode);
+        if (TryGetSettingsValue(settingsData, "AudioDeclickMs", out value))
+            AudioDeclickMs = Math.Clamp(value.AsInt32(), MinAudioDeclickMs, MaxAudioDeclickMs);
+        if (TryGetSettingsValue(settingsData, "AudioMasterVolume", out value))
+        {
+            AudioMasterVolume = Math.Clamp(value.AsSingle(), 0f, 1f);
+            _audioDevices?.SetSessionMasterVolume(AudioMasterVolume);
         }
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
@@ -1237,10 +1362,41 @@ public partial class Settings : Node
             case "OutputBackgroundColor":
                 value = OutputBackgroundColor.ToHtml(true);
                 return true;
+            case "VideoQualityMode":
+                value = (int)VideoQualityMode;
+                return true;
+            case "VideoPreviewQuality":
+                value = (int)VideoPreviewQuality;
+                return true;
+            case "OutputVSyncMode":
+                value = (int)OutputVSyncMode;
+                return true;
+            case "AudioLatencyMode":
+                value = (int)AudioLatencyMode;
+                return true;
+            case "AudioDeclickMs":
+                value = AudioDeclickMs;
+                return true;
+            case "AudioMasterVolume":
+                value = AudioMasterVolume;
+                return true;
             default:
                 value = default;
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Clamps a raw int into an enum range; returns <paramref name="fallback"/> if out of range.
+    /// </summary>
+    private static TEnum ClampEnum<TEnum>(int raw, TEnum min, TEnum max, TEnum fallback)
+        where TEnum : struct, Enum
+    {
+        int minI = Convert.ToInt32(min);
+        int maxI = Convert.ToInt32(max);
+        if (raw < minI || raw > maxI)
+            return fallback;
+        return (TEnum)Enum.ToObject(typeof(TEnum), raw);
     }
 
     /// <summary>

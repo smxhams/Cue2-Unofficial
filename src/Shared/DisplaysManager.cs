@@ -161,12 +161,12 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Applies show background colour and machine vsync prefs to every output window.
+    /// Applies show background colour and vsync prefs to every output window.
     /// </summary>
     public void ApplyOutputPresentationState()
     {
         Color bg = _globalData?.Settings?.OutputBackgroundColor ?? Colors.Black;
-        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+        OutputVSyncMode vsync = _globalData?.Settings?.OutputVSyncMode
             ?? OutputVSyncMode.PreferVSync;
 
         foreach (var output in Outputs.ToList())
@@ -195,11 +195,11 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Re-applies machine vsync preference to all live output windows.
+    /// Re-applies show-scoped vsync preference to all live output windows.
     /// </summary>
     public void ApplyOutputVSyncPreference()
     {
-        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+        OutputVSyncMode vsync = _globalData?.Settings?.OutputVSyncMode
             ?? OutputVSyncMode.PreferVSync;
         foreach (var output in Outputs.ToList())
         {
@@ -344,7 +344,7 @@ public partial class DisplaysManager : Node
             return;
 
         Color bg = _globalData?.Settings?.OutputBackgroundColor ?? Colors.Black;
-        OutputVSyncMode vsync = _globalData?.UserDataManager?.OutputVSyncMode
+        OutputVSyncMode vsync = _globalData?.Settings?.OutputVSyncMode
             ?? OutputVSyncMode.PreferVSync;
         output.SetOutputBackgroundColor(bg);
         output.SetBlackout(OutputBlackout);

@@ -1,9 +1,9 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1785476588
+::res://::1785623248
 AGENTS.md::TextFile::-1::1785296346::0::1::::<><><>0<>0<><>::
-export_presets.cfg::TextFile::-1::1785476571::0::1::::<><><>0<>0<><>::
+export_presets.cfg::TextFile::-1::1785487709::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::8597863507468381028::1764449554::1765135075::1::::<><><>0<>0<>80d061c72c249930f878cc40380df297<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
-README.md::TextFile::-1::1783299166::0::1::::<><><>0<>0<><>::
+README.md::TextFile::-1::1785487058::0::1::::<><><>0<>0<><>::
 Version.cs::CSharpScript::3484266656859141276::1783290162::0::1::::<><><>0<>0<><>::
 ::res://addons/::1755385628
 ::res://addons/collapsible_container/::1764449330
@@ -85,7 +85,7 @@ signal_example.tscn::PackedScene::5697067499366212836::1764449330::0::1::::<><><
 signal_example_script.gd::GDScript::7572096448436812187::1764449330::0::1::::<>Node<><>0<>0<><>::
 ::res://Backup/::1764449554
 ::res://bin/::1783554439
-::res://bin/linux64/::1783553090
+::res://bin/linux64/::1785487751
 ::res://bin/linuxarm64/::1783553057
 ::res://bin/macos/::1784759788
 ::res://bin/win64/::1784759788
@@ -94,7 +94,8 @@ signal_example_script.gd::GDScript::7572096448436812187::1764449330::0::1::::<>N
 Player.run.xml::TextFile::-1::1785476063::0::1::::<><><>0<>0<><>::
 ::res://Cue2Mac.run/::1783556414
 PlayerMac.run.xml::TextFile::-1::1783556402::0::1::::<><><>0<>0<><>::
-::res://docs/::1785295511
+::res://docs/::1785487040
+export-packaging.md::TextFile::-1::1785487040::0::1::::<><><>0<>0<><>::
 FFmpeg-Licensing.md::TextFile::-1::1783299229::0::1::::<><><>0<>0<><>::
 general-video-settings-recommendations.md::TextFile::-1::1785295511::0::1::::<><><>0<>0<><>::
 ::res://LICENSES/::1783299214
@@ -183,7 +184,7 @@ PatchMatrixDeviceOutputHeader.tscn::PackedScene::3246727319699806263::1764449554
 launcher.tscn::PackedScene::4200433581996456708::1764449554::0::1::::<><><>0<>0<><>::uid://bmbs6kyrh6uq7::::res://src/launcher/LaunchManager.cs<>uid://blrla7wswmdn4::::res://src/launcher/LauncherHandles.cs
 LauncherHandles.cs::CSharpScript::3194261988031518947::1764449554::0::1::::<>Control<><>0<>0<><>::
 LaunchManager.cs::CSharpScript::3231900013676203672::1764449554::0::1::::<>Control<><>0<>0<><>::
-::res://src/Shared/::1785476057
+::res://src/Shared/::1785487365
 AudioDevices.cs::CSharpScript::3123637818016137637::1784676167::0::1::::<>Node<><>0<>0<><>::
 CueLibraryManager.cs::CSharpScript::617803041816632894::1784848560::0::1::::<>Node<><>0<>0<><>::
 CueLightManager.cs::CSharpScript::9051166078888758983::1784091574::0::1::::<>Node<><>0<>0<><>::
@@ -198,11 +199,12 @@ InputActionsListener.cs::CSharpScript::701186509687432226::1785284071::0::1::::<
 LibraryPaths.cs::CSharpScript::5524909274849604900::1784846675::0::1::::<><><>0<>0<><>::
 LogType.cs::CSharpScript::4263738573660771563::1764449554::0::1::::<><><>0<>0<><>::
 MediaBackupManager.cs::CSharpScript::5071916910575692354::1784091584::0::1::::<>Node<><>0<>0<><>::
-MediaEngine.cs::CSharpScript::6010125824212505973::1784867149::0::1::::<>Node<><>0<>0<><>::
+MediaEngine.cs::CSharpScript::6010125824212505973::1785487005::0::1::::<>Node<><>0<>0<><>::
 MediaHealthService.cs::CSharpScript::2936253327250331676::1784087134::0::1::::<>Node<><>0<>0<><>::
 MediaPaths.cs::CSharpScript::3047149592125922005::1784001064::0::1::::<><><>0<>0<><>::
 MidiActionBinding.cs::CSharpScript::8859352567175824341::1784771862::0::1::::<><><>0<>0<><>::
-MidiManager.cs::CSharpScript::949616215631463897::1784839638::0::1::::<>Node<><>0<>0<><>::
+MidiManager.cs::CSharpScript::949616215631463897::1785487005::0::1::::<>Node<><>0<>0<><>::
+NativeLibPaths.cs::CSharpScript::2815279150078686183::1785487005::0::1::::<><><>0<>0<><>::
 OscActionBinding.cs::CSharpScript::1308011014410325703::1785284071::0::1::::<><><>0<>0<><>::
 SaveManager.cs::CSharpScript::6032995468372215493::1784091657::0::1::::<>Node<><>0<>0<><>::
 SceneLoader.cs::CSharpScript::3619610303397267705::1764449554::0::1::::<><><>0<>0<><>::
@@ -347,3 +349,4 @@ InspectorMediaUrlStyle.cs::CSharpScript::8003838699970105729::1784001064::0::1::
 TestPattern.cs::CSharpScript::2323821362542526765::1785401968::0::1::::<>Control<><>0<>0<><>::
 UiUtilities.cs::CSharpScript::5759630190538810853::1785212720::0::1::::<>Node<><>0<>0<><>::
 WaveformDisplay.cs::CSharpScript::6447975402463189178::1785403665::0::1::::<>Control<><>0<>0<><>::
+::res://tools/::1785487040

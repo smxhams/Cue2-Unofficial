@@ -122,6 +122,14 @@ public partial class GlobalSignals : Node
 
 	// Signals associated with devices
 	[Signal] public delegate void AudioDevicesChangedEventHandler();
+
+	/// <summary>
+	/// Fired when session master audio volume or runtime mute changes.
+	/// </summary>
+	/// <param name="linear">Session master volume linear 0–1 (ignores mute).</param>
+	/// <param name="muted">True when runtime master mute is active.</param>
+	[Signal] public delegate void AudioMasterControlChangedEventHandler(float linear, bool muted);
+
 	[Signal] public delegate void DisplaysChangedEventHandler();
 	[Signal] public delegate void CanvasSizeChangedEventHandler(Vector2I newSize);
 
@@ -137,12 +145,6 @@ public partial class GlobalSignals : Node
 	/// </summary>
 	/// <param name="color">New background colour applied to output windows.</param>
 	[Signal] public delegate void OutputBackgroundColorChangedEventHandler(Color color);
-
-	/// <summary>
-	/// Fired when machine video performance prefs change (quality mode, preview, vsync, HW decode).
-	/// Listeners re-read from <c>UserDataManager</c>.
-	/// </summary>
-	[Signal] public delegate void VideoPlaybackPrefsChangedEventHandler();
 
 	/// <summary>
 	/// Fired when a single target layer's size or canvas position changes

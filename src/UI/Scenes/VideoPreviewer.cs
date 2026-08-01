@@ -263,13 +263,13 @@ public partial class VideoPreviewer : Control
     }
 
     /// <summary>
-    /// Reads machine preview quality pref (defaults to full resolution).
+    /// Reads show-scoped preview quality (defaults to full resolution).
     /// </summary>
     private float ResolvePreviewScale()
     {
         try
         {
-            var quality = _globalData?.UserDataManager?.VideoPreviewQuality
+            var quality = _globalData?.Settings?.VideoPreviewQuality
                 ?? Cue2.Base.Classes.VideoPreviewQuality.Full;
             return Cue2.Base.Classes.VideoPresentTuning.PreviewScale(quality);
         }

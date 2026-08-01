@@ -26,6 +26,19 @@ public partial class AudioDevices : Node
 	private readonly Dictionary<uint, int> _physicalIdToDeviceId = new Dictionary<uint, int>();
 	
 	private readonly Dictionary<uint, List<IAudioPlayback>> _activeAudioPlaybacks = new Dictionary<uint, List<IAudioPlayback>>();
+
+	/// <summary>
+	/// Session master gain linear 0–1 (show-scoped value mirrored here for fill-thread reads).
+	/// </summary>
+	private float _sessionMasterLinear = 1f;
+
+	/// <summary>
+	/// Runtime master mute (not saved with the showfile; cleared on New Session).
+	/// </summary>
+	private bool _sessionMasterMuted;
+
+	/// <summary>Lock for session master fields read from audio fill threads.</summary>
+	private readonly object _sessionMasterLock = new object();
 	
 	private Timer _pollTimer;
 	
@@ -168,13 +181,9 @@ public partial class AudioDevices : Node
 		    error = adError;
 		    return null;
 	    }
-	    var specs = GetAudioDeviceSpec(name);
+	    ApplyDeviceFormat(device, audioDevice);
 
 	    device.PhysicalId = physicalDeviceId;
-	    device.Channels = specs.Channels;
-	    device.Format = specs.Format;
-	    device.SampleRate = specs.Freq;
-	    device.BitDepth = GetBitDepth(specs.Format);
 	    
 	    _openDevices.Add(device.DeviceId, device);
 	    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
@@ -272,6 +281,235 @@ public partial class AudioDevices : Node
 	    }
 
 	    return deviceNames;
+    }
+
+    /// <summary>
+    /// Snapshot of currently open playback devices (for status UI). Order is dictionary order.
+    /// </summary>
+    /// <returns>List of open <see cref="AudioDevice"/> instances (not copies).</returns>
+    public List<AudioDevice> GetOpenAudioDevices()
+    {
+	    return _openDevices.Values.ToList();
+    }
+
+    /// <summary>
+    /// Refreshes format, buffer size, and channel counts from SDL for all open devices.
+    /// </summary>
+    public void RefreshOpenDeviceFormats()
+    {
+	    foreach (var device in _openDevices.Values)
+	    {
+		    if (device == null || device.LogicalId == 0)
+			    continue;
+		    try
+		    {
+			    ApplyDeviceFormat(device, device.LogicalId);
+		    }
+		    catch
+		    {
+			    // Ignore transient SDL errors while listing status.
+		    }
+	    }
+    }
+
+    /// <summary>
+    /// Builds human-readable status lines for open devices (rate, sample depth, out channels, buffer).
+    /// </summary>
+    /// <returns>One line per open device (or a single placeholder when none are open).</returns>
+    public List<string> GetOpenDeviceStatusLines()
+    {
+	    RefreshOpenDeviceFormats();
+	    var devices = GetOpenAudioDevices();
+	    var lines = new List<string>();
+	    if (devices.Count == 0)
+	    {
+		    lines.Add("No audio devices open. Open devices via Audio Output Patch or by playing a cue.");
+		    return lines;
+	    }
+
+	    foreach (var device in devices)
+	    {
+		    if (device == null)
+			    continue;
+
+		    // Classic audio buffer size is sample frames (often 64/128/256/512/1024 on pro drivers).
+		    string bufferPart = device.BufferFrames > 0
+			    ? $"buffer {device.BufferFrames}"
+			    : "buffer ?";
+
+		    int outCh = device.OutputChannels > 0
+			    ? device.OutputChannels
+			    : Math.Max(0, device.Channels);
+
+		    string ratePart = device.SampleRate > 0 ? $"{device.SampleRate} Hz" : "rate ?";
+		    string depthPart = FormatSampleDepth(device);
+		    lines.Add($"{device.Name} — {ratePart}, {depthPart}, out {outCh}, {bufferPart}");
+	    }
+
+	    return lines;
+    }
+
+    /// <summary>
+    /// Formats sample bit depth and SDL codec/format tag for status UI (e.g. "32-bit float (F32LE)").
+    /// </summary>
+    private static string FormatSampleDepth(AudioDevice device)
+    {
+	    if (device == null)
+		    return "depth ?";
+
+	    string codec = FormatCodecTag(device.Format);
+	    if (device.BitDepth > 0)
+	    {
+		    bool isFloat = device.Format is SDL.AudioFormat.AudioF32LE or SDL.AudioFormat.AudioF32BE;
+		    string kind = isFloat ? "float" : "int";
+		    return string.IsNullOrEmpty(codec)
+			    ? $"{device.BitDepth}-bit {kind}"
+			    : $"{device.BitDepth}-bit {kind} ({codec})";
+	    }
+
+	    return string.IsNullOrEmpty(codec) ? "depth ?" : codec;
+    }
+
+    /// <summary>
+    /// Short SDL format tag (e.g. F32LE) from <see cref="SDL.AudioFormat"/>.
+    /// </summary>
+    private static string FormatCodecTag(SDL.AudioFormat format)
+    {
+	    if (format == 0)
+		    return string.Empty;
+	    string raw = format.ToString();
+	    // Enum names are typically "AudioF32LE" → "F32LE"
+	    if (raw.StartsWith("Audio", StringComparison.Ordinal))
+		    return raw.Substring("Audio".Length);
+	    return raw;
+    }
+
+    /// <summary>
+    /// Fills <see cref="AudioDevice"/> format fields from SDL for an opened logical device id.
+    /// </summary>
+    private void ApplyDeviceFormat(AudioDevice device, uint logicalDeviceId)
+    {
+	    if (device == null || logicalDeviceId == 0)
+		    return;
+
+	    SDL.GetAudioDeviceFormat(logicalDeviceId, out SDL.AudioSpec spec, out int bufferFrames);
+	    device.Channels = spec.Channels;
+	    device.Format = spec.Format;
+	    device.SampleRate = spec.Freq;
+	    device.BitDepth = GetBitDepth(spec.Format);
+	    // Sample frames fed to hardware per chunk (often 64–1024 on pro drivers).
+	    device.BufferFrames = Math.Max(0, bufferFrames);
+
+	    // Playback open path: Channels is the output count.
+	    int outCh = Math.Max(0, (int)spec.Channels);
+	    try
+	    {
+		    // Channel map length can refine multi-channel interfaces when present.
+		    int[] map = SDL.GetAudioDeviceChannelMap(logicalDeviceId, out int mapCount);
+		    if (map != null && map.Length > 0)
+			    outCh = map.Length;
+		    else if (mapCount > 0)
+			    outCh = mapCount;
+	    }
+	    catch
+	    {
+		    // Channel map optional.
+	    }
+
+	    device.OutputChannels = outCh;
+    }
+
+    /// <summary>
+    /// Effective session master gain for mix threads (0 when muted). Thread-safe.
+    /// </summary>
+    public float GetEffectiveSessionMasterLinear()
+    {
+	    lock (_sessionMasterLock)
+	    {
+		    return _sessionMasterMuted ? 0f : Math.Clamp(_sessionMasterLinear, 0f, 1f);
+	    }
+    }
+
+    /// <summary>
+    /// Current session master volume linear 0–1 (ignores mute). Thread-safe.
+    /// </summary>
+    public float SessionMasterLinear
+    {
+	    get
+	    {
+		    lock (_sessionMasterLock) return _sessionMasterLinear;
+	    }
+    }
+
+    /// <summary>
+    /// Runtime master mute (not showfile-persisted). Thread-safe.
+    /// </summary>
+    public bool SessionMasterMuted
+    {
+	    get
+	    {
+		    lock (_sessionMasterLock) return _sessionMasterMuted;
+	    }
+    }
+
+    /// <summary>
+    /// Applies show-scoped master volume into the live session gain used by mix/fill threads.
+    /// </summary>
+    /// <param name="linear">Linear gain 0–1.</param>
+    public void SetSessionMasterVolume(float linear)
+    {
+	    float clamped = Math.Clamp(linear, 0f, 1f);
+	    lock (_sessionMasterLock)
+	    {
+		    if (Math.Abs(_sessionMasterLinear - clamped) < 1e-6f)
+			    return;
+		    _sessionMasterLinear = clamped;
+	    }
+	    EmitSessionMasterControlChanged();
+    }
+
+    /// <summary>
+    /// Sets runtime master mute. Does not write the showfile.
+    /// </summary>
+    /// <param name="muted">True to silence all cue audio output.</param>
+    public void SetSessionMasterMuted(bool muted)
+    {
+	    lock (_sessionMasterLock)
+	    {
+		    if (_sessionMasterMuted == muted)
+			    return;
+		    _sessionMasterMuted = muted;
+	    }
+	    EmitSessionMasterControlChanged();
+    }
+
+    /// <summary>
+    /// Clears runtime mute and reloads volume from show settings (New Session / load).
+    /// </summary>
+    public void SyncSessionMasterFromSettings()
+    {
+	    float linear = 1f;
+	    if (_globalData?.Settings != null)
+		    linear = Math.Clamp(_globalData.Settings.AudioMasterVolume, 0f, 1f);
+
+	    lock (_sessionMasterLock)
+	    {
+		    _sessionMasterLinear = linear;
+		    _sessionMasterMuted = false;
+	    }
+	    EmitSessionMasterControlChanged();
+    }
+
+    private void EmitSessionMasterControlChanged()
+    {
+	    float linear;
+	    bool muted;
+	    lock (_sessionMasterLock)
+	    {
+		    linear = _sessionMasterLinear;
+		    muted = _sessionMasterMuted;
+	    }
+	    _globalSignals?.EmitSignal(nameof(GlobalSignals.AudioMasterControlChanged), linear, muted);
     }
 
     /// <summary>

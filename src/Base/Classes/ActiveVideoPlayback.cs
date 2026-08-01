@@ -30,19 +30,20 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 {
     private const int FadeUpdateIntervalMs = 16;
     private const long MicrosecondsPerSecond = 1_000_000;
-    /// <summary>SDL queue target. Slightly higher than pure-audio cues — embedded audio shares demux with video.</summary>
-    private const int AudioTargetBufferMs = 120;
-    private const int AudioLowWaterMs = 60;
     private const int AudioFillSleepMs = 4;
-    /// <summary>Short cosine fade-in after start/seek to avoid silence→sample discontinuities (pops).</summary>
-    private const int DeclickRampMs = 8;
-    private const int AudioSeekPrefetchMs = 800;
 
     /// <summary>
-    /// Soft quality knobs resolved from <see cref="UserDataManager.VideoQualityMode"/>.
+    /// Soft quality knobs resolved from show <see cref="Settings.VideoQualityMode"/>.
     /// Defaults match the previous hardcodes (Balanced).
     /// </summary>
     private VideoPresentTuning _presentTuning = VideoPresentTuning.ForMode(VideoQualityMode.Balanced);
+
+    /// <summary>
+    /// Embedded-audio fill / prefetch / de-click knobs from show <see cref="Settings"/>.
+    /// Shares the same latency table as standalone audio cues.
+    /// </summary>
+    private AudioPresentTuning _audioTuning = AudioPresentTuning.ForMode(
+        AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
 
     private VideoSourceDecoder _videoDecoder;
     private SubtitleSourceDecoder _subtitleDecoder;
@@ -296,9 +297,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             SourceFormat = SDL.AudioFormat.AudioF32LE;
             SourceBytesPerFrame = SourceChannels * sizeof(float);
 
+            RefreshAudioTuning();
             if (_startTimeUs > 0)
                 _audioDecoder.Seek(_startTimeUs);
-            _audioDecoder.Prefetch(AudioSourceDecoder.DefaultPrefetchMs);
+            _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
 
             int maxFrames = Math.Max(SourceSampleRate / 10, 1024);
             _audioSrcBuffer = new float[maxFrames * SourceChannels];
@@ -712,6 +714,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         // Only drive audio when streams were bound; otherwise wall-clock masters silent video.
         if (_audioDecoder != null && HasBoundAudioStreams)
         {
+            // Main thread: snapshot settings before fill loop consumes _audioTuning.
+            RefreshAudioTuning();
             // Prime the SDL queue before the device can underrun, then start demand fill.
             ArmDeclickRamp();
             PrefillAudioStreams();
@@ -783,8 +787,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             return;
         }
 
-        // Re-read machine quality prefs cheaply each tick so mid-show changes apply without restart.
+        // Re-read show prefs on the main thread so mid-show changes apply without restart.
+        // Audio fill threads consume the last _audioTuning snapshot only (no GetNode off-thread).
         RefreshPresentTuning();
+        RefreshAudioTuning();
 
         int presented = 0;
         int maxPresentPerTick = _presentTuning.MaxPresentPerTick;
@@ -818,15 +824,15 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     }
 
     /// <summary>
-    /// Pulls current machine quality mode into present/prefetch knobs.
+    /// Pulls current show quality mode into present/prefetch knobs.
     /// </summary>
     private void RefreshPresentTuning()
     {
         try
         {
-            var udm = GetNodeOrNull<GlobalData>("/root/GlobalData")?.UserDataManager;
-            if (udm != null)
-                _presentTuning = udm.GetVideoPresentTuning();
+            var settings = GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
+            if (settings != null)
+                _presentTuning = settings.GetVideoPresentTuning();
             else
                 _presentTuning = VideoPresentTuning.ForMode(VideoQualityMode.Balanced);
         }
@@ -873,6 +879,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         // Streams were cleared on pause; re-prime before the fill loop can underrun.
         if (_audioDecoder != null && HasBoundAudioStreams)
         {
+            RefreshAudioTuning();
             ArmDeclickRamp();
             PrefillAudioStreams();
         }
@@ -1027,9 +1034,10 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
             if (_audioDecoder != null)
             {
+                RefreshAudioTuning();
                 _audioDecoder.FlushBuffers();
                 _audioDecoder.Seek(timestampUs);
-                _audioDecoder.Prefetch(AudioSeekPrefetchMs);
+                _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
 
                 // When audible, re-prime the device queue so resume is continuous (no underrun click).
                 bool shouldPrime;
@@ -1140,6 +1148,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         {
             while (!token.IsCancellationRequested)
             {
+                // Do not call RefreshAudioTuning here — fill runs off the main thread and
+                // GetNodeOrNull is not allowed. Use last main-thread snapshot of _audioTuning.
+
                 bool hold;
                 lock (_lock) hold = IsPaused || IsStopped || _isExiting || _audioFillSuspended;
                 if (hold)
@@ -1162,8 +1173,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                     int outCh = GetStreamChannels(kv.Key);
                     int bpf = outCh * sizeof(float);
                     if (bpf <= 0) continue;
-                    long lowWater = SourceSampleRate * AudioLowWaterMs / 1000L * bpf;
-                    long target = SourceSampleRate * AudioTargetBufferMs / 1000L * bpf;
+                    long lowWater = SourceSampleRate * _audioTuning.LowWaterMs / 1000L * bpf;
+                    long target = SourceSampleRate * _audioTuning.TargetBufferMs / 1000L * bpf;
                     if (queued < lowWater)
                     {
                         anyNeed = true;
@@ -1225,19 +1236,42 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     }
 
     /// <summary>
-    /// Arms an ~8 ms raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// Arms a raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// Uses the last main-thread <see cref="_audioTuning"/> snapshot (safe from fill threads).
     /// </summary>
     private void ArmDeclickRamp()
     {
-        if (SourceSampleRate <= 0)
+        if (SourceSampleRate <= 0 || _audioTuning.DeclickRampMs <= 0)
         {
             _declickFramesRemaining = 0;
             _declickRampTotalFrames = 0;
             return;
         }
 
-        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * DeclickRampMs / 1000);
+        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * _audioTuning.DeclickRampMs / 1000);
         _declickFramesRemaining = _declickRampTotalFrames;
+    }
+
+    /// <summary>
+    /// Pulls current show audio latency / declick settings into fill knobs.
+    /// Must only run on the main thread (uses <see cref="Node.GetNodeOrNull{T}"/>).
+    /// </summary>
+    private void RefreshAudioTuning()
+    {
+        try
+        {
+            var settings = GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
+            if (settings != null)
+                _audioTuning = settings.GetAudioPresentTuning();
+            else
+                _audioTuning = AudioPresentTuning.ForMode(
+                    AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
+        }
+        catch
+        {
+            _audioTuning = AudioPresentTuning.ForMode(
+                AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
+        }
     }
 
     /// <summary>
@@ -1265,7 +1299,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     }
 
     /// <summary>
-    /// Fills each bound SDL stream up to <see cref="AudioTargetBufferMs"/> before play/after seek.
+    /// Fills each bound SDL stream up to the configured target buffer before play/after seek.
     /// Prevents the device from consuming an empty queue (primary underrun click source).
     /// </summary>
     private void PrefillAudioStreams()
@@ -1276,6 +1310,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             return;
 
         // Cap work: ~target buffer / chunk size iterations; enough for one full prime.
+        // Uses _audioTuning last refreshed on the main thread (never call GetNode here).
         const int maxIterations = 48;
         for (int iter = 0; iter < maxIterations; iter++)
         {
@@ -1286,7 +1321,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 int outCh = GetStreamChannels(kv.Key);
                 int bpf = outCh * sizeof(float);
                 if (bpf <= 0) continue;
-                long target = SourceSampleRate * AudioTargetBufferMs / 1000L * bpf;
+                long target = SourceSampleRate * _audioTuning.TargetBufferMs / 1000L * bpf;
                 if (queued < target)
                 {
                     int need = (int)Math.Max(1, (target - queued) / bpf);
@@ -1319,7 +1354,8 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         float pan;
         lock (_lock)
         {
-            masterVol = _volume;
+            // Cue fade envelope × session master (volume + runtime mute from AudioDevices).
+            masterVol = _volume * (_audioDevices?.GetEffectiveSessionMasterLinear() ?? 1f);
             // Prefer runtime control-fade override, else component audio level.
             if (_runtimeLevelLinear.HasValue)
                 componentVol = _runtimeLevelLinear.Value;

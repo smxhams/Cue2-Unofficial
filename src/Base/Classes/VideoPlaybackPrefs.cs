@@ -19,21 +19,6 @@ public enum VideoQualityMode
 }
 
 /// <summary>
-/// Hardware decode preference (reserved until FFmpeg HWAccel is wired into VideoSourceDecoder).
-/// </summary>
-public enum HardwareDecodePreference
-{
-    /// <summary>Choose automatically when HW decode is available; software until then.</summary>
-    Auto = 0,
-
-    /// <summary>Prefer a hardware decoder when available; fall back to software.</summary>
-    PreferHardware = 1,
-
-    /// <summary>Always use the software decode path.</summary>
-    ForceSoftware = 2
-}
-
-/// <summary>
 /// Inspector video preview resolution scale (never affects house outputs).
 /// </summary>
 public enum VideoPreviewQuality

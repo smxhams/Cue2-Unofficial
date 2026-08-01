@@ -658,7 +658,14 @@ public partial class HistoryManager : Node
 		"MediaBackupEnabled",
 		"MultiEditEnabled",
 		"SelectNewCues",
-		"ShowTimelineWaveforms"
+		"ShowTimelineWaveforms",
+		"OutputBackgroundColor",
+		"VideoQualityMode",
+		"VideoPreviewQuality",
+		"OutputVSyncMode",
+		"AudioLatencyMode",
+		"AudioDeclickMs",
+		"AudioMasterVolume"
 	};
 
 	private static bool IsScalarSettingsSlice(string[] keys)

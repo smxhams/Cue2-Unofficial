@@ -7,13 +7,13 @@ namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
 /// Video / Image settings panel (Settings tree parent): live disable &amp; blackout,
-/// show background colour, and machine performance preferences (quality, HW decode stub,
-/// preview quality, vsync). Canvas Editor remains a child page for topology.
+/// show background colour, and show-scoped performance options (quality, preview, vsync).
+/// Canvas Editor remains a child page for topology.
 /// </summary>
 /// <remarks>
 /// Disable/blackout are runtime operator controls (not undoable, not saved).
-/// Background colour is show-scoped with history. Performance knobs live in
-/// <see cref="UserDataManager"/> (persist across shows).
+/// Background colour and performance knobs are show-scoped with history and
+/// persist in the showfile via <see cref="AppSettings"/>.
 /// </remarks>
 public partial class SettingsVideoOutput : ScrollContainer
 {
@@ -30,11 +30,9 @@ public partial class SettingsVideoOutput : ScrollContainer
     private ColorPickerButton _backgroundColorPicker;
     private Button _backgroundColorResetButton;
 
-    // Machine prefs
+    // Show-scoped performance
     private OptionButton _qualityModeOption;
     private Button _qualityModeResetButton;
-    private OptionButton _hwDecodeOption;
-    private Button _hwDecodeResetButton;
     private OptionButton _previewQualityOption;
     private Button _previewQualityResetButton;
     private OptionButton _vsyncOption;
@@ -56,8 +54,6 @@ public partial class SettingsVideoOutput : ScrollContainer
         _backgroundColorResetButton = GetNode<Button>("%BackgroundColorResetButton");
         _qualityModeOption = GetNode<OptionButton>("%QualityModeOption");
         _qualityModeResetButton = GetNode<Button>("%QualityModeResetButton");
-        _hwDecodeOption = GetNode<OptionButton>("%HwDecodeOption");
-        _hwDecodeResetButton = GetNode<Button>("%HwDecodeResetButton");
         _previewQualityOption = GetNode<OptionButton>("%PreviewQualityOption");
         _previewQualityResetButton = GetNode<Button>("%PreviewQualityResetButton");
         _vsyncOption = GetNode<OptionButton>("%VSyncOption");
@@ -65,7 +61,6 @@ public partial class SettingsVideoOutput : ScrollContainer
 
         SetupResetButton(_backgroundColorResetButton, OnBackgroundColorResetPressed);
         SetupResetButton(_qualityModeResetButton, OnQualityModeResetPressed);
-        SetupResetButton(_hwDecodeResetButton, OnHwDecodeResetPressed);
         SetupResetButton(_previewQualityResetButton, OnPreviewQualityResetPressed);
         SetupResetButton(_vsyncResetButton, OnVSyncResetPressed);
 
@@ -73,7 +68,6 @@ public partial class SettingsVideoOutput : ScrollContainer
         _blackoutCheckBox.Toggled += OnBlackoutToggled;
         _backgroundColorPicker.PopupClosed += OnBackgroundColorPopupClosed;
         _qualityModeOption.ItemSelected += OnQualityModeSelected;
-        _hwDecodeOption.ItemSelected += OnHwDecodeSelected;
         _previewQualityOption.ItemSelected += OnPreviewQualitySelected;
         _vsyncOption.ItemSelected += OnVSyncSelected;
 
@@ -83,7 +77,6 @@ public partial class SettingsVideoOutput : ScrollContainer
         {
             _globalSignals.NewSession += OnNewSession;
             _globalSignals.VideoOutputControlChanged += OnVideoOutputControlChanged;
-            _globalSignals.VideoPlaybackPrefsChanged += OnVideoPlaybackPrefsChanged;
         }
 
         SyncSettings();
@@ -97,7 +90,6 @@ public partial class SettingsVideoOutput : ScrollContainer
         {
             _globalSignals.NewSession -= OnNewSession;
             _globalSignals.VideoOutputControlChanged -= OnVideoOutputControlChanged;
-            _globalSignals.VideoPlaybackPrefsChanged -= OnVideoPlaybackPrefsChanged;
         }
         base._ExitTree();
     }
@@ -145,19 +137,12 @@ public partial class SettingsVideoOutput : ScrollContainer
         }
     }
 
-    private void OnVideoPlaybackPrefsChanged()
-    {
-        if (!GodotObject.IsInstanceValid(this) || _isSyncingUi)
-            return;
-        SyncMachinePrefsOnly();
-    }
-
     /// <summary>
     /// Pulls current model values into the form without re-firing edit handlers.
     /// </summary>
     private void SyncSettings()
     {
-        if (_globalData == null)
+        if (_globalData?.Settings == null)
             return;
 
         _isSyncingUi = true;
@@ -170,10 +155,10 @@ public partial class SettingsVideoOutput : ScrollContainer
             if (_blackoutCheckBox != null)
                 _blackoutCheckBox.Disabled = disabled;
 
-            if (_globalData.Settings != null && _backgroundColorPicker != null)
+            if (_backgroundColorPicker != null)
                 _backgroundColorPicker.Color = _globalData.Settings.OutputBackgroundColor;
 
-            SyncMachinePrefsOnly(blockSignals: true);
+            SyncShowPerformanceOptions(blockSignals: true);
             UpdateAllResetButtons();
         }
         finally
@@ -182,50 +167,43 @@ public partial class SettingsVideoOutput : ScrollContainer
         }
     }
 
-    private void SyncMachinePrefsOnly(bool blockSignals = false)
+    private void SyncShowPerformanceOptions(bool blockSignals = false)
     {
-        var udm = _globalData?.UserDataManager;
-        if (udm == null)
+        var settings = _globalData?.Settings;
+        if (settings == null)
             return;
 
         if (_qualityModeOption != null)
         {
             if (blockSignals) _qualityModeOption.SetBlockSignals(true);
-            _qualityModeOption.Selected = (int)udm.VideoQualityMode;
+            _qualityModeOption.Selected = (int)settings.VideoQualityMode;
             if (blockSignals) _qualityModeOption.SetBlockSignals(false);
-        }
-        if (_hwDecodeOption != null)
-        {
-            if (blockSignals) _hwDecodeOption.SetBlockSignals(true);
-            _hwDecodeOption.Selected = (int)udm.HardwareDecodePreference;
-            if (blockSignals) _hwDecodeOption.SetBlockSignals(false);
         }
         if (_previewQualityOption != null)
         {
             if (blockSignals) _previewQualityOption.SetBlockSignals(true);
-            _previewQualityOption.Selected = (int)udm.VideoPreviewQuality;
+            _previewQualityOption.Selected = (int)settings.VideoPreviewQuality;
             if (blockSignals) _previewQualityOption.SetBlockSignals(false);
         }
         if (_vsyncOption != null)
         {
             if (blockSignals) _vsyncOption.SetBlockSignals(true);
-            _vsyncOption.Selected = (int)udm.OutputVSyncMode;
+            _vsyncOption.Selected = (int)settings.OutputVSyncMode;
             if (blockSignals) _vsyncOption.SetBlockSignals(false);
         }
 
-        UpdateMachineResetButtons();
+        UpdatePerformanceResetButtons();
     }
 
     private void UpdateAllResetButtons()
     {
         UpdateBackgroundColorResetButton();
-        UpdateMachineResetButtons();
+        UpdatePerformanceResetButtons();
     }
 
-    private void UpdateMachineResetButtons()
+    private void UpdatePerformanceResetButtons()
     {
         UpdateQualityModeResetButton();
-        UpdateHwDecodeResetButton();
         UpdatePreviewQualityResetButton();
         UpdateVSyncResetButton();
     }
@@ -298,85 +276,81 @@ public partial class SettingsVideoOutput : ScrollContainer
             _backgroundColorResetButton.TooltipText = "Reset to default: black";
     }
 
-    // ── Machine performance prefs ───────────────────────────────────────────
+    // ── Show performance options ────────────────────────────────────────────
 
     private void OnQualityModeSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.VideoQualityMode = (VideoQualityMode)(int)index;
+
+        var next = (VideoQualityMode)(int)index;
+        if (_globalData.Settings.VideoQualityMode == next)
+        {
+            UpdateQualityModeResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change video quality mode", null, "VideoQualityMode");
+        _globalData.Settings.VideoQualityMode = next;
         UpdateQualityModeResetButton();
     }
 
     private void OnQualityModeResetPressed()
     {
-        if (_globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.VideoQualityMode = UserDataManager.DefaultVideoQualityMode;
-        SyncMachinePrefsOnly(blockSignals: true);
+        if (_globalData.Settings.VideoQualityMode == AppSettings.DefaultVideoQualityMode)
+            return;
+
+        _historyManager?.RecordSettingsChange("Reset video quality mode", null, "VideoQualityMode");
+        _globalData.Settings.VideoQualityMode = AppSettings.DefaultVideoQualityMode;
+        SyncShowPerformanceOptions(blockSignals: true);
     }
 
     private void UpdateQualityModeResetButton()
     {
-        if (_qualityModeResetButton == null || _globalData?.UserDataManager == null)
+        if (_qualityModeResetButton == null || _globalData?.Settings == null)
             return;
-        bool atDefault = _globalData.UserDataManager.VideoQualityMode
-            == UserDataManager.DefaultVideoQualityMode;
+        bool atDefault = _globalData.Settings.VideoQualityMode == AppSettings.DefaultVideoQualityMode;
         _qualityModeResetButton.Visible = !atDefault;
         if (!atDefault)
             _qualityModeResetButton.TooltipText = "Reset to default: Balanced";
     }
 
-    private void OnHwDecodeSelected(long index)
-    {
-        if (_isSyncingUi || _globalData?.UserDataManager == null)
-            return;
-        _globalData.UserDataManager.HardwareDecodePreference = (HardwareDecodePreference)(int)index;
-        UpdateHwDecodeResetButton();
-    }
-
-    private void OnHwDecodeResetPressed()
-    {
-        if (_globalData?.UserDataManager == null)
-            return;
-        _globalData.UserDataManager.HardwareDecodePreference =
-            UserDataManager.DefaultHardwareDecodePreference;
-        SyncMachinePrefsOnly(blockSignals: true);
-    }
-
-    private void UpdateHwDecodeResetButton()
-    {
-        if (_hwDecodeResetButton == null || _globalData?.UserDataManager == null)
-            return;
-        bool atDefault = _globalData.UserDataManager.HardwareDecodePreference
-            == UserDataManager.DefaultHardwareDecodePreference;
-        _hwDecodeResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _hwDecodeResetButton.TooltipText = "Reset to default: Auto";
-    }
-
     private void OnPreviewQualitySelected(long index)
     {
-        if (_isSyncingUi || _globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.VideoPreviewQuality = (VideoPreviewQuality)(int)index;
+
+        var next = (VideoPreviewQuality)(int)index;
+        if (_globalData.Settings.VideoPreviewQuality == next)
+        {
+            UpdatePreviewQualityResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change video preview quality", null, "VideoPreviewQuality");
+        _globalData.Settings.VideoPreviewQuality = next;
         UpdatePreviewQualityResetButton();
     }
 
     private void OnPreviewQualityResetPressed()
     {
-        if (_globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.VideoPreviewQuality = UserDataManager.DefaultVideoPreviewQuality;
-        SyncMachinePrefsOnly(blockSignals: true);
+        if (_globalData.Settings.VideoPreviewQuality == AppSettings.DefaultVideoPreviewQuality)
+            return;
+
+        _historyManager?.RecordSettingsChange("Reset video preview quality", null, "VideoPreviewQuality");
+        _globalData.Settings.VideoPreviewQuality = AppSettings.DefaultVideoPreviewQuality;
+        SyncShowPerformanceOptions(blockSignals: true);
     }
 
     private void UpdatePreviewQualityResetButton()
     {
-        if (_previewQualityResetButton == null || _globalData?.UserDataManager == null)
+        if (_previewQualityResetButton == null || _globalData?.Settings == null)
             return;
-        bool atDefault = _globalData.UserDataManager.VideoPreviewQuality
-            == UserDataManager.DefaultVideoPreviewQuality;
+        bool atDefault = _globalData.Settings.VideoPreviewQuality == AppSettings.DefaultVideoPreviewQuality;
         _previewQualityResetButton.Visible = !atDefault;
         if (!atDefault)
             _previewQualityResetButton.TooltipText = "Reset to default: Full";
@@ -384,26 +358,40 @@ public partial class SettingsVideoOutput : ScrollContainer
 
     private void OnVSyncSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.OutputVSyncMode = (OutputVSyncMode)(int)index;
+
+        var next = (OutputVSyncMode)(int)index;
+        if (_globalData.Settings.OutputVSyncMode == next)
+        {
+            UpdateVSyncResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change output vsync mode", null, "OutputVSyncMode");
+        _globalData.Settings.OutputVSyncMode = next;
+        _displaysManager?.ApplyOutputVSyncPreference();
         UpdateVSyncResetButton();
     }
 
     private void OnVSyncResetPressed()
     {
-        if (_globalData?.UserDataManager == null)
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
             return;
-        _globalData.UserDataManager.OutputVSyncMode = UserDataManager.DefaultOutputVSyncMode;
-        SyncMachinePrefsOnly(blockSignals: true);
+        if (_globalData.Settings.OutputVSyncMode == AppSettings.DefaultOutputVSyncMode)
+            return;
+
+        _historyManager?.RecordSettingsChange("Reset output vsync mode", null, "OutputVSyncMode");
+        _globalData.Settings.OutputVSyncMode = AppSettings.DefaultOutputVSyncMode;
+        _displaysManager?.ApplyOutputVSyncPreference();
+        SyncShowPerformanceOptions(blockSignals: true);
     }
 
     private void UpdateVSyncResetButton()
     {
-        if (_vsyncResetButton == null || _globalData?.UserDataManager == null)
+        if (_vsyncResetButton == null || _globalData?.Settings == null)
             return;
-        bool atDefault = _globalData.UserDataManager.OutputVSyncMode
-            == UserDataManager.DefaultOutputVSyncMode;
+        bool atDefault = _globalData.Settings.OutputVSyncMode == AppSettings.DefaultOutputVSyncMode;
         _vsyncResetButton.Visible = !atDefault;
         if (!atDefault)
             _vsyncResetButton.TooltipText = "Reset to default: Prefer VSync";

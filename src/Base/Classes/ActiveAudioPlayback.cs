@@ -21,12 +21,11 @@ namespace Cue2.Base.Classes;
 /// </summary>
 public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 {
-    private const int TargetBufferMs = 100;
-    private const int LowWaterMs = 50;
     private const int FillLoopSleepMs = 4;
-    private const int PrefetchMs = 800;
-    /// <summary>Short raised-cosine fade-in after start/seek to suppress silence→sample pops.</summary>
-    private const int DeclickRampMs = 8;
+
+    /// <summary>Fill / prefetch / de-click knobs from show <see cref="Settings"/>.</summary>
+    private AudioPresentTuning _audioTuning = AudioPresentTuning.ForMode(
+        AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
 
     /// <summary>Pull-based audio source decoder.</summary>
     public AudioSourceDecoder Decoder { get; private set; }
@@ -143,6 +142,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     /// </summary>
     public async Task InitAsync()
     {
+        RefreshAudioTuning();
+
         // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
         // subject to decoder size/duration caps. Short looping cues stay exact.
         string mediaPath = ResolveMediaPath(_audioComponent.AudioFile);
@@ -158,10 +159,10 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         if (_startTimeUs > 0)
             Decoder.Seek(_startTimeUs);
         else
-            Decoder.Prefetch(PrefetchMs);
+            Decoder.Prefetch(_audioTuning.PrefetchMs);
 
         // Prefetch after seek as well
-        Decoder.Prefetch(PrefetchMs);
+        Decoder.Prefetch(_audioTuning.PrefetchMs);
 
         int maxFrames = Math.Max(SourceSampleRate / 10, 1024); // ~100 ms chunk
         _srcBuffer = new float[maxFrames * SourceChannels];
@@ -303,6 +304,9 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             _hasStarted = true;
         }
 
+        // Main thread: snapshot settings before fill loop / prefill use _audioTuning.
+        RefreshAudioTuning();
+
         double fadeIn = fadeInDuration ?? _audioComponent.FadeInDuration;
         if (fadeIn > 1e-9)
         {
@@ -362,6 +366,9 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         {
             while (!token.IsCancellationRequested)
             {
+                // Do not call RefreshAudioTuning here — fill runs off the main thread and
+                // SceneTree/GetNode is not allowed. Use last main-thread snapshot of _audioTuning.
+
                 bool hold;
                 lock (_lock) hold = IsPaused || IsStopped || _fillSuspended;
                 if (hold)
@@ -395,8 +402,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                     int bytesPerOutFrame = outCh * sizeof(float);
                     if (bytesPerOutFrame <= 0) continue;
 
-                    long lowWater = SourceSampleRate * LowWaterMs / 1000L * bytesPerOutFrame;
-                    long target = SourceSampleRate * TargetBufferMs / 1000L * bytesPerOutFrame;
+                    long lowWater = SourceSampleRate * _audioTuning.LowWaterMs / 1000L * bytesPerOutFrame;
+                    long target = SourceSampleRate * _audioTuning.TargetBufferMs / 1000L * bytesPerOutFrame;
 
                     if (queued < lowWater)
                     {
@@ -510,19 +517,47 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     }
 
     /// <summary>
-    /// Arms an ~8 ms raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// Arms a raised-cosine fade-in so the next PCM pushed after silence does not click.
+    /// Uses the last main-thread <see cref="_audioTuning"/> snapshot (safe from fill threads).
     /// </summary>
     private void ArmDeclickRamp()
     {
-        if (SourceSampleRate <= 0)
+        if (SourceSampleRate <= 0 || _audioTuning.DeclickRampMs <= 0)
         {
             _declickFramesRemaining = 0;
             _declickRampTotalFrames = 0;
             return;
         }
 
-        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * DeclickRampMs / 1000);
+        _declickRampTotalFrames = Math.Max(1, SourceSampleRate * _audioTuning.DeclickRampMs / 1000);
         _declickFramesRemaining = _declickRampTotalFrames;
+    }
+
+    /// <summary>
+    /// Pulls current show audio latency / declick settings into fill knobs.
+    /// Must only run on the main thread (uses SceneTree / GetNodeOrNull).
+    /// </summary>
+    private void RefreshAudioTuning()
+    {
+        try
+        {
+            if (Engine.GetMainLoop() is SceneTree tree)
+            {
+                var settings = tree.Root.GetNodeOrNull<GlobalData>("/root/GlobalData")?.Settings;
+                if (settings != null)
+                {
+                    _audioTuning = settings.GetAudioPresentTuning();
+                    return;
+                }
+            }
+            _audioTuning = AudioPresentTuning.ForMode(
+                AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
+        }
+        catch
+        {
+            _audioTuning = AudioPresentTuning.ForMode(
+                AudioLatencyMode.Balanced, Settings.DefaultAudioDeclickMs);
+        }
     }
 
     /// <summary>
@@ -548,7 +583,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     }
 
     /// <summary>
-    /// Fills each bound SDL stream up to <see cref="TargetBufferMs"/> before play/after seek.
+    /// Fills each bound SDL stream up to the configured target buffer before play/after seek.
     /// </summary>
     private void PrefillStreams()
     {
@@ -557,6 +592,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         if (_srcBuffer == null || SourceSampleRate <= 0 || SourceChannels <= 0)
             return;
 
+        // Uses _audioTuning last refreshed on the main thread (never call GetNode here —
+        // Prefill can also run from the fill loop on loop/segment restart).
         const int maxIterations = 48;
         for (int iter = 0; iter < maxIterations; iter++)
         {
@@ -567,7 +604,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 int outCh = GetStreamChannels(kv.Key);
                 int bpf = outCh * sizeof(float);
                 if (bpf <= 0) continue;
-                long target = SourceSampleRate * TargetBufferMs / 1000L * bpf;
+                long target = SourceSampleRate * _audioTuning.TargetBufferMs / 1000L * bpf;
                 if (queued < target)
                 {
                     int need = (int)Math.Max(1, (target - queued) / bpf);
@@ -601,7 +638,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         float pan;
         lock (_lock)
         {
-            masterVol = _volume;
+            // Cue fade envelope × session master (volume + runtime mute from AudioDevices).
+            masterVol = _volume * (_audioDevices?.GetEffectiveSessionMasterLinear() ?? 1f);
             componentVol = _runtimeLevelLinear ?? Mathf.Clamp((float)_audioComponent.Volume, 0f, 1f);
             // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
             pan = SourceChannels == 2
@@ -685,7 +723,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                         SDL.ClearAudioStream(stream);
                 }
                 Decoder.Seek(_startTimeUs);
-                Decoder.Prefetch(PrefetchMs);
+                Decoder.Prefetch(_audioTuning.PrefetchMs);
                 _framesDelivered = 0;
                 ArmDeclickRamp();
                 PrefillStreams();
@@ -844,10 +882,11 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
         try
         {
+            RefreshAudioTuning();
             if (_pausedAtUs > 0)
             {
                 Decoder.Seek(_pausedAtUs);
-                Decoder.Prefetch(PrefetchMs / 2);
+                Decoder.Prefetch(Math.Max(50, _audioTuning.PrefetchMs / 2));
                 _pausedAtUs = 0;
             }
 
@@ -1198,6 +1237,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 IsPaused = true;
             }
 
+            RefreshAudioTuning();
+
             if (DeviceStreams != null)
             {
                 foreach (var stream in DeviceStreams.Values)
@@ -1209,7 +1250,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 clamped = Math.Min(clamped, _endTimeUs);
 
             Decoder.Seek(clamped);
-            Decoder.Prefetch(PrefetchMs / 2);
+            Decoder.Prefetch(Math.Max(50, _audioTuning.PrefetchMs / 2));
             _framesDelivered = 0;
             _pausedAtUs = clamped;
 

@@ -16,7 +16,18 @@ public class AudioDevice : IDevice
     public int Channels { get; set; } = -1;
     public int SampleRate { get; set; } = -1;
     public int BitDepth { get; set; } = -1;
-    
+
+    /// <summary>
+    /// Playback (output) channel count from the device format, or 0 if unknown.
+    /// </summary>
+    public int OutputChannels { get; set; }
+
+    /// <summary>
+    /// Device buffer size in sample frames (SDL chunk fed to hardware). Often a power of two
+    /// (64–1024) on pro/ASIO-style drivers; shared-mode OS devices may use other sizes (e.g. 480).
+    /// </summary>
+    public int BufferFrames { get; set; }
+
     public SDL.AudioFormat Format { get; set; } = 0;
     public float VolumeLevel { get; set; } = 1f;
     
@@ -42,13 +53,22 @@ public class AudioDevice : IDevice
         error = "";
     }
     
+    /// <summary>
+    /// Device buffer duration in milliseconds, or 0 when sample rate / buffer frames are unknown.
+    /// </summary>
+    public float BufferMs =>
+        SampleRate > 0 && BufferFrames > 0
+            ? 1000f * BufferFrames / SampleRate
+            : 0f;
+
     public override string ToString()
     {
         return $"Device: {Name}\n" +
                $"ID: {DeviceId}\n" +
-               $"Channels: {Channels}\n" +
+               $"Output channels: {OutputChannels}\n" +
                $"Sample Rate: {SampleRate} Hz\n" +
                $"Bit Depth: {BitDepth}-bit\n" +
+               $"Buffer: {BufferFrames} samples\n" +
                $"Volume: {VolumeLevel * 100:F1}%\n" +
                $"Format: {Format}";
     }
