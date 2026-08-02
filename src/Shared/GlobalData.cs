@@ -182,6 +182,7 @@ public partial class GlobalData : Node
 		"ResumeAll",
 		"ToggleSettings",
 		"ToggleLog",
+		"ToggleShowMode",
 		"ExpandOneLayer",
 		"CollapseOneLayer",
 		"ToggleExpandAll",
@@ -204,7 +205,7 @@ public partial class GlobalData : Node
 		("Playback", new[] { "Go", "StopAll", "PauseAll", "ResumeAll" }),
 		("Cue Editing", new[] { "CreateCue", "GroupSelectedCues", "DeleteCue", "DuplicateSelectedCues", "CutSelectedCues", "CopySelectedCues", "PasteCues" }),
 		("Navigation", new[] { "SelectAll", "SelectNext", "SelectPrevious", "ExpandOneLayer", "CollapseOneLayer", "ToggleExpandAll" }),
-		("Windows", new[] { "ToggleSettings", "ToggleLog" }),
+		("Windows", new[] { "ToggleSettings", "ToggleLog", "ToggleShowMode" }),
 		("History", new[] { "Undo", "Redo" }),
 	};
 

@@ -140,9 +140,11 @@ public partial class ShellBar : PanelContainer
 		// Optional global refresh targeting this cue id
 		_globalSignals.UpdateShellBar += OnUpdateShellBar;
 		_globalSignals.CueMediaHealthChanged += OnCueMediaHealthChanged;
+		_globalSignals.ShowModeChanged += OnShowModeChanged;
 
 		ShellColumnLayout.Changed += OnShellColumnLayoutChanged;
 		ApplyColumnLayout();
+		ApplyShowModeEditLock(_globalData?.Settings?.IsCueEditingLocked == true);
 	}
 
 	/// <summary>
@@ -331,6 +333,7 @@ public partial class ShellBar : PanelContainer
 		{
 			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
 			_globalSignals.CueMediaHealthChanged -= OnCueMediaHealthChanged;
+			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		}
 		if (_cue != null)
 		{
@@ -903,11 +906,102 @@ public partial class ShellBar : PanelContainer
 			_postWaitLineEdit.Text = FormatDurationField(postWait);
 	}
 	
+	/// <summary>
+	/// True when Show Mode is locking cue property / structure edits.
+	/// </summary>
+	private bool IsCueEditingLocked() =>
+		_globalData?.Settings?.IsCueEditingLocked == true;
+
+	/// <summary>
+	/// Applies or clears inline-edit lock when show mode changes.
+	/// </summary>
+	private void OnShowModeChanged(bool enabled)
+	{
+		ApplyShowModeEditLock(enabled);
+	}
+
+	/// <summary>
+	/// Disables shell-row editing chrome in Show Mode (keeps selection / collapse / playback usable).
+	/// </summary>
+	/// <param name="locked">True when Show Mode is active.</param>
+	private void ApplyShowModeEditLock(bool locked)
+	{
+		if (locked)
+			CancelInlineEdits();
+
+		// Pre/post wait are normally always editable; lock them in show mode.
+		if (_preWaitLineEdit != null)
+			_preWaitLineEdit.Editable = !locked;
+		if (_postWaitLineEdit != null)
+			_postWaitLineEdit.Editable = !locked;
+
+		if (_followButton != null)
+			_followButton.Disabled = locked;
+
+		if (_dragButton != null)
+		{
+			_dragButton.Disabled = locked;
+			_dragButton.MouseFilter = locked ? MouseFilterEnum.Ignore : MouseFilterEnum.Stop;
+			_dragButton.MouseDefaultCursorShape = locked
+				? CursorShape.Arrow
+				: CursorShape.Drag;
+		}
+	}
+
+	/// <summary>
+	/// Aborts any in-progress double-click inline edit without committing.
+	/// </summary>
+	private void CancelInlineEdits()
+	{
+		if (_isEditingCueNum && _cueNumLineEdit != null)
+		{
+			_cueNumLineEdit.Text = _cue?.CueNum ?? string.Empty;
+			_cueNumLineEdit.Editable = false;
+			_cueNumLineEdit.FocusMode = FocusModeEnum.None;
+			if (_cueNumLineEdit.HasFocus())
+				_cueNumLineEdit.ReleaseFocus();
+			_isEditingCueNum = false;
+		}
+		if (_isEditingName && _cueNameLineEdit != null)
+		{
+			_cueNameLineEdit.Text = _cue?.Name ?? string.Empty;
+			_cueNameLineEdit.Editable = false;
+			_cueNameLineEdit.FocusMode = FocusModeEnum.None;
+			if (_cueNameLineEdit.HasFocus())
+				_cueNameLineEdit.ReleaseFocus();
+			_isEditingName = false;
+		}
+		if (_isEditingMemo && _memoLineEdit != null)
+		{
+			_memoLineEdit.Text = FlattenNotesForShell(_cue?.Notes);
+			_memoLineEdit.Editable = false;
+			_memoLineEdit.FocusMode = FocusModeEnum.None;
+			if (_memoLineEdit.HasFocus())
+				_memoLineEdit.ReleaseFocus();
+			_isEditingMemo = false;
+		}
+		if (_isEditingPreWait && _preWaitLineEdit != null && _cue != null)
+		{
+			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+			if (_preWaitLineEdit.HasFocus())
+				_preWaitLineEdit.ReleaseFocus();
+			_isEditingPreWait = false;
+		}
+		if (_isEditingPostWait && _postWaitLineEdit != null && _cue != null)
+		{
+			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+			if (_postWaitLineEdit.HasFocus())
+				_postWaitLineEdit.ReleaseFocus();
+			_isEditingPostWait = false;
+		}
+	}
+
 	private void OnCueNumGuiInput(InputEvent @event)
 	{
 		OnInput(@event);
 		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && mb.DoubleClick)
 		{
+			if (IsCueEditingLocked()) return;
 			if (_isEditingCueNum) return;
 			_cueNumLineEdit.Editable = true;
 			_cueNumLineEdit.FocusMode = FocusModeEnum.Click;
@@ -947,6 +1041,7 @@ public partial class ShellBar : PanelContainer
 		OnInput(@event);
 		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && mb.DoubleClick)
 		{
+			if (IsCueEditingLocked()) return;
 			_cueNameLineEdit.Editable = true;
 			_cueNameLineEdit.FocusMode = FocusModeEnum.Click;
 			_cueNameLineEdit.GrabFocus();
@@ -985,6 +1080,7 @@ public partial class ShellBar : PanelContainer
 		if (_memoLineEdit == null || _cue?.Memo != true) return;
 		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && mb.DoubleClick)
 		{
+			if (IsCueEditingLocked()) return;
 			if (_isEditingMemo) return;
 			_memoLineEdit.Editable = true;
 			_memoLineEdit.FocusMode = FocusModeEnum.Click;
@@ -1030,6 +1126,16 @@ public partial class ShellBar : PanelContainer
 	private void OnPreWaitEditToggled(bool editing)
 	{
 		if (_cue == null) return;
+		if (IsCueEditingLocked())
+		{
+			if (editing && _preWaitLineEdit != null)
+			{
+				_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+				_preWaitLineEdit.ReleaseFocus();
+			}
+			_isEditingPreWait = false;
+			return;
+		}
 		if (_isEditingPreWait && editing == false)
 		{
 			var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
@@ -1058,6 +1164,16 @@ public partial class ShellBar : PanelContainer
 	private void OnPostWaitEditToggled(bool editing)
 	{
 		if (_cue == null) return;
+		if (IsCueEditingLocked())
+		{
+			if (editing && _postWaitLineEdit != null)
+			{
+				_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+				_postWaitLineEdit.ReleaseFocus();
+			}
+			_isEditingPostWait = false;
+			return;
+		}
 		if (_isEditingPostWait && editing == false)
 		{
 			var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
@@ -1089,6 +1205,7 @@ public partial class ShellBar : PanelContainer
 	private void OnFollowButtonPressed()
 	{
 		if (_cue == null) return;
+		if (IsCueEditingLocked()) return;
 		if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
 		var desired = _cue.Follow switch
@@ -1345,15 +1462,24 @@ public partial class ShellBar : PanelContainer
 		}
 
 		_contextMenu.Clear();
-		AddContextMenuItem("Cut", "CutSelectedCues", ShellContextMenuId.Cut);
-		AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
-		AddContextMenuItem("Paste", "PasteCues", ShellContextMenuId.Paste);
-		_contextMenu.AddSeparator();
-		AddContextMenuItem("Duplicate", "DuplicateSelectedCues", ShellContextMenuId.Duplicate);
-		AddContextMenuItem("Delete", "DeleteCue", ShellContextMenuId.Delete);
-		_contextMenu.AddSeparator();
-		AddContextMenuItem("Group", "GroupSelectedCues", ShellContextMenuId.Group);
-		AddContextMenuItem("Create Cue", "CreateCue", ShellContextMenuId.CreateCue);
+		bool locked = IsCueEditingLocked();
+		if (locked)
+		{
+			// Show Mode: copy is read-only; mutating actions are omitted.
+			AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
+		}
+		else
+		{
+			AddContextMenuItem("Cut", "CutSelectedCues", ShellContextMenuId.Cut);
+			AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
+			AddContextMenuItem("Paste", "PasteCues", ShellContextMenuId.Paste);
+			_contextMenu.AddSeparator();
+			AddContextMenuItem("Duplicate", "DuplicateSelectedCues", ShellContextMenuId.Duplicate);
+			AddContextMenuItem("Delete", "DeleteCue", ShellContextMenuId.Delete);
+			_contextMenu.AddSeparator();
+			AddContextMenuItem("Group", "GroupSelectedCues", ShellContextMenuId.Group);
+			AddContextMenuItem("Create Cue", "CreateCue", ShellContextMenuId.CreateCue);
+		}
 
 		// Popup at cursor (screen coords — PopupMenu is a Window).
 		_contextMenu.ResetSize();
@@ -1666,6 +1792,8 @@ public partial class ShellBar : PanelContainer
 		AcceptEvent();
 		_dragButton?.SetPressedNoSignal(false);
 
+		if (IsCueEditingLocked())
+			return;
 		if (_globalData?.Cuelist == null)
 			return;
 		_globalData.Cuelist.StartReorder(this);

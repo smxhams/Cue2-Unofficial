@@ -25,7 +25,16 @@ public partial class SettingsWindow : Window
 	private Godot.Tree _setTree;
 	private string _currentDisplay = "";
 
+	/// <summary>
+	/// Floor size for interactive resize. Canvas editor side panels may compress below preferred widths.
+	/// </summary>
 	private static readonly Vector2I MinWindowSize = new Vector2I(500, 350);
+
+	/// <summary>
+	/// First-open default: wide enough for Canvas Editor (structure + stage + properties) without a cramped layout.
+	/// </summary>
+	private static readonly Vector2I DefaultWindowSize = new Vector2I(1100, 700);
+
 	private const string DefaultMenuKey = "General";
 
 	// Session cache: seeded once from UserDataManager (file load at app start), then authoritative
@@ -72,9 +81,10 @@ public partial class SettingsWindow : Window
 		// Content scale only — does not change outer window pixel size.
 		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
 
-		// Prefer session/cached geometry. Only scale the scene default on a true first run.
+		// Prefer session/cached geometry. First run uses a canvas-editor-friendly default, then DPI scale.
 		if (!TryRestoreWindowState())
 		{
+			Size = DefaultWindowSize;
 			UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
 		}
 
@@ -950,8 +960,6 @@ public partial class SettingsWindow : Window
 		TreeItem tiMidiInputMap = _setTree.CreateItem(tiMidi);
 		tiMidiInputMap.SetText(0, "MIDI Input Map");
 		tiMidiInputMap.SetTooltipText(0, "Assign MIDI controls to app actions (Go, Save, Undo, …)");
-		TreeItem tiNetworkConnection = _setTree.CreateItem(tiConnections);
-		tiNetworkConnection.SetText(0, "Network Connection");
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);
 		tiArtNet.SetText(0, "Art-Net");
 

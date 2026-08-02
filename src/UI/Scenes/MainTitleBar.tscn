@@ -47,6 +47,17 @@ mouse_filter = 2
 theme = ExtResource("1_2nc7k")
 script = ExtResource("1_ijer2")
 
+[node name="TitleBarBackground" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0588235, 0.0588235, 0.0588235, 1)
+
 [node name="TitleLabel" type="Label" parent="." unique_id=1531342879]
 unique_name_in_owner = true
 layout_mode = 1
@@ -125,6 +136,19 @@ text = "View"
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
+
+[node name="ShowModeButton" type="CheckButton" parent="HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Show Mode locks cue editing for live performance.
+Off = Edit Mode (default): full cue editing.
+On = Show Mode: inspectors hidden, shell edits and cue structure locked.
+Saved with the showfile."
+focus_mode = 0
+theme_override_font_sizes/font_size = 11
+text = "Show Mode"
 
 [node name="AboutButton" type="Button" parent="HBoxContainer" unique_id=30696281]
 unique_name_in_owner = true

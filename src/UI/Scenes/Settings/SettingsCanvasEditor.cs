@@ -73,6 +73,19 @@ public partial class SettingsCanvasEditor : Control
     private Button _fitButton;
     private LineEdit _zoomPercentLineEdit;
 
+    // Layout: structure | stage | properties — stage collapses first when space is tight
+    private HSplitContainer _bodyHSplit;
+    private HSplitContainer _centerRightSplit;
+    private Control _leftPanel;
+    private Control _rightPanel;
+    private bool _isApplyingPanelLayout;
+
+    /// <summary>Preferred width for the structure (screens/layers) panel while the stage still has room.</summary>
+    private const float LeftPanelPreferredWidth = 180f;
+
+    /// <summary>Preferred width for the properties panel while the stage still has room.</summary>
+    private const float RightPanelPreferredWidth = 220f;
+
     // Properties – empty / canvas
     private Label _emptyPropsLabel;
     private Control _canvasProps;
@@ -293,12 +306,17 @@ public partial class SettingsCanvasEditor : Control
         _viewport.TransparentBg = true;
         _viewport.HandleInputLocally = false;
         _subViewportContainer.Stretch = false;
-        _subViewportContainer.CustomMinimumSize = new Vector2(64, 64);
-        _viewport.Size = new Vector2I(64, 64);
+        // Zero min so the center stage can fully collapse before side panels shrink.
+        _subViewportContainer.CustomMinimumSize = Vector2.Zero;
+        _viewport.Size = new Vector2I(1, 1);
 
         _scrollContainer.MouseFilter = MouseFilterEnum.Stop;
         _subViewportContainer.MouseFilter = MouseFilterEnum.Stop;
         _scrollContainer.Resized += OnStageResized;
+
+        if (_bodyHSplit != null)
+            _bodyHSplit.Resized += OnBodyHSplitResized;
+        CallDeferred(nameof(ApplyResponsivePanelLayout));
 
         // Start input-off; enabled only while this panel is the visible settings page.
         SetProcessInput(IsVisibleInTree());
@@ -353,12 +371,9 @@ public partial class SettingsCanvasEditor : Control
         if (!IsInsideTree() || !_stageInitialized || !IsVisibleInTree())
             return;
 
-        // Still not laid out — try again next frame only while visible (avoid infinite defer while hidden)
+        // Stage collapsed or not laid out yet — wait for Resized; do not spin forever at zero width.
         if (_scrollContainer.Size.X < 8f || _scrollContainer.Size.Y < 8f)
-        {
-            CallDeferred(nameof(RefreshStageView));
             return;
-        }
 
         FitToView();
         UpdateCanvasGizmos();
@@ -378,6 +393,7 @@ public partial class SettingsCanvasEditor : Control
 
             // Heavy init only when user actually opens Canvas Editor (not every Settings open).
             CallDeferred(nameof(EnsureStageInitialized));
+            CallDeferred(nameof(ApplyResponsivePanelLayout));
             CallDeferred(nameof(RefreshStageView));
             if (_needsHistoryRefresh && _stageInitialized)
             {
@@ -428,11 +444,86 @@ public partial class SettingsCanvasEditor : Control
         if (!IsVisibleInTree() || !_stageInitialized)
             return;
 
+        // Collapsed stage (narrow window): skip zoom work until space returns.
+        if (_scrollContainer.Size.X < 8f || _scrollContainer.Size.Y < 8f)
+            return;
+
         // First meaningful size after being blank/hidden: fit rather than leave zoom broken
         if (_viewport.Size.X <= 8 || _viewport.Size.Y <= 8)
             CallDeferred(nameof(RefreshStageView));
         else
             UpdateZoom();
+    }
+
+    private void OnBodyHSplitResized()
+    {
+        ApplyResponsivePanelLayout();
+    }
+
+    /// <summary>
+    /// Shrink order: center stage collapses first; only when both side panels are already at their
+    /// preferred widths with no stage left do left/right release their minimums and compress.
+    /// </summary>
+    private void ApplyResponsivePanelLayout()
+    {
+        if (_isApplyingPanelLayout || !IsInsideTree())
+            return;
+        if (_bodyHSplit == null || _centerRightSplit == null || _leftPanel == null || _rightPanel == null)
+            return;
+
+        float width = _bodyHSplit.Size.X;
+        if (width < 1f)
+            return;
+
+        float separation = _bodyHSplit.GetThemeConstant("separation");
+        if (separation < 0f)
+            separation = 4f;
+
+        // Body has one separator between left and center-right; center-right has one more.
+        float neededForSides = LeftPanelPreferredWidth + RightPanelPreferredWidth + separation * 2f;
+
+        _isApplyingPanelLayout = true;
+        try
+        {
+            if (width >= neededForSides)
+            {
+                // Room for stage: pin side panels so all further shrink eats the center first.
+                _leftPanel.CustomMinimumSize = new Vector2(LeftPanelPreferredWidth, 0f);
+                _rightPanel.CustomMinimumSize = new Vector2(RightPanelPreferredWidth, 0f);
+            }
+            else
+            {
+                // Stage must be gone; free side mins and collapse center so only left/right share space.
+                _leftPanel.CustomMinimumSize = Vector2.Zero;
+                _rightPanel.CustomMinimumSize = Vector2.Zero;
+
+                SetFirstSplitOffset(_centerRightSplit, 0);
+
+                float forSides = Mathf.Max(0f, width - separation);
+                float leftShare = forSides * (LeftPanelPreferredWidth / (LeftPanelPreferredWidth + RightPanelPreferredWidth));
+                int leftOffset = Mathf.RoundToInt(leftShare);
+                SetFirstSplitOffset(_bodyHSplit, leftOffset);
+            }
+        }
+        finally
+        {
+            _isApplyingPanelLayout = false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the first split offset on a Godot 4.6+ <see cref="SplitContainer"/> via <see cref="SplitContainer.SplitOffsets"/>.
+    /// </summary>
+    private static void SetFirstSplitOffset(SplitContainer split, int offset)
+    {
+        if (split == null || !IsInstanceValid(split))
+            return;
+
+        int[] current = split.SplitOffsets;
+        if (current != null && current.Length > 0 && current[0] == offset)
+            return;
+
+        split.SplitOffsets = new int[] { offset };
     }
 
     /// <summary>
@@ -483,6 +574,11 @@ public partial class SettingsCanvasEditor : Control
         _zoomOutButton = GetNode<Button>("%ZoomOutButton");
         _fitButton = GetNode<Button>("%FitButton");
         _zoomPercentLineEdit = GetNode<LineEdit>("%ZoomPercentLabel");
+
+        _bodyHSplit = GetNodeOrNull<HSplitContainer>("MarginContainer/MainVBox/BodyHSplit");
+        _centerRightSplit = GetNodeOrNull<HSplitContainer>("MarginContainer/MainVBox/BodyHSplit/CenterRightSplit");
+        _leftPanel = GetNodeOrNull<Control>("MarginContainer/MainVBox/BodyHSplit/LeftPanel");
+        _rightPanel = GetNodeOrNull<Control>("MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel");
 
         _emptyPropsLabel = GetNode<Label>("%EmptyPropsLabel");
         _canvasProps = GetNode<Control>("%CanvasProps");
@@ -2609,15 +2705,30 @@ public partial class SettingsCanvasEditor : Control
 
     private void UpdateZoom()
     {
+        if (_scrollContainer == null || _subViewportContainer == null || _viewport == null)
+            return;
+
+        Vector2 viewportSize = _scrollContainer.Size;
+        // Collapsed stage: keep content min at zero so layout can hide the center panel.
+        if (viewportSize.X < 8f || viewportSize.Y < 8f)
+        {
+            _subViewportContainer.CustomMinimumSize = Vector2.Zero;
+            _viewport.Size = new Vector2I(1, 1);
+            return;
+        }
+
         Vector2 zoomedSize = new Vector2(_canvas.CanvasSize.X * _zoom, _canvas.CanvasSize.Y * _zoom);
         _control.Size = zoomedSize;
         _control.Position = Vector2.Zero;
-        Vector2 viewportSize = _scrollContainer.Size;
         _subViewportContainer.CustomMinimumSize = viewportSize;
         _viewport.Size = new Vector2I(Mathf.Max(1, (int)viewportSize.X), Mathf.Max(1, (int)viewportSize.Y));
-        _backgroundRect.Size = viewportSize;
-        (_backgroundRect.Material as ShaderMaterial)?.SetShaderParameter("rect_size", viewportSize);
-        _canvasOutlinePanel.CustomMinimumSize = zoomedSize;
+        if (_backgroundRect != null)
+        {
+            _backgroundRect.Size = viewportSize;
+            (_backgroundRect.Material as ShaderMaterial)?.SetShaderParameter("rect_size", viewportSize);
+        }
+        if (_canvasOutlinePanel != null)
+            _canvasOutlinePanel.CustomMinimumSize = zoomedSize;
         UpdateZoomLabel();
         UpdateCanvasGizmos();
     }
@@ -2740,6 +2851,8 @@ public partial class SettingsCanvasEditor : Control
         VisibilityChanged -= OnEditorVisibilityChanged;
         if (_scrollContainer != null && IsInstanceValid(_scrollContainer))
             _scrollContainer.Resized -= OnStageResized;
+        if (_bodyHSplit != null && IsInstanceValid(_bodyHSplit))
+            _bodyHSplit.Resized -= OnBodyHSplitResized;
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null && GodotObject.IsInstanceValid(_globalSignals) &&

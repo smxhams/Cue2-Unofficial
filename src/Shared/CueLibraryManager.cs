@@ -637,6 +637,9 @@ public partial class CueLibraryManager : Node
     /// <param name="options">Load options.</param>
     public LibraryResult LoadEntry(string entryRelativePath, LibraryLoadOptions options = null)
     {
+        if (_globalData?.Settings?.IsCueEditingLocked == true)
+            return LibraryResult.Fail("Show Mode is active — turn it off to load library cues into the cuelist.");
+
         EnsureLibraryInitialized();
         options ??= new LibraryLoadOptions();
 

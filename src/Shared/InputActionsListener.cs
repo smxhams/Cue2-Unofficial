@@ -65,6 +65,7 @@ public partial class InputActionsListener : Node
         Register("ResumeAll", nameof(GlobalSignals.ResumeAll), "Resume All Cues", true);
         Register("ToggleSettings", nameof(GlobalSignals.ToggleSettingsWindow), "Toggle Settings Window", true);
         Register("ToggleLog", nameof(GlobalSignals.ToggleLogWindow), "Toggle Log Window", true);
+        Register("ToggleShowMode", nameof(GlobalSignals.ToggleShowMode), "Toggle Show Mode", true);
         Register("ExpandOneLayer", nameof(GlobalSignals.CuelistExpandOneLayer), "Expand One Group Layer", true);
         Register("CollapseOneLayer", nameof(GlobalSignals.CuelistCollapseOneLayer), "Collapse One Group Layer", true);
         Register("ToggleExpandAll", nameof(GlobalSignals.ToggleExpandAll), "Toggle Expand/Collapse Groups", true);

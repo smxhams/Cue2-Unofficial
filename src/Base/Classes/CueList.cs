@@ -142,6 +142,9 @@ public partial class CueList : Control
 		_globalSignals.ToggleExpandAll += OnExpandAllPressed;
 		_addCueButton.Pressed += CreateCue;
 		_expandAllButton.Pressed += OnExpandAllPressed;
+
+		_globalSignals.ShowModeChanged += OnShowModeChanged;
+		ApplyShowModeUi(_globalData?.Settings?.IsCueEditingLocked == true);
 	}
 
 	public override void _ExitTree()
@@ -151,7 +154,43 @@ public partial class CueList : Control
 			_numberNameResizeGrip.GuiInput -= OnNumberNameGripGuiInput;
 		if (_durationHeaderLabel != null)
 			_durationHeaderLabel.GuiInput -= OnTimeHeaderGuiInput;
+		if (_globalSignals != null)
+			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		base._ExitTree();
+	}
+
+	/// <summary>
+	/// True when Show Mode is locking cue/cuelist document edits.
+	/// </summary>
+	private bool IsCueEditingLocked() =>
+		_globalData?.Settings?.IsCueEditingLocked == true;
+
+	/// <summary>
+	/// Logs and returns true when a mutating cue operation should be blocked.
+	/// </summary>
+	/// <param name="actionLabel">Short action name for the log message.</param>
+	/// <returns>True if the caller should abort.</returns>
+	private bool BlockIfShowMode(string actionLabel)
+	{
+		if (!IsCueEditingLocked())
+			return false;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"Show Mode: cannot {actionLabel}. Turn off Show Mode to edit cues.", (int)LogType.Info);
+		return true;
+	}
+
+	private void OnShowModeChanged(bool enabled)
+	{
+		ApplyShowModeUi(enabled);
+	}
+
+	/// <summary>
+	/// Disables Add Cue (and similar chrome) while Show Mode is active.
+	/// </summary>
+	private void ApplyShowModeUi(bool showMode)
+	{
+		if (_addCueButton != null)
+			_addCueButton.Disabled = showMode;
 	}
 
 	/// <summary>
@@ -330,6 +369,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void CreateCue()
 	{
+		if (BlockIfShowMode("create cues")) return;
 		_globalData?.HistoryManager?.RecordCuelistChange("Create cue");
 		var newCue = new Cue();
 		_globalData?.Settings?.ApplyShellDefaults(newCue);
@@ -381,6 +421,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void GroupSelectedCues()
 	{
+		if (BlockIfShowMode("group cues")) return;
 		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
 		if (selected.Count == 0)
 		{
@@ -501,6 +542,7 @@ public partial class CueList : Control
 	/// <param name="asGroup">When true and multiple files, wrap the created cues inside a new parent group cue.</param>
 	public void CreateCuesFromDroppedFiles(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
 	{
+		if (BlockIfShowMode("create cues from dropped files")) return;
 		if (files == null || files.Length == 0) return;
 
 		_globalData?.HistoryManager?.RecordCuelistChange("Import media cues");
@@ -893,6 +935,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void DuplicateSelectedCues()
 	{
+		if (BlockIfShowMode("duplicate cues")) return;
 		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
 		if (selected.Count == 0)
 		{
@@ -1004,6 +1047,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void CutSelectedCues()
 	{
+		if (BlockIfShowMode("cut cues")) return;
 		if (!TryCaptureSelectionToClipboard("cut", out int rootCount, out string sampleName))
 			return;
 
@@ -1037,6 +1081,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void PasteCues()
 	{
+		if (BlockIfShowMode("paste cues")) return;
 		if (_clipboardRootIds == null || _clipboardRootIds.Count == 0 ||
 		    _clipboardCuesByOldId == null || _clipboardCuesByOldId.Count == 0)
 		{
@@ -1317,6 +1362,8 @@ public partial class CueList : Control
 		int rootTempId,
 		LibraryInsertMode insertMode)
 	{
+		if (BlockIfShowMode("load library cues into the cuelist"))
+			return -1;
 		if (cuesByTempId == null || cuesByTempId.Count == 0)
 			return -1;
 
@@ -1583,6 +1630,7 @@ public partial class CueList : Control
 	/// </summary>
 	public void DeleteSelectedCues()
 	{
+		if (BlockIfShowMode("delete cues")) return;
 		var selected = ShellSelection.SelectedCues?.ToList() ?? new List<Cue>();
 		if (selected.Count == 0)
 		{
@@ -1731,6 +1779,8 @@ public partial class CueList : Control
 
 	public void StartReorder(ShellBar shellbar)
 	{
+		if (IsCueEditingLocked())
+			return;
 		// Drop blue hover wash for the session; reorder indicator owns highlight.
 		ClearAllShellHoverChrome();
 		_reorderController.Start(shellbar);

@@ -117,6 +117,7 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [node name="HSplitContainer2" type="HSplitContainer" parent="MarginContainer/BoxContainer/VSplitContainer" unique_id=139014194]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 

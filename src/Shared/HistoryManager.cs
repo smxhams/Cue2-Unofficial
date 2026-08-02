@@ -129,6 +129,8 @@ public partial class HistoryManager : Node
 	public void RecordCueChange(int cueId, string description, string coalesceKey = null)
 	{
 		if (_isRestoring) return;
+		// Show Mode locks cue document edits — do not push history for blocked mutations.
+		if (_globalData?.Settings?.IsCueEditingLocked == true) return;
 		if (_globalData?.Cuelist == null) return;
 
 		var cue = CueList.FetchCueFromId(cueId);
@@ -160,6 +162,7 @@ public partial class HistoryManager : Node
 	public void RecordCuelistChange(string description, string coalesceKey = null)
 	{
 		if (_isRestoring) return;
+		if (_globalData?.Settings?.IsCueEditingLocked == true) return;
 		if (_globalData?.Cuelist == null) return;
 		if (ShouldCoalesce(coalesceKey)) return;
 
@@ -305,6 +308,15 @@ public partial class HistoryManager : Node
 			_activeCoalesceKey = null;
 			target = _undoStack[^1];
 
+			// Show Mode: ignore undo steps that would mutate cues / cuelist structure.
+			// Settings and selection undos still apply. Cue steps stay on the stack until Edit Mode.
+			if (IsCueScopeBlockedInShowMode(target.Scope))
+			{
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+					"Undo skipped: cue/cuelist changes are locked in Show Mode.", (int)LogType.Info);
+				return;
+			}
+
 			// Capture redo state BEFORE popping, so a capture failure cannot discard the undo entry.
 			redoEntry = CaptureCurrentForScope(target);
 
@@ -352,6 +364,13 @@ public partial class HistoryManager : Node
 		{
 			_activeCoalesceKey = null;
 			target = _redoStack[^1];
+
+			if (IsCueScopeBlockedInShowMode(target.Scope))
+			{
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+					"Redo skipped: cue/cuelist changes are locked in Show Mode.", (int)LogType.Info);
+				return;
+			}
 
 			undoEntry = CaptureCurrentForScope(target);
 
@@ -432,6 +451,16 @@ public partial class HistoryManager : Node
 		return !string.IsNullOrEmpty(coalesceKey)
 		       && !string.IsNullOrEmpty(_activeCoalesceKey)
 		       && _activeCoalesceKey == coalesceKey;
+	}
+
+	/// <summary>
+	/// Whether undoing/redoing this scope would change cues or cuelist structure while Show Mode is on.
+	/// </summary>
+	private bool IsCueScopeBlockedInShowMode(HistoryScope scope)
+	{
+		if (_globalData?.Settings?.IsCueEditingLocked != true)
+			return false;
+		return scope == HistoryScope.Cue || scope == HistoryScope.Cuelist;
 	}
 
 	private void PushUndo(HistoryEntry entry, string coalesceKey)
@@ -658,6 +687,7 @@ public partial class HistoryManager : Node
 		"MediaBackupEnabled",
 		"MultiEditEnabled",
 		"SelectNewCues",
+		"ShowMode",
 		"ShowTimelineWaveforms",
 		"OutputBackgroundColor",
 		"VideoQualityMode",

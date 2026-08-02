@@ -22,6 +22,7 @@ border_width_bottom = 1
 border_color = Color(0.0113369, 0.218073, 0.244462, 1)
 
 [node name="CanvasEditor" type="Control" unique_id=1136064775]
+clip_contents = true
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -33,6 +34,7 @@ size_flags_vertical = 3
 script = ExtResource("1_r0ob0")
 
 [node name="MarginContainer" type="MarginContainer" parent="." unique_id=1978728804]
+clip_contents = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -45,6 +47,7 @@ theme_override_constants/margin_right = 4
 theme_override_constants/margin_bottom = 4
 
 [node name="MainVBox" type="VBoxContainer" parent="MarginContainer" unique_id=1087767163]
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -100,13 +103,15 @@ focus_mode = 0
 text = "Fit"
 
 [node name="BodyHSplit" type="HSplitContainer" parent="MarginContainer/MainVBox" unique_id=1003660165]
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-split_offsets = PackedInt32Array(200)
-split_offset = 200
+split_offsets = PackedInt32Array(180)
+split_offset = 180
 
 [node name="LeftPanel" type="PanelContainer" parent="MarginContainer/MainVBox/BodyHSplit" unique_id=443773294]
+clip_contents = true
 custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
 size_flags_vertical = 3
@@ -126,15 +131,15 @@ text = "Canvas"
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="ScreensHeader" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow"]
+[node name="ScreensHeader" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow" unique_id=1772834398]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 11
 text = "SCREENS"
-uppercase = true
 vertical_alignment = 1
+uppercase = true
 
-[node name="RefreshScreensButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow"]
+[node name="RefreshScreensButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/ScreensHeaderRow" unique_id=197240560]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(28, 0)
 layout_mode = 2
@@ -173,18 +178,18 @@ size_flags_vertical = 3
 hide_root = true
 select_mode = 1
 
-[node name="LayerButtonsHBox" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox"]
+[node name="LayerButtonsHBox" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox" unique_id=1457803014]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="AddTargetLayerButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
+[node name="AddTargetLayerButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox" unique_id=1871261665]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 0
 text = "+ Layer"
 
-[node name="MoveLayerUpButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
+[node name="MoveLayerUpButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox" unique_id=1351384295]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(28, 0)
 layout_mode = 2
@@ -193,7 +198,7 @@ focus_mode = 0
 disabled = true
 text = "↑"
 
-[node name="MoveLayerDownButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox"]
+[node name="MoveLayerDownButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/LeftPanel/LeftVBox/LayerButtonsHBox" unique_id=158765135]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(28, 0)
 layout_mode = 2
@@ -203,27 +208,36 @@ disabled = true
 text = "↓"
 
 [node name="CenterRightSplit" type="HSplitContainer" parent="MarginContainer/MainVBox/BodyHSplit" unique_id=256912890]
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-split_offsets = PackedInt32Array(-240)
-split_offset = -240
+split_offsets = PackedInt32Array(-220)
+split_offset = -220
 
 [node name="CenterPanel" type="VBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit" unique_id=386143506]
+clip_contents = true
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+size_flags_stretch_ratio = 1.0
 theme_override_constants/separation = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel" unique_id=1527729094]
 unique_name_in_owner = true
+clip_contents = true
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_canvas_bg")
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 3
 
 [node name="SubViewportContainer" type="SubViewportContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel/ScrollContainer" unique_id=166595456]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -257,14 +271,19 @@ size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_canvas_outline")
 
 [node name="ControlsLabel" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel" unique_id=1669559873]
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.412004, 0.412004, 0.412004, 1)
 theme_override_font_sizes/font_size = 9
 text = "Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view"
+clip_text = true
+text_overrun_behavior = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="RightPanel" type="PanelContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit" unique_id=1837942953]
+clip_contents = true
 custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
 size_flags_vertical = 3
@@ -734,8 +753,8 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-focus_mode = 0
 tooltip_text = "When locked, Translate Layer control cues cannot move or resize this layer"
+focus_mode = 0
 text = "Lock"
 
 [node name="LayerLockResetButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/LayerProps/LayerLockRow" unique_id=850684174]

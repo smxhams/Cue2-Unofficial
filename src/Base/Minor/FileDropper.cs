@@ -149,6 +149,14 @@ public partial class FileDropper : Control
     {
         GD.Print("FileDropper:OnFilesDropped - Files dropped");
 
+        // Show Mode: media drops create or replace cue media — block all drop editing paths.
+        if (_globalData?.Settings?.IsCueEditingLocked == true)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                "Show Mode: file drops are disabled. Turn off Show Mode to add or change media.", (int)LogType.Info);
+            return;
+        }
+
         var dropInfo = GetDropTarget(GetGlobalMousePosition());
         GD.Print($"FileDropper:OnFilesDropped - targetType={dropInfo.TargetType}, files={files?.Length ?? 0}, targetCueId={dropInfo.TargetCueId}");
 

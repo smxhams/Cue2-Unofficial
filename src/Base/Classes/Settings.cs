@@ -69,6 +69,9 @@ public partial class Settings : Node
     /// <summary>Default for selecting a newly created cue after Add / drop.</summary>
     public const bool DefaultSelectNewCues = true;
 
+    /// <summary>Default show mode (false = edit mode; true = live show / cue edits locked).</summary>
+    public const bool DefaultShowMode = false;
+
     /// <summary>Default for drawing audio waveforms inside Timeline Inspector cue bars.</summary>
     public const bool DefaultShowTimelineWaveforms = true;
 
@@ -271,6 +274,18 @@ public partial class Settings : Node
     /// When false, selection is left unchanged. Persisted with the showfile.
     /// </summary>
     public bool SelectNewCues = DefaultSelectNewCues;
+
+    /// <summary>
+    /// When true, the UI is in Show Mode: cue/cuelist editing is locked (inspectors hidden,
+    /// shell inline edits disabled, structural cue ops blocked). When false (default), Edit Mode.
+    /// Persisted with the showfile. Not tracked by undo/redo.
+    /// </summary>
+    public bool ShowMode = DefaultShowMode;
+
+    /// <summary>
+    /// True when cue and cuelist document edits must be blocked (Show Mode active).
+    /// </summary>
+    public bool IsCueEditingLocked => ShowMode;
 
     /// <summary>
     /// When true, the Timeline Inspector draws available audio waveforms inside cue bars.
@@ -746,6 +761,7 @@ public partial class Settings : Node
         MediaBackupEnabled = DefaultMediaBackupEnabled;
         MultiEditEnabled = DefaultMultiEditEnabled;
         SelectNewCues = DefaultSelectNewCues;
+        ShowMode = DefaultShowMode;
         ShowTimelineWaveforms = DefaultShowTimelineWaveforms;
         OutputBackgroundColor = DefaultOutputBackgroundColor;
         VideoQualityMode = DefaultVideoQualityMode;
@@ -790,11 +806,36 @@ public partial class Settings : Node
         // MIDI session inputs
         GetNodeOrNull<MidiManager>("/root/MidiManager")?.ResetToDefaults();
 
-        // Notify live UI (settings general, GO scale, etc.)
+        // Notify live UI (settings general, GO scale, show mode, etc.)
         _globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+        NotifyShowModeChanged();
 
         GD.Print("Settings:ResetSettings - Show settings restored to defaults.");
+    }
+
+    /// <summary>
+    /// Broadcasts the current <see cref="ShowMode"/> so title bar, inspectors, and shell bars resync.
+    /// Does not push undo history.
+    /// </summary>
+    public void NotifyShowModeChanged()
+    {
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.ShowModeChanged), ShowMode);
+    }
+
+    /// <summary>
+    /// Sets <see cref="ShowMode"/> and notifies listeners. No-ops when the value is unchanged
+    /// (unless <paramref name="forceNotify"/> is true). Not tracked by undo/redo.
+    /// </summary>
+    /// <param name="enabled">True for Show Mode; false for Edit Mode.</param>
+    /// <param name="forceNotify">When true, always emit even if the value did not change.</param>
+    public void SetShowMode(bool enabled, bool forceNotify = false)
+    {
+        if (ShowMode == enabled && !forceNotify)
+            return;
+        ShowMode = enabled;
+        NotifyShowModeChanged();
+        GD.Print($"Settings:SetShowMode - ShowMode={ShowMode}");
     }
 
     public Dictionary GetData()
@@ -821,6 +862,7 @@ public partial class Settings : Node
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
         saveTable.Add("MultiEditEnabled", MultiEditEnabled);
         saveTable.Add("SelectNewCues", SelectNewCues);
+        saveTable.Add("ShowMode", ShowMode);
         saveTable.Add("ShowTimelineWaveforms", ShowTimelineWaveforms);
         saveTable.Add("OutputBackgroundColor", OutputBackgroundColor.ToHtml(true));
         saveTable.Add("VideoQualityMode", (int)VideoQualityMode);
@@ -939,6 +981,10 @@ public partial class Settings : Node
         SelectNewCues = settingsData.TryGetValue("SelectNewCues", out value)
             ? value.AsBool()
             : DefaultSelectNewCues;
+        // Default false (edit mode) for older shows that predate this setting
+        ShowMode = settingsData.TryGetValue("ShowMode", out value)
+            ? value.AsBool()
+            : DefaultShowMode;
         ShowTimelineWaveforms = settingsData.TryGetValue("ShowTimelineWaveforms", out value)
             ? value.AsBool()
             : DefaultShowTimelineWaveforms;
@@ -1040,6 +1086,9 @@ public partial class Settings : Node
         {
             GD.Print("Settings:LoadSettings - Ignoring showfile InputMap (now stored in user preferences).");
         }
+
+        // Sync show/edit mode UI after load (always notify so chrome matches the loaded value).
+        NotifyShowModeChanged();
     }
 
     /// <summary>
@@ -1129,6 +1178,11 @@ public partial class Settings : Node
             MultiEditEnabled = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "SelectNewCues", out value))
             SelectNewCues = ReadBoolVariant(value);
+        if (TryGetSettingsValue(settingsData, "ShowMode", out value))
+        {
+            ShowMode = ReadBoolVariant(value);
+            NotifyShowModeChanged();
+        }
         if (TryGetSettingsValue(settingsData, "ShowTimelineWaveforms", out value))
             ShowTimelineWaveforms = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "OutputBackgroundColor", out value))
@@ -1355,6 +1409,9 @@ public partial class Settings : Node
                 return true;
             case "SelectNewCues":
                 value = SelectNewCues ? 1 : 0;
+                return true;
+            case "ShowMode":
+                value = ShowMode ? 1 : 0;
                 return true;
             case "ShowTimelineWaveforms":
                 value = ShowTimelineWaveforms ? 1 : 0;

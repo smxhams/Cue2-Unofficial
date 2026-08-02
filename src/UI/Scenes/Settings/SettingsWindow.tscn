@@ -46,7 +46,7 @@ disable_3d = true
 oversampling_override = 1.0
 title = "Cue2 Settings"
 initial_position = 4
-size = Vector2i(800, 500)
+size = Vector2i(1100, 700)
 visible = false
 borderless = true
 theme = ExtResource("1_gxjl5")
@@ -163,11 +163,13 @@ tooltip_text = "Load selected settings categories from a .c2settings file (undoa
 text = "Load…"
 
 [node name="Panel" type="Panel" parent="Control/VBoxContainer/MarginContainer/HSplitContainer" unique_id=1457761424]
+clip_contents = true
 layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="RightSide" type="MarginContainer" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel" unique_id=506612916]
 unique_name_in_owner = true
+clip_contents = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

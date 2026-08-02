@@ -107,6 +107,17 @@ public partial class GlobalSignals : Node
 
 	/// <summary>Redo the last undone document edit.</summary>
 	[Signal] public delegate void RedoEventHandler();
+
+	/// <summary>
+	/// Fired when show mode is enabled or disabled (showfile setting).
+	/// </summary>
+	/// <param name="enabled">True = Show Mode (cue edits locked); false = Edit Mode.</param>
+	[Signal] public delegate void ShowModeChangedEventHandler(bool enabled);
+
+	/// <summary>
+	/// Toggle Show Mode / Edit Mode (Input Map / hotkey).
+	/// </summary>
+	[Signal] public delegate void ToggleShowModeEventHandler();
 	
 	// Text edit signal connector
 	[Signal]  public delegate void TextEditFocusEnteredEventHandler();

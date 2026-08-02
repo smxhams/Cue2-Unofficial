@@ -38,8 +38,13 @@ public partial class MainTitleBarUI : Control
     private Timer _menuHideTimer;
 
     private Label _titleLabel;
+    private ColorRect _titleBarBackground;
     private Button _editUndoButton;
     private Button _editRedoButton;
+    private Button _editCutButton;
+    private Button _editPasteButton;
+    private CheckButton _showModeButton;
+    private bool _isSyncingShowModeUi;
     
     
     public override void _Ready()
@@ -48,7 +53,19 @@ public partial class MainTitleBarUI : Control
         _globalData = GetNode<GlobalData>("/root/GlobalData");
 
         _titleLabel = GetNode<Label>("%TitleLabel");
+        _titleBarBackground = GetNodeOrNull<ColorRect>("%TitleBarBackground");
         UpdateTitle();
+
+        // Show Mode toggle (left of About). Off = Edit Mode (default).
+        _showModeButton = GetNodeOrNull<CheckButton>("%ShowModeButton");
+        if (_showModeButton != null)
+        {
+            _showModeButton.Toggled += OnShowModeToggled;
+            SyncShowModeButton();
+        }
+        _globalSignals.ShowModeChanged += OnShowModeChanged;
+        _globalSignals.ToggleShowMode += OnToggleShowMode;
+        ApplyTitleBarShowModeChrome(_globalData?.Settings?.ShowMode == true);
 
         _fileMenuContainer = GetNode<PanelContainer>("%DropMenuFile")
             .GetNode<VBoxContainer>("MarginContainer/dmFileContainer");
@@ -129,10 +146,10 @@ public partial class MainTitleBarUI : Control
             _globalSignals.EmitSignal(nameof(GlobalSignals.Redo));
             _mainMenuButton.ButtonPressed = false;
         };
-        var editCut = GetNodeOrNull<Button>("%EditCut");
-        if (editCut != null)
+        _editCutButton = GetNodeOrNull<Button>("%EditCut");
+        if (_editCutButton != null)
         {
-            editCut.Pressed += () =>
+            _editCutButton.Pressed += () =>
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.CutSelectedCues));
                 _mainMenuButton.ButtonPressed = false;
@@ -147,15 +164,16 @@ public partial class MainTitleBarUI : Control
                 _mainMenuButton.ButtonPressed = false;
             };
         }
-        var editPaste = GetNodeOrNull<Button>("%EditPaste");
-        if (editPaste != null)
+        _editPasteButton = GetNodeOrNull<Button>("%EditPaste");
+        if (_editPasteButton != null)
         {
-            editPaste.Pressed += () =>
+            _editPasteButton.Pressed += () =>
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.PasteCues));
                 _mainMenuButton.ButtonPressed = false;
             };
         }
+        UpdateEditMenuForShowMode();
         if (_globalData.HistoryManager != null)
         {
             _globalData.HistoryManager.HistoryChanged += UpdateUndoRedoMenuState;
@@ -221,6 +239,116 @@ public partial class MainTitleBarUI : Control
         SyncHotkeys();
     }
 
+    public override void _ExitTree()
+    {
+        if (_showModeButton != null)
+            _showModeButton.Toggled -= OnShowModeToggled;
+        if (_globalSignals != null)
+        {
+            _globalSignals.ShowModeChanged -= OnShowModeChanged;
+            _globalSignals.ToggleShowMode -= OnToggleShowMode;
+        }
+        if (_globalData?.HistoryManager != null)
+        {
+            _globalData.HistoryManager.HistoryChanged -= UpdateUndoRedoMenuState;
+            _globalData.HistoryManager.HistoryRestored -= OnHistoryRestored;
+        }
+        base._ExitTree();
+    }
+
+    /// <summary>
+    /// Title-bar Show Mode CheckButton toggled by the operator.
+    /// </summary>
+    private void OnShowModeToggled(bool enabled)
+    {
+        if (_isSyncingShowModeUi) return;
+        _globalData?.Settings?.SetShowMode(enabled);
+    }
+
+    /// <summary>
+    /// Input Map / hotkey: flip Show Mode.
+    /// </summary>
+    private void OnToggleShowMode()
+    {
+        var settings = _globalData?.Settings;
+        if (settings == null) return;
+        settings.SetShowMode(!settings.ShowMode);
+    }
+
+    /// <summary>
+    /// External show mode change (load, new session, programmatic set).
+    /// </summary>
+    private void OnShowModeChanged(bool enabled)
+    {
+        SyncShowModeButton();
+        UpdateEditMenuForShowMode();
+        ApplyTitleBarShowModeChrome(enabled);
+        SyncShowModeTooltip();
+    }
+
+    /// <summary>
+    /// Syncs the CheckButton to <see cref="Settings.ShowMode"/> without re-firing the toggle.
+    /// </summary>
+    private void SyncShowModeButton()
+    {
+        if (_showModeButton == null) return;
+        bool showMode = _globalData?.Settings?.ShowMode == true;
+        if (_showModeButton.ButtonPressed == showMode) return;
+        _isSyncingShowModeUi = true;
+        _showModeButton.SetPressedNoSignal(showMode);
+        _isSyncingShowModeUi = false;
+    }
+
+    /// <summary>
+    /// Disables cut/paste (mutating) while Show Mode is active. Copy remains available.
+    /// </summary>
+    private void UpdateEditMenuForShowMode()
+    {
+        bool locked = _globalData?.Settings?.IsCueEditingLocked == true;
+        if (_editCutButton != null)
+            _editCutButton.Disabled = locked;
+        if (_editPasteButton != null)
+            _editPasteButton.Disabled = locked;
+    }
+
+    /// <summary>
+    /// Tints the title bar using <see cref="GlobalStyles"/> colours so Show Mode is obvious at a glance.
+    /// </summary>
+    /// <param name="showMode">True when Show Mode is active.</param>
+    private void ApplyTitleBarShowModeChrome(bool showMode)
+    {
+        if (_titleBarBackground != null && IsInstanceValid(_titleBarBackground))
+        {
+            _titleBarBackground.Color = showMode
+                ? GlobalStyles.TitleBarShowMode
+                : GlobalStyles.TitleBarEditMode;
+        }
+
+        if (_titleLabel != null && IsInstanceValid(_titleLabel))
+        {
+            _titleLabel.AddThemeColorOverride(
+                "font_color",
+                showMode ? GlobalStyles.TitleBarLabelShowMode : GlobalStyles.TitleBarLabelEditMode);
+        }
+    }
+
+    /// <summary>
+    /// Updates the Show Mode CheckButton tooltip including the current hotkey.
+    /// </summary>
+    private void SyncShowModeTooltip()
+    {
+        if (_showModeButton == null) return;
+        string hotkey = GlobalData.ParseHotkey("ToggleShowMode");
+        string tip =
+            "Show Mode locks cue editing for live performance.\n" +
+            "Off = Edit Mode (default): full cue editing.\n" +
+            "On = Show Mode: inspectors hidden, shell edits and cue structure locked.\n" +
+            "Saved with the showfile.";
+        if (!string.IsNullOrEmpty(hotkey))
+            tip += "\nHotkey: " + hotkey;
+        _showModeButton.TooltipText = tip;
+    }
+
     private void SyncHotkeys()
     {
         GetNode<Label>("%FileNewHotkey").Text = GlobalData.ParseHotkey("NewSession");
@@ -239,6 +367,8 @@ public partial class MainTitleBarUI : Control
         var settingsBtn = GetNode<Button>("%SettingsButton");
         string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");
         settingsBtn.TooltipText = "Settings" + (!string.IsNullOrEmpty(settingsHotkey) ? "\nHotkey: " + settingsHotkey : "");
+
+        SyncShowModeTooltip();
     }
 
     private void OnHistoryRestored(int scope)
