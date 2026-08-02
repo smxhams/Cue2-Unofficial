@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
+using Cue2.Domain.Connections;
 using Cue2.Services;
 
 namespace Cue2.UI.Shell;
@@ -44,6 +46,12 @@ public partial class Footer : Control
     private AudioDevices _audioDevices;
     private DisplaysManager _displaysManager;
     private Button _devicesFooterButton;
+
+    // Connections status (OSC send/listen + MIDI session devices)
+    private Button _connectionsFooterButton;
+    private OscConnections _oscConnections;
+    private OscListen _oscListen;
+    private MidiManager _midiManager;
     
     public override void _Ready()
     {
@@ -56,13 +64,30 @@ public partial class Footer : Control
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
+        _oscConnections = GetNodeOrNull<OscConnections>("/root/OscConnections");
+        _oscListen = GetNodeOrNull<OscListen>("/root/OscListen");
+        _midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
+
         _devicesFooterButton = GetNode<Button>("%DevicesFooterButton");
         _devicesFooterButton.TooltipText = "Devices";
-        _devicesFooterButton.Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Test log", new Random().Next(0,5));
         _devicesFooterButton.MouseEntered += UpdateDevicesFooterTooltip;
         
+        _connectionsFooterButton = GetNodeOrNull<Button>("%ConnectionsFooterButton");
+        if (_connectionsFooterButton != null)
+        {
+            _connectionsFooterButton.TooltipText = "Connections";
+            _connectionsFooterButton.MouseEntered += UpdateConnectionsFooterTooltip;
+        }
+
         _globalSignals.AudioDevicesChanged += UpdateDevicesFooterTooltip;
         _globalSignals.DisplaysChanged += UpdateDevicesFooterTooltip;
+
+        if (_oscConnections != null)
+            _oscConnections.OscConnectionsStateChanged += UpdateConnectionsFooterTooltip;
+        if (_oscListen != null)
+            _oscListen.OscStateChanged += UpdateConnectionsFooterTooltip;
+        if (_midiManager != null)
+            _midiManager.MidiStateChanged += UpdateConnectionsFooterTooltip;
         
         _logCountButton.Toggled += OnLogCountToggled;
 
@@ -106,10 +131,42 @@ public partial class Footer : Control
         _updateTimer.Timeout += UpdateResourceUsage;
 
         UpdateDevicesFooterTooltip(); // initial status
+        UpdateConnectionsFooterTooltip();
         // Prefer live cuelist count if already available (session may load after footer ready)
         int initialTotal = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
         UpdateTotalCuesLabel(initialTotal);
         UpdateResourceUsage(); // initial CPU/MEM read
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        if (_devicesFooterButton != null)
+            _devicesFooterButton.MouseEntered -= UpdateDevicesFooterTooltip;
+        if (_connectionsFooterButton != null)
+            _connectionsFooterButton.MouseEntered -= UpdateConnectionsFooterTooltip;
+
+        if (_globalSignals != null)
+        {
+            _globalSignals.AudioDevicesChanged -= UpdateDevicesFooterTooltip;
+            _globalSignals.DisplaysChanged -= UpdateDevicesFooterTooltip;
+            _globalSignals.LogUpdated -= _updateLog;
+            _globalSignals.ToggleLogWindow -= ToggleLogWindow;
+            _globalSignals.MediaBackupProgress -= OnMediaBackupProgress;
+            _globalSignals.MediaBackupCompleted -= OnMediaBackupCompleted;
+            _globalSignals.BackgroundProcessProgress -= OnBackgroundProcessProgress;
+            _globalSignals.BackgroundProcessCompleted -= OnBackgroundProcessCompleted;
+            _globalSignals.TotalCuesChanged -= OnTotalCuesChanged;
+        }
+
+        if (_oscConnections != null)
+            _oscConnections.OscConnectionsStateChanged -= UpdateConnectionsFooterTooltip;
+        if (_oscListen != null)
+            _oscListen.OscStateChanged -= UpdateConnectionsFooterTooltip;
+        if (_midiManager != null)
+            _midiManager.MidiStateChanged -= UpdateConnectionsFooterTooltip;
+
+        base._ExitTree();
     }
 
     /// <summary>
@@ -454,6 +511,158 @@ public partial class Footer : Control
         else
         {
             _devicesFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
+        }
+    }
+
+    /// <summary>
+    /// Updates the ConnectionsFooterButton tooltip and color with OSC send/listen and MIDI session status.
+    /// Green (🟢) = ready/open/listening.
+    /// Yellow (🟡) = connecting (OSC TCP in flight) — not treated as a fault.
+    /// Red (🔴) = configured but not available (or listen enabled but failed).
+    /// Gray (⚪) = intentionally inactive (listen off / MIDI disabled).
+    /// Button tints Success when all configured links are healthy, Danger if any hard failure.
+    /// </summary>
+    private void UpdateConnectionsFooterTooltip()
+    {
+        if (_connectionsFooterButton == null)
+            return;
+
+        var oscSends = OscConnections.GetSendConnectionStatuses();
+        var midiInputs = _midiManager?.GetSessionInputStatuses()
+                         ?? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var midiOutputs = _midiManager?.GetSessionOutputStatuses()
+                          ?? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        bool midiEnabled = _midiManager?.MidiEnabled ?? false;
+        bool midiNativeReady = _midiManager?.IsNativeReady ?? false;
+
+        bool hasOscListen = _oscListen != null;
+        bool hasAnyConfigured =
+            oscSends.Count > 0 ||
+            midiInputs.Count > 0 ||
+            midiOutputs.Count > 0 ||
+            hasOscListen;
+
+        if (!hasAnyConfigured)
+        {
+            _connectionsFooterButton.TooltipText =
+                "Connections\n\nNo OSC or MIDI connections are currently configured.";
+            _connectionsFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
+            return;
+        }
+
+        bool hasProblem = false;
+        var sb = new StringBuilder();
+        sb.AppendLine("Connections:");
+
+        // ── OSC send destinations ───────────────────────────────────────────
+        if (oscSends.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("OSC Send:");
+            foreach (var row in oscSends.OrderBy(r => r.Label, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!row.Ok)
+                    hasProblem = true;
+
+                string indicator = row.IsConnecting ? "🟡 " : row.Ok ? "🟢 " : "🔴 ";
+                sb.AppendLine($"{indicator}{row.Label} ({row.Detail})");
+            }
+        }
+
+        // ── OSC listen ──────────────────────────────────────────────────────
+        if (_oscListen != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("OSC Listen:");
+
+            bool enabled = _oscListen.OscListenEnabled;
+            bool listening = _oscListen.IsListening;
+            int port = _oscListen.Port;
+            bool tcp = _oscListen.TcpEnabled;
+            int tcpPort = _oscListen.TcpPort;
+            string session = _oscListen.SessionName;
+
+            string portPart = tcp
+                ? $"UDP :{port}, TCP :{tcpPort}"
+                : $"UDP :{port}";
+            if (!string.IsNullOrEmpty(session))
+                portPart += $"  prefix /{session}/";
+
+            if (!enabled)
+            {
+                sb.AppendLine($"⚪ Disabled ({portPart})");
+            }
+            else if (listening)
+            {
+                sb.AppendLine($"🟢 Listening ({portPart})");
+            }
+            else
+            {
+                hasProblem = true;
+                sb.AppendLine($"🔴 Enabled but not listening ({portPart})");
+            }
+        }
+
+        // ── MIDI ────────────────────────────────────────────────────────────
+        if (midiInputs.Count > 0 || midiOutputs.Count > 0 || !midiNativeReady)
+        {
+            sb.AppendLine();
+            if (!midiNativeReady)
+            {
+                hasProblem = true;
+                sb.AppendLine("MIDI:");
+                sb.AppendLine("🔴 Native MIDI library unavailable");
+            }
+            else if (!midiEnabled)
+            {
+                sb.AppendLine("MIDI (disabled):");
+                AppendMidiSessionLines(sb, "Inputs", midiInputs, midiEnabled: false, ref hasProblem);
+                AppendMidiSessionLines(sb, "Outputs", midiOutputs, midiEnabled: false, ref hasProblem);
+            }
+            else
+            {
+                sb.AppendLine("MIDI:");
+                AppendMidiSessionLines(sb, "Inputs", midiInputs, midiEnabled: true, ref hasProblem);
+                AppendMidiSessionLines(sb, "Outputs", midiOutputs, midiEnabled: true, ref hasProblem);
+            }
+        }
+
+        _connectionsFooterButton.TooltipText = sb.ToString().TrimEnd('\n', '\r');
+        _connectionsFooterButton.AddThemeColorOverride(
+            "font_color",
+            hasProblem ? GlobalStyles.Danger : GlobalStyles.Success);
+    }
+
+    /// <summary>
+    /// Appends a MIDI input or output subsection to the connections tooltip.
+    /// </summary>
+    private static void AppendMidiSessionLines(
+        StringBuilder sb,
+        string heading,
+        Dictionary<string, bool> statuses,
+        bool midiEnabled,
+        ref bool hasProblem)
+    {
+        if (statuses == null || statuses.Count == 0)
+            return;
+
+        sb.AppendLine($"  {heading}:");
+        foreach (var entry in statuses.OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!midiEnabled)
+            {
+                // Intentionally closed while MIDI is off — not a fault.
+                sb.AppendLine($"  ⚪ {entry.Key} (session — MIDI off)");
+                continue;
+            }
+
+            bool open = entry.Value;
+            if (!open)
+                hasProblem = true;
+
+            string indicator = open ? "🟢 " : "🔴 ";
+            string status = open ? "open" : "session device offline";
+            sb.AppendLine($"  {indicator}{entry.Key} ({status})");
         }
     }
 }

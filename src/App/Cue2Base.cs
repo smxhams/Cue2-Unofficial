@@ -1,6 +1,7 @@
 using Godot;
 using Cue2.Services;
 using Cue2.UI.Utilities;
+using Cue2.UI.Windows;
 
 namespace Cue2.App;
 
@@ -9,6 +10,14 @@ namespace Cue2.App;
 /// </summary>
 public partial class Cue2Base : Control
 {
+	/// <summary>
+	/// When true, the first-time welcome window is shown every launch (debug only).
+	/// Production keeps this false so only <see cref="UserDataManager.IsFirstTimeStartup"/> controls it.
+	/// </summary>
+	private const bool ForceFirstTimeStartupEveryLaunch = false;
+
+	private const string FirstTimeStartupScenePath = "res://src/UI/Windows/FirstTimeStartupWindow.tscn";
+
 	private GlobalSignals _globalSignals;
 	private GlobalData _globalData;
 
@@ -20,6 +29,9 @@ public partial class Cue2Base : Control
 
 	/// <summary>Bottom inspector row (Shell Inspector + InspectorTabs). Hidden in Show Mode.</summary>
 	private Control _inspectorSplit;
+
+	/// <summary>Active first-time welcome window, if any.</summary>
+	private FirstTimeStartupWindow _firstTimeStartupWindow;
 
 	public WorkspaceStates State { get; set; }
 
@@ -44,6 +56,62 @@ public partial class Cue2Base : Control
 		// content scale first, then restore saved geometry (or design-size RescaleWindow once).
 		// Do not call RescaleWindow here — it runs after child restore and corrupts saved size/pos
 		// (especially on macOS HiDPI where BaseDisplayScale is often 2).
+
+		// Deferred so main window geometry/chrome settles before a modal-style sub-window opens.
+		CallDeferred(nameof(MaybeShowFirstTimeStartup));
+	}
+
+	/// <summary>
+	/// Opens the first-time welcome sub-window when appropriate.
+	/// Currently forced every launch for testing; production will rely on the user-data flag only.
+	/// </summary>
+	private void MaybeShowFirstTimeStartup()
+	{
+		var udm = _globalData?.UserDataManager;
+		if (udm == null)
+			return;
+
+		bool shouldShow = ForceFirstTimeStartupEveryLaunch || udm.IsFirstTimeStartup;
+		if (!shouldShow)
+			return;
+
+		if (_firstTimeStartupWindow != null && GodotObject.IsInstanceValid(_firstTimeStartupWindow))
+		{
+			_firstTimeStartupWindow.Show();
+			_firstTimeStartupWindow.GrabFocus();
+			return;
+		}
+
+		var node = SceneLoader.LoadScene(FirstTimeStartupScenePath, out string error);
+		if (node == null)
+		{
+			GD.PrintErr($"Cue2Base:MaybeShowFirstTimeStartup - Failed to load welcome window: {error}");
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to open first-time startup window: {error}", 2);
+			return;
+		}
+
+		if (node is not FirstTimeStartupWindow window)
+		{
+			GD.PrintErr("Cue2Base:MaybeShowFirstTimeStartup - Scene root is not FirstTimeStartupWindow.");
+			node.QueueFree();
+			return;
+		}
+
+		_firstTimeStartupWindow = window;
+		_firstTimeStartupWindow.TreeExiting += OnFirstTimeStartupWindowExiting;
+		AddChild(_firstTimeStartupWindow);
+		GD.Print("Cue2Base:MaybeShowFirstTimeStartup - First-time startup window opened.");
+	}
+
+	/// <summary>
+	/// Clears the welcome window reference when it is freed.
+	/// </summary>
+	private void OnFirstTimeStartupWindowExiting()
+	{
+		if (_firstTimeStartupWindow != null)
+			_firstTimeStartupWindow.TreeExiting -= OnFirstTimeStartupWindowExiting;
+		_firstTimeStartupWindow = null;
 	}
 
 	private void ScaleUI(float uiScale)
@@ -76,6 +144,9 @@ public partial class Cue2Base : Control
 
 	public override void _ExitTree()
 	{
+		if (_firstTimeStartupWindow != null && GodotObject.IsInstanceValid(_firstTimeStartupWindow))
+			_firstTimeStartupWindow.TreeExiting -= OnFirstTimeStartupWindowExiting;
+
 		if (_globalSignals != null)
 		{
 			_globalSignals.UiScaleChanged -= ScaleUI;

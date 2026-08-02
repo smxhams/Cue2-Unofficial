@@ -145,10 +145,15 @@ public partial class CueCommandExectutor : Node
         if (target == null) return;
 
         if (ShellSelection.SelectedCues.Count == 1 && ShellSelection.SelectedCues[0] == target)
+        {
+            // Still keep playhead in view if GO left selection on this cue (e.g. sequence end).
+            _globalData?.Cuelist?.EnsurePlayheadVisibleAfterGo(target);
             return;
+        }
 
         // Playback playhead move is not a document/selection undo step.
         _globalData?.ShellSelection?.SelectIndividualShell(target, recordHistory: false);
+        _globalData?.Cuelist?.EnsurePlayheadVisibleAfterGo(target);
     }
 
     /// <summary>

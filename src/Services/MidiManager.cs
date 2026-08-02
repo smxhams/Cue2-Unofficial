@@ -1010,6 +1010,39 @@ public partial class MidiManager : Node
         }
     }
 
+    /// <summary>
+    /// Session MIDI input devices mapped to whether each is currently open and healthy.
+    /// Used by the footer Connections tooltip. Does not factor <see cref="MidiEnabled"/> —
+    /// when MIDI is disabled the footer treats offline handles as intentional, not faults.
+    /// </summary>
+    /// <returns>Device name → open/healthy (true = green when MIDI is enabled).</returns>
+    public Dictionary<string, bool> GetSessionInputStatuses()
+    {
+        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in _sessionInputNames)
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            result[name] = IsOpenHandleHealthy(name);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Session MIDI output devices mapped to whether each is currently open and healthy.
+    /// Used by the footer Connections tooltip. Does not factor <see cref="MidiEnabled"/>.
+    /// </summary>
+    /// <returns>Device name → open/healthy (true = green when MIDI is enabled).</returns>
+    public Dictionary<string, bool> GetSessionOutputStatuses()
+    {
+        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in _sessionOutputNames)
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            result[name] = IsOpenOutputHealthy(name);
+        }
+        return result;
+    }
+
     private static string SafeGetDeviceName(MidiDevice device)
     {
         if (device == null) return null;

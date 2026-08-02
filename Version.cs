@@ -76,4 +76,10 @@ public static class Version
     /// </summary>
     /// <value>The full version string in the format "v{major}.{minor}.{patch} {status} - {codeName}".</value>
     public static readonly string FullVersionString = $"v{Major}.{Minor}.{Patch} {Status} - {CodeName}";
+
+    /// <summary>
+    /// Gets the semantic version string used when stamping showfiles (major.minor.patch).
+    /// </summary>
+    /// <value>The semantic version, e.g. "0.1.0".</value>
+    public static readonly string SemanticVersionString = $"{Major}.{Minor}.{Patch}";
 }

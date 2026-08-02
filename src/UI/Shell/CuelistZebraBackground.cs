@@ -22,7 +22,7 @@ public partial class CuelistZebraBackground : Control
 	public override void _Ready()
 	{
 		MouseFilter = MouseFilterEnum.Ignore;
-		// Sit behind sibling CueContainer in the same MarginContainer.
+		// Sit behind scroll content (CueContainer + end pad) in the same MarginContainer.
 		ZIndex = -1;
 		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 		ShellColumnLayout.Changed += OnShellColumnLayoutChanged;

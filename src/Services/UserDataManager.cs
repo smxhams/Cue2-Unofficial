@@ -39,6 +39,12 @@ public partial class UserDataManager : Node
 	private int _undoDepth = DefaultUndoDepth;
 	private int _logSessionDepth = DefaultLogSessionDepth;
 
+	/// <summary>
+	/// True until the user has dismissed the first-time startup welcome window.
+	/// Defaults to true for new installs (no user_data.json yet).
+	/// </summary>
+	private bool _isFirstTimeStartup = true;
+
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
 
@@ -164,6 +170,37 @@ public partial class UserDataManager : Node
 				SaveUserData();
 			}
 		}
+	}
+
+	/// <summary>
+	/// Whether the first-time startup welcome window should be shown.
+	/// True for new installs until the user dismisses the welcome UI.
+	/// </summary>
+	/// <value>True if the welcome flow has not been completed yet.</value>
+	public bool IsFirstTimeStartup
+	{
+		get => _isFirstTimeStartup;
+		set
+		{
+			if (_isFirstTimeStartup != value)
+			{
+				_isFirstTimeStartup = value;
+				SaveUserData();
+			}
+		}
+	}
+
+	/// <summary>
+	/// Marks the first-time startup welcome as completed and persists user data.
+	/// </summary>
+	public void MarkFirstTimeStartupComplete()
+	{
+		if (!_isFirstTimeStartup)
+			return;
+
+		_isFirstTimeStartup = false;
+		SaveUserData();
+		GD.Print("UserDataManager:MarkFirstTimeStartupComplete - First-time startup flagged complete.");
 	}
 
 	/// <summary>
@@ -404,9 +441,9 @@ public partial class UserDataManager : Node
 	/// </summary>
 	/// <remarks>
 	/// Clears recent show files, window geometry, shell column widths, and custom
-	/// InputMap bindings. Restores live InputMap to project defaults when
-	/// <see cref="GlobalData"/> is available. Callers should re-sync dependent
-	/// systems (autosave timer, log pruning, history depth, Input Map UI).
+	/// InputMap bindings. Restores first-time startup flag and live InputMap to
+	/// project defaults when <see cref="GlobalData"/> is available. Callers should
+	/// re-sync dependent systems (autosave timer, log pruning, history depth, Input Map UI).
 	/// </remarks>
 	public void ResetToDefaults()
 	{
@@ -427,6 +464,7 @@ public partial class UserDataManager : Node
 		_backupDepth = DefaultBackupDepth;
 		_undoDepth = DefaultUndoDepth;
 		_logSessionDepth = DefaultLogSessionDepth;
+		_isFirstTimeStartup = true;
 
 		_shellNumberColumnWidth = 0;
 		_shellTimeColumnWidth = 0;
@@ -721,6 +759,16 @@ public partial class UserDataManager : Node
 				_logSessionDepth = Math.Clamp(logSessionDepthVal.AsInt32(), MinLogSessionDepth, MaxLogSessionDepth);
 			}
 
+			// Missing key = legacy install; treat as already past first-time welcome.
+			if (data.TryGetValue("IsFirstTimeStartup", out var firstTimeVal))
+			{
+				_isFirstTimeStartup = firstTimeVal.AsBool();
+			}
+			else
+			{
+				_isFirstTimeStartup = false;
+			}
+
 			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
 			{
 				_shellNumberColumnWidth = shellNumW.AsSingle();
@@ -742,7 +790,7 @@ public partial class UserDataManager : Node
 			// OutputVSyncMode were machine prefs; they now live in the showfile (Settings). Ignore if present.
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
 		}
 		catch (Exception ex)
 		{
@@ -799,6 +847,7 @@ public partial class UserDataManager : Node
 			data["LastSettingsMenu"] = _lastSettingsMenu ?? "General";
 
 			data["StartupBehavior"] = (int)_startupBehavior;
+			data["IsFirstTimeStartup"] = _isFirstTimeStartup;
 
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;

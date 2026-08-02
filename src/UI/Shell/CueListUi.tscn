@@ -179,13 +179,29 @@ size_flags_vertical = 3
 mouse_filter = 2
 script = ExtResource("zebra_bg_script")
 
-[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List/MarginContainer" unique_id=105568765]
+[node name="ScrollContentVBox" type="VBoxContainer" parent="VBoxContainer/Cue List/MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 0
+
+[node name="CueContainer" type="VBoxContainer" parent="VBoxContainer/Cue List/MarginContainer/ScrollContentVBox" unique_id=105568765]
 unique_name_in_owner = true
 y_sort_enabled = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 0
+
+[node name="ScrollEndPad" type="Control" parent="VBoxContainer/Cue List/MarginContainer/ScrollContentVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+mouse_filter = 0
+tooltip_text = ""
 
 [node name="ReorderCueControl" type="Control" parent="." unique_id=2011399606]
 unique_name_in_owner = true

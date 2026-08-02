@@ -2,6 +2,7 @@ using System;
 using Godot;
 using System.IO;
 using System.Threading.Tasks;
+using Cue2.UI.Popups;
 using Cue2.UI.Shell;
 using Cue2.UI.Utilities;
 using Godot.Collections;
@@ -12,6 +13,11 @@ namespace Cue2.Services;
 /// Manages saving and loading of session data, including cues and settings.
 /// Handles file dialogs, encryption via Godot's FileAccess, and data serialization/deserialization using Godot's Json.
 /// </summary>
+/// <remarks>
+/// Showfiles are versioned via <see cref="ShowfileFormat"/>. On open, version is checked
+/// <b>before</b> session reset; mismatches prompt <see cref="VersionMismatchDialog"/> and may
+/// run <see cref="ShowfileMigrator"/> before load.
+/// </remarks>
 public partial class SaveManager : Node
 {
 	private GlobalSignals _globalSignals;
@@ -23,8 +29,11 @@ public partial class SaveManager : Node
 	private PackedScene _openDialogScene;
 	private FileDialog _saveDialog;
 	private FileDialog _openDialog;
-	
-	
+
+	/// <summary>Prevents overlapping open/version-dialog flows for concurrent open requests.</summary>
+	private bool _isOpenInProgress;
+
+	private VersionMismatchDialog _activeVersionDialog;
 	
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
@@ -190,15 +199,8 @@ public partial class SaveManager : Node
 		
 		
 		// SAVE DATA
-		var saveData = new Dictionary(); // Save type (cues, cue data)
-		
-		var cueSaveData = _globalData.Cuelist.GetData();
-		saveData.Add("cues", cueSaveData); // Save type (cues, cue data)();
+		var saveData = BuildSaveDataDictionary();
 
-		var settingsData = _globalData.Settings.GetData();
-		saveData.Add("settings", settingsData);
-		
-		
 		// Serialize to JSON
 		string jsonString = Json.Stringify(saveData);
 		
@@ -276,36 +278,253 @@ public partial class SaveManager : Node
 	}
 	
 	/// <summary>
-	/// Loads and processes a selected session file, decrypting it, parsing JSON, and applying data to settings and cuelist.
+	/// Loads and processes a selected session file.
+	/// Version is checked first (before any session reset); mismatches require user confirmation.
 	/// </summary>
 	/// <param name="selectedPath">The file path of the session to load.</param>
 	private void OpenSelectedSession(string selectedPath)
 	{
+		if (_isOpenInProgress)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"A showfile open is already in progress.", (int)LogType.Warning);
+			GD.Print("SaveManager:OpenSelectedSession - Open already in progress; ignoring.");
+			return;
+		}
+
 		// Verify file before resetting current session.
 		if (!File.Exists(selectedPath))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session file not found: {selectedPath}", 2);
-			GD.PrintErr("SaveManager:LoadSession - File not found: " + selectedPath);
+			GD.PrintErr("SaveManager:OpenSelectedSession - File not found: " + selectedPath);
 			return;
 		}
 
-		// Wipe previous show first, then attach paths and load.
-		ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+		// Peek encrypted JSON without mutating the live session.
+		if (!TryReadSaveData(selectedPath, out var saveData, out string readError))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to read session (session not changed): {readError}", 2);
+			GD.PrintErr($"SaveManager:OpenSelectedSession - Read failed: {readError}");
+			return;
+		}
 
-		ApplySessionPaths(selectedPath);
-		
-		LoadSession(selectedPath);
+		var fileVersion = ShowfileFormat.ReadVersion(saveData);
+		GD.Print(
+			$"SaveManager:OpenSelectedSession - File version: {fileVersion.ToDisplayString()}; " +
+			$"app: {Cue2.Version.SemanticVersionString} format {ShowfileFormat.CurrentFormatVersion}");
 
-		// Document history is not retained across open/load.
-		_globalData.HistoryManager?.Clear();
-		
-		// Track in persistent recent files for "Open Recent" in header
-		_globalData.UserDataManager?.AddRecentShowFile(selectedPath);
+		if (fileVersion.MatchesCurrent)
+		{
+			CompleteOpenSession(selectedPath, saveData, fileVersion, userConfirmedMismatch: false);
+			return;
+		}
 
-		ConfigureAutosave();
+		// Version differs: confirm before any open/reset actions.
+		ShowVersionMismatchDialog(selectedPath, saveData, fileVersion);
+	}
 
-		// Update title bar
-		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
+	/// <summary>
+	/// Shows the version-mismatch confirmation dialog. Session remains untouched until Attempt Open.
+	/// </summary>
+	private void ShowVersionMismatchDialog(string selectedPath, Dictionary saveData, ShowfileVersionInfo fileVersion)
+	{
+		DismissActiveVersionDialog();
+
+		var dialog = VersionMismatchDialog.Create(out string loadError);
+		if (dialog == null)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Could not show version dialog ({loadError}). Open cancelled; session unchanged.", 2);
+			GD.PrintErr($"SaveManager:ShowVersionMismatchDialog - {loadError}");
+			return;
+		}
+
+		_isOpenInProgress = true;
+		_activeVersionDialog = dialog;
+
+		dialog.Configure(selectedPath, fileVersion);
+
+		dialog.AttemptOpen += () =>
+		{
+			_activeVersionDialog = null;
+			_isOpenInProgress = false;
+			CompleteOpenSession(selectedPath, saveData, fileVersion, userConfirmedMismatch: true);
+		};
+
+		dialog.Cancelled += () =>
+		{
+			_activeVersionDialog = null;
+			_isOpenInProgress = false;
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Open cancelled (version mismatch): {selectedPath}", 0);
+			GD.Print("SaveManager:ShowVersionMismatchDialog - User cancelled open.");
+		};
+
+		// Parent under main scene when available so the window attaches cleanly.
+		var parent = GetTree()?.Root?.GetNodeOrNull("Cue2Base") ?? (Node)this;
+		parent.AddChild(dialog);
+		dialog.ShowConfigured();
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"Showfile version differs ({fileVersion.ToDisplayString()}). Confirm before open.", 1);
+	}
+
+	/// <summary>
+	/// Closes any open version dialog without proceeding with load.
+	/// </summary>
+	private void DismissActiveVersionDialog()
+	{
+		if (_activeVersionDialog != null && IsInstanceValid(_activeVersionDialog))
+		{
+			_activeVersionDialog.Hide();
+			_activeVersionDialog.QueueFree();
+		}
+
+		_activeVersionDialog = null;
+		_isOpenInProgress = false;
+	}
+
+	/// <summary>
+	/// Migrates (if needed), resets the session, and applies save data.
+	/// Called only after version matches or the user confirms Attempt Open.
+	/// </summary>
+	/// <param name="selectedPath">Absolute path of the .c2 file.</param>
+	/// <param name="saveData">Already-parsed root dictionary (may be mutated by migration).</param>
+	/// <param name="fileVersion">Version metadata as read from the file.</param>
+	/// <param name="userConfirmedMismatch">True when the user accepted the version warning.</param>
+	private void CompleteOpenSession(
+		string selectedPath,
+		Dictionary saveData,
+		ShowfileVersionInfo fileVersion,
+		bool userConfirmedMismatch)
+	{
+		try
+		{
+			// Migrate older (or stamp current) formats before applying to the live model.
+			if (ShowfileMigrator.NeedsMigration(fileVersion.FormatVersion) ||
+			    ShowfileMigrator.IsNewerThanSupported(fileVersion.FormatVersion) ||
+			    userConfirmedMismatch)
+			{
+				var migration = ShowfileMigrator.MigrateToCurrent(saveData, fileVersion.FormatVersion);
+				if (!string.IsNullOrEmpty(migration.Log))
+				{
+					GD.Print($"SaveManager:CompleteOpenSession - Migration log:\n{migration.Log}");
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Showfile migration: {migration.Log.Replace("\n", " | ")}", 0);
+				}
+
+				if (!migration.Success)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Showfile migration failed (session not changed): {migration.Error}", 2);
+					GD.PrintErr($"SaveManager:CompleteOpenSession - Migration failed: {migration.Error}");
+					return;
+				}
+			}
+			else
+			{
+				// Matching open path: ensure stamps exist for any later re-save consistency.
+				ShowfileFormat.StampCurrentVersion(saveData);
+			}
+
+			// Wipe previous show only after version gate + successful migration.
+			ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+
+			ApplySessionPaths(selectedPath);
+
+			LoadSessionFromData(saveData);
+
+			// Document history is not retained across open/load.
+			_globalData.HistoryManager?.Clear();
+
+			// Track in persistent recent files for "Open Recent" in header
+			_globalData.UserDataManager?.AddRecentShowFile(selectedPath);
+
+			ConfigureAutosave();
+
+			// Update title bar
+			GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")
+				?.CallDeferred("UpdateTitle");
+
+			if (userConfirmedMismatch)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Opened showfile after version confirmation: {selectedPath}", 0);
+			}
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to open session: {ex.Message}", 2);
+			GD.PrintErr($"SaveManager:CompleteOpenSession - Error: {ex.Message}\n{ex.StackTrace}");
+		}
+	}
+
+	/// <summary>
+	/// Decrypts and parses a showfile without modifying session state.
+	/// </summary>
+	/// <param name="selectedPath">Absolute path to the .c2 file.</param>
+	/// <param name="saveData">Parsed root dictionary on success.</param>
+	/// <param name="error">Error description on failure.</param>
+	/// <returns>True when the file was read and parsed as a dictionary.</returns>
+	private bool TryReadSaveData(string selectedPath, out Dictionary saveData, out string error)
+	{
+		saveData = null;
+		error = null;
+
+		try
+		{
+			using var file = Godot.FileAccess.OpenEncryptedWithPass(
+				selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
+			if (file == null)
+			{
+				Error err = Godot.FileAccess.GetOpenError();
+				error = $"Failed to open file for reading: {selectedPath} (error {err})";
+				return false;
+			}
+
+			string jsonString = file.GetAsText();
+			using var json = new Json();
+			Error parseResult = json.Parse(jsonString);
+			if (parseResult != Error.Ok)
+			{
+				error = $"JSON parse error: {parseResult}";
+				return false;
+			}
+
+			saveData = json.Data.AsGodotDictionary();
+			if (saveData == null)
+			{
+				error = "Showfile root is not a dictionary.";
+				return false;
+			}
+
+			return true;
+		}
+		catch (Exception ex)
+		{
+			error = ex.Message;
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// Builds the root save dictionary (version stamps + cues + settings).
+	/// </summary>
+	/// <returns>Dictionary ready for JSON serialization.</returns>
+	private Dictionary BuildSaveDataDictionary()
+	{
+		var saveData = new Dictionary();
+		ShowfileFormat.StampCurrentVersion(saveData);
+
+		var cueSaveData = _globalData.Cuelist.GetData();
+		saveData.Add("cues", cueSaveData);
+
+		var settingsData = _globalData.Settings.GetData();
+		saveData.Add("settings", settingsData);
+
+		return saveData;
 	}
 
 	/// <summary>Signal handler for File → New / New Session hotkey.</summary>
@@ -368,43 +587,29 @@ public partial class SaveManager : Node
 	
 	
 	/// <summary>
-	/// Loads the session data from the encrypted file, parses JSON, and delegates loading to settings and cuelist.
+	/// Loads session data from an already-parsed (and optionally migrated) dictionary.
 	/// </summary>
-	/// <param name="selectedPath">The file path to load from.</param>
-	private void LoadSession(string selectedPath)
+	/// <param name="saveData">Root showfile dictionary with settings/cues keys.</param>
+	private void LoadSessionFromData(Dictionary saveData)
 	{
+		if (saveData == null)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to load session: save data is null.", 2);
+			return;
+		}
+
 		try
 		{
-			using var file = Godot.FileAccess.OpenEncryptedWithPass(selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
-			if (file == null)
-			{
-				Error err = Godot.FileAccess.GetOpenError();
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for reading: {selectedPath} with error: {err}", 2);
-				GD.PrintErr($"SaveManager:LoadSession - Failed to open file: {selectedPath} Error: {err}");
-				return;
-			}
-			
-			string jsonString = file.GetAsText();
-			using var json = new Json();
-			Error parseResult = json.Parse(jsonString);
-			if (parseResult != Error.Ok)
-			{
-				GD.PrintErr($"SaveManager:LoadSession - JSON parse error: {parseResult}");
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"JSON parse error: {parseResult}", 2);
-				return;
-			}
-			var saveData = json.Data.AsGodotDictionary();
-
 			if (saveData.ContainsKey("settings"))
 			{
-				GD.Print("SaveManager:LoadSession - Loading Settings");
+				GD.Print("SaveManager:LoadSessionFromData - Loading Settings");
 				var settingsData = saveData["settings"].AsGodotDictionary();
 				_globalData.Settings.LoadSettings(settingsData);
 			}
 
 			if (saveData.ContainsKey("cues"))
 			{
-				GD.Print("SaveManager:LoadSession - Loading Cues");
+				GD.Print("SaveManager:LoadSessionFromData - Loading Cues");
 				var cuesData = saveData["cues"].AsGodotDictionary();
 				_globalData.Cuelist.LoadData(cuesData);
 			}
@@ -415,9 +620,8 @@ public partial class SaveManager : Node
 		catch (Exception ex)
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load session: {ex.Message}", 2);
-			GD.PrintErr($"SaveManager:LoadSession - Error: {ex.Message}  \n{ex.StackTrace}");
+			GD.PrintErr($"SaveManager:LoadSessionFromData - Error: {ex.Message}  \n{ex.StackTrace}");
 		}
-		
 	}
 	
 	/// <summary>
@@ -495,14 +699,8 @@ public partial class SaveManager : Node
 			string backupName = $"{_globalData.SessionName}_autosave_{timestamp}.c2";
 			string backupPath = backupDir + "/" + backupName;
 
-			// Serialize current data (same as SaveSession)
-			var saveData = new Dictionary();
-			var cueSaveData = _globalData.Cuelist.GetData();
-			saveData.Add("cues", cueSaveData);
-
-			var settingsData = _globalData.Settings.GetData();
-			saveData.Add("settings", settingsData);
-
+			// Serialize current data (same as SaveSession, including version stamps)
+			var saveData = BuildSaveDataDictionary();
 			string jsonString = Json.Stringify(saveData);
 
 			using var file = Godot.FileAccess.OpenEncryptedWithPass(backupPath, Godot.FileAccess.ModeFlags.Write, _decodepass);

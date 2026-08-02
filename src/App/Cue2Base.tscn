@@ -328,7 +328,7 @@ popup_window = true
 ok_button_text = "Open"
 file_mode = 0
 access = 2
-filters = PackedStringArray("*C2; Cue2 Session Data")
+filters = PackedStringArray("*.c2,*.C2 ; Cue2 Session")
 use_native_dialog = true
 script = ExtResource("14_5gc0s")
 

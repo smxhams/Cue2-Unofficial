@@ -61,8 +61,19 @@ public partial class CueList : Control
 	// Ui
 	internal VBoxContainer _cueContainer;
 	private ScrollContainer _cueListScroll;
+	/// <summary>
+	/// Trailing pad below the last cue so the list can scroll slightly past the end.
+	/// Lives inside the scroll content (with zebra) — not a MarginContainer margin.
+	/// </summary>
+	private Control _scrollEndPad;
 	private Button _addCueButton;
 	private Button _expandAllButton;
+
+	/// <summary>
+	/// Extra scrollable space below the last cue (as a fraction of row height).
+	/// Lets the final row clear the bottom of the viewport when the list is full.
+	/// </summary>
+	private const float ScrollEndPaddingRows = 3.0f;
 
 	private Control _headerColorPad;
 	private Control _headerIssuePad;
@@ -132,6 +143,7 @@ public partial class CueList : Control
 		// Ui
 		_cueContainer = GetNode<VBoxContainer>("%CueContainer");
 		_cueListScroll = GetNodeOrNull<ScrollContainer>("VBoxContainer/Cue List");
+		_scrollEndPad = GetNodeOrNull<Control>("%ScrollEndPad");
 		_addCueButton = GetNode<Button>("%AddCueButton");
 		_expandAllButton = GetNode<Button>("%ExpandAllButton");
 
@@ -166,9 +178,11 @@ public partial class CueList : Control
 		_reorderController = new CueReorder(this, _reorderCueControl, _reorderLocationLabel, _reorderListContainer, _reorderIndicatorPanel, _cueContainer);
 		_boxSelectController = new CueBoxSelect(this, _cueContainer, _cueListScroll, this);
 
-		// Empty space in the list (below last cue / gutters) starts box-select / clear.
+		// Empty space in the list (below last cue / gutters / end pad) starts box-select / clear.
 		if (_cueContainer != null)
 			_cueContainer.GuiInput += OnCueContainerGuiInput;
+		if (_scrollEndPad != null)
+			_scrollEndPad.GuiInput += OnCueContainerGuiInput;
 
 		_globalSignals.CreateCue += CreateCue;
 		_globalSignals.DeleteSelectedCues += DeleteSelectedCues;
@@ -198,6 +212,8 @@ public partial class CueList : Control
 			_durationHeaderLabel.GuiInput -= OnTimeHeaderGuiInput;
 		if (_cueContainer != null)
 			_cueContainer.GuiInput -= OnCueContainerGuiInput;
+		if (_scrollEndPad != null)
+			_scrollEndPad.GuiInput -= OnCueContainerGuiInput;
 		if (_globalSignals != null)
 		{
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
@@ -239,6 +255,101 @@ public partial class CueList : Control
 		// Header button sizes use scaled chrome; re-apply even after silent set.
 		ApplyHeaderChromeSizes();
 		ApplyHeaderColumnLayout();
+		UpdateScrollEndPadding();
+	}
+
+	/// <summary>
+	/// Sizes the trailing scroll pad so the list can scroll slightly past the last cue.
+	/// Pad is a sibling of <see cref="_cueContainer"/> inside the zebra-covered content,
+	/// so stripes continue through the blank space.
+	/// </summary>
+	private void UpdateScrollEndPadding()
+	{
+		if (_scrollEndPad == null || !IsInstanceValid(_scrollEndPad))
+			return;
+
+		float padPx = Mathf.Max(24f, ShellColumnLayout.RowMinHeight * ScrollEndPaddingRows);
+		_scrollEndPad.CustomMinimumSize = new Vector2(0f, padPx);
+	}
+
+	/// <summary>
+	/// After GO advances the playhead: if the newly selected cue sits at or past the bottom
+	/// of the visible cuelist (or outside the viewport), scroll so that cue is centered.
+	/// </summary>
+	/// <param name="cue">Playhead cue to keep in view.</param>
+	public void EnsurePlayheadVisibleAfterGo(Cue cue)
+	{
+		if (cue == null || _cueListScroll == null)
+			return;
+		// Defer one frame so selection chrome / layout settle after SelectIndividualShell.
+		CallDeferred(nameof(EnsurePlayheadVisibleAfterGoDeferred), cue.Id);
+	}
+
+	/// <summary>
+	/// Deferred body for <see cref="EnsurePlayheadVisibleAfterGo"/>.
+	/// </summary>
+	/// <param name="cueId">Id of the playhead cue.</param>
+	private void EnsurePlayheadVisibleAfterGoDeferred(int cueId)
+	{
+		if (_cueListScroll == null || !IsInstanceValid(_cueListScroll))
+			return;
+
+		var cue = FetchCueFromId(cueId);
+		var shell = cue?.ShellBar;
+		if (shell == null || !IsInstanceValid(shell))
+			return;
+
+		// Use the cue row only — group shells include nested children in their full height.
+		Control row = shell.GetNodeOrNull<Control>("%RowHBox") ?? shell;
+		if (!IsInstanceValid(row))
+			return;
+
+		var scrollRect = _cueListScroll.GetGlobalRect();
+		var rowRect = row.GetGlobalRect();
+		if (scrollRect.Size.Y <= 1f || rowRect.Size.Y <= 0f)
+			return;
+
+		float viewTop = scrollRect.Position.Y;
+		float viewBottom = viewTop + scrollRect.Size.Y;
+		float rowTop = rowRect.Position.Y;
+		float rowBottom = rowTop + rowRect.Size.Y;
+
+		// Comfort zone: fully visible with at least half a row of space under the shell.
+		// When the next playhead cue sits at/below that band (bottom of visible area) or is
+		// outside the viewport, re-center it.
+		float comfortBottom = viewBottom - Mathf.Max(1f, ShellColumnLayout.RowMinHeight * 0.5f);
+		bool outsideAbove = rowBottom <= viewTop;
+		bool outsideBelow = rowTop >= viewBottom;
+		bool atOrPastBottom = rowBottom > comfortBottom;
+		if (!outsideAbove && !outsideBelow && !atOrPastBottom)
+			return;
+
+		ScrollControlToVerticalCenter(row);
+	}
+
+	/// <summary>
+	/// Scrolls the cuelist so <paramref name="control"/> is vertically centered in the viewport.
+	/// </summary>
+	/// <param name="control">Control to center (typically a shell row).</param>
+	private void ScrollControlToVerticalCenter(Control control)
+	{
+		if (_cueListScroll == null || control == null || !IsInstanceValid(control))
+			return;
+
+		var scrollRect = _cueListScroll.GetGlobalRect();
+		var controlRect = control.GetGlobalRect();
+		float viewCenterY = scrollRect.Position.Y + scrollRect.Size.Y * 0.5f;
+		float controlCenterY = controlRect.Position.Y + controlRect.Size.Y * 0.5f;
+		float delta = controlCenterY - viewCenterY;
+
+		int next = _cueListScroll.ScrollVertical + Mathf.RoundToInt(delta);
+		var vBar = _cueListScroll.GetVScrollBar();
+		if (vBar != null)
+			next = (int)Mathf.Clamp(next, vBar.MinValue, vBar.MaxValue);
+		else
+			next = Mathf.Max(0, next);
+
+		_cueListScroll.ScrollVertical = next;
 	}
 
 	/// <summary>

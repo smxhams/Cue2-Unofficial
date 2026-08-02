@@ -359,7 +359,56 @@ public partial class OscConnections : Node
         EmitSignal(SignalName.OscConnectionsStateChanged);
         GD.Print("OscConnections:ClearAll - All OSC connections cleared.");
     }
+
+    /// <summary>
+    /// Footer/status snapshot of configured OSC send connections.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="OscSendStatus.Ok"/> is false when the sender is not open and not mid-connect
+    /// (e.g. failed TCP or UDP init). Connecting counts as OK so the footer stays green while
+    /// a background TCP connect is still in flight.
+    /// </remarks>
+    /// <returns>Ordered list of display rows for the Connections footer tooltip.</returns>
+    public static System.Collections.Generic.List<OscSendStatus> GetSendConnectionStatuses()
+    {
+        var result = new System.Collections.Generic.List<OscSendStatus>();
+        var list = Connections;
+        if (list == null || list.Count == 0)
+            return result;
+
+        foreach (var c in list)
+        {
+            if (c == null || !GodotObject.IsInstanceValid(c))
+                continue;
+
+            string transport = c.Transport == OscTransport.Tcp ? "TCP" : "UDP";
+            string dest = $"{c.Address}:{c.Port}";
+            string label = $"{c.Name ?? "OSC"} ({transport} → {dest})";
+
+            bool connecting = c.IsConnecting;
+            bool open = c.IsSenderOpen;
+            bool ok = open || connecting;
+            string detail = connecting
+                ? "connecting"
+                : open
+                    ? "ready"
+                    : "not connected";
+
+            result.Add(new OscSendStatus(label, ok, detail, connecting));
+        }
+
+        return result;
+    }
 }
+
+/// <summary>
+/// One OSC send connection row for footer / status UI.
+/// </summary>
+/// <param name="Label">Display name including transport and destination.</param>
+/// <param name="Ok">True when ready or still connecting (not a hard failure).</param>
+/// <param name="Detail">Short status phrase (ready / connecting / not connected).</param>
+/// <param name="IsConnecting">True while a background TCP connect is in progress.</param>
+public readonly record struct OscSendStatus(string Label, bool Ok, string Detail, bool IsConnecting);
 
 /// <summary>OSC transport for a send connection.</summary>
 public enum OscTransport
