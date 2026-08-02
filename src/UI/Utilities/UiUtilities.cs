@@ -2,9 +2,16 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
-using Cue2.Base.Classes;
-using Cue2.Base.Classes.CueTypes;
-using Cue2.Shared;
+using Cue2.Domain.Cuelist;
+using Cue2.Domain.Playback;
+using Cue2.Domain.Devices;
+using Cue2.Domain.ShowSettings;
+using Cue2.Domain.Metadata;
+using Cue2.Domain.Cues;
+using Cue2.Domain.Connections;
+using Cue2.Domain.Library;
+using Cue2.Domain.Commands;
+using Cue2.Services;
 using Godot;
 
 namespace Cue2.UI.Utilities;
@@ -71,16 +78,22 @@ public partial class UiUtilities : Node
     
     
     /// <summary>
-    /// Parses user input from a LineEdit (e.g., "2:02.000", "122", "2:2") into seconds and formats to "m:s.ms".
+    /// Parses user input from a LineEdit (e.g., "2:02.000", "122", "2:2", "4'", "1'30\"") into seconds
+    /// and formats to "m:s.ms" (with hours when needed).
     /// </summary>
     /// <param name="input">The raw string from the LineEdit.</param>
     /// <param name="seconds">Out: The parsed time in seconds (double).</param>
     /// <param name="labeledFormat">Out: Optional labeled format (e.g., "01hr:02m:03s.000ms" or "02m:03s.000ms" if hours are 0).</param>
     /// <param name="isValid">Out: True if the input was successfully parsed, false otherwise.</param>
-    /// <returns>The formatted string (e.g., "2:02.000") or "" on parse failure.</returns>
+    /// <returns>The formatted string (e.g., "02:02.000") or "" on parse failure. Never null.</returns>
     /// <remarks>
-    /// Supports flexible formats: colon-separated (m:s.ms), plain seconds (e.g., "122" -> "2:02.000"), or partial (e.g., "2:2" -> "2:02.000").
-    /// Plain numbers are treated as total seconds.
+    /// Supports:
+    /// <list type="bullet">
+    /// <item>Colon form: m:s.ms, h:m:s.ms (partial segments allowed).</item>
+    /// <item>Plain number: total seconds (e.g. "122" → 2:02.000).</item>
+    /// <item>QLab-style ticks: minutes with <c>'</c>, seconds with <c>"</c> (e.g. "4'", "1'30", "30\"").</item>
+    /// </list>
+    /// Unknown letters/symbols are stripped when using colon/plain form so fields can always re-sanitize.
     /// </remarks>
     public static string ParseAndFormatTime(string input, out double seconds, out string labeledFormat, out bool isValid)
     {
@@ -95,71 +108,217 @@ public partial class UiUtilities : Node
 
         try
         {
-            // Check for invalid characters before processing
-            if (!Regex.IsMatch(input, @"^[\d:.]+$"))
+            string raw = input.Trim();
+
+            // Normalize unicode primes / curly quotes to ASCII feet/inches marks.
+            raw = raw
+                .Replace('′', '\'')
+                .Replace('’', '\'')
+                .Replace('`', '\'')
+                .Replace('″', '"')
+                .Replace('”', '"')
+                .Replace('“', '"');
+
+            // QLab-style minute/second ticks take priority when present.
+            if (raw.Contains('\'') || raw.Contains('"'))
             {
-                GD.PrintErr("Invalid time format: contains invalid characters");
-                return "";
-            }
-
-            // Normalize input: remove any non-numeric/colon/dot characters, handle flexible formats
-            input = Regex.Replace(input, @"[^0-9:.]", "");
-
-            // minute:second.milisecond
-            var regex = new Regex(@"^(?:(\d+):)?(?:(\d+):)?(?:(\d+)(?:\.(\d+))?)?$");
-            var match = regex.Match(input);
-
-            if (match.Success)
-            {
-                double hour = 0;
-                double min = 0;
-                if (match.Groups[2].Success)
+                if (!TryParseTickTime(raw, out seconds))
                 {
-                    hour = double.Parse(match.Groups[1].Value);
-                    min = double.Parse(match.Groups[2].Value);
-                }
-                else if (match.Groups[1].Success)
-                {
-                    min = double.Parse(match.Groups[1].Value);
-                }
-                string secStr = match.Groups[3].Value;
-                string msStr = match.Groups[4].Value;
-
-                double sec = string.IsNullOrEmpty(secStr) ? 0 : double.Parse(secStr);
-                double fracSec = 0.0;
-                if (!string.IsNullOrEmpty(msStr))
-                {
-                    msStr = msStr.Substring(0, Math.Min(msStr.Length, 3)); // Truncate to at most 3 digits, ignoring extra
-                    fracSec = double.Parse("0." + msStr);
+                    GD.Print($"UiUtilities:ParseAndFormatTime - Invalid tick time '{input}'");
+                    return "";
                 }
 
-                // If no colon (plain number), treat entire input as seconds
-                if (!input.Contains(":") && double.TryParse(input, out double totalSec))
-                {
-                    hour = Math.Floor(totalSec / 3600);
-                    min = Math.Floor((totalSec % 3600) / 60);
-                    sec = Math.Floor(totalSec % 60);
-                    fracSec = totalSec - Math.Floor(totalSec); // Fractional as seconds
-                }
-
-                seconds = (hour * 3600) + (min * 60) + sec + fracSec;
-                labeledFormat = FormatLabeledTime(seconds); // Compute labeled format
+                labeledFormat = FormatLabeledTime(seconds);
                 isValid = true;
                 return FormatTime(seconds);
             }
-            else
+
+            // Colon / plain-seconds path: strip junk (letters, spaces, etc.) then parse.
+            string cleaned = Regex.Replace(raw, @"[^0-9:.]", "");
+            if (string.IsNullOrEmpty(cleaned) || cleaned is "." or ":" or ".:")
             {
-                GD.PrintErr("Invalid time format");
+                GD.Print($"UiUtilities:ParseAndFormatTime - No numeric content in '{input}'");
+                return "";
             }
 
+            // Collapse accidental repeated separators (e.g. "1::2" → "1:2").
+            cleaned = Regex.Replace(cleaned, @":{2,}", ":");
+            cleaned = Regex.Replace(cleaned, @"\.{2,}", ".");
+            cleaned = cleaned.Trim(':', '.');
 
+            if (string.IsNullOrEmpty(cleaned))
+            {
+                GD.Print($"UiUtilities:ParseAndFormatTime - Empty after cleanup: '{input}'");
+                return "";
+            }
+
+            // Plain number (no colon) → total seconds (supports fractional).
+            if (!cleaned.Contains(':'))
+            {
+                if (!double.TryParse(cleaned, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out double totalSec) ||
+                    totalSec < 0 || double.IsNaN(totalSec) || double.IsInfinity(totalSec))
+                {
+                    GD.Print($"UiUtilities:ParseAndFormatTime - Invalid plain seconds '{input}'");
+                    return "";
+                }
+
+                seconds = totalSec;
+                labeledFormat = FormatLabeledTime(seconds);
+                isValid = true;
+                return FormatTime(seconds);
+            }
+
+            // Colon-separated: [h:]m:s[.ms] or m:s[.ms] or h:m:s
+            var parts = cleaned.Split(':');
+            if (parts.Length is < 2 or > 3)
+            {
+                GD.Print($"UiUtilities:ParseAndFormatTime - Invalid colon segments in '{input}'");
+                return "";
+            }
+
+            double hour = 0;
+            double min;
+            double sec;
+            double fracSec = 0.0;
+
+            if (parts.Length == 3)
+            {
+                if (!double.TryParse(parts[0], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out hour) ||
+                    !double.TryParse(parts[1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out min))
+                    return "";
+                if (!TryParseSecondsWithFraction(parts[2], out sec, out fracSec))
+                    return "";
+            }
+            else // 2 parts: m:s
+            {
+                if (!double.TryParse(parts[0], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out min))
+                    return "";
+                if (!TryParseSecondsWithFraction(parts[1], out sec, out fracSec))
+                    return "";
+            }
+
+            if (hour < 0 || min < 0 || sec < 0 || fracSec < 0)
+                return "";
+
+            seconds = (hour * 3600.0) + (min * 60.0) + sec + fracSec;
+            labeledFormat = FormatLabeledTime(seconds);
+            isValid = true;
+            return FormatTime(seconds);
         }
         catch (Exception ex)
         {
             GD.Print($"UiUtilities:ParseAndFormatTime - Invalid input '{input}': {ex.Message}");
+            seconds = 0.0;
+            labeledFormat = "00m:00s.000ms";
+            isValid = false;
             return "";
         }
-        return null;
+    }
+
+    /// <summary>
+    /// Parses QLab-style tick times: minutes with <c>'</c>, seconds with <c>"</c>.
+    /// Examples: <c>4'</c> → 240s, <c>1'30</c> / <c>1'30"</c> → 90s, <c>30"</c> → 30s.
+    /// </summary>
+    private static bool TryParseTickTime(string raw, out double seconds)
+    {
+        seconds = 0.0;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        // Allow spaces around marks: "4 ' 30 \"", "4'", "30\""
+        // Minutes optional only when a seconds mark is present.
+        var match = Regex.Match(raw,
+            @"^\s*(?:(\d+(?:\.\d+)?)\s*')?\s*(?:(\d+(?:\.\d+)?)\s*""?)?\s*$");
+        if (!match.Success)
+            return false;
+
+        bool hasMinMark = raw.Contains('\'');
+        bool hasSecMark = raw.Contains('"');
+        string minStr = match.Groups[1].Success ? match.Groups[1].Value : null;
+        string secStr = match.Groups[2].Success ? match.Groups[2].Value : null;
+
+        // Require structure that matches the marks present.
+        if (hasMinMark && string.IsNullOrEmpty(minStr))
+            return false;
+        if (!hasMinMark && !hasSecMark)
+            return false;
+        // Bare "4'" → minutes only (sec group empty). Bare "30\"" → seconds only.
+        // "4'30" → both. Reject empty after marks.
+        if (string.IsNullOrEmpty(minStr) && string.IsNullOrEmpty(secStr))
+            return false;
+
+        // If only a seconds mark, group1 is empty and group2 is the number (regex may put
+        // a lone number in group2 only when ' is absent — re-parse when needed).
+        if (!hasMinMark && hasSecMark)
+        {
+            var secOnly = Regex.Match(raw, @"^\s*(\d+(?:\.\d+)?)\s*""\s*$");
+            if (!secOnly.Success)
+                return false;
+            if (!double.TryParse(secOnly.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double secOnlyVal) ||
+                secOnlyVal < 0)
+                return false;
+            seconds = secOnlyVal;
+            return true;
+        }
+
+        double mins = 0;
+        double secs = 0;
+        if (!string.IsNullOrEmpty(minStr))
+        {
+            if (!double.TryParse(minStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out mins) || mins < 0)
+                return false;
+        }
+
+        if (!string.IsNullOrEmpty(secStr))
+        {
+            if (!double.TryParse(secStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out secs) || secs < 0)
+                return false;
+        }
+
+        seconds = (mins * 60.0) + secs;
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a seconds segment that may include a fractional part ("3", "3.5", "03.250").
+    /// </summary>
+    private static bool TryParseSecondsWithFraction(string segment, out double wholeSeconds, out double fracSeconds)
+    {
+        wholeSeconds = 0;
+        fracSeconds = 0;
+        if (string.IsNullOrEmpty(segment))
+            return true;
+
+        int dot = segment.IndexOf('.');
+        if (dot < 0)
+        {
+            return double.TryParse(segment, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out wholeSeconds);
+        }
+
+        string whole = segment.Substring(0, dot);
+        string frac = segment.Substring(dot + 1);
+        if (!string.IsNullOrEmpty(whole) &&
+            !double.TryParse(whole, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out wholeSeconds))
+            return false;
+        if (string.IsNullOrEmpty(frac))
+            return true;
+
+        // At most 3 ms digits; extra digits ignored (same as prior behavior).
+        if (frac.Length > 3)
+            frac = frac.Substring(0, 3);
+        if (!double.TryParse("0." + frac, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out fracSeconds))
+            return false;
+        return true;
     }
 
     public static string FormatTime(double seconds)

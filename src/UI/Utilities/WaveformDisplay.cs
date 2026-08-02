@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using Cue2.Shared;
-using Cue2.Shared.Audio;
+using Cue2.Services;
+using Cue2.Media.Audio;
 using Godot;
 
 namespace Cue2.UI.Utilities;

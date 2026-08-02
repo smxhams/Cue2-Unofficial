@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Cue2"
 config/version="0.00.003"
-run/main_scene="res://src/Base/Cue2Base.tscn"
+run/main_scene="res://src/App/Cue2Base.tscn"
 run/print_header=false
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Techmop/Cue2"
@@ -27,21 +27,21 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-GlobalData="*res://src/Shared/GlobalData.cs"
-GlobalSignals="*res://src/Shared/GlobalSignals.cs"
-GlobalStyles="*res://src/Shared/GlobalStyles.cs"
-EventLogger="*res://src/Shared/EventLogger.cs"
-DisplaysManager="*res://src/Shared/DisplaysManager.cs"
-SaveManager="*res://src/Shared/SaveManager.cs"
-InputActionsListener="*res://src/Shared/InputActionsListener.cs"
+GlobalData="*res://src/Services/GlobalData.cs"
+GlobalSignals="*res://src/Services/GlobalSignals.cs"
+GlobalStyles="*res://src/Services/GlobalStyles.cs"
+EventLogger="*res://src/Services/EventLogger.cs"
+DisplaysManager="*res://src/Services/DisplaysManager.cs"
+SaveManager="*res://src/Services/SaveManager.cs"
+InputActionsListener="*res://src/Services/InputActionsListener.cs"
 UiUtilities="*res://src/UI/Utilities/UiUtilities.cs"
-MediaEngine="*res://src/Shared/MediaEngine.cs"
-MediaBackupManager="*res://src/Shared/MediaBackupManager.cs"
-MediaHealthService="*res://src/Shared/MediaHealthService.cs"
-AudioDevices="*res://src/Shared/AudioDevices.cs"
-OscListen="*res://src/Base/Classes/Connections/OscListen.cs"
-OscConnections="*res://src/Base/Classes/Connections/OscConnections.cs"
-MidiManager="*res://src/Shared/MidiManager.cs"
+MediaEngine="*res://src/Services/MediaEngine.cs"
+MediaBackupManager="*res://src/Services/MediaBackupManager.cs"
+MediaHealthService="*res://src/Services/MediaHealthService.cs"
+AudioDevices="*res://src/Services/AudioDevices.cs"
+OscListen="*res://src/Domain/Connections/OscListen.cs"
+OscConnections="*res://src/Domain/Connections/OscConnections.cs"
+MidiManager="*res://src/Services/MidiManager.cs"
 
 [debug]
 

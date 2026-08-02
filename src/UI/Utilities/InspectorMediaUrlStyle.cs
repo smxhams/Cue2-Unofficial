@@ -1,5 +1,5 @@
 using Godot;
-using Cue2.Shared;
+using Cue2.Services;
 
 namespace Cue2.UI.Utilities;
 

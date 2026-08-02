@@ -1,0 +1,638 @@
+using Cue2.Services;
+using Cue2.UI.Utilities;
+using Godot;
+
+namespace Cue2.App;
+
+/// <summary>
+/// Borderless main-window title drag, edge/corner resize, maximize/fullscreen toggle, and geometry persistence.
+/// </summary>
+/// <remarks>
+/// Expand button enters non-exclusive <see cref="DisplayServer.WindowMode.Fullscreen"/>.
+/// Title double-click enters <see cref="DisplayServer.WindowMode.Maximized"/> only.
+/// Single-click / drag on the header does not leave fullscreen; drag-out applies to OS maximize only.
+/// </remarks>
+public partial class MainWindowHandles : Control
+{
+	private GlobalData _globalData;
+	private GlobalSignals _globalSignals;
+
+	private static readonly Vector2I MinWindowSize = new Vector2I(600, 370);
+
+	private Timer _resizeSaveTimer;
+	private Vector2I _lastKnownPosition;
+
+	/// <summary>Pre-fill-screen size/position used by maximize/fullscreen toggles and drag-out of maximize.</summary>
+	private Vector2I _restoreSize = Vector2I.Zero;
+	private Vector2I _restorePosition = Vector2I.Zero;
+	private bool _hasRestoreRect;
+
+	/// <summary>
+	/// Fill-screen mode requested by chrome (engine <see cref="Window.Mode"/> can lag on borderless).
+	/// </summary>
+	private enum FillMode
+	{
+		None,
+		Maximized,
+		Fullscreen
+	}
+
+	private FillMode _fillMode = FillMode.None;
+
+	/// <summary>Skip persistence for one frame while mode/geometry is being applied.</summary>
+	private bool _suppressGeometrySave;
+
+	/// <summary>Resting border colour (edit or show mode); alert flash fades back to this.</summary>
+	private Color _restBorderColor;
+	private bool _isFading;
+	private float _fadeProgress;
+	private Color _highlightColor;
+	private StyleBoxFlat _borderStylebox;
+
+	private Control _headerHandle;
+	private Control _rightHandle;
+	private Control _topHandle;
+	private Control _leftHandle;
+	private Control _bottomHandle;
+	private Control _bottomRightHandle;
+	private Control _bottomLeftHandle;
+	private Control _topRightHandle;
+	private Control _topLeftHandle;
+
+	/// <inheritdoc />
+	public override void _Ready()
+	{
+		_globalData = GetNode<GlobalData>("/root/GlobalData");
+		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+
+		_resizeSaveTimer = new Timer { OneShot = true, WaitTime = 0.25f };
+		_resizeSaveTimer.Timeout += SaveCurrentWindowState;
+		AddChild(_resizeSaveTimer);
+
+		var window = GetWindow();
+		window.MinSize = MinWindowSize;
+		window.MaxSize = UiUtilities.ComputeVirtualDesktopSize();
+
+		// Startup order (critical on macOS HiDPI):
+		// 1) Content scale only (must not own outer pixel size)
+		// 2) Restore saved geometry OR scale design-time default once — never both
+		// 3) Deferred re-apply after the display server settles
+		_suppressGeometrySave = true;
+		UiUtilities.RescaleUi(window, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		// WrapControls would auto-grow the frame when ContentScaleFactor changes and
+		// overwrite the restored size; main window geometry is managed explicitly.
+		window.WrapControls = false;
+
+		bool restored = RestoreWindowFromUserData(window);
+		if (!restored)
+			UiUtilities.RescaleWindow(window, _globalData.BaseDisplayScale);
+
+		_lastKnownPosition = window.Position;
+		CallDeferred(nameof(FinalizeStartupGeometry));
+
+		_globalSignals.LogAlert += OnAlertReceived;
+		_globalSignals.ShowModeChanged += OnShowModeChanged;
+
+		var border = GetNode<Panel>("%Border");
+		// Duplicate so border colour mutations do not touch a shared theme resource.
+		if (border.GetThemeStylebox("panel") is StyleBoxFlat style)
+		{
+			_borderStylebox = (StyleBoxFlat)style.Duplicate();
+			border.AddThemeStyleboxOverride("panel", _borderStylebox);
+			_highlightColor = GlobalStyles.Danger;
+			ApplyShowModeBorder(_globalData?.Settings?.ShowMode == true);
+		}
+
+		_headerHandle = GetNode<Control>("%HeaderHandle");
+		_rightHandle = GetNode<Control>("%RightHandle");
+		_topHandle = GetNode<Control>("%TopHandle");
+		_leftHandle = GetNode<Control>("%LeftHandle");
+		_bottomHandle = GetNode<Control>("%BottomHandle");
+		_bottomRightHandle = GetNode<Control>("%BottomRightCornerHandle");
+		_bottomLeftHandle = GetNode<Control>("%BottomLeftCornerHandle");
+		_topRightHandle = GetNode<Control>("%TopRightCornerHandle");
+		_topLeftHandle = GetNode<Control>("%TopLeftCornerHandle");
+
+		_headerHandle.GuiInput += OnHeaderHandleGuiInput;
+		_rightHandle.GuiInput += OnRightHandleGuiInput;
+		_topHandle.GuiInput += OnTopHandleGuiInput;
+		_leftHandle.GuiInput += OnLeftHandleGuiInput;
+		_bottomHandle.GuiInput += OnBottomHandleGuiInput;
+		_topRightHandle.GuiInput += OnTopRightHandleGuiInput;
+		_bottomLeftHandle.GuiInput += OnBottomLeftHandleGuiInput;
+		_topLeftHandle.GuiInput += OnTopLeftHandleGuiInput;
+		_bottomRightHandle.GuiInput += OnBottomRightHandleGuiInput;
+
+		window.SizeChanged += OnWindowSizeChanged;
+	}
+
+	/// <summary>
+	/// Re-applies restored (or design-scaled) geometry after content scale and the display
+	/// server finish settling. Prevents size/position from being overwritten by WrapControls
+	/// or a late OS layout pass (common on macOS).
+	/// </summary>
+	private void FinalizeStartupGeometry()
+	{
+		var window = GetWindow();
+		if (window == null || !IsInstanceValid(window))
+		{
+			_suppressGeometrySave = false;
+			return;
+		}
+
+		if (_fillMode == FillMode.Fullscreen)
+		{
+			SetWindowMode(window, DisplayServer.WindowMode.Fullscreen);
+		}
+		else if (_fillMode == FillMode.Maximized)
+		{
+			SetWindowMode(window, DisplayServer.WindowMode.Maximized);
+		}
+		else if (_hasRestoreRect)
+		{
+			ApplyGeometry(window, _restoreSize, _restorePosition);
+			_lastKnownPosition = _restorePosition;
+		}
+
+		_suppressGeometrySave = false;
+		SaveCurrentWindowState();
+	}
+
+	/// <summary>
+	/// Restores previous size / position / fill-screen state from persistent user data.
+	/// </summary>
+	/// <returns>True when a valid saved size or maximized/fullscreen flag was applied.</returns>
+	private bool RestoreWindowFromUserData(Window window)
+	{
+		var udm = _globalData?.UserDataManager;
+		if (udm == null)
+			return false;
+
+		bool hasSize = udm.LastWindowSize.X >= MinWindowSize.X && udm.LastWindowSize.Y >= MinWindowSize.Y;
+		if (!hasSize && !udm.WasMaximized)
+			return false;
+
+		if (hasSize)
+		{
+			// Clamp out sizes corrupted by older order-of-ops bugs (scale applied after restore).
+			Vector2I size = UiUtilities.ClampWindowSizeToVirtualDesktop(udm.LastWindowSize, MinWindowSize);
+			Vector2I absPos = UiUtilities.ResolveSavedWindowPosition(udm.LastWindowPosition, size);
+			RememberRestoreRect(size, absPos);
+
+			if (!udm.WasMaximized)
+				ApplyGeometry(window, _restoreSize, _restorePosition);
+		}
+
+		if (udm.WasMaximized)
+		{
+			_fillMode = udm.WasFullscreen ? FillMode.Fullscreen : FillMode.Maximized;
+			SetWindowMode(window, udm.WasFullscreen
+				? DisplayServer.WindowMode.Fullscreen
+				: DisplayServer.WindowMode.Maximized);
+		}
+
+		GD.Print($"MainWindowHandles:RestoreWindowFromUserData - size={udm.LastWindowSize} " +
+		         $"(clamped apply={_restoreSize}) pos={udm.LastWindowPosition} -> {_restorePosition} " +
+		         $"fill={_fillMode}");
+		return true;
+	}
+
+	private async void OnAlertReceived()
+	{
+		if (_borderStylebox == null)
+			return;
+
+		_isFading = false;
+		_borderStylebox.BorderColor = _highlightColor;
+		await ToSignal(GetTree().CreateTimer(0.5), "timeout");
+		_fadeProgress = 0.0f;
+		_isFading = true;
+	}
+
+	private void OnShowModeChanged(bool enabled)
+	{
+		ApplyShowModeBorder(enabled);
+	}
+
+	/// <summary>
+	/// Accents the window border for Show Mode (title bar stays default chrome).
+	/// </summary>
+	/// <param name="showMode">True when Show Mode is active.</param>
+	private void ApplyShowModeBorder(bool showMode)
+	{
+		_restBorderColor = showMode
+			? GlobalStyles.WindowBorderShowMode
+			: GlobalStyles.WindowBorderEditMode;
+
+		if (_borderStylebox == null)
+			return;
+
+		// If an alert flash is mid-fade, continue fading toward the new rest colour.
+		if (!_isFading)
+			_borderStylebox.BorderColor = _restBorderColor;
+	}
+
+	private void OnHeaderHandleGuiInput(InputEvent @event)
+	{
+		if (@event is not InputEventMouseButton mouseEvent)
+			return;
+
+		if (mouseEvent.DoubleClick && mouseEvent.ButtonIndex == MouseButton.Left)
+		{
+			// Header double-click: OS maximize only (never fullscreen).
+			ToggleMaximizeFromChrome();
+			return;
+		}
+
+		if (mouseEvent.Pressed && mouseEvent.ButtonIndex == MouseButton.Left)
+			StartDrag();
+	}
+
+	private void OnRightHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.Right);
+	}
+
+	private void OnTopHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.Top);
+	}
+
+	private void OnLeftHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.Left);
+	}
+
+	private void OnBottomHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.Bottom);
+	}
+
+	private void OnBottomRightHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.BottomRight);
+	}
+
+	private void OnBottomLeftHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.BottomLeft);
+	}
+
+	private void OnTopRightHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.TopRight);
+	}
+
+	private void OnTopLeftHandleGuiInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton { Pressed: true })
+			StartResize(DisplayServer.WindowResizeEdge.TopLeft);
+	}
+
+	/// <summary>
+	/// Begins an OS edge resize. Leaves OS-maximize without snapping to the pre-maximize rect.
+	/// Does nothing while in chrome fullscreen (edges should not break fullscreen).
+	/// </summary>
+	private void StartResize(DisplayServer.WindowResizeEdge edge)
+	{
+		var window = GetWindow();
+		if (window == null || !IsInstanceValid(window))
+			return;
+
+		if (IsChromeFullscreen(window))
+			return;
+
+		// Keep current (full) size so the edge drag continues naturally.
+		LeaveFillScreen(window, applyRestoreRect: false);
+
+		int windowId = window.GetWindowId();
+		if (windowId >= 0)
+			DisplayServer.WindowStartResize(edge, windowId);
+	}
+
+	/// <summary>
+	/// Begins an OS window drag. Drag-out of OS maximize restores the pre-maximize rect.
+	/// Fullscreen is left alone on press/click — use the expand button or double-click instead.
+	/// </summary>
+	private void StartDrag()
+	{
+		var window = GetWindow();
+		if (window == null || !IsInstanceValid(window))
+			return;
+
+		// Single-click / drag must not exit fullscreen.
+		if (IsChromeFullscreen(window))
+			return;
+
+		// OS maximize: desktop convention is drag title bar to pull out with restore rect.
+		if (IsEffectivelyFillScreen(window))
+			LeaveFillScreen(window, applyRestoreRect: true);
+
+		int windowId = window.GetWindowId();
+		if (windowId >= 0)
+			DisplayServer.WindowStartDrag(windowId);
+	}
+
+	/// <summary>
+	/// Toggle non-exclusive fullscreen from the expand button.
+	/// Does not use ExclusiveFullscreen (avoids black flashes / exclusive display takeover).
+	/// </summary>
+	public void ToggleFullscreenFromChrome()
+	{
+		var window = GetWindow();
+		if (window == null || !IsInstanceValid(window))
+			return;
+
+		if (IsEffectivelyFillScreen(window))
+		{
+			LeaveFillScreen(window, applyRestoreRect: true);
+			return;
+		}
+
+		EnterFillScreen(window, FillMode.Fullscreen);
+	}
+
+	/// <summary>
+	/// Toggle OS maximize from title double-click (never fullscreen).
+	/// </summary>
+	public void ToggleMaximizeFromChrome()
+	{
+		var window = GetWindow();
+		if (window == null || !IsInstanceValid(window))
+			return;
+
+		if (IsEffectivelyFillScreen(window))
+		{
+			LeaveFillScreen(window, applyRestoreRect: true);
+			return;
+		}
+
+		EnterFillScreen(window, FillMode.Maximized);
+	}
+
+	/// <summary>
+	/// Snapshots the current rect and enters maximize or non-exclusive fullscreen.
+	/// </summary>
+	private void EnterFillScreen(Window window, FillMode mode)
+	{
+		if (mode == FillMode.None)
+			return;
+
+		_resizeSaveTimer.Stop();
+		RememberRestoreRect(window.Size, window.Position);
+		PersistWindowState(fill: false);
+
+		_suppressGeometrySave = true;
+		_fillMode = mode;
+		SetWindowMode(window, mode == FillMode.Fullscreen
+			? DisplayServer.WindowMode.Fullscreen
+			: DisplayServer.WindowMode.Maximized);
+		PersistWindowState(fill: true);
+		CallDeferred(nameof(EndGeometrySaveSuppression));
+	}
+
+	/// <summary>
+	/// Leaves maximize/fullscreen. Optionally restores the pre-fill rect (button / double-click / drag),
+	/// or keeps the current size (edge-resize out of maximize).
+	/// </summary>
+	/// <param name="window">Target window.</param>
+	/// <param name="applyRestoreRect">True to apply remembered pre-fill size/position.</param>
+	private void LeaveFillScreen(Window window, bool applyRestoreRect)
+	{
+		if (!IsEffectivelyFillScreen(window))
+			return;
+
+		_resizeSaveTimer.Stop();
+		_suppressGeometrySave = true;
+		_fillMode = FillMode.None;
+
+		SetWindowMode(window, DisplayServer.WindowMode.Windowed);
+
+		if (applyRestoreRect && _hasRestoreRect)
+		{
+			ApplyGeometry(window, _restoreSize, _restorePosition);
+			_lastKnownPosition = _restorePosition;
+			// Borderless: engine often overwrites size on the next frame.
+			CallDeferred(nameof(ReapplyRestoreRectDeferred));
+		}
+		else
+		{
+			// Free-size path (edge resize): current dimensions stay; next save captures them.
+			_lastKnownPosition = window.Position;
+			PersistWindowState(fill: false);
+			CallDeferred(nameof(EndGeometrySaveSuppression));
+		}
+	}
+
+	/// <summary>
+	/// Re-applies the restore rect after the display server finishes leaving fill-screen mode.
+	/// </summary>
+	private void ReapplyRestoreRectDeferred()
+	{
+		var window = GetWindow();
+		if (window != null && IsInstanceValid(window) && _hasRestoreRect)
+		{
+			if (UiUtilities.IsWindowFillScreen(window))
+				SetWindowMode(window, DisplayServer.WindowMode.Windowed);
+
+			ApplyGeometry(window, _restoreSize, _restorePosition);
+			_lastKnownPosition = _restorePosition;
+			PersistWindowState(fill: false);
+		}
+
+		_suppressGeometrySave = false;
+	}
+
+	private void EndGeometrySaveSuppression()
+	{
+		_suppressGeometrySave = false;
+	}
+
+	/// <summary>True when chrome or engine reports any fill-screen mode.</summary>
+	private bool IsEffectivelyFillScreen(Window window) =>
+		_fillMode != FillMode.None || UiUtilities.IsWindowFillScreen(window);
+
+	/// <summary>True when chrome fullscreen (or engine fullscreen) is active.</summary>
+	private bool IsChromeFullscreen(Window window)
+	{
+		if (_fillMode == FillMode.Fullscreen)
+			return true;
+		if (window == null || !IsInstanceValid(window))
+			return false;
+		return window.Mode is Window.ModeEnum.Fullscreen or Window.ModeEnum.ExclusiveFullscreen;
+	}
+
+	private void RememberRestoreRect(Vector2I size, Vector2I globalPosition)
+	{
+		if (size.X < MinWindowSize.X || size.Y < MinWindowSize.Y)
+			return;
+
+		_restoreSize = size;
+		_restorePosition = globalPosition;
+		_hasRestoreRect = true;
+	}
+
+	private static void SetWindowMode(Window window, DisplayServer.WindowMode mode)
+	{
+		int id = window.GetWindowId();
+		if (id >= 0)
+			DisplayServer.WindowSetMode(mode, id);
+		else
+			window.Mode = mode switch
+			{
+				DisplayServer.WindowMode.Maximized => Window.ModeEnum.Maximized,
+				DisplayServer.WindowMode.Fullscreen => Window.ModeEnum.Fullscreen,
+				DisplayServer.WindowMode.ExclusiveFullscreen => Window.ModeEnum.ExclusiveFullscreen,
+				DisplayServer.WindowMode.Minimized => Window.ModeEnum.Minimized,
+				_ => Window.ModeEnum.Windowed
+			};
+	}
+
+	private static void ApplyGeometry(Window window, Vector2I size, Vector2I globalPosition)
+	{
+		int id = window.GetWindowId();
+		if (id >= 0)
+		{
+			if (size.X > 0 && size.Y > 0)
+				DisplayServer.WindowSetSize(size, id);
+			DisplayServer.WindowSetPosition(globalPosition, id);
+			return;
+		}
+
+		if (size.X > 0 && size.Y > 0)
+			window.Size = size;
+		window.Position = globalPosition;
+	}
+
+	/// <summary>
+	/// Persists restore rect (when known) and fill-screen flags. Uses session restore fields while
+	/// fill-screen so transitional sizes never overwrite the pre-fill rect.
+	/// </summary>
+	/// <param name="fill">True when currently maximized or fullscreen.</param>
+	private void PersistWindowState(bool fill)
+	{
+		Vector2I size;
+		Vector2I relPos;
+
+		if (fill && _hasRestoreRect)
+		{
+			size = _restoreSize;
+			relPos = UiUtilities.ToScreenRelativePosition(_restorePosition, size);
+		}
+		else
+		{
+			var win = GetWindow();
+			if (win == null || !IsInstanceValid(win))
+				return;
+
+			size = win.Size;
+			relPos = UiUtilities.ToScreenRelativePosition(win.Position, size);
+
+			if (!fill && size.X >= MinWindowSize.X && size.Y >= MinWindowSize.Y)
+				RememberRestoreRect(size, win.Position);
+		}
+
+		bool fullscreen = fill && _fillMode == FillMode.Fullscreen;
+		// SetWindowState only writes size/position when not fill-screen.
+		_globalData?.UserDataManager?.SetWindowState(size, relPos, fill, fullscreen);
+	}
+
+	/// <inheritdoc />
+	public override void _Process(double delta)
+	{
+		if (_isFading && _borderStylebox != null)
+		{
+			_fadeProgress += (float)delta / 1.0f;
+			if (_fadeProgress >= 1.0f)
+			{
+				_fadeProgress = 1.0f;
+				_isFading = false;
+			}
+
+			_borderStylebox.BorderColor = _highlightColor.Lerp(_restBorderColor, _fadeProgress);
+		}
+
+		CheckAndDebounceWindowPosition();
+	}
+
+	private void OnWindowSizeChanged()
+	{
+		if (_suppressGeometrySave)
+			return;
+
+		var win = GetWindow();
+		if (IsEffectivelyFillScreen(win))
+		{
+			PersistWindowState(fill: true);
+			return;
+		}
+
+		_resizeSaveTimer.Start();
+	}
+
+	/// <summary>
+	/// Saves the current window size, relative position, and fill-screen state.
+	/// </summary>
+	private void SaveCurrentWindowState()
+	{
+		if (_suppressGeometrySave)
+			return;
+
+		var win = GetWindow();
+		if (win == null || !IsInstanceValid(win))
+			return;
+
+		PersistWindowState(IsEffectivelyFillScreen(win));
+	}
+
+	private void CheckAndDebounceWindowPosition()
+	{
+		if (_suppressGeometrySave)
+			return;
+
+		var win = GetWindow();
+		if (IsEffectivelyFillScreen(win))
+			return;
+
+		Vector2I currentPos = win.Position;
+		if (currentPos != _lastKnownPosition)
+		{
+			_lastKnownPosition = currentPos;
+			_resizeSaveTimer.Start();
+		}
+	}
+
+	/// <inheritdoc />
+	public override void _ExitTree()
+	{
+		var window = GetWindow();
+		if (window != null && IsInstanceValid(window))
+			window.SizeChanged -= OnWindowSizeChanged;
+
+		if (_headerHandle != null) _headerHandle.GuiInput -= OnHeaderHandleGuiInput;
+		if (_rightHandle != null) _rightHandle.GuiInput -= OnRightHandleGuiInput;
+		if (_topHandle != null) _topHandle.GuiInput -= OnTopHandleGuiInput;
+		if (_leftHandle != null) _leftHandle.GuiInput -= OnLeftHandleGuiInput;
+		if (_bottomHandle != null) _bottomHandle.GuiInput -= OnBottomHandleGuiInput;
+		if (_bottomRightHandle != null) _bottomRightHandle.GuiInput -= OnBottomRightHandleGuiInput;
+		if (_bottomLeftHandle != null) _bottomLeftHandle.GuiInput -= OnBottomLeftHandleGuiInput;
+		if (_topRightHandle != null) _topRightHandle.GuiInput -= OnTopRightHandleGuiInput;
+		if (_topLeftHandle != null) _topLeftHandle.GuiInput -= OnTopLeftHandleGuiInput;
+
+		if (_globalSignals != null)
+		{
+			_globalSignals.LogAlert -= OnAlertReceived;
+			_globalSignals.ShowModeChanged -= OnShowModeChanged;
+		}
+
+		_resizeSaveTimer?.Stop();
+		SaveCurrentWindowState();
+	}
+}

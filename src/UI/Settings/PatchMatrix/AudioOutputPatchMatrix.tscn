@@ -1,0 +1,173 @@
+[gd_scene load_steps=2 format=3 uid="uid://dgy2bmmm4rjpt"]
+
+[ext_resource type="Script" uid="uid://7blngcdj0grc" path="res://src/UI/Settings/PatchMatrix/AudioOutputPatchMatrix.cs" id="1_ntaie"]
+
+[node name="AudioOutputPatchMatrix" type="Control"]
+custom_minimum_size = Vector2(400, 300)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+script = ExtResource("1_ntaie")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="."]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_vertical = 3
+
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer2"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="GridContainer" parent="VBoxContainer2/ScrollContainer"]
+layout_mode = 2
+theme_override_constants/h_separation = 5
+theme_override_constants/v_separation = 5
+columns = 2
+
+[node name="TopLeftContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer"]
+layout_mode = 2
+
+[node name="PatchName" type="LineEdit" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Name of the patch"
+text = "Audio Patch"
+alignment = 1
+
+[node name="RefreshButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+layout_mode = 2
+focus_mode = 0
+text = "Refresh"
+
+[node name="DeletePatchButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete Patch"
+
+[node name="Expanded" type="BoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+size_flags_vertical = 3
+alignment = 2
+
+[node name="ExpandedButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Expanded"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 22)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 0
+
+[node name="Line2D" type="Line2D" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Expanded"]
+position = Vector2(0, 2)
+points = PackedVector2Array(8, 8, 12, 13, 16, 8)
+width = 2.0
+default_color = Color(0.340659, 0.340659, 0.340659, 1)
+
+[node name="Collapsed" type="BoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CollapsedButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Collapsed"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 22)
+layout_mode = 2
+focus_mode = 0
+
+[node name="Line2D" type="Line2D" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/Collapsed"]
+points = PackedVector2Array(5, 6, 10, 10, 5, 14)
+width = 2.0
+default_color = Color(0.340659, 0.340659, 0.340659, 1)
+
+[node name="TopContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+clip_contents = true
+custom_minimum_size = Vector2(40, 150)
+layout_mode = 2
+size_flags_stretch_ratio = 0.89
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopContainer"]
+layout_mode = 2
+
+[node name="DeviceOutputsListHBoxContainer" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/TopContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LeftContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+custom_minimum_size = Vector2(150, 40)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ChannelList" type="VBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="TestingExampleChannel" type="HBoxContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList"]
+visible = false
+layout_mode = 2
+
+[node name="Channel1Label" type="LineEdit" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList/TestingExampleChannel"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "The output from your cue arrives. Routing this will send your  audio output to the device you connect it to."
+mouse_filter = 1
+text = "Channel 1"
+alignment = 2
+max_length = 24
+emoji_menu_enabled = false
+virtual_keyboard_enabled = false
+
+[node name="AddChannelButton" type="Button" parent="VBoxContainer2/ScrollContainer/VBoxContainer/LeftContainer/ChannelList"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+focus_mode = 0
+text = "Add Channel +"
+
+[node name="PanelContainer" type="PanelContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PatchMatrixContainer" type="GridContainer" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PanelContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer2/ScrollContainer/VBoxContainer/PanelContainer"]
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+size_flags_horizontal = 0
+
+[connection signal="pressed" from="VBoxContainer2/ScrollContainer/VBoxContainer/TopLeftContainer/VBoxContainer/RefreshButton" to="." method="_onRefreshButtonPressed"]
