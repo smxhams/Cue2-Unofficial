@@ -50,8 +50,22 @@ public partial class LogWindow : Window
 
 		_globalSignals.UiScaleChanged += ScaleUi;
 		_globalSignals.LogUpdated += OnNewLog;
+		_globalSignals.LocaleChanged += OnLocaleChanged;
 
 		SyncLogsInitialPage();
+		UiLocalizer.LocalizeTree(this);
+	}
+
+	/// <summary>
+	/// Re-localizes log window chrome when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
+		UpdateShowingLabel();
 	}
 
 	/// <summary>
@@ -177,7 +191,7 @@ public partial class LogWindow : Window
 
 		int total = _eventLogger.GetTotalLogCount();
 		int showing = Math.Max(0, total - _oldestDisplayedIndex);
-		_showingLabel.Text = $"Showing {showing}/{total} Logs";
+		_showingLabel.Text = UiLocalizer.Tf("Showing {0}/{1} Logs", showing, total);
 	}
 
 	private static Label CreateLogLabel(string printout, int type)
@@ -246,6 +260,7 @@ public partial class LogWindow : Window
 		{
 			_globalSignals.UiScaleChanged -= ScaleUi;
 			_globalSignals.LogUpdated -= OnNewLog;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 	}
 }

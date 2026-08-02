@@ -9,6 +9,7 @@ using Cue2.Services;
 using Cue2.UI.Windows;
 using Cue2.UI.Utilities;
 using SettingsWindow = Cue2.UI.Settings.SettingsWindow;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Shell;
 
@@ -178,6 +179,11 @@ public partial class MainTitleBarUI : Control
         SyncShowModeTooltip();
         SyncSettingsButtonTooltip();
         SyncHotkeyLabels();
+
+        // Scene chrome (File/Edit/… labels, window tooltips) + menus when locale changes.
+        LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
     }
 
     public override void _ExitTree()
@@ -194,6 +200,7 @@ public partial class MainTitleBarUI : Control
             _globalSignals.NewSession -= UpdateTitle;
             _globalSignals.Save -= UpdateTitle;
             _globalSignals.SaveAs -= UpdateTitle;
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
         }
         if (_globalData?.HistoryManager != null)
         {
@@ -201,6 +208,62 @@ public partial class MainTitleBarUI : Control
             _globalData.HistoryManager.HistoryRestored -= OnHistoryRestored;
         }
         base._ExitTree();
+    }
+
+    /// <summary>
+    /// Re-applies translations to the title bar, menus, and chrome tooltips.
+    /// </summary>
+    /// <param name="localeCode">New locale (unused; strings come from TranslationServer).</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        LocalizeTree(this);
+        ApplyLocalizedMenuTitles();
+        SyncShowModeTooltip();
+        SyncSettingsButtonTooltip();
+        SyncHotkeyLabels();
+        // About button appends version after the base tooltip.
+        var aboutBtn = GetNodeOrNull<Button>("%AboutButton");
+        if (aboutBtn != null)
+        {
+            string baseTip = T("About Cue2");
+            aboutBtn.SetMeta(MetaTooltip, baseTip);
+            aboutBtn.TooltipText = baseTip + "\n" + Version.FullVersionString;
+        }
+    }
+
+    /// <summary>
+    /// Updates all menu row title labels from their stored English <c>base_title</c> meta.
+    /// </summary>
+    private void ApplyLocalizedMenuTitles()
+    {
+        ApplyMenuTitlesIn(_fileItems);
+        ApplyMenuTitlesIn(_editItems);
+        ApplyMenuTitlesIn(_playbackItems);
+        ApplyMenuTitlesIn(_viewItems);
+        ApplyMenuTitlesIn(_helpItems);
+        ApplyMenuTitlesIn(_showFilesItems);
+        ApplyMenuTitlesIn(_recentItems);
+        FitAllMenusToContent();
+    }
+
+    private static void ApplyMenuTitlesIn(VBoxContainer items)
+    {
+        if (items == null) return;
+        foreach (Node child in items.GetChildren())
+        {
+            if (child is not Button btn)
+                continue;
+            var titleLabel = GetRowTitleLabel(btn);
+            if (titleLabel == null)
+                continue;
+            string baseTitle = btn.HasMeta("base_title")
+                ? btn.GetMeta("base_title").AsString()
+                : titleLabel.Text;
+            if (!string.IsNullOrEmpty(baseTitle))
+                titleLabel.Text = T(baseTitle);
+        }
     }
 
     // ── Menu construction (Control panels) ──────────────────────────────────
@@ -297,12 +360,12 @@ public partial class MainTitleBarUI : Control
         _blackoutMenuButton = AddCheckRow(_viewItems, "Blackout Video", null, OnBlackoutMenuPressed);
         _closeDisplaysMenuButton = AddCheckRow(_viewItems, "Close Displays", null, OnCloseDisplaysMenuPressed);
 
-        _muteMenuButton.TooltipText =
-            "Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.";
-        _blackoutMenuButton.TooltipText =
-            "Black out all video output layers while keeping display windows open. Runtime-only.";
-        _closeDisplaysMenuButton.TooltipText =
-            "Close/hide all house display windows without clearing canvas topology. Runtime-only.";
+        _muteMenuButton.TooltipText = T(
+            "Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.");
+        _blackoutMenuButton.TooltipText = T(
+            "Black out all video output layers while keeping display windows open. Runtime-only.");
+        _closeDisplaysMenuButton.TooltipText = T(
+            "Close/hide all house display windows without clearing canvas topology. Runtime-only.");
 
         // Help
         (_helpDrop, _helpItems) = CreateDropPanel("DropMenuHelp");
@@ -517,9 +580,10 @@ public partial class MainTitleBarUI : Control
         }
 
         // Title: natural width, never clip. Menu grows via FitMenuItemsToContent.
+        // English title is the catalog key; display is translated.
         var titleLabel = new Label
         {
-            Text = title,
+            Text = T(title),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
@@ -1264,7 +1328,7 @@ public partial class MainTitleBarUI : Control
                     : btn.HasMeta("base_title")
                         ? btn.GetMeta("base_title").AsString()
                         : titleLabel.Text;
-                titleLabel.Text = baseTitle;
+                titleLabel.Text = T(baseTitle);
             }
         }
     }
@@ -1338,13 +1402,13 @@ public partial class MainTitleBarUI : Control
     {
         if (_showModeButton == null) return;
         string hotkey = GlobalData.ParseHotkey("ToggleShowMode");
-        string tip =
+        string tip = T(
             "Show Mode locks cue editing for live performance.\n" +
             "Off = Edit Mode (default): full cue editing.\n" +
             "On = Show Mode: inspectors hidden, shell edits and cue structure locked.\n" +
-            "Saved with the showfile.";
+            "Saved with the showfile.");
         if (!string.IsNullOrEmpty(hotkey))
-            tip += "\nHotkey: " + hotkey;
+            tip += "\n" + Tf("Hotkey: {0}", hotkey);
         _showModeButton.TooltipText = tip;
     }
 
@@ -1353,8 +1417,8 @@ public partial class MainTitleBarUI : Control
         var settingsBtn = GetNodeOrNull<Button>("%SettingsButton");
         if (settingsBtn == null) return;
         string settingsHotkey = GlobalData.ParseHotkey("ToggleSettings");
-        settingsBtn.TooltipText = "Settings" +
-            (!string.IsNullOrEmpty(settingsHotkey) ? "\nHotkey: " + settingsHotkey : "");
+        settingsBtn.TooltipText = T("Settings") +
+            (!string.IsNullOrEmpty(settingsHotkey) ? "\n" + Tf("Hotkey: {0}", settingsHotkey) : "");
     }
 
     public void UpdateTitle()

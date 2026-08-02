@@ -10,8 +10,10 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 using AppSettings = Cue2.Domain.ShowSettings.Settings;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Shell;
 
@@ -67,6 +69,9 @@ public partial class HeaderUI : Control
 		GoScaleChange(initialScale);
 
 		RefreshStandbyDisplay();
+		LocalizeTree(this);
+		if (_globalSignals != null)
+			_globalSignals.LocaleChanged += OnLocaleChanged;
 	}
 
 	public override void _ExitTree()
@@ -80,14 +85,27 @@ public partial class HeaderUI : Control
 			_globalSignals.ShellFocused -= OnShellFocused;
 			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
 			_globalSignals.SyncShellInspector -= RefreshStandbyDisplay;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 
 		base._ExitTree();
 	}
 
+	/// <summary>
+	/// Re-localizes header chrome when the application language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		LocalizeTree(this);
+		SyncHotkeys();
+	}
+
 	private void SyncHotkeys()
 	{
-		_goButton.TooltipText = "Hotkey: " + GlobalData.ParseHotkey("Go");
+		_goButton.TooltipText = Tf("Hotkey: {0}", GlobalData.ParseHotkey("Go"));
 	}
 
 	private async void GoButtonFeedback()

@@ -3,6 +3,7 @@ using Cue2.Services;
 using Cue2.UI.Utilities;
 using Godot;
 using AppSettings = Cue2.Domain.ShowSettings.Settings;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Windows;
 
@@ -11,8 +12,8 @@ namespace Cue2.UI.Windows;
 /// (or every launch while testing with the force-show flag).
 /// </summary>
 /// <remarks>
-/// Welcome message, documentation/website links, optional UI scale adjustment (same
-/// controls as Settings → General), then dismiss via Get Started or window chrome.
+/// Welcome message, documentation/website links, language preference, optional UI scale
+/// adjustment (same controls as Settings → General), then dismiss via Get Started or window chrome.
 /// Dismiss marks <see cref="UserDataManager.IsFirstTimeStartup"/> complete.
 /// </remarks>
 public partial class FirstTimeStartupWindow : Window
@@ -21,11 +22,17 @@ public partial class FirstTimeStartupWindow : Window
 	private GlobalSignals _globalSignals;
 	private UserDataManager _userDataManager;
 	private HistoryManager _historyManager;
+	private LocalizationService _localization;
 
 	private LinkButton _docsLinkButton;
 	private LinkButton _websiteLinkButton;
 	private Button _getStartedButton;
 
+	private Label _titleLabel;
+	private Label _welcomeLabel;
+	private Label _languageLabel;
+	private OptionButton _languageOptionButton;
+	private Label _uiScaleLabel;
 	private LineEdit _uiScaleNum;
 	private HSlider _uiScaleSlider;
 	private Button _uiScaleResetButton;
@@ -33,8 +40,11 @@ public partial class FirstTimeStartupWindow : Window
 	/// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
 	private bool _isSyncingUi;
 
+	/// <summary>True while rebuilding the language option list.</summary>
+	private bool _isSyncingLanguage;
+
 	/// <summary>
-	/// Initializes UI, applies scale, wires dismiss and UI-scale handlers.
+	/// Initializes UI, applies scale, wires dismiss, language, and UI-scale handlers.
 	/// </summary>
 	public override void _Ready()
 	{
@@ -42,10 +52,15 @@ public partial class FirstTimeStartupWindow : Window
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_userDataManager = _globalData?.UserDataManager;
 		_historyManager = _globalData?.HistoryManager;
+		_localization = _globalData?.LocalizationService;
 
 		_docsLinkButton = GetNode<LinkButton>("%DocsLinkButton");
 		_websiteLinkButton = GetNode<LinkButton>("%WebsiteLinkButton");
 		_getStartedButton = GetNode<Button>("%GetStartedButton");
+		_titleLabel = GetNodeOrNull<Label>("%TitleLabel");
+		_welcomeLabel = GetNodeOrNull<Label>("%WelcomeLabel");
+		_languageLabel = GetNodeOrNull<Label>("%LanguageLabel");
+		_uiScaleLabel = GetNodeOrNull<Label>("%UiScaleLabel");
 
 		_docsLinkButton.Uri = Version.DocsWebsite;
 		_websiteLinkButton.Uri = Version.Website;
@@ -53,8 +68,11 @@ public partial class FirstTimeStartupWindow : Window
 		_getStartedButton.Pressed += OnGetStartedPressed;
 		CloseRequested += OnCloseRequested;
 
+		WireLanguageControls();
 		WireUiScaleControls();
+		SyncLanguageControls();
 		SyncUiScaleControls();
+		ApplyLocalizedStrings();
 
 		// Re-sync if UI scale is undone/redone while this window is open (e.g. via Settings).
 		if (_historyManager != null)
@@ -64,6 +82,171 @@ public partial class FirstTimeStartupWindow : Window
 		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
+		_globalSignals.LocaleChanged += OnLocaleChanged;
+	}
+
+	/// <summary>
+	/// Wires the language OptionButton for first-time language selection.
+	/// </summary>
+	private void WireLanguageControls()
+	{
+		_languageOptionButton = GetNodeOrNull<OptionButton>("%LanguageOptionButton");
+		if (_languageOptionButton == null)
+			return;
+
+		_languageOptionButton.ItemSelected += OnLanguageItemSelected;
+	}
+
+	/// <summary>
+	/// Populates the language list from <see cref="LocalizationService"/> and selects the saved locale.
+	/// </summary>
+	private void SyncLanguageControls()
+	{
+		if (_languageOptionButton == null)
+			return;
+
+		_isSyncingLanguage = true;
+		try
+		{
+			string locale = _userDataManager?.Locale ?? UserDataManager.DefaultLocale;
+			if (_localization != null)
+				_localization.PopulateLanguageOptionButton(_languageOptionButton, locale);
+			else
+			{
+				_languageOptionButton.Clear();
+				_languageOptionButton.AddItem("English", 0);
+				_languageOptionButton.SetItemMetadata(0, UserDataManager.DefaultLocale);
+				_languageOptionButton.Selected = 0;
+			}
+		}
+		finally
+		{
+			_isSyncingLanguage = false;
+		}
+	}
+
+	/// <summary>
+	/// English fallback for the welcome body if the catalog entry is missing or failed to load.
+	/// </summary>
+	private const string WelcomeBodyEnglishFallback =
+		"Welcome to the Cue2 v0.1 Pre-Release StripyHat build!\n\n" +
+		"Your feedback ahead of public launch would be appreciated. Please email feedback to\n" +
+		"info@cue2.live\n" +
+		"This could include feature requests, issues or bugs you may find while testing this software.\n" +
+		"Remember - this software is considered to be in development, it is recommend for private use only.\n\n" +
+		"Explore the docs and website below for how to get started.";
+
+	/// <summary>
+	/// Applies translated chrome strings for the welcome window (title, body, language, scale, CTA).
+	/// </summary>
+	private void ApplyLocalizedStrings()
+	{
+		// Generic scene walk first (labels/tooltips). Explicit keys below overwrite so
+		// managed strings (especially multiline welcome body) are never left empty/wrong.
+		LocalizeTree(this);
+
+		if (_titleLabel != null)
+			_titleLabel.Text = T("FIRST_TIME_TITLE");
+
+		ApplyWelcomeBody();
+
+		if (_getStartedButton != null)
+			_getStartedButton.Text = T("FIRST_TIME_GET_STARTED");
+
+		if (_docsLinkButton != null)
+			_docsLinkButton.Text = T("Documentation — docs.cue2.live");
+		if (_websiteLinkButton != null)
+			_websiteLinkButton.Text = T("Website — cue2.live");
+
+		string languageLabel = T("FIRST_TIME_LANGUAGE");
+		string languageTooltip = T("SETTINGS_LANGUAGE_TOOLTIP");
+		if (_languageLabel != null)
+			_languageLabel.Text = languageLabel;
+		if (_languageOptionButton != null)
+			_languageOptionButton.TooltipText = languageTooltip;
+
+		if (_uiScaleLabel != null)
+			_uiScaleLabel.Text = T("FIRST_TIME_UI_SCALE");
+
+		string scaleTip = T("Scales whole UI.\nCaution: Will apply on Enter.");
+		if (_uiScaleNum != null)
+			_uiScaleNum.TooltipText = scaleTip;
+		if (_uiScaleSlider != null)
+			_uiScaleSlider.TooltipText = T("Scales whole UI.\nCaution: Will apply on mouse release.");
+		if (_uiScaleResetButton != null)
+			_uiScaleResetButton.TooltipText = T("RESET_TO_DEFAULT");
+	}
+
+	/// <summary>
+	/// Sets the welcome body from <c>FIRST_TIME_WELCOME_BODY</c>, with a hard English fallback.
+	/// </summary>
+	private void ApplyWelcomeBody()
+	{
+		if (_welcomeLabel == null || !GodotObject.IsInstanceValid(_welcomeLabel))
+		{
+			GD.PrintErr("FirstTimeStartupWindow:ApplyWelcomeBody - WelcomeLabel not found.");
+			return;
+		}
+
+		const string key = "FIRST_TIME_WELCOME_BODY";
+		// Stable catalog key so later LocalizeTree / locale switches keep the correct msgid.
+		_welcomeLabel.SetMeta(MetaText, key);
+		_welcomeLabel.SetMeta(MetaSkip, false);
+
+		string translated = T(key);
+		// TranslationServer returns the key when no message exists — treat that as missing.
+		if (string.IsNullOrWhiteSpace(translated) || translated == key)
+		{
+			GD.PrintErr("FirstTimeStartupWindow:ApplyWelcomeBody - Catalog missing FIRST_TIME_WELCOME_BODY; using English fallback.");
+			translated = WelcomeBodyEnglishFallback;
+		}
+
+		_welcomeLabel.Text = translated;
+		_welcomeLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		_welcomeLabel.Visible = true;
+	}
+
+	/// <summary>
+	/// Refreshes localized strings when the application locale changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code (unused; strings come from TranslationServer).</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		ApplyLocalizedStrings();
+	}
+
+	/// <summary>
+	/// Persists and applies the selected language immediately.
+	/// </summary>
+	/// <param name="index">Selected option index (unused; locale read from item metadata).</param>
+	private void OnLanguageItemSelected(long index)
+	{
+		if (_isSyncingLanguage || _languageOptionButton == null)
+			return;
+
+		string locale = _localization != null
+			? _localization.GetLocaleFromOptionButton(_languageOptionButton)
+			: UserDataManager.DefaultLocale;
+
+		try
+		{
+			if (_localization != null)
+				_localization.SetUserLocale(locale);
+			else if (_userDataManager != null)
+				_userDataManager.Locale = locale;
+
+			// LocaleChanged may already have refreshed chrome; apply again as a safety net.
+			ApplyLocalizedStrings();
+			GD.Print($"FirstTimeStartupWindow:OnLanguageItemSelected - Locale set to {locale}");
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"FirstTimeStartupWindow:OnLanguageItemSelected - Failed: {ex.Message}");
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to set language: {ex.Message}", 2);
+		}
 	}
 
 	/// <summary>
@@ -322,6 +505,9 @@ public partial class FirstTimeStartupWindow : Window
 
 		CloseRequested -= OnCloseRequested;
 
+		if (_languageOptionButton != null)
+			_languageOptionButton.ItemSelected -= OnLanguageItemSelected;
+
 		if (_uiScaleSlider != null)
 		{
 			_uiScaleSlider.ValueChanged -= OnUiScaleSliderValueChanged;
@@ -336,6 +522,9 @@ public partial class FirstTimeStartupWindow : Window
 			_historyManager.HistoryRestored -= OnHistoryRestored;
 
 		if (_globalSignals != null)
+		{
 			_globalSignals.UiScaleChanged -= ScaleUi;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
+		}
 	}
 }

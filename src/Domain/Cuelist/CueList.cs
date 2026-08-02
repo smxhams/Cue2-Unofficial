@@ -13,6 +13,7 @@ using Cue2.Domain.Library;
 using Cue2.UI.Shell;
 using Cue2.Services;
 using Cue2.UI.Popups;
+using Cue2.UI.Utilities;
 
 // This script is attached to the cuelist in main UI
 // Originator
@@ -200,7 +201,9 @@ public partial class CueList : Control
 		_globalSignals.ShowModeChanged += OnShowModeChanged;
 		_globalSignals.CueListScaleChanged += OnCueListScaleChanged;
 		_globalSignals.NewSession += OnNewSession;
+		_globalSignals.LocaleChanged += OnLocaleChanged;
 		ApplyShowModeUi(_globalData?.Settings?.IsCueEditingLocked == true);
+		UiLocalizer.LocalizeTree(this);
 	}
 
 	public override void _ExitTree()
@@ -219,8 +222,21 @@ public partial class CueList : Control
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 			_globalSignals.CueListScaleChanged -= OnCueListScaleChanged;
 			_globalSignals.NewSession -= OnNewSession;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 		base._ExitTree();
+	}
+
+	/// <summary>
+	/// Re-localizes cuelist header labels and tooltips when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
+		_syncHotkeys();
 	}
 
 	/// <summary>

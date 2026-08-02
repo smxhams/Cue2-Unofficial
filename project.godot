@@ -60,6 +60,10 @@ window/handheld/orientation=1
 
 project/assembly_name="Cue2"
 
+[internationalization]
+
+locale/fallback="en"
+
 [editor]
 
 naming/default_signal_callback_name="_on{NodeName}{SignalName}"

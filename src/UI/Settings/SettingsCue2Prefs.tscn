@@ -69,6 +69,35 @@ expand_icon = true
 visible = false
 tooltip_text = "Reset to default"
 
+[node name="LanguageRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="LanguageLabel" type="Label" parent="VBoxContainer/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Language"
+vertical_alignment = 1
+tooltip_text = "Application interface language. Applies immediately and is saved as a user preference."
+
+[node name="LanguageOptionButton" type="OptionButton" parent="VBoxContainer/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+focus_mode = 0
+tooltip_text = "Application interface language. Applies immediately and is saved as a user preference."
+
+[node name="LanguageResetButton" type="Button" parent="VBoxContainer/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
 [node name="AutosaveRow" type="HBoxContainer" parent="VBoxContainer" unique_id=6677889900]
 layout_mode = 2
 
@@ -208,7 +237,7 @@ custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 10
-text = "Reset all stored user preferences (startup, autosave, shortcuts, recent files, window layout)."
+text = "Reset all stored user preferences (language, startup, autosave, shortcuts, recent files, window layout)."
 autowrap_mode = 3
 vertical_alignment = 1
 

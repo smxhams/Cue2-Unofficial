@@ -11,6 +11,7 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Inspectors;
@@ -88,6 +89,7 @@ public partial class LibraryInspector : Control
         BuildDialogs();
         VisibilityChanged += OnVisibilityChanged;
         CallDeferred(nameof(TryInitializeAndRefresh));
+        CallDeferred(nameof(ApplyLocalization));
     }
 
     /// <inheritdoc />
@@ -95,9 +97,38 @@ public partial class LibraryInspector : Control
     {
         VisibilityChanged -= OnVisibilityChanged;
         if (_globalSignals != null)
+        {
             _globalSignals.ShellFocused -= OnShellFocused;
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+        }
         UnwireToolbarSignals();
         UnwireTreeSignals();
+    }
+
+    /// <summary>
+    /// Applies catalog translations to toolbar labels, placeholders, and tooltips.
+    /// </summary>
+    private void ApplyLocalization()
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+        {
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+        }
+    }
+
+    /// <summary>
+    /// Re-localizes library inspector chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
     }
 
     /// <summary>

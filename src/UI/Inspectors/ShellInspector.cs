@@ -300,6 +300,9 @@ public partial class ShellInspector : Control
 		_globalSignals.SyncShellInspector += UpdateFields;
 
 		Visible = false;
+		UiLocalizer.LocalizeTree(this);
+		if (_globalSignals != null)
+			_globalSignals.LocaleChanged += OnLocaleChanged;
 	}
 
 	public override void _ExitTree()
@@ -316,10 +319,23 @@ public partial class ShellInspector : Control
 		{
 			_globalSignals.ShellFocused -= ShellSelected;
 			_globalSignals.SyncShellInspector -= UpdateFields;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 
 		DetachFocusedCueEvents();
 		base._ExitTree();
+	}
+
+	/// <summary>
+	/// Re-localizes shell inspector labels and tooltips when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
+		SyncDeleteHotkeyTooltip();
 	}
 
 	private void SyncDeleteHotkeyTooltip()
@@ -327,10 +343,10 @@ public partial class ShellInspector : Control
 		if (_deleteCueButton == null) return;
 		string hotkey = GlobalData.ParseHotkey("DeleteCue");
 		string tip = _isMultiEdit
-			? "Delete all selected cues (and any child cues)."
-			: "Delete this cue (and any child cues).";
+			? UiLocalizer.T("Delete all selected cues (and any child cues).")
+			: UiLocalizer.T("Delete this cue (and any child cues).");
 		if (!string.IsNullOrEmpty(hotkey))
-			tip += "\nHotkey: " + hotkey;
+			tip += "\n" + UiLocalizer.Tf("Hotkey: {0}", hotkey);
 		_deleteCueButton.TooltipText = tip;
 	}
 

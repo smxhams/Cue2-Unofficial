@@ -136,6 +136,12 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void UiScaleChangedEventHandler(float value);
 	[Signal] public delegate void GoScaleChangedEventHandler(float value);
 
+	/// <summary>
+	/// Fired when the application UI locale changes via localization preferences.
+	/// </summary>
+	/// <param name="localeCode">ISO-style locale code (e.g. <c>en</c>).</param>
+	[Signal] public delegate void LocaleChangedEventHandler(string localeCode);
+
 	/// <summary>Fired when the cuelist UI scale (Small / Medium / Large) changes.</summary>
 	[Signal] public delegate void CueListScaleChangedEventHandler(float value);
 

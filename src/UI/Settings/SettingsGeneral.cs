@@ -1,4 +1,5 @@
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 using AppSettings = Cue2.Domain.ShowSettings.Settings;
 
@@ -157,9 +158,13 @@ public partial class SettingsGeneral : ScrollContainer
         if (_historyManager != null)
             _historyManager.HistoryRestored += OnHistoryRestored;
         if (_globalSignals != null)
+        {
             _globalSignals.NewSession += OnNewSession;
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+        }
 
         SyncSettings();
+        UiLocalizer.LocalizeTree(this);
     }
 
     public override void _ExitTree()
@@ -167,8 +172,22 @@ public partial class SettingsGeneral : ScrollContainer
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
+        {
             _globalSignals.NewSession -= OnNewSession;
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+        }
         base._ExitTree();
+    }
+
+    /// <summary>
+    /// Re-localizes General settings labels and tooltips when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
     }
 
     /// <summary>

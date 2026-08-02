@@ -45,6 +45,16 @@ public partial class UserDataManager : Node
 	/// </summary>
 	private bool _isFirstTimeStartup = true;
 
+	/// <summary>
+	/// Preferred UI locale code (e.g. <c>en</c>). Applied by <see cref="LocalizationService"/>.
+	/// </summary>
+	private string _locale = DefaultLocale;
+
+	/// <summary>
+	/// Production default UI locale (English).
+	/// </summary>
+	public const string DefaultLocale = "en";
+
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
 
@@ -201,6 +211,29 @@ public partial class UserDataManager : Node
 		_isFirstTimeStartup = false;
 		SaveUserData();
 		GD.Print("UserDataManager:MarkFirstTimeStartupComplete - First-time startup flagged complete.");
+	}
+
+	/// <summary>
+	/// Preferred application UI locale code (ISO-style, e.g. <c>en</c>).
+	/// </summary>
+	/// <value>
+	/// Persisted in user preferences. Applying the locale to
+	/// <see cref="TranslationServer"/> is handled by <see cref="LocalizationService"/>.
+	/// </value>
+	public string Locale
+	{
+		get => _locale;
+		set
+		{
+			string next = string.IsNullOrWhiteSpace(value)
+				? DefaultLocale
+				: value.Trim().ToLowerInvariant();
+			if (_locale != next)
+			{
+				_locale = next;
+				SaveUserData();
+			}
+		}
 	}
 
 	/// <summary>
@@ -465,6 +498,7 @@ public partial class UserDataManager : Node
 		_undoDepth = DefaultUndoDepth;
 		_logSessionDepth = DefaultLogSessionDepth;
 		_isFirstTimeStartup = true;
+		_locale = DefaultLocale;
 
 		_shellNumberColumnWidth = 0;
 		_shellTimeColumnWidth = 0;
@@ -475,6 +509,9 @@ public partial class UserDataManager : Node
 			_globalData.ResetInputBindingsToDefaults();
 		}
 		_inputMapBindings = new Dictionary();
+
+		// Re-apply default UI locale so TranslationServer matches persisted prefs.
+		_globalData?.LocalizationService?.ApplyLocale(DefaultLocale, emitSignal: true);
 
 		SaveUserData();
 
@@ -769,6 +806,19 @@ public partial class UserDataManager : Node
 				_isFirstTimeStartup = false;
 			}
 
+			// Missing key = legacy install; default to English.
+			if (data.TryGetValue("Locale", out var localeVal))
+			{
+				string loadedLocale = localeVal.AsString();
+				_locale = string.IsNullOrWhiteSpace(loadedLocale)
+					? DefaultLocale
+					: loadedLocale.Trim().ToLowerInvariant();
+			}
+			else
+			{
+				_locale = DefaultLocale;
+			}
+
 			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
 			{
 				_shellNumberColumnWidth = shellNumW.AsSingle();
@@ -790,7 +840,7 @@ public partial class UserDataManager : Node
 			// OutputVSyncMode were machine prefs; they now live in the showfile (Settings). Ignore if present.
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} locale:{_locale} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
 		}
 		catch (Exception ex)
 		{
@@ -848,6 +898,7 @@ public partial class UserDataManager : Node
 
 			data["StartupBehavior"] = (int)_startupBehavior;
 			data["IsFirstTimeStartup"] = _isFirstTimeStartup;
+			data["Locale"] = string.IsNullOrWhiteSpace(_locale) ? DefaultLocale : _locale;
 
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;

@@ -1,19 +1,24 @@
 using Cue2.Services;
 using Cue2.UI.Utilities;
 using Godot;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// Cue2 Preferences panel: startup, autosave, backup depth, undo depth, and log session depth.
+/// Cue2 Preferences panel: language, startup, autosave, backup depth, undo depth, and log session depth.
 /// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
 /// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
 {
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
+	private LocalizationService _localization;
 	private OptionButton _startupOptionButton;
 	private Button _startupResetButton;
+	private Label _languageLabel;
+	private OptionButton _languageOptionButton;
+	private Button _languageResetButton;
 	private SpinBox _autosaveInterval;
 	private Button _autosaveResetButton;
 	private SpinBox _backupDepth;
@@ -25,10 +30,14 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	private Button _resetUserDataButton;
 	private ConfirmationDialog _resetUserDataDialog;
 
+	/// <summary>True while rebuilding language options so selection handlers do not re-apply.</summary>
+	private bool _isSyncingLanguage;
+
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+		_localization = _globalData?.LocalizationService;
 
 		_startupOptionButton = GetNode<OptionButton>("%StartupOptionButton");
 		_startupOptionButton.ItemSelected += OnStartupItemSelected;
@@ -36,6 +45,14 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_startupResetButton = GetNode<Button>("%StartupResetButton");
 		_startupResetButton.Pressed += OnStartupResetButtonPressed;
 		_startupResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+
+		_languageLabel = GetNodeOrNull<Label>("%LanguageLabel");
+		_languageOptionButton = GetNode<OptionButton>("%LanguageOptionButton");
+		_languageOptionButton.ItemSelected += OnLanguageItemSelected;
+
+		_languageResetButton = GetNode<Button>("%LanguageResetButton");
+		_languageResetButton.Pressed += OnLanguageResetButtonPressed;
+		_languageResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
 		_autosaveInterval = GetNode<SpinBox>("%AutosaveInterval");
 		_autosaveInterval.ValueChanged += OnAutosaveIntervalChanged;
@@ -80,7 +97,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			DialogText =
 				"Reset all Cue2 preferences stored for this user?\n\n" +
 				"This will restore defaults for:\n" +
-				"• Startup, autosave, backup, undo, and log session settings\n" +
+				"• Language, startup, autosave, backup, undo, and log session settings\n" +
 				"• Keyboard shortcuts (Input Map)\n" +
 				"• Recent show files list\n" +
 				"• Remembered window sizes and positions\n" +
@@ -94,15 +111,23 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		// ConfirmationDialog is its own Window and does not inherit Settings content scale.
 		ApplyResetDialogUiScale();
 		if (_globalSignals != null)
+		{
 			_globalSignals.UiScaleChanged += OnResetDialogUiScaleChanged;
+			_globalSignals.LocaleChanged += OnLocaleChanged;
+		}
 
 		SyncSettings();
+		ApplyLocalizedLanguageUi();
+		LocalizeTree(this);
 	}
 
 	public override void _ExitTree()
 	{
 		if (_globalSignals != null)
+		{
 			_globalSignals.UiScaleChanged -= OnResetDialogUiScaleChanged;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
+		}
 		base._ExitTree();
 	}
 
@@ -112,16 +137,78 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		{
 			var udm = _globalData.UserDataManager;
 			_startupOptionButton.Selected = (int)udm.Startup;
+			SyncLanguageOption();
 			_autosaveInterval.Value = udm.AutosaveInterval;
 			_backupDepth.Value = udm.BackupDepth;
 			_undoDepth.Value = udm.UndoDepth;
 			_logSessionDepth.Value = udm.LogSessionDepth;
 			UpdateStartupResetButton();
+			UpdateLanguageResetButton();
 			UpdateAutosaveResetButton();
 			UpdateBackupResetButton();
 			UpdateUndoDepthResetButton();
 			UpdateLogSessionDepthResetButton();
+			ApplyLocalizedLanguageUi();
 		}
+	}
+
+	/// <summary>
+	/// Rebuilds the language option list from <see cref="LocalizationService"/> and selects the saved locale.
+	/// </summary>
+	private void SyncLanguageOption()
+	{
+		if (_languageOptionButton == null)
+			return;
+
+		_isSyncingLanguage = true;
+		try
+		{
+			string locale = _globalData?.UserDataManager?.Locale ?? UserDataManager.DefaultLocale;
+			if (_localization != null)
+				_localization.PopulateLanguageOptionButton(_languageOptionButton, locale);
+			else
+			{
+				// Fallback if localization service is unavailable.
+				_languageOptionButton.Clear();
+				_languageOptionButton.AddItem("English", 0);
+				_languageOptionButton.SetItemMetadata(0, UserDataManager.DefaultLocale);
+				_languageOptionButton.Selected = 0;
+			}
+		}
+		finally
+		{
+			_isSyncingLanguage = false;
+		}
+	}
+
+	/// <summary>
+	/// Applies translated strings for the language row (label + tooltips).
+	/// </summary>
+	private void ApplyLocalizedLanguageUi()
+	{
+		string label = Tr("SETTINGS_LANGUAGE");
+		string tooltip = Tr("SETTINGS_LANGUAGE_TOOLTIP");
+
+		if (_languageLabel != null)
+		{
+			_languageLabel.Text = label;
+			_languageLabel.TooltipText = tooltip;
+		}
+		if (_languageOptionButton != null)
+			_languageOptionButton.TooltipText = tooltip;
+	}
+
+	/// <summary>
+	/// Refreshes localized language chrome when the app locale changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code (unused; strings come from TranslationServer).</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		LocalizeTree(this);
+		ApplyLocalizedLanguageUi();
+		UpdateLanguageResetButton();
 	}
 
 	private void OnStartupItemSelected(long index)
@@ -130,6 +217,63 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		{
 			_globalData.UserDataManager.Startup = (UserDataManager.StartupBehavior)index;
 			UpdateStartupResetButton();
+		}
+	}
+
+	/// <summary>
+	/// Applies the selected UI language via <see cref="LocalizationService.SetUserLocale"/>.
+	/// </summary>
+	/// <param name="index">Selected option index (unused; locale read from item metadata).</param>
+	private void OnLanguageItemSelected(long index)
+	{
+		if (_isSyncingLanguage || _languageOptionButton == null)
+			return;
+
+		string locale = _localization != null
+			? _localization.GetLocaleFromOptionButton(_languageOptionButton)
+			: UserDataManager.DefaultLocale;
+
+		if (_localization != null)
+			_localization.SetUserLocale(locale);
+		else if (_globalData?.UserDataManager != null)
+			_globalData.UserDataManager.Locale = locale;
+
+		ApplyLocalizedLanguageUi();
+		UpdateLanguageResetButton();
+	}
+
+	/// <summary>
+	/// Resets the UI language to English.
+	/// </summary>
+	private void OnLanguageResetButtonPressed()
+	{
+		if (_localization != null)
+			_localization.SetUserLocale(UserDataManager.DefaultLocale);
+		else if (_globalData?.UserDataManager != null)
+			_globalData.UserDataManager.Locale = UserDataManager.DefaultLocale;
+
+		SyncLanguageOption();
+		ApplyLocalizedLanguageUi();
+		UpdateLanguageResetButton();
+	}
+
+	/// <summary>
+	/// Shows the language reset button only when the locale is not English.
+	/// </summary>
+	private void UpdateLanguageResetButton()
+	{
+		if (_languageResetButton == null || _globalData?.UserDataManager == null)
+			return;
+
+		string current = _globalData.UserDataManager.Locale ?? UserDataManager.DefaultLocale;
+		bool atDefault = string.Equals(current, UserDataManager.DefaultLocale, System.StringComparison.OrdinalIgnoreCase);
+		_languageResetButton.Visible = !atDefault;
+
+		if (!atDefault)
+		{
+			string name = _localization?.GetDisplayName(UserDataManager.DefaultLocale) ?? "English";
+			string resetLabel = Tr("RESET_TO_DEFAULT");
+			_languageResetButton.TooltipText = $"{resetLabel}: {name}";
 		}
 	}
 

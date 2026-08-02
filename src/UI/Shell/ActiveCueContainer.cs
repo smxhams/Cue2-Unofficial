@@ -9,6 +9,7 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Shell;
@@ -34,6 +35,31 @@ public partial class ActiveCueContainer : PanelContainer
 		GetNode<Button>("%ResumeAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.ResumeAll));
 		GetNode<Button>("%PauseAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.PauseAll));
 		GetNode<Button>("%StopAllButton").Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.StopAll));
+
+		UiLocalizer.LocalizeTree(this);
+		_globalSignals.LocaleChanged += OnLocaleChanged;
+	}
+
+	/// <inheritdoc />
+	public override void _ExitTree()
+	{
+		if (_globalSignals != null)
+		{
+			_globalSignals.CueGo -= AddActiveCue;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
+		}
+		base._ExitTree();
+	}
+
+	/// <summary>
+	/// Re-localizes active-cue panel chrome when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
 	}
 
 	// Called every frame. 'delta' is the elapsed time since the previous frame.

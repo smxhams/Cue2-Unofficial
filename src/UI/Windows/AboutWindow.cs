@@ -55,6 +55,20 @@ public partial class AboutWindow : Window
         
 
         PopulateThirdPartyLicenses();
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+    }
+
+    /// <summary>
+    /// Re-localizes About window chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
     }
 
     private void PopulateThirdPartyLicenses()
@@ -103,7 +117,11 @@ public partial class AboutWindow : Window
     
     public override void _ExitTree()
     {
-        _globalSignals.UiScaleChanged -= ScaleUi;
+        if (_globalSignals != null)
+        {
+            _globalSignals.UiScaleChanged -= ScaleUi;
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+        }
     }
 
     private const string Colour = "#974B08";

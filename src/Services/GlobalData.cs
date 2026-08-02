@@ -74,6 +74,11 @@ public partial class GlobalData : Node
 	public UserDataManager UserDataManager;
 	public HistoryManager HistoryManager;
 	public CueLibraryManager CueLibraryManager;
+
+	/// <summary>
+	/// Application localization service (CSV catalogs + <see cref="TranslationServer"/>).
+	/// </summary>
+	public LocalizationService LocalizationService;
 	
 	/// <summary>
 	/// Id of the cue currently focused for inspectors (-1 if none).
@@ -269,6 +274,12 @@ public partial class GlobalData : Node
 
 		UserDataManager = new UserDataManager();
 		AddChild(UserDataManager);
+
+		// Localization after user prefs so the saved Locale is available to apply.
+		LocalizationService = new LocalizationService();
+		LocalizationService.Name = nameof(LocalizationService);
+		AddChild(LocalizationService);
+		LocalizationService.Initialize();
 
 		HistoryManager = new HistoryManager();
 		AddChild(HistoryManager);

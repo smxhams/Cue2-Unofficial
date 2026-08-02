@@ -13,6 +13,7 @@ using Cue2.Domain.Commands;
 using Cue2.Services;
 using Cue2.UI.Utilities;
 using Godot;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Settings;
 
@@ -107,9 +108,32 @@ public partial class SettingsWindow : Window
 		RestoreSelectedMenu();
 		_connectSignals();
 		SetupSettingsFileFilterUi();
+		LocalizeTree(this);
+		if (_globalSignals != null)
+			_globalSignals.LocaleChanged += OnLocaleChanged;
 
 		// Reveal only after size, position, scale, and menu are ready — avoids open-time flicker.
 		Show();
+	}
+
+	/// <summary>
+	/// Re-localizes settings chrome, tree labels, and the visible panel when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		LocalizeTree(this);
+		if (_setTree?.GetRoot() != null)
+			RelocalizeTreeItems(_setTree.GetRoot());
+		// Refresh active panel chrome (labels/tooltips) without changing selection.
+		if (!string.IsNullOrEmpty(_currentDisplay))
+		{
+			var panel = GetNodeOrNull<Control>("%" + _currentDisplay);
+			if (panel != null)
+				LocalizeTree(panel);
+		}
 	}
 
 	/// <summary>
@@ -345,7 +369,7 @@ public partial class SettingsWindow : Window
 			return null;
 		}
 
-		if (item.GetText(0) == text)
+		if (GetTreeItemMenuKey(item) == text || item.GetText(0) == text)
 		{
 			return item;
 		}
@@ -836,7 +860,8 @@ public partial class SettingsWindow : Window
 			return;
 		}
 
-		string action = selected.GetText(0);
+		// Use stable English menu key (not the possibly-translated display text).
+		string action = GetTreeItemMenuKey(selected);
 		if (!TryGetMenuNode(action, out string menuNode))
 		{
 			// Category headers / unimplemented pages — keep previous panel.
@@ -928,70 +953,70 @@ public partial class SettingsWindow : Window
 		TreeItem root = _setTree.CreateItem();
 		_setTree.HideRoot = true;
 
+		// English labels are stable menu keys (persisted / panel mapping); display is translated.
 		//General (show-scoped)
 		TreeItem tiGeneral = _setTree.CreateItem(root);
-		tiGeneral.SetText(0, "General");
+		SetTreeItemText(tiGeneral, 0, "General");
 
 		// Audio
 		TreeItem tiAudio = _setTree.CreateItem(root);
-		tiAudio.SetText(0, "Audio");
+		SetTreeItemText(tiAudio, 0, "Audio");
 		TreeItem tiAudioOutputPatch = _setTree.CreateItem(tiAudio);
-		tiAudioOutputPatch.SetText(0, "Audio Output Patch");
-
+		SetTreeItemText(tiAudioOutputPatch, 0, "Audio Output Patch");
 
 		// Video / Image (parent shows general video output panel; Canvas Editor is topology)
 		TreeItem tiOutputDevices = _setTree.CreateItem(root);
-		tiOutputDevices.SetText(0, "Video/Image");
-		tiOutputDevices.SetTooltipText(0,
+		SetTreeItemText(tiOutputDevices, 0, "Video/Image");
+		SetTreeItemTooltip(tiOutputDevices, 0,
 			"Disable/blackout, background colour, and machine video performance preferences.");
 		TreeItem tiVideoDevice = _setTree.CreateItem(tiOutputDevices);
-		tiVideoDevice.SetText(0, "Canvas Editor");
+		SetTreeItemText(tiVideoDevice, 0, "Canvas Editor");
 
 		// Connections
 		TreeItem tiConnections = _setTree.CreateItem(root);
-		tiConnections.SetText(0, "Connections");
+		SetTreeItemText(tiConnections, 0, "Connections");
 		// Cue Lights: kept in codebase (panel + TryGetMenuNode mapping) but not shipped in v1 UI.
 		// TreeItem tiCueLights = _setTree.CreateItem(tiConnections);
-		// tiCueLights.SetText(0, "Cue Lights");
+		// SetTreeItemText(tiCueLights, 0, "Cue Lights");
 		TreeItem tiOscConnections = _setTree.CreateItem(tiConnections);
-		tiOscConnections.SetText(0, "OSC Connections");
-		tiOscConnections.SetTooltipText(0, "Named OSC send destinations and send monitor");
+		SetTreeItemText(tiOscConnections, 0, "OSC Connections");
+		SetTreeItemTooltip(tiOscConnections, 0, "Named OSC send destinations and send monitor");
 		TreeItem tiOscListener = _setTree.CreateItem(tiConnections);
-		tiOscListener.SetText(0, "OSC Listener");
-		tiOscListener.SetTooltipText(0, "UDP receive port and live receive monitor");
+		SetTreeItemText(tiOscListener, 0, "OSC Listener");
+		SetTreeItemTooltip(tiOscListener, 0, "UDP receive port and live receive monitor");
 		TreeItem tiOscInputMap = _setTree.CreateItem(tiOscListener);
-		tiOscInputMap.SetText(0, "OSC Input Map");
-		tiOscInputMap.SetTooltipText(0, "Assign OSC addresses to app actions (Go, Save, Undo, …)");
+		SetTreeItemText(tiOscInputMap, 0, "OSC Input Map");
+		SetTreeItemTooltip(tiOscInputMap, 0, "Assign OSC addresses to app actions (Go, Save, Undo, …)");
 		TreeItem tiMidi = _setTree.CreateItem(tiConnections);
-		tiMidi.SetText(0, "MIDI");
-		tiMidi.SetTooltipText(0, "MIDI input devices and live monitor");
+		SetTreeItemText(tiMidi, 0, "MIDI");
+		SetTreeItemTooltip(tiMidi, 0, "MIDI input devices and live monitor");
 		TreeItem tiMidiInputMap = _setTree.CreateItem(tiMidi);
-		tiMidiInputMap.SetText(0, "MIDI Input Map");
-		tiMidiInputMap.SetTooltipText(0, "Assign MIDI controls to app actions (Go, Save, Undo, …)");
+		SetTreeItemText(tiMidiInputMap, 0, "MIDI Input Map");
+		SetTreeItemTooltip(tiMidiInputMap, 0, "Assign MIDI controls to app actions (Go, Save, Undo, …)");
 		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);
-		tiArtNet.SetText(0, "Art-Net");
+		SetTreeItemText(tiArtNet, 0, "Art-Net");
 
 		// Cue defaults (shell + component defaults applied to newly created cues/components)
 		TreeItem tiDefaults = _setTree.CreateItem(root);
-		tiDefaults.SetText(0, "Cue Defaults");
-		tiDefaults.SetTooltipText(0, "Default shell properties for newly created cues (pre-wait, colour, arming, etc.).");
+		SetTreeItemText(tiDefaults, 0, "Cue Defaults");
+		SetTreeItemTooltip(tiDefaults, 0, "Default shell properties for newly created cues (pre-wait, colour, arming, etc.).");
 		TreeItem tiAudioCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiAudioCueDefaults.SetText(0, "Audio Defaults");
-		tiAudioCueDefaults.SetTooltipText(0, "Default volume, pan, loop, play count, and fades for new audio components.");
+		SetTreeItemText(tiAudioCueDefaults, 0, "Audio Defaults");
+		SetTreeItemTooltip(tiAudioCueDefaults, 0, "Default volume, pan, loop, play count, and fades for new audio components.");
 		TreeItem tiVideoCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiVideoCueDefaults.SetText(0, "Video Defaults");
-		tiVideoCueDefaults.SetTooltipText(0, "Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.");
+		SetTreeItemText(tiVideoCueDefaults, 0, "Video Defaults");
+		SetTreeItemTooltip(tiVideoCueDefaults, 0, "Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.");
 		TreeItem tiTextCueDefaults = _setTree.CreateItem(tiDefaults);
-		tiTextCueDefaults.SetText(0, "Text Defaults");
-		tiTextCueDefaults.SetTooltipText(0, "Default typography, alignment, duration, outline/background, and fades for new text components.");
+		SetTreeItemText(tiTextCueDefaults, 0, "Text Defaults");
+		SetTreeItemTooltip(tiTextCueDefaults, 0, "Default typography, alignment, duration, outline/background, and fades for new text components.");
 
 		// App preferences (user:// — not stored in the showfile)
 		TreeItem tiCue2Preferences = _setTree.CreateItem(root);
-		tiCue2Preferences.SetText(0, "Cue2 Preferences");
-		tiCue2Preferences.SetTooltipText(0, "Showfile-independent preferences (stored per user)");
+		SetTreeItemText(tiCue2Preferences, 0, "Cue2 Preferences");
+		SetTreeItemTooltip(tiCue2Preferences, 0, "Showfile-independent preferences (stored per user)");
 		TreeItem tiInputMap = _setTree.CreateItem(tiCue2Preferences);
-		tiInputMap.SetText(0, "Input Map");
-		tiInputMap.SetTooltipText(0, "Keyboard shortcuts — saved with Cue2 Preferences, not the show");
+		SetTreeItemText(tiInputMap, 0, "Input Map");
+		SetTreeItemTooltip(tiInputMap, 0, "Keyboard shortcuts — saved with Cue2 Preferences, not the show");
 	}
 
 	/// <summary>
@@ -1013,6 +1038,7 @@ public partial class SettingsWindow : Window
 		if (_globalSignals != null)
 		{
 			_globalSignals.UiScaleChanged -= ScaleUi;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 
 		if (_filterButton != null)

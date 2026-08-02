@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using Cue2.Domain.Connections;
 using Cue2.Services;
+using Cue2.UI.Utilities;
+using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Shell;
 
@@ -69,13 +71,13 @@ public partial class Footer : Control
         _midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
 
         _devicesFooterButton = GetNode<Button>("%DevicesFooterButton");
-        _devicesFooterButton.TooltipText = "Devices";
+        _devicesFooterButton.TooltipText = T("Devices");
         _devicesFooterButton.MouseEntered += UpdateDevicesFooterTooltip;
         
         _connectionsFooterButton = GetNodeOrNull<Button>("%ConnectionsFooterButton");
         if (_connectionsFooterButton != null)
         {
-            _connectionsFooterButton.TooltipText = "Connections";
+            _connectionsFooterButton.TooltipText = T("Connections");
             _connectionsFooterButton.MouseEntered += UpdateConnectionsFooterTooltip;
         }
 
@@ -136,6 +138,25 @@ public partial class Footer : Control
         int initialTotal = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
         UpdateTotalCuesLabel(initialTotal);
         UpdateResourceUsage(); // initial CPU/MEM read
+
+        LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+    }
+
+    /// <summary>
+    /// Re-localizes static footer chrome and refreshes dynamic labels.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        LocalizeTree(this);
+        int total = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
+        UpdateTotalCuesLabel(total);
+        UpdateResourceUsage();
+        _syncHotkeys();
     }
 
     /// <inheritdoc />
@@ -157,6 +178,7 @@ public partial class Footer : Control
             _globalSignals.BackgroundProcessProgress -= OnBackgroundProcessProgress;
             _globalSignals.BackgroundProcessCompleted -= OnBackgroundProcessCompleted;
             _globalSignals.TotalCuesChanged -= OnTotalCuesChanged;
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
         }
 
         if (_oscConnections != null)
@@ -188,11 +210,11 @@ public partial class Footer : Control
             return;
 
         int safeTotal = Math.Max(0, total);
-        _totalCuesLabel.Text = $"{safeTotal} total cues";
+        _totalCuesLabel.Text = Tf("{0} total cues", safeTotal);
         _totalCuesLabel.TooltipText =
             safeTotal == 1
-                ? "1 cue in the show"
-                : $"{safeTotal} total cues in the show";
+                ? T("1 cue in the show")
+                : Tf("{0} total cues in the show", safeTotal);
     }
 
     /// <summary>
@@ -316,7 +338,7 @@ public partial class Footer : Control
         if (type == 1) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Warning);
         if (type == 2) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
         if (type == 3) logPrintout.AddThemeColorOverride("font_color", GlobalStyles.Danger);
-        _logCountButton.Text = "Log " + EventLogger.GetLogCount().ToString();
+        _logCountButton.Text = Tf("Log {0}", EventLogger.GetLogCount());
         
         _last5Logs.Add(@printout);
         if (_last5Logs.Count > 5)
@@ -325,7 +347,7 @@ public partial class Footer : Control
         }
         
         //Update log tooltip to show last 5 logs
-        logPrintout.TooltipText = _logPrintoutBaseTooltip + "\n\nLast 5 log messages:\n";
+        logPrintout.TooltipText = _logPrintoutBaseTooltip + "\n\n" + T("Last 5 log messages:") + "\n";
         foreach (var log in _last5Logs)
         {    
             logPrintout.TooltipText += log + "\n";
@@ -344,8 +366,8 @@ public partial class Footer : Control
 
         if (_currentProcess == null)
         {
-            _cpuUsageLabel.Text = "CPU --.-%";
-            _memoryUsageLabel.Text = "MEM -- MB";
+            _cpuUsageLabel.Text = T("CPU --.-%");
+            _memoryUsageLabel.Text = T("MEM -- MB");
             return;
         }
 
@@ -356,11 +378,11 @@ public partial class Footer : Control
             // Memory: working set (physical RAM used by this process)
             double memMb = _currentProcess.WorkingSet64 / (1024.0 * 1024.0);
             double memPrivateMb = _currentProcess.PrivateMemorySize64 / (1024.0 * 1024.0);
-            _memoryUsageLabel.Text = $"MEM {memMb:F0} MB";
+            _memoryUsageLabel.Text = Tf("MEM {0} MB", memMb.ToString("F0"));
             _memoryUsageLabel.TooltipText =
-                $"Memory usage (this process)\n" +
-                $"Working set: {memMb:F1} MB\n" +
-                $"Private: {memPrivateMb:F1} MB";
+                T("Memory usage (this process)") + "\n" +
+                Tf("Working set: {0} MB", memMb.ToString("F1")) + "\n" +
+                Tf("Private: {0} MB", memPrivateMb.ToString("F1"));
 
             // CPU: delta of TotalProcessorTime over wall-clock interval, normalized by core count
             TimeSpan currentCpu = _currentProcess.TotalProcessorTime;
@@ -371,8 +393,8 @@ public partial class Footer : Control
                 _lastCpuTime = currentCpu;
                 _lastCpuSampleUtc = nowUtc;
                 _hasCpuBaseline = true;
-                _cpuUsageLabel.Text = "CPU --.-%";
-                _cpuUsageLabel.TooltipText = "CPU usage (this process)\nSampling…";
+                _cpuUsageLabel.Text = T("CPU --.-%");
+                _cpuUsageLabel.TooltipText = T("CPU usage (this process)") + "\n" + T("Sampling…");
                 return;
             }
 
@@ -384,7 +406,7 @@ public partial class Footer : Control
 
             if (wallDeltaMs <= 0.0)
             {
-                _cpuUsageLabel.Text = "CPU --.-%";
+                _cpuUsageLabel.Text = T("CPU --.-%");
                 return;
             }
 
@@ -392,17 +414,17 @@ public partial class Footer : Control
             int coreCount = Math.Max(1, System.Environment.ProcessorCount);
             double cpuPercent = Math.Clamp((cpuDeltaMs / wallDeltaMs) * 100.0 / coreCount, 0.0, 100.0);
 
-            _cpuUsageLabel.Text = $"CPU {cpuPercent:F1}%";
+            _cpuUsageLabel.Text = Tf("CPU {0}%", cpuPercent.ToString("F1"));
             _cpuUsageLabel.TooltipText =
-                $"CPU usage (this process)\n" +
-                $"{cpuPercent:F1}% of total system capacity\n" +
-                $"Logical processors: {coreCount}";
+                T("CPU usage (this process)") + "\n" +
+                Tf("{0}% of total system capacity", cpuPercent.ToString("F1")) + "\n" +
+                Tf("Logical processors: {0}", coreCount);
         }
         catch (Exception ex)
         {
             GD.Print($"Footer:UpdateResourceUsage - {ex.Message}");
-            _cpuUsageLabel.Text = "CPU --.-%";
-            _memoryUsageLabel.Text = "MEM -- MB";
+            _cpuUsageLabel.Text = T("CPU --.-%");
+            _memoryUsageLabel.Text = T("MEM -- MB");
         }
     }
     
@@ -442,12 +464,13 @@ public partial class Footer : Control
     private void _syncHotkeys()
     {
         string logHotkey = GlobalData.ParseHotkey("ToggleLog");
-        _logCountButton.TooltipText = "Log, click to open full log" + (!string.IsNullOrEmpty(logHotkey) ? "\nHotkey: " + logHotkey : "");
+        _logCountButton.TooltipText = T("Log, click to open full log") +
+            (!string.IsNullOrEmpty(logHotkey) ? "\n" + Tf("Hotkey: {0}", logHotkey) : "");
 
         var logPrintout = GetNode<Button>("%LogPrintout");
-        _logPrintoutBaseTooltip = "Log";
+        _logPrintoutBaseTooltip = T("Log");
         if (!string.IsNullOrEmpty(logHotkey))
-            _logPrintoutBaseTooltip += "\nHotkey: " + logHotkey;
+            _logPrintoutBaseTooltip += "\n" + Tf("Hotkey: {0}", logHotkey);
         logPrintout.TooltipText = _logPrintoutBaseTooltip;
     }
 

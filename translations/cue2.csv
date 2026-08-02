@@ -1,0 +1,816 @@
+keys,en,mi,es
+     Idle:,     Idle:,     Idle:,     Idle:
+    Count-In:,    Count-In:,    Count-In:,    Count-In:
+    Go:,    Go:,    Go:,    Go:
+    Standby:,    Standby:,    Standby:,    Standby:
+#1,#1,#1,#1
+(none),(none),(none),(none)
+(Pre-wait),(Pre-wait),(Pre-wait),(Pre-wait)
++ Layer,+ Layer,+ Layer,+ Layer
++ Screen,+ Screen,+ Screen,+ Screen
+/command/path,/command/path,/command/path,/command/path
+/path,/path,/path,/path
+/test/path,/test/path,/test/path,/test/path
+0 = hold,0 = hold,0 = hold,0 = hold
+0 = instant. Second Stop cuts immediately.,0 = instant. Second Stop cuts immediately.,0 = instant. Second Stop cuts immediately.,0 = instant. Second Stop cuts immediately.
+0 total cues,0 total cues,0 total cues,0 total cues
+0.0dB,0.0dB,0.0dB,0.0dB
+00m:00s.000ms,00m:00s.000ms,00m:00s.000ms,00m:00s.000ms
+0dB,0dB,0dB,0dB
+1 cue in the show,1 cue in the show,1 tohu i te whakaaturanga,1 cue en el show
+A shells video content and parameters.,A shells video content and parameters.,A shells video content and parameters.,A shells video content and parameters.
+About,About,Mō,Acerca de
+About and Help.,About and Help.,About and Help.,About and Help.
+"About and Help.
+Version: ","About and Help.
+Version: ","About and Help.
+Version: ","About and Help.
+Version: "
+About Cue2,About Cue2,Mō Cue2,Acerca de Cue2
+About Cue2…,About Cue2…,Mō Cue2…,Acerca de Cue2…
+Absolute: C / L50 / R100. Relative: ± pan delta.,Absolute: C / L50 / R100. Relative: ± pan delta.,Absolute: C / L50 / R100. Relative: ± pan delta.,Absolute: C / L50 / R100. Relative: ± pan delta.
+Absolute: media time. Relative: ± offset from current position.,Absolute: media time. Relative: ± offset from current position.,Absolute: media time. Relative: ± offset from current position.,Absolute: media time. Relative: ± offset from current position.
+Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.
+Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.
+Action:,Action:,Action:,Action:
+Active Cues,Active Cues,Tohu hohe,Cues activas
+"Add a new cue.
+Inserts below selection.","Add a new cue.
+Inserts below selection.","Add a new cue.
+Inserts below selection.","Add a new cue.
+Inserts below selection."
+Add control:,Add control:,Add control:,Add control:
+Add input:,Add input:,Add input:,Add input:
+Add output:,Add output:,Add output:,Add output:
+Add session inputs (receive) and outputs (send). Enable MIDI to open both. Cue MIDI Output components send to session outputs. Offline devices stay listed until removed.,Add session inputs (receive) and outputs (send). Enable MIDI to open both. Cue MIDI Output components send to session outputs. Offline devices stay listed until removed.,Add session inputs (receive) and outputs (send). Enable MIDI to open both. Cue MIDI Output components send to session outputs. Offline devices stay listed until removed.,Add session inputs (receive) and outputs (send). Enable MIDI to open both. Cue MIDI Output components send to session outputs. Offline devices stay listed until removed.
+Add Text Component,Add Text Component,Add Text Component,Add Text Component
+All,All,Katoa,Todo
+Allowlist,Allowlist,Allowlist,Allowlist
+Also accept OSC over TCP (binary length-prefixed packets).,Also accept OSC over TCP (binary length-prefixed packets).,Also accept OSC over TCP (binary length-prefixed packets).,Also accept OSC over TCP (binary length-prefixed packets).
+Animate a canvas target layer size and/or position.,Animate a canvas target layer size and/or position.,Animate a canvas target layer size and/or position.,Animate a canvas target layer size and/or position.
+Appearance (show),Appearance (show),Appearance (show),Appearance (show)
+Application interface language. Applies immediately and is saved as a user preference.,Application interface language. Applies immediately and is saved as a user preference.,"Te reo o te atanga. Ka whakamahia tonutia, ā, ka tiakina hei manakohanga kaiwhakamahi.",Idioma de la interfaz. Se aplica de inmediato y se guarda como preferencia de usuario.
+Applies on next start/seek.,Applies on next start/seek.,Applies on next start/seek.,Applies on next start/seek.
+Apply,Apply,Apply,Apply
+Apply allowlist changes.,Apply allowlist changes.,Apply allowlist changes.,Apply allowlist changes.
+args,args,args,args
+"args: 1 0.5 ""hello"" true","args: 1 0.5 ""hello"" true","args: 1 0.5 ""hello"" true","args: 1 0.5 ""hello"" true"
+Armed,Armed,Mau pū,Armado
+Armed:,Armed:,Mau pū:,Armado:
+Arming,Arming,Arming,Arming
+Art-Net,Art-Net,Art-Net,Art-Net
+"Assign MIDI controls to app actions (Go, Save, Undo, …)","Assign MIDI controls to app actions (Go, Save, Undo, …)","Assign MIDI controls to app actions (Go, Save, Undo, …)","Assign MIDI controls to app actions (Go, Save, Undo, …)"
+"Assign MIDI controls to the same actions as the keyboard Input Map (Go, Save, Undo, …). Click a binding to capture the next MIDI message. Requires a session MIDI input under Settings → MIDI. Esc cancels capture.","Assign MIDI controls to the same actions as the keyboard Input Map (Go, Save, Undo, …). Click a binding to capture the next MIDI message. Requires a session MIDI input under Settings → MIDI. Esc cancels capture.","Assign MIDI controls to the same actions as the keyboard Input Map (Go, Save, Undo, …). Click a binding to capture the next MIDI message. Requires a session MIDI input under Settings → MIDI. Esc cancels capture.","Assign MIDI controls to the same actions as the keyboard Input Map (Go, Save, Undo, …). Click a binding to capture the next MIDI message. Requires a session MIDI input under Settings → MIDI. Esc cancels capture."
+"Assign OSC addresses to app actions (Go, Save, Undo, …)","Assign OSC addresses to app actions (Go, Save, Undo, …)","Assign OSC addresses to app actions (Go, Save, Undo, …)","Assign OSC addresses to app actions (Go, Save, Undo, …)"
+Audio,Audio,Oro,Audio
+Audio Defaults,Audio Defaults,Taunoa oro,Predeterminados de audio
+Audio output,Audio output,Audio output,Audio output
+Audio Output Patch,Audio Output Patch,Pātene putanga oro,Matriz de salida de audio
+Audio volume,Audio volume,Audio volume,Audio volume
+"Autosave Interval (min, 0=off)","Autosave Interval (min, 0=off)","Wā tiaki-aunoa (meneti, 0=weto)","Intervalo de autoguardado (min, 0=off)"
+Autowrap,Autowrap,Autowrap,Autowrap
+Background,Background,Background,Background
+Background colour,Background colour,Background colour,Background colour
+Background process,Background process,Background process,Background process
+Backup Depth,Backup Depth,Hōhonu pūrua,Profundidad de copias
+Backup media,Backup media,Backup media,Backup media
+BBCode,BBCode,BBCode,BBCode
+BG,BG,BG,BG
+Bind the UDP receive port and process incoming OSC messages.,Bind the UDP receive port and process incoming OSC messages.,Bind the UDP receive port and process incoming OSC messages.,Bind the UDP receive port and process incoming OSC messages.
+Black out all layers,Black out all layers,Black out all layers,Black out all layers
+Black out all video output layers while keeping display windows open. Runtime-only.,Black out all video output layers while keeping display windows open. Runtime-only.,Black out all video output layers while keeping display windows open. Runtime-only.,Black out all video output layers while keeping display windows open. Runtime-only.
+Blackout,Blackout,Blackout,Blackout
+Blackout Video,Blackout Video,Pōuri ataata,Apagar vídeo
+Built-in commands,Built-in commands,Built-in commands,Built-in commands
+Cancel,Cancel,Cancel,Cancel
+"Cancels active commands. Standbys, count-ins and identifies. ","Cancels active commands. Standbys, count-ins and identifies. ","Cancels active commands. Standbys, count-ins and identifies. ","Cancels active commands. Standbys, count-ins and identifies. "
+Canvas,Canvas,Canvas,Canvas
+CANVAS EDITOR,CANVAS EDITOR,CANVAS EDITOR,CANVAS EDITOR
+Canvas Editor,Canvas Editor,Kaiwhakatika papa,Editor de lienzo
+Canvas Position,Canvas Position,Canvas Position,Canvas Position
+Canvas Zoom. Ctrl + Scroll,Canvas Zoom. Ctrl + Scroll,Canvas Zoom. Ctrl + Scroll,Canvas Zoom. Ctrl + Scroll
+Capture,Capture,Capture,Capture
+Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.
+Change canvas position,Change canvas position,Change canvas position,Change canvas position
+Change layer size,Change layer size,Change layer size,Change layer size
+Check File Presence,Check File Presence,Tirohia te noho o ngā kōnae,Comprobar presencia de archivos
+Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file
+Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.
+Clear,Clear,Clear,Clear
+Clear logs,Clear logs,Ūkui rātaka,Borrar registros
+Clear Recent,Clear Recent,Ūkui nā nātata,Borrar recientes
+Clear target,Clear target,Clear target,Clear target
+Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. 
+Click or drag to set the playhead,Click or drag to set the playhead,Click or drag to set the playhead,Click or drag to set the playhead
+Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.
+Clock,Clock,Clock,Clock
+Close all displays,Close all displays,Close all displays,Close all displays
+Close Displays,Close Displays,Katia ngā whakaaturanga,Cerrar pantallas
+Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.
+Closes all display windows without destroying the canvas layout. Cues may still run; video is not shown on house screens.,Closes all display windows without destroying the canvas layout. Cues may still run; video is not shown on house screens.,Closes all display windows without destroying the canvas layout. Cues may still run; video is not shown on house screens.,Closes all display windows without destroying the canvas layout. Cues may still run; video is not shown on house screens.
+Col,Col,Col,Col
+Collapse One Layer,Collapse One Layer,Whakaiti taumata kotahi,Contraer un nivel
+Colour,Colour,Colour,Colour
+Colour:,Colour:,Tae:,Color:
+Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.
+Connection controls,Connection controls,Connection controls,Connection controls
+Connections,Connections,Hononga,Conexiones
+Cont.,Cont.,Haere.,Cont.
+Content,Content,Content,Content
+Continue,Continue,Haere tonu,Continuar
+"Continue mode (click to cycle):
+None → Auto-continue → Auto-follow
+→  Auto-continue (after post-wait)
+↳  Auto-follow (after cue completes)","Continue mode (click to cycle):
+None → Auto-continue → Auto-follow
+→  Auto-continue (after post-wait)
+↳  Auto-follow (after cue completes)","Continue mode (click to cycle):
+None → Auto-continue → Auto-follow
+→  Auto-continue (after post-wait)
+↳  Auto-follow (after cue completes)","Continue mode (click to cycle):
+None → Auto-continue → Auto-follow
+→  Auto-continue (after post-wait)
+↳  Auto-follow (after cue completes)"
+Continue:,Continue:,Haere tonu:,Continuar:
+Control commands to itself or other cues.,Control commands to itself or other cues.,Control commands to itself or other cues.,Control commands to itself or other cues.
+Copy,Copy,Tārua,Copiar
+Copy media into show,Copy media into show,Tārua pāpāho ki te whakaaturanga,Copiar medios al show
+Copy Media into Show Folder,Copy Media into Show Folder,Tārua pāpāho ki te kōpaki whakaaturanga,Copiar medios a la carpeta del show
+Copy media into show folder (Audio/Video/Images).,Copy media into show folder (Audio/Video/Images).,Copy media into show folder (Audio/Video/Images).,Copy media into show folder (Audio/Video/Images).
+Copying 0%,Copying 0%,Copying 0%,Copying 0%
+Copying {0}%,Copying {0}%,Tārua {0}%,Copiando {0}%
+Count-In,Count-In,Count-In,Count-In
+"Count-In override time. To make count-in = prewait time, enter 0.","Count-In override time. To make count-in = prewait time, enter 0.","Count-In override time. To make count-in = prewait time, enter 0.","Count-In override time. To make count-in = prewait time, enter 0."
+Count-In:,Count-In:,Count-In:,Count-In:
+CPU --.-%,CPU --.-%,CPU --.-%,CPU --.-%
+CPU usage,CPU usage,CPU usage,CPU usage
+CPU usage (this process),CPU usage (this process),Whakamahinga CPU (tēnei hātepe),Uso de CPU (este proceso)
+CPU {0}%,CPU {0}%,CPU {0}%,CPU {0}%
+Create a folder under the selected library folder.,Create a folder under the selected library folder.,Create a folder under the selected library folder.,Create a folder under the selected library folder.
+Create Cue,Create Cue,Waihanga tohu,Crear cue
+Cue Defaults,Cue Defaults,Taunoa tohu,Valores predeterminados de cue
+Cue id,Cue id,Cue id,Cue id
+Cue Lights,Cue Lights,Cue Lights,Cue Lights
+Cue List Scale,Cue List Scale,Cue List Scale,Cue List Scale
+Cue notes…,Cue notes…,Cue notes…,Cue notes…
+Cue number,Cue number,Cue number,Cue number
+"Cue numbers, shorthand identifier. Does not need to be unique. Max length of 5 characters.","Cue numbers, shorthand identifier. Does not need to be unique. Max length of 5 characters.","Cue numbers, shorthand identifier. Does not need to be unique. Max length of 5 characters.","Cue numbers, shorthand identifier. Does not need to be unique. Max length of 5 characters."
+"Cue sequence mode for the next cue at the same nesting level.
+None: Do not auto-start the next cue.
+Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Continue + this post-wait).
+Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait).","Cue sequence mode for the next cue at the same nesting level.
+None: Do not auto-start the next cue.
+Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Continue + this post-wait).
+Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait).","Cue sequence mode for the next cue at the same nesting level.
+None: Do not auto-start the next cue.
+Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Continue + this post-wait).
+Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait).","Cue sequence mode for the next cue at the same nesting level.
+None: Do not auto-start the next cue.
+Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Continue + this post-wait).
+Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
+Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.
+Cue2,Cue2,Cue2,Cue2
+Cue2 Log,Cue2 Log,Cue2 Log,Cue2 Log
+Cue2 Preferences,Cue2 Preferences,Manakohanga Cue2,Preferencias de Cue2
+Cue2 Settings,Cue2 Settings,Cue2 Settings,Cue2 Settings
+Cues,Cues,Tohu,Cues
+Cut,Cut,Tapahi,Cortar
+Declick ramp,Declick ramp,Declick ramp,Declick ramp
+Decode / present,Decode / present,Decode / present,Decode / present
+"Default audio output for new audio components.
+Preferred uses Default Patch (or the first patch).
+Routing matrix still builds when a file is assigned.","Default audio output for new audio components.
+Preferred uses Default Patch (or the first patch).
+Routing matrix still builds when a file is assigned.","Default audio output for new audio components.
+Preferred uses Default Patch (or the first patch).
+Routing matrix still builds when a file is assigned.","Default audio output for new audio components.
+Preferred uses Default Patch (or the first patch).
+Routing matrix still builds when a file is assigned."
+Default background panel colour.,Default background panel colour.,Default background panel colour.,Default background panel colour.
+Default delay between trigger and component start for new cues.,Default delay between trigger and component start for new cues.,Default delay between trigger and component start for new cues.,Default delay between trigger and component start for new cues.
+Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop.,Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop.,Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop.,Default duration for still-image components only (not video). 0 or 'Until stopped' = hold until stop.
+Default embedded audio volume (dB).,Default embedded audio volume (dB).,Default embedded audio volume (dB).,Default embedded audio volume (dB).
+"Default embedded-audio output for new video components.
+Preferred uses Default Patch (or the first patch).","Default embedded-audio output for new video components.
+Preferred uses Default Patch (or the first patch).","Default embedded-audio output for new video components.
+Preferred uses Default Patch (or the first patch).","Default embedded-audio output for new video components.
+Preferred uses Default Patch (or the first patch)."
+Default fade-in duration (0 = immediate).,Default fade-in duration (0 = immediate).,Default fade-in duration (0 = immediate).,Default fade-in duration (0 = immediate).
+Default fade-in duration for new audio components (0 = immediate).,Default fade-in duration for new audio components (0 = immediate).,Default fade-in duration for new audio components (0 = immediate).,Default fade-in duration for new audio components (0 = immediate).
+Default fade-out duration (0 = immediate / session stop fade).,Default fade-out duration (0 = immediate / session stop fade).,Default fade-out duration (0 = immediate / session stop fade).,Default fade-out duration (0 = immediate / session stop fade).
+Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).
+Default font colour.,Default font colour.,Default font colour.,Default font colour.
+Default font size in pixels.,Default font size in pixels.,Default font size in pixels.,Default font size in pixels.
+Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).
+"Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components."
+Default number of plays when loop is off.,Default number of plays when loop is off.,Default number of plays when loop is off.,Default number of plays when loop is off.
+Default opacity (0–100%) for new video components.,Default opacity (0–100%) for new video components.,Default opacity (0–100%) for new video components.,Default opacity (0–100%) for new video components.
+Default opacity (0–100%).,Default opacity (0–100%).,Default opacity (0–100%).,Default opacity (0–100%).
+Default outline colour.,Default outline colour.,Default outline colour.,Default outline colour.
+Default outline thickness in pixels (0 = none).,Default outline thickness in pixels (0 = none).,Default outline thickness in pixels (0 = none).,Default outline thickness in pixels (0 = none).
+Default post-wait for Auto-continue / Auto-follow on new cues.,Default post-wait for Auto-continue / Auto-follow on new cues.,Default post-wait for Auto-continue / Auto-follow on new cues.,Default post-wait for Auto-continue / Auto-follow on new cues.
+"Default sequence mode for new cues.
+None: Do not auto-start the next cue.
+Auto-continue: After pre-wait ends, arm the next cue.
+Auto-follow: When this cue completes, arm the next cue.","Default sequence mode for new cues.
+None: Do not auto-start the next cue.
+Auto-continue: After pre-wait ends, arm the next cue.
+Auto-follow: When this cue completes, arm the next cue.","Default sequence mode for new cues.
+None: Do not auto-start the next cue.
+Auto-continue: After pre-wait ends, arm the next cue.
+Auto-follow: When this cue completes, arm the next cue.","Default sequence mode for new cues.
+None: Do not auto-start the next cue.
+Auto-continue: After pre-wait ends, arm the next cue.
+Auto-follow: When this cue completes, arm the next cue."
+Default shell colour for new cues.,Default shell colour for new cues.,Default shell colour for new cues.,Default shell colour for new cues.
+"Default shell properties for newly created cues (pre-wait, colour, arming, etc.).","Default shell properties for newly created cues (pre-wait, colour, arming, etc.).","Default shell properties for newly created cues (pre-wait, colour, arming, etc.).","Default shell properties for newly created cues (pre-wait, colour, arming, etc.)."
+Default stereo pan (balance) for new audio components.,Default stereo pan (balance) for new audio components.,Default stereo pan (balance) for new audio components.,Default stereo pan (balance) for new audio components.
+Default stereo pan for embedded audio.,Default stereo pan for embedded audio.,Default stereo pan for embedded audio.,Default stereo pan for embedded audio.
+Default target layer for new text components.,Default target layer for new text components.,Default target layer for new text components.,Default target layer for new text components.
+Default TextureRect expand mode for new video components.,Default TextureRect expand mode for new video components.,Default TextureRect expand mode for new video components.,Default TextureRect expand mode for new video components.
+Default TextureRect stretch mode for new video components.,Default TextureRect stretch mode for new video components.,Default TextureRect stretch mode for new video components.,Default TextureRect stretch mode for new video components.
+"Default typography, alignment, duration, outline/background, and fades for new text components.","Default typography, alignment, duration, outline/background, and fades for new text components.","Default typography, alignment, duration, outline/background, and fades for new text components.","Default typography, alignment, duration, outline/background, and fades for new text components."
+Default uniform padding inside the layer (pixels).,Default uniform padding inside the layer (pixels).,Default uniform padding inside the layer (pixels).,Default uniform padding inside the layer (pixels).
+Default video target layer for new video/image components.,Default video target layer for new video/image components.,Default video target layer for new video/image components.,Default video target layer for new video/image components.
+Default volume for new audio components (dB).,Default volume for new audio components (dB).,Default volume for new audio components (dB).,Default volume for new audio components (dB).
+"Default volume, pan, loop, play count, and fades for new audio components.","Default volume, pan, loop, play count, and fades for new audio components.","Default volume, pan, loop, play count, and fades for new audio components.","Default volume, pan, loop, play count, and fades for new audio components."
+Defaults applied to every newly created cue.,Defaults applied to every newly created cue.,Defaults applied to every newly created cue.,Defaults applied to every newly created cue.
+Defaults applied when a new audio component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new audio component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new audio component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new audio component is created. File path and routing matrix stay independent of these defaults.
+Defaults applied when a new text component is created. Content starts empty.,Defaults applied when a new text component is created. Content starts empty.,Defaults applied when a new text component is created. Content starts empty.,Defaults applied when a new text component is created. Content starts empty.
+Defaults applied when a new video or image component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new video or image component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new video or image component is created. File path and routing matrix stay independent of these defaults.,Defaults applied when a new video or image component is created. File path and routing matrix stay independent of these defaults.
+Delete,Delete,Muku,Eliminar
+Delete all selected cues (and any child cues).,Delete all selected cues (and any child cues).,Muku ngā tohu katoa kua tīpakohia (me ngā tohu tamaiti).,Eliminar todas las cues seleccionadas (y cualquier cue hija).
+Delete Cue,Delete Cue,Muku tohu,Eliminar cue
+Delete Cue Light,Delete Cue Light,Delete Cue Light,Delete Cue Light
+Delete Layer,Delete Layer,Delete Layer,Delete Layer
+Delete Screen,Delete Screen,Delete Screen,Delete Screen
+Delete the selected entry or folder.,Delete the selected entry or folder.,Delete the selected entry or folder.,Delete the selected entry or folder.
+Delete this cue (and any child cues).,Delete this cue (and any child cues).,Muku tēnei tohu (me ngā tohu tamaiti).,Eliminar esta cue (y cualquier cue hija).
+Destination,Destination,Destination,Destination
+Device,Device,Device,Device
+Devices,Devices,Pūrere,Dispositivos
+Disable output,Disable output,Disable output,Disable output
+"Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences."
+Display Offset,Display Offset,Display Offset,Display Offset
+Documentation — docs.cue2.live,Documentation — docs.cue2.live,Tuhinga — docs.cue2.live,Documentación — docs.cue2.live
+Documentation…,Documentation…,Tuhinga…,Documentación…
+Drag to resize Number / Name columns,Drag to resize Number / Name columns,Drag to resize Number / Name columns,Drag to resize Number / Name columns
+Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view,Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view,Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view,Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view
+Duplicate,Duplicate,Tāruarua,Duplicar
+Dur,Dur,Dur,Dur
+Duration,Duration,Roanga,Duración
+"Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait.","Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait.","Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait.","Duration is the full length of the cue, including its children, pre-wait, components contents and post-wait."
+Duration:,Duration:,Roanga:,Duración:
+Edit,Edit,Whakatika,Editar
+Editing,Editing,Editing,Editing
+Embedded audio,Embedded audio,Embedded audio,Embedded audio
+"empty = all · e.g. 192.168.1.10, 10.0.0.5","empty = all · e.g. 192.168.1.10, 10.0.0.5","empty = all · e.g. 192.168.1.10, 10.0.0.5","empty = all · e.g. 192.168.1.10, 10.0.0.5"
+Empty Component,Empty Component,Empty Component,Empty Component
+Enable MIDI,Enable MIDI,Enable MIDI,Enable MIDI
+Enable OSC Listener,Enable OSC Listener,Enable OSC Listener,Enable OSC Listener
+Enabled,Enabled,Enabled,Enabled
+End Time:,End Time:,End Time:,End Time:
+Enter overlay text…,Enter overlay text…,Enter overlay text…,Enter overlay text…
+Every day,Every day,Every day,Every day
+Exit Cue2,Exit Cue2,Puta i a Cue2,Salir de Cue2
+Expand,Expand,Expand,Expand
+Expand / Collapse All,Expand / Collapse All,Whakawhānui / Whakaiti katoa,Expandir / Contraer todo
+Expand One Layer,Expand One Layer,Whakawhānui taumata kotahi,Expandir un nivel
+Expand/Collapse all groups.,Expand/Collapse all groups.,Expand/Collapse all groups.,Expand/Collapse all groups.
+Expand:,Expand:,Expand:,Expand:
+Fade,Fade,Fade,Fade
+Fade audio volume and/or video opacity on a target cue.,Fade audio volume and/or video opacity on a target cue.,Fade audio volume and/or video opacity on a target cue.,Fade audio volume and/or video opacity on a target cue.
+Fade in,Fade in,Fade in,Fade in
+Fade in:,Fade in:,Fade in:,Fade in:
+Fade out,Fade out,Fade out,Fade out
+Fade out:,Fade out:,Fade out:,Fade out:
+Fade time for this control action.,Fade time for this control action.,Fade time for this control action.,Fade time for this control action.
+Fade-in duration at play start (0 = immediate).,Fade-in duration at play start (0 = immediate).,Fade-in duration at play start (0 = immediate).,Fade-in duration at play start (0 = immediate).
+Fade-out duration on stop (0 = immediate / session stop fade).,Fade-out duration on stop (0 = immediate / session stop fade).,Fade-out duration on stop (0 = immediate / session stop fade).,Fade-out duration on stop (0 = immediate / session stop fade).
+"Fade-out duration when Stop is pressed (seconds).
+First Stop fades out; second Stop while fading hard-stops.
+Set to 0 for immediate stop.","Fade-out duration when Stop is pressed (seconds).
+First Stop fades out; second Stop while fading hard-stops.
+Set to 0 for immediate stop.","Fade-out duration when Stop is pressed (seconds).
+First Stop fades out; second Stop while fading hard-stops.
+Set to 0 for immediate stop.","Fade-out duration when Stop is pressed (seconds).
+First Stop fades out; second Stop while fading hard-stops.
+Set to 0 for immediate stop."
+Fade:,Fade:,Fade:,Fade:
+Fades,Fades,Fades,Fades
+File,File,Kōnae,Archivo
+File Duration:,File Duration:,File Duration:,File Duration:
+FIRST_TIME_GET_STARTED,"Let's ""Go""!","Tīmata ""Go""!","¡Vamos a ""Go""!"
+FIRST_TIME_LANGUAGE,Language,Reo,Idioma
+FIRST_TIME_TITLE,Welcome,Nau mai,Bienvenido
+FIRST_TIME_UI_SCALE,UI Scaling,Whakatauira UI,Escala de UI
+FIRST_TIME_WELCOME_BODY,"Welcome to the Cue2 v0.1 Pre-Release StripyHat build!
+
+Your feedback ahead of public launch would be appreciated. Please email feedback to
+info@cue2.live
+This could include feature requests, issues or bugs you may find while testing this software.
+Remember - this software is considered to be in development, it is recommend for private use only.
+
+Explore the docs and website below for how to get started.","Nau mai ki te putanga Cue2 v0.1 Pre-Release StripyHat!
+
+He pai te whiwhi urupare i mua i te whakarewatanga tūmatanui. Tēnā koa īmēra ō urupare ki
+info@cue2.live
+Ka taea te whakauru tono āhuatanga, raruraru, ngā hapa rānei ka kitea i a koe e whakamātau ana.
+Kia mahara - e whakawhanakehia ana tēnei pūmanawa; e tūtohungia ana mō te whakamahi tūmataiti anake.
+
+Tirohia ngā tuhinga me te paetukutuku i raro nei hei tīmatanga.","¡Bienvenido a Cue2 v0.1 Pre-Release (StripyHat)!
+
+Agradecemos tus comentarios antes del lanzamiento público. Envíalos por correo a
+info@cue2.live
+Pueden incluir solicitudes de funciones, problemas o errores que encuentres al probar el software.
+Recuerda: este software está en desarrollo; se recomienda solo para uso privado.
+
+Consulta la documentación y el sitio web abajo para empezar."
+Fit,Fit,Fit,Fit
+Fit canvas to view,Fit canvas to view,Fit canvas to view,Fit canvas to view
+Fit timeline to content width,Fit timeline to content width,Fit timeline to content width,Fit timeline to content width
+Focus newly created cues in the cuelist.,Focus newly created cues in the cuelist.,Focus newly created cues in the cuelist.,Focus newly created cues in the cuelist.
+Folders,Folders,Kōpaki,Carpetas
+Font,Font,Font,Font
+Font colour,Font colour,Font colour,Font colour
+Font name,Font name,Font name,Font name
+Font size,Font size,Font size,Font size
+Frame pacing on output windows. Prefer VSync reduces tearing; Off / Low latency can reduce present lag on projectors (may tear). Saved with the showfile.,Frame pacing on output windows. Prefer VSync reduces tearing; Off / Low latency can reduce present lag on projectors (may tear). Saved with the showfile.,Frame pacing on output windows. Prefer VSync reduces tearing; Off / Low latency can reduce present lag on projectors (may tear). Saved with the showfile.,Frame pacing on output windows. Prefer VSync reduces tearing; Off / Low latency can reduce present lag on projectors (may tear). Saved with the showfile.
+Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.
+Fullscreen,Fullscreen,Mata katoa,Pantalla completa
+Fullscreen/Windowed,Fullscreen/Windowed,Mata katoa/Matapihi,Pantalla completa/Ventana
+General,General,Whānui,General
+"General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings."
+General Settings,General Settings,General Settings,General Settings
+GO,GO,GO,GO
+Go,Go,Go,Go
+Go Button Scale,Go Button Scale,Go Button Scale,Go Button Scale
+Go button size. Half Go hides notes; No Go hides the GO header.,Go button size. Half Go hides notes; No Go hides the GO header.,Go button size. Half Go hides notes; No Go hides the GO header.,Go button size. Half Go hides notes; No Go hides the GO header.
+Group Selected,Group Selected,Rōpūngia te tīpakonga,Agrupar selección
+H alignment,H alignment,H alignment,H alignment
+Height,Height,Height,Height
+Height:,Height:,Height:,Height:
+Help,Help,Āwhina,Ayuda
+HH:mm:ss,HH:mm:ss,HH:mm:ss,HH:mm:ss
+Hold and release over a cue in the list to set target,Hold and release over a cue in the list to set target,Hold and release over a cue in the list to set target,Hold and release over a cue in the list to set target
+Hold time in seconds. 0 keeps text until the cue is stopped.,Hold time in seconds. 0 keeps text until the cue is stopped.,Hold time in seconds. 0 keeps text until the cue is stopped.,Hold time in seconds. 0 keeps text until the cue is stopped.
+Horizontal offset of the output window from the target display origin (pixels).,Horizontal offset of the output window from the target display origin (pixels).,Horizontal offset of the output window from the target display origin (pixels).,Horizontal offset of the output window from the target display origin (pixels).
+Horizontal zoom (Ctrl + scroll wheel over timeline),Horizontal zoom (Ctrl + scroll wheel over timeline),Horizontal zoom (Ctrl + scroll wheel over timeline),Horizontal zoom (Ctrl + scroll wheel over timeline)
+Hotkey,Hotkey,Pātuhi poto,Atajo
+Hotkey: {0},Hotkey: {0},Pātuhi poto: {0},Atajo: {0}
+How long to wait between this cue being triggered and activating the cue's components. ,How long to wait between this cue being triggered and activating the cue's components. ,How long to wait between this cue being triggered and activating the cue's components. ,How long to wait between this cue being triggered and activating the cue's components. 
+How many previous autosave versions to keep in the Backups folder.,How many previous autosave versions to keep in the Backups folder.,How many previous autosave versions to keep in the Backups folder.,How many previous autosave versions to keep in the Backups folder.
+How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only.,How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only.,How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only.,How many session log files to keep on disk (including the current session). The log window only shows the current session. 1 keeps current only.
+"How many undo/redo steps to keep for document edits (cues, components, settings).","How many undo/redo steps to keep for document edits (cues, components, settings).","How many undo/redo steps to keep for document edits (cues, components, settings).","How many undo/redo steps to keep for document edits (cues, components, settings)."
+"How solid the video appears (0% = invisible, 100% = fully solid). Changes also apply to playing cues.","How solid the video appears (0% = invisible, 100% = fully solid). Changes also apply to playing cues.","How solid the video appears (0% = invisible, 100% = fully solid). Changes also apply to playing cues.","How solid the video appears (0% = invisible, 100% = fully solid). Changes also apply to playing cues."
+"How the picture is drawn within its area.
+Hover each option for details. Changes also apply to playing cues.","How the picture is drawn within its area.
+Hover each option for details. Changes also apply to playing cues.","How the picture is drawn within its area.
+Hover each option for details. Changes also apply to playing cues.","How the picture is drawn within its area.
+Hover each option for details. Changes also apply to playing cues."
+How the picture is drawn within its area. Changes also apply to playing cues.,How the picture is drawn within its area. Changes also apply to playing cues.,How the picture is drawn within its area. Changes also apply to playing cues.,How the picture is drawn within its area. Changes also apply to playing cues.
+"How the video sizes itself within the layer.
+Hover each option for details. Changes also apply to playing cues.","How the video sizes itself within the layer.
+Hover each option for details. Changes also apply to playing cues.","How the video sizes itself within the layer.
+Hover each option for details. Changes also apply to playing cues.","How the video sizes itself within the layer.
+Hover each option for details. Changes also apply to playing cues."
+How the video sizes itself within the layer. Changes also apply to playing cues.,How the video sizes itself within the layer. Changes also apply to playing cues.,How the video sizes itself within the layer. Changes also apply to playing cues.,How the video sizes itself within the layer. Changes also apply to playing cues.
+ID:,ID:,ID:,ID:
+Identify,Identify,Identify,Identify
+"If set, all received OSC must start with /{SessionName}/… (built-ins and Input Map). Example: /MyShow/Go","If set, all received OSC must start with /{SessionName}/… (built-ins and Input Map). Example: /MyShow/Go","If set, all received OSC must start with /{SessionName}/… (built-ins and Input Map). Example: /MyShow/Go","If set, all received OSC must start with /{SessionName}/… (built-ins and Input Map). Example: /MyShow/Go"
+Image Duration,Image Duration,Image Duration,Image Duration
+Input Map,Input Map,Mahere pātuhi,Mapa de teclado
+Insert the selected library cue into the cuelist.,Insert the selected library cue into the cuelist.,Insert the selected library cue into the cuelist.,Insert the selected library cue into the cuelist.
+Insert:,Insert:,Whakauru:,Insertar:
+Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.
+Interface,Interface,Interface,Interface
+"Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.)."
+Keep Aspect,Keep Aspect,Keep Aspect,Keep Aspect
+Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.
+"Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show"
+Language,Language,Reo,Idioma
+Last 5 log messages:,Last 5 log messages:,Ngā karere rātaka 5 whakamutunga:,Últimos 5 mensajes del registro:
+Latency preset,Latency preset,Latency preset,Latency preset
+Layer,Layer,Layer,Layer
+Layer name,Layer name,Layer name,Layer name
+Layer:,Layer:,Layer:,Layer:
+Layout,Layout,Layout,Layout
+LED Colours,LED Colours,LED Colours,LED Colours
+LED Master Brightness:,LED Master Brightness:,LED Master Brightness:,LED Master Brightness:
+"Let's ""Go""!","Let's ""Go""!","Tīmata ""Go""!","¡Vamos a ""Go""!"
+Library is empty. Select a cue and click Save to Library.,Library is empty. Select a cue and click Save to Library.,Library is empty. Select a cue and click Save to Library.,Library is empty. Select a cue and click Save to Library.
+Listen,Listen,Listen,Listen
+Listener off,Listener off,Listener off,Listener off
+Live house-output controls plus show-scoped appearance and performance options. Disable and blackout are runtime-only (not saved with the show).,Live house-output controls plus show-scoped appearance and performance options. Disable and blackout are runtime-only (not saved with the show).,Live house-output controls plus show-scoped appearance and performance options. Disable and blackout are runtime-only (not saved with the show).,Live house-output controls plus show-scoped appearance and performance options. Disable and blackout are runtime-only (not saved with the show).
+Live output control,Live output control,Live output control,Live output control
+Load,Load,Uta,Cargar
+Load next 100,Load next 100,Uta 100 e whai ake,Cargar siguientes 100
+Load selected settings categories from a .c2settings file (undoable),Load selected settings categories from a .c2settings file (undoable),Load selected settings categories from a .c2settings file (undoable),Load selected settings categories from a .c2settings file (undoable)
+Load…,Load…,Uta…,Cargar…
+Local IPv4,Local IPv4,Local IPv4,Local IPv4
+LOCALE_NAME_en,English,English,English
+LOCALE_NAME_es,Español,Español,Español
+LOCALE_NAME_mi,Te reo Māori,Te reo Māori,Te reo Māori
+Lock,Lock,Lock,Lock
+Log,Log,Rātaka,Registro
+Log 0,Log 0,Log 0,Log 0
+Log Session Depth,Log Session Depth,Hōhonu rātaka,Profundidad de registros
+Log {0},Log {0},Rātaka {0},Registro {0}
+"Log, click to open full log","Log, click to open full log","Rātaka, pāwhiritia hei huaki te rātaka katoa","Registro, clic para abrir el registro completo"
+Logical processors: {0},Logical processors: {0},Ngā tukatuka arorau: {0},Procesadores lógicos: {0}
+Log…,Log…,Rātaka…,Registro…
+Loop,Loop,Loop,Loop
+Loop indefinitely. This overrules playcount.,Loop indefinitely. This overrules playcount.,Loop indefinitely. This overrules playcount.,Loop indefinitely. This overrules playcount.
+Loop:,Loop:,Loop:,Loop:
+m:s:ms,m:s:ms,m:s:ms,m:s:ms
+Margins,Margins,Margins,Margins
+Master mute,Master mute,Master mute,Master mute
+Master output,Master output,Master output,Master output
+Master volume,Master volume,Master volume,Master volume
+Media,Media,Media,Media
+MEM -- MB,MEM -- MB,MEM -- MB,MEM -- MB
+MEM {0} MB,MEM {0} MB,MEM {0} MB,MEM {0} MB
+Memo,Memo,Memo,Nota
+Memory usage,Memory usage,Memory usage,Memory usage
+Memory usage (this process),Memory usage (this process),Whakamahinga pūmahara (tēnei hātepe),Uso de memoria (este proceso)
+MIDI,MIDI,MIDI,MIDI
+MIDI channel 1–16. Set to 0 for any channel.,MIDI channel 1–16. Set to 0 for any channel.,MIDI channel 1–16. Set to 0 for any channel.,MIDI channel 1–16. Set to 0 for any channel.
+MIDI input devices and live monitor,MIDI input devices and live monitor,MIDI input devices and live monitor,MIDI input devices and live monitor
+MIDI Input Map,MIDI Input Map,Mahere tāuru MIDI,Mapa de entrada MIDI
+MIDI message type to match.,MIDI message type to match.,MIDI message type to match.,MIDI message type to match.
+MIDI Monitor,MIDI Monitor,MIDI Monitor,MIDI Monitor
+MIDI off,MIDI off,MIDI off,MIDI off
+MIDI Output,MIDI Output,MIDI Output,MIDI Output
+Minimize,Minimize,Whakaiti,Minimizar
+Minutes between automatic saves. 0 disables autosave.,Minutes between automatic saves. 0 disables autosave.,Minutes between automatic saves. 0 disables autosave.,Minutes between automatic saves. 0 disables autosave.
+Mode:,Mode:,Mode:,Mode:
+Move playhead to 0,Move playhead to 0,Move playhead to 0,Move playhead to 0
+Move selected layer down (toward bottom / drawn behind),Move selected layer down (toward bottom / drawn behind),Move selected layer down (toward bottom / drawn behind),Move selected layer down (toward bottom / drawn behind)
+Move selected layer up (toward top / drawn on top),Move selected layer up (toward top / drawn on top),Move selected layer up (toward top / drawn on top),Move selected layer up (toward top / drawn on top)
+Multi-edit cues,Multi-edit cues,Multi-edit cues,Multi-edit cues
+Mute All Audio,Mute All Audio,Whakamū katoa te oro,Silenciar todo el audio
+Mute all outputs,Mute all outputs,Mute all outputs,Mute all outputs
+Name,Name,Ingoa,Nombre
+Name:,Name:,Ingoa:,Nombre:
+Named OSC send destinations and send monitor,Named OSC send destinations and send monitor,Named OSC send destinations and send monitor,Named OSC send destinations and send monitor
+New Cuelight,New Cuelight,New Cuelight,New Cuelight
+New Folder,New Folder,Kōpaki hōu,Nueva carpeta
+New OSC Connection,New OSC Connection,New OSC Connection,New OSC Connection
+New Patch,New Patch,Pātene hōu,Nuevo patch
+New Session,New Session,Wātū hōu,Nueva sesión
+New Shell,New Shell,Anga hōu,Nuevo shell
+Next cue,Next cue,Tohu panuku,Siguiente cue
+Next cue to be played (current selection).,Next cue to be played (current selection).,Next cue to be played (current selection).,Next cue to be played (current selection).
+No connections,No connections,No connections,No connections
+No recent show files,No recent show files,Kāore he kōnae whakaaturanga nā nātata,No hay shows recientes
+No Selection,No Selection,Kāore he tīpakonga,Sin selección
+No shell selected,No shell selected,No shell selected,No shell selected
+No text component on this cue.,No text component on this cue.,No text component on this cue.,No text component on this cue.
+No valid fadable properties,No valid fadable properties,No valid fadable properties,No valid fadable properties
+No:,No:,No:,No:
+None,None,Kore,Ninguno
+Note length (s):,Note length (s):,Note length (s):,Note length (s):
+"Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127)."
+Notes,Notes,Tuhipoka,Notas
+Notes for the standby cue.,Notes for the standby cue.,Notes for the standby cue.,Notes for the standby cue.
+Number,Number,Tau,Número
+Number:,Number:,Tau:,Número:
+Offset -,Offset -,Offset -,Offset -
+Op%,Op%,Op%,Op%
+Opacity %,Opacity %,Opacity %,Opacity %
+Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.
+Opacity:,Opacity:,Opacity:,Opacity:
+Open all session MIDI inputs and outputs.,Open all session MIDI inputs and outputs.,Open all session MIDI inputs and outputs.,Open all session MIDI inputs and outputs.
+Open devices,Open devices,Open devices,Open devices
+"Open playback interfaces: sample rate, bit depth, output channels, and device buffer size in sample frames.","Open playback interfaces: sample rate, bit depth, output channels, and device buffer size in sample frames.","Open playback interfaces: sample rate, bit depth, output channels, and device buffer size in sample frames.","Open playback interfaces: sample rate, bit depth, output channels, and device buffer size in sample frames."
+Open Recent,Open Recent,Huaki nā nātata,Abrir reciente
+Open Show Folder,Open Show Folder,Huaki te kōpaki whakaaturanga,Abrir carpeta del show
+Open the library folder in the system file manager.,Open the library folder in the system file manager.,Open the library folder in the system file manager.,Open the library folder in the system file manager.
+Open…,Open…,Huaki…,Abrir…
+"Optional args: 1 0.5 ""hi"" true","Optional args: 1 0.5 ""hi"" true","Optional args: 1 0.5 ""hi"" true","Optional args: 1 0.5 ""hi"" true"
+"Optional arguments: ints, floats, quoted strings, true/false. Space or comma separated.","Optional arguments: ints, floats, quoted strings, true/false. Space or comma separated.","Optional arguments: ints, floats, quoted strings, true/false. Space or comma separated.","Optional arguments: ints, floats, quoted strings, true/false. Space or comma separated."
+OSC,OSC,OSC,OSC
+OSC address path (must start with /).,OSC address path (must start with /).,OSC address path (must start with /).,OSC address path (must start with /).
+"OSC address that GO's this cue (e.g. /my/fx). Exact match, case-sensitive.","OSC address that GO's this cue (e.g. /my/fx). Exact match, case-sensitive.","OSC address that GO's this cue (e.g. /my/fx). Exact match, case-sensitive.","OSC address that GO's this cue (e.g. /my/fx). Exact match, case-sensitive."
+OSC Connections,OSC Connections,Hononga OSC,Conexiones OSC
+OSC Input Map,OSC Input Map,Mahere tāuru OSC,Mapa de entrada OSC
+OSC Listener,OSC Listener,Kaiwhakarongo OSC,Receptor OSC
+OSC path to send for testing.,OSC path to send for testing.,OSC path to send for testing.,OSC path to send for testing.
+OSC Receive Monitor,OSC Receive Monitor,OSC Receive Monitor,OSC Receive Monitor
+OSC Send Monitor,OSC Send Monitor,OSC Send Monitor,OSC Send Monitor
+Out,Out,Out,Out
+Outline & background,Outline & background,Outline & background,Outline & background
+Outline colour,Outline colour,Outline colour,Outline colour
+Outline size,Outline size,Outline size,Outline size
+Output,Output,Output,Output
+Output background,Output background,Output background,Output background
+Output vsync,Output vsync,Output vsync,Output vsync
+Output:,Output:,Output:,Output:
+Overall audio volume (dB).,Overall audio volume (dB).,Overall audio volume (dB).,Overall audio volume (dB).
+Pad,Pad,Pad,Pad
+Pan,Pan,Pan,Pan
+Pan:,Pan:,Pan:,Pan:
+"Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100"
+Panic,Panic,Panic,Panic
+Paste,Paste,Whakapiri,Pegar
+Pause,Pause,Pause,Pause
+Pause All,Pause All,Tārewa katoa,Pausar todo
+Pause all cues,Pause all cues,Pause all cues,Pause all cues
+Performance,Performance,Performance,Performance
+Performance (show),Performance (show),Performance (show),Performance (show)
+Play count,Play count,Play count,Play count
+Play focused cue from the playhead,Play focused cue from the playhead,Play focused cue from the playhead,Play focused cue from the playhead
+Playback,Playback,Purei,Reproducción
+Playcount:,Playcount:,Playcount:,Playcount:
+"Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s"
+Port,Port,Port,Port
+Position:,Position:,Position:,Position:
+Post-Wait,Post-Wait,Tārewa-muri,Post-espera
+Post-wait,Post-wait,Post-wait,Post-wait
+Post-wait:,Post-wait:,Tārewa-muri:,Post-espera:
+Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment.,Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment.,Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment.,Post-wait: delay on the next cue after Auto-continue (when this cue's content phase starts) or Auto-follow (when this cue completes). 0 = next starts at that moment.
+Pre-Wait,Pre-Wait,Tārewa-mua,Pre-espera
+Pre-wait,Pre-wait,Pre-wait,Pre-wait
+Pre-wait:,Pre-wait:,Tārewa-mua:,Pre-espera:
+Preview,Preview,Preview,Preview
+Preview quality,Preview quality,Preview quality,Preview quality
+Private: {0} MB,Private: {0} MB,Tūmataiti: {0} MB,Privada: {0} MB
+PROPERTIES,PROPERTIES,PROPERTIES,PROPERTIES
+Property:,Property:,Property:,Property:
+Push /reply/playhead to the last remote that sent OSC (when selection changes).,Push /reply/playhead to the last remote that sent OSC (when selection changes).,Push /reply/playhead to the last remote that sent OSC (when selection changes).,Push /reply/playhead to the last remote that sent OSC (when selection changes).
+Push playhead,Push playhead,Push playhead,Push playhead
+Quit Cue2,Quit Cue2,Waiho Cue2,Salir de Cue2
+"Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off."
+Redo,Redo,Mahi anō,Rehacer
+Refresh,Refresh,Tāmata anō,Actualizar
+"Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)"
+Refresh device list,Refresh device list,Refresh device list,Refresh device list
+Reload library folders and entries from disk.,Reload library folders and entries from disk.,Reload library folders and entries from disk.,Reload library folders and entries from disk.
+Remove the audio component from this cue.,Remove the audio component from this cue.,Remove the audio component from this cue.,Remove the audio component from this cue.
+Remove the video component from this cue.,Remove the video component from this cue.,Remove the video component from this cue.,Remove the video component from this cue.
+Remove this control,Remove this control,Remove this control,Remove this control
+Rename,Rename,Ingoa anō,Renombrar
+Rename the selected entry or folder.,Rename the selected entry or folder.,Rename the selected entry or folder.,Rename the selected entry or folder.
+Reply,Reply,Reply,Reply
+"Reply to the sender of /ping, /playhead, /active, /cue/status (UDP origin address:port).","Reply to the sender of /ping, /playhead, /active, /cue/status (UDP origin address:port).","Reply to the sender of /ping, /playhead, /active, /cue/status (UDP origin address:port).","Reply to the sender of /ping, /playhead, /active, /cue/status (UDP origin address:port)."
+Reset all Cue2 preferences stored for this user. Show files are not deleted.,Reset all Cue2 preferences stored for this user. Show files are not deleted.,Reset all Cue2 preferences stored for this user. Show files are not deleted.,Reset all Cue2 preferences stored for this user. Show files are not deleted.
+"Reset all stored user preferences (language, startup, autosave, shortcuts, recent files, window layout).","Reset all stored user preferences (language, startup, autosave, shortcuts, recent files, window layout).","Reset all stored user preferences (language, startup, autosave, shortcuts, recent files, window layout).","Reset all stored user preferences (language, startup, autosave, shortcuts, recent files, window layout)."
+Reset fade to default,Reset fade to default,Reset fade to default,Reset fade to default
+Reset to default,Reset to default,Tautuhi anō ki te taunoa,Restablecer predeterminado
+Reset to default (no clock),Reset to default (no clock),Reset to default (no clock),Reset to default (no clock)
+Reset to default (no hotkey),Reset to default (no hotkey),Reset to default (no hotkey),Reset to default (no hotkey)
+Reset to default (no MIDI trigger),Reset to default (no MIDI trigger),Reset to default (no MIDI trigger),Reset to default (no MIDI trigger)
+Reset to default (no OSC trigger),Reset to default (no OSC trigger),Reset to default (no OSC trigger),Reset to default (no OSC trigger)
+Reset User Data,Reset User Data,Tautuhi anō raraunga kaiwhakamahi,Restablecer datos de usuario
+RESET_TO_DEFAULT,Reset to default,Tautuhi anō ki te taunoa,Restablecer predeterminado
+Resume,Resume,Resume,Resume
+Resume All,Resume All,Tīmata anō katoa,Reanudar todo
+Resumes all paused cues,Resumes all paused cues,Resumes all paused cues,Resumes all paused cues
+Reveal,Reveal,Whakaatu,Mostrar
+Routing Matrix,Routing Matrix,Routing Matrix,Routing Matrix
+Run earlier (higher priority),Run earlier (higher priority),Run earlier (higher priority),Run earlier (higher priority)
+Run later (lower priority),Run later (lower priority),Run later (lower priority),Run later (lower priority)
+Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.,Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.,Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.,Runtime mute of session master audio (not saved with the show). Same as Settings → Audio.
+Sampling…,Sampling…,Tātauira…,Muestreando…
+Save,Save,Tiaki,Guardar
+Save / Load filter,Save / Load filter,Tātari tiaki/uta,Filtro guardar/cargar
+Save As…,Save As…,Tiaki hei…,Guardar como…
+Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file
+Save Session,Save Session,Save Session,Save Session
+Save the focused cue into the selected library folder.,Save the focused cue into the selected library folder.,Save the focused cue into the selected library folder.,Save the focused cue into the selected library folder.
+Save to Library…,Save to Library…,Tiaki ki te whare pukapuka…,Guardar en biblioteca…
+"Saved with the showfile. Affects decode/present behaviour, inspector preview scale, and output window vsync.","Saved with the showfile. Affects decode/present behaviour, inspector preview scale, and output window vsync.","Saved with the showfile. Affects decode/present behaviour, inspector preview scale, and output window vsync.","Saved with the showfile. Affects decode/present behaviour, inspector preview scale, and output window vsync."
+Scale resolution -,Scale resolution -,Scale resolution -,Scale resolution -
+"Scales cuelist row height, chrome, and fonts only.
+Does not affect the rest of the UI or playback.","Scales cuelist row height, chrome, and fonts only.
+Does not affect the rest of the UI or playback.","Scales cuelist row height, chrome, and fonts only.
+Does not affect the rest of the UI or playback.","Scales cuelist row height, chrome, and fonts only.
+Does not affect the rest of the UI or playback."
+"Scales whole UI.
+Caution: Will apply on Enter.","Scales whole UI.
+Caution: Will apply on Enter.","Whakatauira te UI katoa.
+Kia tūpato: Ka whakamahia i te Enter.","Escala toda la UI.
+Atención: se aplica al pulsar Intro."
+"Scales whole UI.
+Caution: Will apply on mouse release.","Scales whole UI.
+Caution: Will apply on mouse release.","Whakatauira te UI katoa.
+Kia tūpato: Ka whakamahia i te tuku kiore.","Escala toda la UI.
+Atención: se aplica al soltar el ratón."
+Scan,Scan,Scan,Scan
+Scans the network to discover Cue-Lights,Scans the network to discover Cue-Lights,Scans the network to discover Cue-Lights,Scans the network to discover Cue-Lights
+Screen,Screen,Screen,Screen
+Screen name,Screen name,Screen name,Screen name
+SCREENS,SCREENS,SCREENS,SCREENS
+Search…,Search…,Rapu…,Buscar…
+Seek,Seek,Seek,Seek
+Seek playing audio/video on a target cue (absolute or relative time).,Seek playing audio/video on a target cue (absolute or relative time).,Seek playing audio/video on a target cue (absolute or relative time).,Seek playing audio/video on a target cue (absolute or relative time).
+Seek time (absolute media time or relative offset).,Seek time (absolute media time or relative offset).,Seek time (absolute media time or relative offset).,Seek time (absolute media time or relative offset).
+Select a cell to set the fade target level.,Select a cell to set the fade target level.,Select a cell to set the fade target level.,Select a cell to set the fade target level.
+Select a cue to edit its timeline,Select a cue to edit its timeline,Select a cue to edit its timeline,Select a cue to edit its timeline
+Select a library cue to see details.,Select a library cue to see details.,Select a library cue to see details.,Select a library cue to see details.
+Select All,Select All,Tīpako katoa,Seleccionar todo
+Select an available MIDI input to add it to this session.,Select an available MIDI input to add it to this session.,Select an available MIDI input to add it to this session.,Select an available MIDI input to add it to this session.
+Select an available MIDI output to add it to this session.,Select an available MIDI output to add it to this session.,Select an available MIDI output to add it to this session.,Select an available MIDI output to add it to this session.
+Select an item in the structure tree.,Select an item in the structure tree.,Select an item in the structure tree.,Select an item in the structure tree.
+Select categories to include when saving or loading settings,Select categories to include when saving or loading settings,Select categories to include when saving or loading settings,Select categories to include when saving or loading settings
+Select File,Select File,Select File,Select File
+Select new cues,Select new cues,Select new cues,Select new cues
+Send All Notes Off / All Sound Off on all open outputs.,Send All Notes Off / All Sound Off on all open outputs.,Send All Notes Off / All Sound Off on all open outputs.,Send All Notes Off / All Sound Off on all open outputs.
+Send on all OSC connections.,Send on all OSC connections.,Send on all OSC connections.,Send on all OSC connections.
+Send this OSC message now (does not GO the cue).,Send this OSC message now (does not GO the cue).,Send this OSC message now (does not GO the cue).,Send this OSC message now (does not GO the cue).
+Session inputs,Session inputs,Session inputs,Session inputs
+Session name,Session name,Session name,Session name
+Session outputs,Session outputs,Session outputs,Session outputs
+Session-wide gain applied to all cue audio (standalone and video embedded). Enter dB (0dB = full).,Session-wide gain applied to all cue audio (standalone and video embedded). Enter dB (0dB = full).,Session-wide gain applied to all cue audio (standalone and video embedded). Enter dB (0dB = full).,Session-wide gain applied to all cue audio (standalone and video embedded). Enter dB (0dB = full).
+Settings,Settings,Tautuhinga,Ajustes
+SETTINGS_LANGUAGE,Language,Reo,Idioma
+SETTINGS_LANGUAGE_TOOLTIP,Application interface language. Applies immediately and is saved as a user preference.,"Te reo o te atanga. Ka whakamahia tonutia, ā, ka tiakina hei manakohanga kaiwhakamahi.",Idioma de la interfaz. Se aplica de inmediato y se guarda como preferencia de usuario.
+Settings…,Settings…,Tautuhinga…,Ajustes…
+Shell,Shell,Shell,Shell
+Shell + Audio / Video / Text inspectors multi-edit selected cues.,Shell + Audio / Video / Text inspectors multi-edit selected cues.,Shell + Audio / Video / Text inspectors multi-edit selected cues.,Shell + Audio / Video / Text inspectors multi-edit selected cues.
+Shell Colour,Shell Colour,Tae anga,Color del shell
+Show application menu,Show application menu,Whakaatu tahua taupānga,Mostrar menú de la aplicación
+Show Files,Show Files,Kōnae whakaaturanga,Archivos del show
+Show Mode,Show Mode,Aratau whakaaturanga,Modo show
+"Show Mode locks cue editing for live performance.
+Off = Edit Mode (default): full cue editing.
+On = Show Mode: inspectors hidden, shell edits and cue structure locked.
+Saved with the showfile.","Show Mode locks cue editing for live performance.
+Off = Edit Mode (default): full cue editing.
+On = Show Mode: inspectors hidden, shell edits and cue structure locked.
+Saved with the showfile.","Ka raka te Aratau Whakaaturanga i te whakatika tohu mō te mahi ora.
+Weto = Aratau Whakatika (taunoa): whakatika tohu katoa.
+Kā = Aratau Whakaaturanga: hunaia ngā kaitirotiro, raka te anga me te hanga tohu.
+Ka tiakina ki te kōnae whakaaturanga.","El modo show bloquea la edición de cues en vivo.
+Off = Modo edición (predeterminado): edición completa.
+On = Modo show: inspectores ocultos, shell y estructura bloqueados.
+Se guarda con el show."
+Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.
+Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.
+Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user)
+Showing 0/0 Logs,Showing 0/0 Logs,Showing 0/0 Logs,Showing 0/0 Logs
+Showing {0}/{1} Logs,Showing {0}/{1} Logs,E whakaatu ana {0}/{1} rātaka,Mostrando {0}/{1} registros
+Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.
+Size,Size,Size,Size
+Size:,Size:,Size:,Size:
+Skip if disarmed,Skip if disarmed,Tīpoka mēnā kāore i mau,Omitir si desarmado
+Skip if disarmed:,Skip if disarmed:,Tīpoka mēnā kāore i mau:,Omitir si desarmado:
+"Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile."
+"Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load."
+Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.
+Standby,Standby,Standby,Standby
+Standby Cue,Standby Cue,Tohu tātari,Cue en espera
+Standby in Pre-Wait:,Standby in Pre-Wait:,Standby in Pre-Wait:,Standby in Pre-Wait:
+Start a waiting cue immediately (skip continue/follow and pre-wait).,Start a waiting cue immediately (skip continue/follow and pre-wait).,Start a waiting cue immediately (skip continue/follow and pre-wait).,Start a waiting cue immediately (skip continue/follow and pre-wait).
+Start Now,Start Now,Start Now,Start Now
+Start Time:,Start Time:,Start Time:,Start Time:
+Startup,Startup,Tīmatanga,Inicio
+Stereo pan (balance) before routing matrix. Stereo embedded audio only.,Stereo pan (balance) before routing matrix. Stereo embedded audio only.,Stereo pan (balance) before routing matrix. Stereo embedded audio only.,Stereo pan (balance) before routing matrix. Stereo embedded audio only.
+Stereo pan (balance) before routing matrix. Stereo files only.,Stereo pan (balance) before routing matrix. Stereo files only.,Stereo pan (balance) before routing matrix. Stereo files only.,Stereo pan (balance) before routing matrix. Stereo files only.
+Stereo pan/balance.,Stereo pan/balance.,Stereo pan/balance.,Stereo pan/balance.
+Stereo pan: L ← C → R,Stereo pan: L ← C → R,Stereo pan: L ← C → R,Stereo pan: L ← C → R
+Stereo pan: L ← C → R. Applied before the routing matrix.,Stereo pan: L ← C → R. Applied before the routing matrix.,Stereo pan: L ← C → R. Applied before the routing matrix.,Stereo pan: L ← C → R. Applied before the routing matrix.
+Stop,Stop,Stop,Stop
+Stop All,Stop All,Katia katoa,Detener todo
+"Stop all cues
+(Single click to fade and stop, double click to hard stop.)","Stop all cues
+(Single click to fade and stop, double click to hard stop.)","Stop all cues
+(Single click to fade and stop, double click to hard stop.)","Stop all cues
+(Single click to fade and stop, double click to hard stop.)"
+Stop Fade Out,Stop Fade Out,Stop Fade Out,Stop Fade Out
+Stretch,Stretch,Stretch,Stretch
+Stretch:,Stretch:,Stretch:,Stretch:
+System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.
+System font family. Default uses the project theme font.,System font family. Default uses the project theme font.,System font family. Default uses the project theme font.,System font family. Default uses the project theme font.
+Target Layer,Target Layer,Target Layer,Target Layer
+Target layer,Target layer,Target layer,Target layer
+Target Layer:,Target Layer:,Target Layer:,Target Layer:
+TARGET LAYERS,TARGET LAYERS,TARGET LAYERS,TARGET LAYERS
+TCP,TCP,TCP,TCP
+TCP listen port (can match UDP).,TCP listen port (can match UDP).,TCP listen port (can match UDP).,TCP listen port (can match UDP).
+Test,Test,Test,Test
+Test all Cue Lights:,Test all Cue Lights:,Test all Cue Lights:,Test all Cue Lights:
+Test Pattern,Test Pattern,Test Pattern,Test Pattern
+Test Send,Test Send,Test Send,Test Send
+Test send,Test send,Test send,Test send
+Text Defaults,Text Defaults,Taunoa kuputuhi,Predeterminados de texto
+Text Overlay,Text Overlay,Text Overlay,Text Overlay
+Text overlay content and typography.,Text overlay content and typography.,Text overlay content and typography.,Text overlay content and typography.
+The number of times the audio loops then stops.,The number of times the audio loops then stops.,The number of times the audio loops then stops.,The number of times the audio loops then stops.
+Theme default,Theme default,Theme default,Theme default
+Time,Time,Wā,Tiempo
+Time Remaining,Time Remaining,Wā toe,Tiempo restante
+Time:,Time:,Time:,Time:
+Timeline waveforms,Timeline waveforms,Timeline waveforms,Timeline waveforms
+Timing & appearance,Timing & appearance,Timing & appearance,Timing & appearance
+Total cues in the show,Total cues in the show,Total cues in the show,Total cues in the show
+Track list,Track list,Track list,Track list
+Translate Layer,Translate Layer,Translate Layer,Translate Layer
+Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.
+Transparent,Transparent,Transparent,Transparent
+Triggers,Triggers,Pūtahi,Disparadores
+"Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching)."
+Typography,Typography,Typography,Typography
+UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).
+UDP port,UDP port,UDP port,UDP port
+UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).
+UDP receive port and live receive monitor,UDP receive port and live receive monitor,UDP receive port and live receive monitor,UDP receive port and live receive monitor
+UI Scaling,UI Scaling,Whakatauira UI,Escala de UI
+Undo,Undo,Wetekina,Deshacer
+Undo Depth,Undo Depth,Hōhonu wetekina,Profundidad de deshacer
+Until stopped,Until stopped,Until stopped,Until stopped
+URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here)
+Use Audio,Use Audio,Use Audio,Use Audio
+Use audio,Use audio,Use audio,Use audio
+Use BBCode,Use BBCode,Use BBCode,Use BBCode
+V alignment,V alignment,V alignment,V alignment
+Val,Val,Val,Val
+Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.
+Vertical offset of the output window from the target display origin (pixels).,Vertical offset of the output window from the target display origin (pixels).,Vertical offset of the output window from the target display origin (pixels).,Vertical offset of the output window from the target display origin (pixels).
+Video / Image,Video / Image,Video / Image,Video / Image
+Video Defaults,Video Defaults,Taunoa ataata,Predeterminados de vídeo
+Video opacity (0–100%).,Video opacity (0–100%).,Video opacity (0–100%).,Video opacity (0–100%).
+Video/Image,Video/Image,Ataata/Atahanga,Vídeo/Imagen
+View,View,Tiro,Ver
+View License Online,View License Online,Tiro raihana ipurangi,Ver licencia en línea
+Virtual Output,Virtual Output,Virtual Output,Virtual Output
+Volume,Volume,Volume,Volume
+Volume:,Volume:,Volume:,Volume:
+"Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none.","Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none.","Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none.","Wall-clock time of day (local). Examples: 14:30, 14:30:00, 2:30 PM. Leave empty for none."
+Want to contribue? Visit our Github,Want to contribue? Visit our Github,Kei te hiahia tāpae? Torohia tā mātou Github,¿Quieres contribuir? Visita nuestro GitHub
+Waveform,Waveform,Waveform,Waveform
+Website — cue2.live,Website — cue2.live,Paetukutuku — cue2.live,Sitio web — cue2.live
+Website…,Website…,Paetukutuku…,Sitio web…
+Welcome,Welcome,Nau mai,Bienvenido
+Welcome to Cue2,Welcome to Cue2,Welcome to Cue2,Welcome to Cue2
+"Welcome to the Cue2 v0.1 Pre-Release StripyHat build!
+
+Your feedback ahead of public launch would be appreciated. Please email feedback to
+info@cue2.live
+This could include feature requests, issues or bugs you may find while testing this software.
+Remember - this software is considered to be in development, it is recommend for private use only.
+
+Explore the docs and website below for how to get started.","Welcome to the Cue2 v0.1 Pre-Release StripyHat build!
+
+Your feedback ahead of public launch would be appreciated. Please email feedback to
+info@cue2.live
+This could include feature requests, issues or bugs you may find while testing this software.
+Remember - this software is considered to be in development, it is recommend for private use only.
+
+Explore the docs and website below for how to get started.","Nau mai ki te putanga Cue2 v0.1 Pre-Release StripyHat!
+
+He pai te whiwhi urupare i mua i te whakarewatanga tūmatanui. Tēnā koa īmēra ō urupare ki
+info@cue2.live
+Ka taea te whakauru tono āhuatanga, raruraru, ngā hapa rānei ka kitea i a koe e whakamātau ana.
+Kia mahara - e whakawhanakehia ana tēnei pūmanawa; e tūtohungia ana mō te whakamahi tūmataiti anake.
+
+Tirohia ngā tuhinga me te paetukutuku i raro nei hei tīmatanga.","¡Bienvenido a Cue2 v0.1 Pre-Release (StripyHat)!
+
+Agradecemos tus comentarios antes del lanzamiento público. Envíalos por correo a
+info@cue2.live
+Pueden incluir solicitudes de funciones, problemas o errores que encuentres al probar el software.
+Recuerda: este software está en desarrollo; se recomienda solo para uso privado.
+
+Consulta la documentación y el sitio web abajo para empezar."
+What to do on launch if no file is specified via command line,What to do on launch if no file is specified via command line,What to do on launch if no file is specified via command line,What to do on launch if no file is specified via command line
+"When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it.","When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it.","When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it.","When armed is off and this is on, GO on a prior cue bypasses this cue and selects the next eligible cue instead of standing on it."
+"When armed is off and this is on, GO on a prior cue bypasses this cue.","When armed is off and this is on, GO on a prior cue bypasses this cue.","When armed is off and this is on, GO on a prior cue bypasses this cue.","When armed is off and this is on, GO on a prior cue bypasses this cue."
+"When checked and a key is bound, pressing the hotkey triggers this cue (GO).","When checked and a key is bound, pressing the hotkey triggers this cue (GO).","When checked and a key is bound, pressing the hotkey triggers this cue (GO).","When checked and a key is bound, pressing the hotkey triggers this cue (GO)."
+"When checked and a MIDI pattern is set, matching MIDI input GO's this cue.","When checked and a MIDI pattern is set, matching MIDI input GO's this cue.","When checked and a MIDI pattern is set, matching MIDI input GO's this cue.","When checked and a MIDI pattern is set, matching MIDI input GO's this cue."
+"When checked and a path is set, matching received OSC GO's this cue.","When checked and a path is set, matching received OSC GO's this cue.","When checked and a path is set, matching received OSC GO's this cue.","When checked and a path is set, matching received OSC GO's this cue."
+"When checked and a time is set, this cue GO's when local real-world time reaches that time of day on selected weekdays.","When checked and a time is set, this cue GO's when local real-world time reaches that time of day on selected weekdays.","When checked and a time is set, this cue GO's when local real-world time reaches that time of day on selected weekdays.","When checked and a time is set, this cue GO's when local real-world time reaches that time of day on selected weekdays."
+"When checked, incoming MIDI messages are printed in the log below.","When checked, incoming MIDI messages are printed in the log below.","When checked, incoming MIDI messages are printed in the log below.","When checked, incoming MIDI messages are printed in the log below."
+"When checked, incoming OSC messages are printed in the log below.","When checked, incoming OSC messages are printed in the log below.","When checked, incoming OSC messages are printed in the log below.","When checked, incoming OSC messages are printed in the log below."
+"When checked, outgoing OSC messages are printed in the log below.","When checked, outgoing OSC messages are printed in the log below.","When checked, outgoing OSC messages are printed in the log below.","When checked, outgoing OSC messages are printed in the log below."
+"When checked, velocity / CC value must match exactly.","When checked, velocity / CC value must match exactly.","When checked, velocity / CC value must match exactly.","When checked, velocity / CC value must match exactly."
+"When enabled and multiple cues are selected, shell and component inspector edits apply to every selected cue that has that field/component. When disabled, only the last-focused cue is edited.","When enabled and multiple cues are selected, shell and component inspector edits apply to every selected cue that has that field/component. When disabled, only the last-focused cue is edited.","When enabled and multiple cues are selected, shell and component inspector edits apply to every selected cue that has that field/component. When disabled, only the last-focused cue is edited.","When enabled and multiple cues are selected, shell and component inspector edits apply to every selected cue that has that field/component. When disabled, only the last-focused cue is edited."
+"When enabled, changing width or height updates the other to preserve aspect ratio.","When enabled, changing width or height updates the other to preserve aspect ratio.","When enabled, changing width or height updates the other to preserve aspect ratio.","When enabled, changing width or height updates the other to preserve aspect ratio."
+"When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged.","When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged.","When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged.","When enabled, newly created cues (Add Cue or media drop) become the selection. When disabled, selection is left unchanged."
+"When enabled, the cuelist shell shows notes instead of number, name, and wait/duration fields.","When enabled, the cuelist shell shows notes instead of number, name, and wait/duration fields.","When enabled, the cuelist shell shows notes instead of number, name, and wait/duration fields.","When enabled, the cuelist shell shows notes instead of number, name, and wait/duration fields."
+"When enabled, the Timeline Inspector draws audio waveforms inside cue bars when peak data is available.","When enabled, the Timeline Inspector draws audio waveforms inside cue bars when peak data is available.","When enabled, the Timeline Inspector draws audio waveforms inside cue bars when peak data is available.","When enabled, the Timeline Inspector draws audio waveforms inside cue bars when peak data is available."
+"When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile.","When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile.","When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile.","When enabled, used media files are copied into Audio/Video/Images folders inside the show directory so the show is portable between machines. Saved with this showfile."
+"When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows)."
+"When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer"
+"When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead."
+"When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count)."
+"When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text."
+"When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode."
+"When on, new video components enable embedded audio if the file has any. Still images always ignore this.","When on, new video components enable embedded audio if the file has any. Still images always ignore this.","When on, new video components enable embedded audio if the file has any. Still images always ignore this.","When on, new video components enable embedded audio if the file has any. Still images always ignore this."
+"When on, new video components loop indefinitely (overrides play count).","When on, new video components loop indefinitely (overrides play count).","When on, new video components loop indefinitely (overrides play count).","When on, new video components loop indefinitely (overrides play count)."
+"When on, text wraps within the layer width.","When on, text wraps within the layer width.","When on, text wraps within the layer width.","When on, text wraps within the layer width."
+"When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead."
+Where,Where,Kei hea,Dónde
+Which single property this fade controls.,Which single property this fade controls.,Which single property this fade controls.,Which single property this fade controls.
+Width,Width,Width,Width
+Width:,Width:,Width:,Width:
+Working set: {0} MB,Working set: {0} MB,Huinga mahi: {0} MB,Conjunto de trabajo: {0} MB
+Wrap,Wrap,Wrap,Wrap
+X:,X:,X:,X:
+Xport,Xport,Xport,Xport
+Y:,Y:,Y:,Y:
+Zoom %,Zoom %,Zoom %,Zoom %
+Zoom in,Zoom in,Zoom in,Zoom in
+Zoom out,Zoom out,Zoom out,Zoom out
+{0} total cues,{0} total cues,{0} tohu katoa,{0} cues en total
+{0} total cues in the show,{0} total cues in the show,{0} tohu katoa i te whakaaturanga,{0} cues en total en el show
+{0}% of total system capacity,{0}% of total system capacity,{0}% o te kaha pūnaha katoa,{0}% de la capacidad total del sistema
