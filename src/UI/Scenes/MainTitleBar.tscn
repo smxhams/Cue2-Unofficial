@@ -26,15 +26,27 @@ region = Rect2(96, 0, 32, 32)
 atlas = ExtResource("3_skmbr")
 region = Rect2(64, 0, 32, 32)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w68qa"]
-bg_color = Color(0.0588235, 0.0588235, 0.0588235, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.00392157, 0.231373, 0.25098, 1)
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_menu"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
 
-[node name="MainTitleBar" type="Control" unique_id=745549436]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_menu_hover"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.12, 0.14, 0.16, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_menu_pressed"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.00392157, 0.231373, 0.25098, 0.55)
+
+[node name="MainTitleBar" type="Control"]
 custom_minimum_size = Vector2(0, 32)
 layout_mode = 3
 anchors_preset = 15
@@ -58,7 +70,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.0588235, 0.0588235, 0.0588235, 1)
 
-[node name="TitleLabel" type="Label" parent="." unique_id=1531342879]
+[node name="TitleLabel" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 10
@@ -70,7 +82,7 @@ text = "Cue2"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=831859912]
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 1
 anchors_preset = 10
@@ -78,25 +90,27 @@ anchor_right = 1.0
 offset_bottom = 24.0
 grow_horizontal = 2
 mouse_filter = 2
+theme_override_constants/separation = 2
 
-[node name="TitleCue2Menu" type="Button" parent="HBoxContainer" unique_id=2031797913]
+[node name="TitleCue2Menu" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 size_flags_vertical = 4
 size_flags_stretch_ratio = 0.0
-tooltip_text = "Cue-2 is a simple and free playback software for events."
+tooltip_text = "About Cue2"
 focus_mode = 0
 theme_override_constants/icon_max_width = 23
 theme_override_icons/icon = ExtResource("1_bd8jg")
 icon_alignment = 1
 expand_icon = true
 
-[node name="TitleMainMenu" type="Button" parent="HBoxContainer" unique_id=835904943]
+[node name="TitleMainMenu" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 size_flags_vertical = 4
+tooltip_text = "Show application menu"
 focus_mode = 0
 theme_override_colors/icon_hover_color = Color(0.592157, 0.294118, 0.0313726, 1)
 theme_override_colors/icon_hover_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
@@ -106,40 +120,85 @@ toggle_mode = true
 icon_alignment = 1
 expand_icon = true
 
-[node name="MainMenuContainer" type="HBoxContainer" parent="HBoxContainer" unique_id=87305723]
+[node name="MainMenuContainer" type="HBoxContainer" parent="HBoxContainer"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_override_constants/separation = 0
 
-[node name="MainMenuFile" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1199056670]
+[node name="MainMenuFile" type="Button" parent="HBoxContainer/MainMenuContainer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_menu")
+theme_override_styles/hover = SubResource("StyleBoxFlat_menu_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_menu_pressed")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_menu")
+theme_override_font_sizes/font_size = 11
 text = "File"
+flat = true
+clip_text = false
 
-[node name="MainMenuEdit" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=197758606]
+[node name="MainMenuEdit" type="Button" parent="HBoxContainer/MainMenuContainer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_menu")
+theme_override_styles/hover = SubResource("StyleBoxFlat_menu_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_menu_pressed")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_menu")
+theme_override_font_sizes/font_size = 11
 text = "Edit"
+flat = true
+clip_text = false
 
-[node name="MainMenuView" type="Button" parent="HBoxContainer/MainMenuContainer" unique_id=1002245581]
+[node name="MainMenuPlayback" type="Button" parent="HBoxContainer/MainMenuContainer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 focus_mode = 0
-text = "View"
+theme_override_styles/normal = SubResource("StyleBoxEmpty_menu")
+theme_override_styles/hover = SubResource("StyleBoxFlat_menu_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_menu_pressed")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_menu")
+theme_override_font_sizes/font_size = 11
+text = "Playback"
+flat = true
+clip_text = false
 
-[node name="SpacerContainer1" type="Container" parent="HBoxContainer" unique_id=471146666]
+[node name="MainMenuView" type="Button" parent="HBoxContainer/MainMenuContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_menu")
+theme_override_styles/hover = SubResource("StyleBoxFlat_menu_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_menu_pressed")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_menu")
+theme_override_font_sizes/font_size = 11
+text = "View"
+flat = true
+clip_text = false
+
+[node name="MainMenuHelp" type="Button" parent="HBoxContainer/MainMenuContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_menu")
+theme_override_styles/hover = SubResource("StyleBoxFlat_menu_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_menu_pressed")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_menu")
+theme_override_font_sizes/font_size = 11
+text = "Help"
+flat = true
+clip_text = false
+
+[node name="SpacerContainer1" type="Container" parent="HBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 
 [node name="ShowModeButton" type="CheckButton" parent="HBoxContainer"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 24)
+custom_minimum_size = Vector2(110, 24)
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Show Mode locks cue editing for live performance.
@@ -150,7 +209,7 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 11
 text = "Show Mode"
 
-[node name="AboutButton" type="Button" parent="HBoxContainer" unique_id=30696281]
+[node name="AboutButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -166,7 +225,7 @@ text = "
 icon_alignment = 1
 expand_icon = true
 
-[node name="SettingsButton" type="Button" parent="HBoxContainer" unique_id=1380699086]
+[node name="SettingsButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -179,12 +238,12 @@ toggle_mode = true
 icon_alignment = 1
 expand_icon = true
 
-[node name="SpacerContainer2" type="Container" parent="HBoxContainer" unique_id=773727711]
+[node name="SpacerContainer2" type="Container" parent="HBoxContainer"]
 custom_minimum_size = Vector2(32, 0)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="WindowMinimizeButton" type="Button" parent="HBoxContainer" unique_id=914024673]
+[node name="WindowMinimizeButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -197,7 +256,7 @@ theme_override_icons/icon = SubResource("AtlasTexture_ijer2")
 icon_alignment = 1
 expand_icon = true
 
-[node name="WindowExpandButton" type="Button" parent="HBoxContainer" unique_id=413291982]
+[node name="WindowExpandButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -210,7 +269,7 @@ theme_override_icons/icon = SubResource("AtlasTexture_0baon")
 icon_alignment = 1
 expand_icon = true
 
-[node name="ExitButton" type="Button" parent="HBoxContainer" unique_id=1450936800]
+[node name="ExitButton" type="Button" parent="HBoxContainer"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -222,355 +281,3 @@ theme_override_constants/icon_max_width = 12
 theme_override_icons/icon = SubResource("AtlasTexture_w68qa")
 icon_alignment = 1
 expand_icon = true
-
-[node name="DropMenuFile" type="PanelContainer" parent="." unique_id=212532090]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(140, 78)
-layout_mode = 0
-offset_left = 60.0
-offset_top = 30.0
-offset_right = 240.0
-offset_bottom = 108.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuFile" unique_id=1864912724]
-layout_mode = 2
-theme_override_constants/margin_left = 1
-theme_override_constants/margin_top = 1
-theme_override_constants/margin_right = 1
-theme_override_constants/margin_bottom = 1
-
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=1194183248]
-layout_mode = 2
-
-[node name="FileNew" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=177293339]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "New Session"
-alignment = 0
-
-[node name="FileSave" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=189414062]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Save"
-alignment = 0
-
-[node name="FileSaveAs" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=2018752184]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Save As"
-alignment = 0
-
-[node name="FileOpenSession" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=1267218861]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Open"
-alignment = 0
-
-[node name="FileOpenRecent" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer" unique_id=1749316654]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Open Recent "
-alignment = 0
-
-[node name="FileShowFiles" type="Button" parent="DropMenuFile/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Show Files "
-alignment = 0
-tooltip_text = "Show file tools: copy media, check presence, open folder"
-
-[node name="dmFileHotkeys" type="VBoxContainer" parent="DropMenuFile/MarginContainer" unique_id=374009381]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="FileNewHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1450554340]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="FileSaveHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1747158170]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="FileSaveAsHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1194011861]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="FileOpenHotkey" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=1229360708]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="FileOpenRecentArrow" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys" unique_id=311594630]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.62172264, 0.62172264, 0.62172264, 1)
-theme_override_font_sizes/font_size = 8
-text = "▶"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="FileShowFilesArrow" type="Label" parent="DropMenuFile/MarginContainer/dmFileHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.62172264, 0.62172264, 0.62172264, 1)
-theme_override_font_sizes/font_size = 8
-text = "▶"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="DropMenuEdit" type="PanelContainer" parent="." unique_id=1141345260]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(140, 120)
-layout_mode = 0
-offset_left = 108.0
-offset_top = 30.0
-offset_right = 268.0
-offset_bottom = 150.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuEdit" unique_id=416709885]
-layout_mode = 2
-theme_override_constants/margin_left = 2
-theme_override_constants/margin_top = 2
-theme_override_constants/margin_right = 2
-theme_override_constants/margin_bottom = 2
-
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuEdit/MarginContainer" unique_id=110020484]
-layout_mode = 2
-
-[node name="EditUndo" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-disabled = true
-text = "Undo"
-alignment = 0
-
-[node name="EditRedo" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-disabled = true
-text = "Redo"
-alignment = 0
-
-[node name="EditCut" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Cut"
-alignment = 0
-
-[node name="EditCopy" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Copy"
-alignment = 0
-
-[node name="EditPaste" type="Button" parent="DropMenuEdit/MarginContainer/dmFileContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Paste"
-alignment = 0
-
-[node name="dmEditHotkeys" type="VBoxContainer" parent="DropMenuEdit/MarginContainer"]
-layout_mode = 2
-mouse_filter = 2
-
-[node name="EditUndoHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="EditRedoHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="EditCutHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="EditCopyHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="EditPasteHotkey" type="Label" parent="DropMenuEdit/MarginContainer/dmEditHotkeys"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.305623, 0.305623, 0.305623, 1)
-theme_override_font_sizes/font_size = 8
-text = "Hotkey"
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="DropMenuView" type="PanelContainer" parent="." unique_id=2034320650]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(100, 78)
-layout_mode = 0
-offset_left = 163.0
-offset_top = 30.0
-offset_right = 263.0
-offset_bottom = 108.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuView" unique_id=122413070]
-layout_mode = 2
-theme_override_constants/margin_left = 2
-theme_override_constants/margin_top = 2
-theme_override_constants/margin_right = 2
-theme_override_constants/margin_bottom = 2
-
-[node name="dmFileContainer" type="VBoxContainer" parent="DropMenuView/MarginContainer" unique_id=752392253]
-layout_mode = 2
-
-[node name="DropMenuRecent" type="PanelContainer" parent="." unique_id=632060967]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-offset_left = 260.0
-offset_top = 145.0
-offset_right = 264.0
-offset_bottom = 149.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuRecent" unique_id=1895878778]
-layout_mode = 2
-theme_override_constants/margin_left = 1
-theme_override_constants/margin_top = 1
-theme_override_constants/margin_right = 1
-theme_override_constants/margin_bottom = 1
-
-[node name="RecentContainer" type="VBoxContainer" parent="DropMenuRecent/MarginContainer" unique_id=733323381]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="DropMenuShowFiles" type="PanelContainer" parent="."]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-offset_left = 260.0
-offset_top = 145.0
-offset_right = 480.0
-offset_bottom = 230.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_w68qa")
-
-[node name="MarginContainer" type="MarginContainer" parent="DropMenuShowFiles"]
-layout_mode = 2
-theme_override_constants/margin_left = 1
-theme_override_constants/margin_top = 1
-theme_override_constants/margin_right = 1
-theme_override_constants/margin_bottom = 1
-
-[node name="ShowFilesContainer" type="VBoxContainer" parent="DropMenuShowFiles/MarginContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="ShowFilesCopyMedia" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Copy media files into Showfile folder"
-alignment = 0
-tooltip_text = "Copy all used media into Audio/Video/Images under the show folder and update cue paths to relative URLs. Works even if automatic backup is disabled."
-
-[node name="ShowFilesCheckPresence" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Check file presence"
-alignment = 0
-tooltip_text = "Immediately verify every media path on every cue. Updates missing-file indicators and logs a summary."
-
-[node name="ShowFilesOpenFolder" type="Button" parent="DropMenuShowFiles/MarginContainer/ShowFilesContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-mouse_filter = 1
-text = "Open showfile folder"
-alignment = 0
-tooltip_text = "Open the show session folder in the system file browser."

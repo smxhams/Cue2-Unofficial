@@ -128,6 +128,9 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void UiScaleChangedEventHandler(float value);
 	[Signal] public delegate void GoScaleChangedEventHandler(float value);
 
+	/// <summary>Fired when the cuelist UI scale (Small / Medium / Large) changes.</summary>
+	[Signal] public delegate void CueListScaleChangedEventHandler(float value);
+
 	/// <summary>Fired when the Timeline Inspector waveform display setting changes.</summary>
 	[Signal] public delegate void ShowTimelineWaveformsChangedEventHandler(bool enabled);
 

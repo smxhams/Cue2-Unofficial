@@ -7,6 +7,7 @@ namespace Cue2.Base;
 /// <summary>
 /// Full-area zebra stripes behind the cuelist (including blank space below the last cue).
 /// Shells paint their own zebra+cue wash on top; this fills the rest of the scroll area.
+/// Stripe height follows <see cref="ShellColumnLayout.RowMinHeight"/> (cuelist scale).
 /// </summary>
 public partial class CuelistZebraBackground : Control
 {
@@ -16,7 +17,20 @@ public partial class CuelistZebraBackground : Control
 		// Sit behind sibling CueContainer in the same MarginContainer.
 		ZIndex = -1;
 		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		ShellColumnLayout.Changed += OnShellColumnLayoutChanged;
 		QueueRedraw();
+	}
+
+	public override void _ExitTree()
+	{
+		ShellColumnLayout.Changed -= OnShellColumnLayoutChanged;
+		base._ExitTree();
+	}
+
+	private void OnShellColumnLayoutChanged()
+	{
+		if (IsInstanceValid(this))
+			QueueRedraw();
 	}
 
 	public override void _Notification(int what)

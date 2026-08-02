@@ -40,13 +40,20 @@ public partial class Cue2Base : Control
 
 		ApplyShowModeUi(_globalData?.Settings?.ShowMode == true);
 
-		UiUtilities.RescaleWindow(GetWindow(), _globalData.BaseDisplayScale);
-		UiUtilities.RescaleUi(GetWindow(), _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		// Initial window size/position/scale order is owned by MainWindowHandles:
+		// content scale first, then restore saved geometry (or design-size RescaleWindow once).
+		// Do not call RescaleWindow here — it runs after child restore and corrupts saved size/pos
+		// (especially on macOS HiDPI where BaseDisplayScale is often 2).
 	}
 
 	private void ScaleUI(float uiScale)
 	{
-		UiUtilities.RescaleUi(GetWindow(), _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		// Runtime scale changes only touch ContentScaleFactor, not outer pixel size.
+		var window = GetWindow();
+		UiUtilities.RescaleUi(window, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		// Keep explicit geometry; do not let WrapControls auto-resize the main frame.
+		if (window != null)
+			window.WrapControls = false;
 	}
 
 	/// <summary>

@@ -62,7 +62,7 @@ public static class SettingsExport
     public static readonly Category[] Categories =
     {
         new("General", "General",
-            "UiScale", "GoScale", "WaveformResolution", "StopFadeDuration",
+            "UiScale", "GoScale", "CueListScale", "WaveformResolution", "StopFadeDuration",
             "MediaBackupEnabled", "MultiEditEnabled", "SelectNewCues", "ShowTimelineWaveforms"),
         new("CueDefaults", "Cue Defaults",
             "CueDefaults", "AudioDefaults", "VideoDefaults", "TextDefaults"),

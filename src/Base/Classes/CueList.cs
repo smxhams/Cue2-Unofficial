@@ -123,6 +123,8 @@ public partial class CueList : Control
 		_reorderCueControl.Visible = false;
 
 		LoadShellColumnPrefs();
+		// Apply show-scoped cuelist density before wiring header (so chrome sizes match).
+		ApplyCueListScale(_globalData?.Settings?.CueListScale ?? Settings.DefaultCueListScale, silent: true);
 		SetupShellColumnHeader();
 		ShellColumnLayout.Changed += OnShellColumnLayoutChanged;
 
@@ -144,6 +146,8 @@ public partial class CueList : Control
 		_expandAllButton.Pressed += OnExpandAllPressed;
 
 		_globalSignals.ShowModeChanged += OnShowModeChanged;
+		_globalSignals.CueListScaleChanged += OnCueListScaleChanged;
+		_globalSignals.NewSession += OnNewSession;
 		ApplyShowModeUi(_globalData?.Settings?.IsCueEditingLocked == true);
 	}
 
@@ -155,8 +159,46 @@ public partial class CueList : Control
 		if (_durationHeaderLabel != null)
 			_durationHeaderLabel.GuiInput -= OnTimeHeaderGuiInput;
 		if (_globalSignals != null)
+		{
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
+			_globalSignals.CueListScaleChanged -= OnCueListScaleChanged;
+			_globalSignals.NewSession -= OnNewSession;
+		}
 		base._ExitTree();
+	}
+
+	/// <summary>
+	/// Applies cuelist UI scale from General Settings (row height / chrome / fonts only).
+	/// </summary>
+	private void OnCueListScaleChanged(float scale)
+	{
+		ApplyCueListScale(scale, silent: false);
+	}
+
+	/// <summary>
+	/// Re-applies scale after New Session / show reset.
+	/// </summary>
+	private void OnNewSession()
+	{
+		ApplyCueListScale(_globalData?.Settings?.CueListScale ?? Settings.DefaultCueListScale, silent: false);
+	}
+
+	/// <summary>
+	/// Updates <see cref="ShellColumnLayout.Scale"/> and refreshes header chrome.
+	/// Shell rows re-layout via <see cref="ShellColumnLayout.Changed"/>.
+	/// </summary>
+	/// <param name="scale">Scale factor (Small / Medium / Large).</param>
+	/// <param name="silent">When true, set scale without raising Changed (caller will apply once).</param>
+	private void ApplyCueListScale(float scale, bool silent)
+	{
+		if (silent)
+			ShellColumnLayout.SetScaleSilent(scale);
+		else
+			ShellColumnLayout.Scale = scale;
+
+		// Header button sizes use scaled chrome; re-apply even after silent set.
+		ApplyHeaderChromeSizes();
+		ApplyHeaderColumnLayout();
 	}
 
 	/// <summary>
@@ -199,17 +241,7 @@ public partial class CueList : Control
 	/// </summary>
 	private void SetupShellColumnHeader()
 	{
-		if (_addCueButton != null)
-			_addCueButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, 18);
-		if (_expandAllButton != null)
-			_expandAllButton.CustomMinimumSize = new Vector2(ShellColumnLayout.CollapseWidth, 18);
-
-		// Color strip + 1px nest gap so Number columns line up with shell rows.
-		if (_headerColorPad != null)
-			_headerColorPad.CustomMinimumSize = new Vector2(
-				ShellColumnLayout.ColorWidth + ShellColumnLayout.ColorNestGap, 15);
-		if (_headerIssuePad != null)
-			_headerIssuePad.CustomMinimumSize = new Vector2(ShellColumnLayout.IssueWidth, 15);
+		ApplyHeaderChromeSizes();
 
 		// Dedicated grip is more reliable than HSplit for this header (Godot 4.6 multi-split quirks).
 		if (_numberNameResizeGrip != null)
@@ -225,38 +257,86 @@ public partial class CueList : Control
 		ApplyHeaderColumnLayout();
 	}
 
+	/// <summary>
+	/// Sizes header chrome (Add / Expand / pads) from current <see cref="ShellColumnLayout"/> scale.
+	/// </summary>
+	private void ApplyHeaderChromeSizes()
+	{
+		float headerBtnH = Mathf.Max(14f, 18f * ShellColumnLayout.Scale);
+		float padH = Mathf.Max(12f, 15f * ShellColumnLayout.Scale);
+
+		if (_addCueButton != null)
+		{
+			_addCueButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, headerBtnH);
+			_addCueButton.AddThemeConstantOverride("icon_max_width", ShellColumnLayout.IconMaxWidth);
+		}
+		if (_expandAllButton != null)
+		{
+			_expandAllButton.CustomMinimumSize = new Vector2(ShellColumnLayout.CollapseWidth, headerBtnH);
+			_expandAllButton.AddThemeConstantOverride("icon_max_width", ShellColumnLayout.IconMaxWidth);
+		}
+
+		// Color strip + nest gap so Number columns line up with shell rows.
+		if (_headerColorPad != null)
+			_headerColorPad.CustomMinimumSize = new Vector2(
+				ShellColumnLayout.ColorWidth + ShellColumnLayout.ColorNestGap, padH);
+		if (_headerIssuePad != null)
+			_headerIssuePad.CustomMinimumSize = new Vector2(ShellColumnLayout.IssueWidth, padH);
+	}
+
 	private void OnShellColumnLayoutChanged()
 	{
 		if (!IsInstanceValid(this))
 			return;
 		// ShellBar instances subscribe to ShellColumnLayout.Changed themselves.
+		// Scale changes also fire Changed — refresh header chrome + column labels.
+		ApplyHeaderChromeSizes();
 		ApplyHeaderColumnLayout();
+		// Only persist when user-resized widths changed (scale changes do not write prefs).
+		// Persist is cheap and keeps number/time widths saved after drag end via grip handlers;
+		// calling here on scale is harmless (same values).
 		PersistShellColumnPrefs();
 	}
 
 	/// <summary>
-	/// Applies current <see cref="ShellColumnLayout"/> widths to header labels.
+	/// Applies current <see cref="ShellColumnLayout"/> widths and font scale to header labels.
 	/// </summary>
 	private void ApplyHeaderColumnLayout()
 	{
 		float numW = ShellColumnLayout.NumberWidth;
 		float timeW = ShellColumnLayout.TimeWidth;
 		float followW = ShellColumnLayout.FollowWidth;
+		int headerFont = ShellColumnLayout.HeaderFontSize;
 
 		if (_numberHeaderLabel != null)
+		{
 			_numberHeaderLabel.CustomMinimumSize = new Vector2(numW, 0);
+			_numberHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
+		}
+		if (_nameHeaderLabel != null)
+			_nameHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
 		if (_preWaitHeaderLabel != null)
+		{
 			_preWaitHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
+			_preWaitHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
+		}
 		if (_durationHeaderLabel != null)
 		{
 			_durationHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
 			_durationHeaderLabel.TooltipText = "Drag horizontally to resize Pre-Wait / Duration / Post-Wait columns.";
 			_durationHeaderLabel.MouseDefaultCursorShape = Control.CursorShape.Hsize;
+			_durationHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
 		}
 		if (_postWaitHeaderLabel != null)
+		{
 			_postWaitHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
+			_postWaitHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
+		}
 		if (_followHeaderLabel != null)
+		{
 			_followHeaderLabel.CustomMinimumSize = new Vector2(followW, 0);
+			_followHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
+		}
 	}
 
 	/// <summary>

@@ -400,6 +400,7 @@ public partial class ShellInspector : Control
 
 		_focusedCueId = cueId;
 		_focusedCue.NameChanged += OnNameChanged;
+		_focusedCue.CueNumChanged += OnCueNumChanged;
 		_focusedCue.FollowChanged += OnFollowChanged;
 		EnsureFollowOptions();
 		ClearMultiEditPlaceholders();
@@ -441,6 +442,7 @@ public partial class ShellInspector : Control
 	{
 		if (_focusedCue == null) return;
 		_focusedCue.NameChanged -= OnNameChanged;
+		_focusedCue.CueNumChanged -= OnCueNumChanged;
 		_focusedCue.FollowChanged -= OnFollowChanged;
 	}
 
@@ -818,12 +820,35 @@ public partial class ShellInspector : Control
 	private void OnNameChanged(string name)
 	{
 		if (_isMultiEdit || _isRefreshingUi || _cueName == null) return;
-		int caretPosition = _cueName.CaretColumn;
+		// Skip while the inspector field itself is being typed (TextChanged already owns that path).
+		if (_cueName.HasFocus())
+			return;
+
 		_isRefreshingUi = true;
 		try
 		{
-			_cueName.Text = name;
-			_cueName.SetCaretColumn(caretPosition);
+			_cueName.Text = name ?? string.Empty;
+		}
+		finally
+		{
+			_isRefreshingUi = false;
+		}
+	}
+
+	/// <summary>
+	/// Updates the inspector number field when the model changes from shell-bar (or other) edits.
+	/// </summary>
+	/// <param name="cueNum">New cue number string.</param>
+	private void OnCueNumChanged(string cueNum)
+	{
+		if (_isMultiEdit || _isRefreshingUi || _cueNum == null) return;
+		if (_cueNum.HasFocus())
+			return;
+
+		_isRefreshingUi = true;
+		try
+		{
+			_cueNum.Text = cueNum ?? string.Empty;
 		}
 		finally
 		{

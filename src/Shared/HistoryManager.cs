@@ -682,6 +682,7 @@ public partial class HistoryManager : Node
 	{
 		"UiScale",
 		"GoScale",
+		"CueListScale",
 		"WaveformResolution",
 		"StopFadeDuration",
 		"MediaBackupEnabled",

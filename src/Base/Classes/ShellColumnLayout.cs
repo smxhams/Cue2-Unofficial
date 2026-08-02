@@ -11,43 +11,53 @@ namespace Cue2.Base.Classes;
 /// <remarks>
 /// Industry-style tree table: reserved tree chrome + nested indent + flex name column.
 /// Number and time column widths are user-resizable via the cuelist header.
+/// <see cref="Scale"/> multiplies row heights, chrome, and fonts for the General Settings
+/// "Cue list scale" option (UI-only; does not affect playback).
 /// </remarks>
 public static class ShellColumnLayout
 {
-	/// <summary>Left color strip width.</summary>
-	public const float ColorWidth = 3f;
+	// ── Base (Medium / 1.0) metrics ─────────────────────────────────────────
 
-	/// <summary>
-	/// Horizontal gap between a shell's color strip and its content (and thus between
-	/// stacked parent/child color strips when nested).
-	/// </summary>
-	public const int ColorNestGap = 1;
+	/// <summary>Base left color strip width at scale 1.0.</summary>
+	public const float BaseColorWidth = 3f;
 
-	/// <summary>Drag handle column.</summary>
-	public const float DragWidth = 18f;
+	/// <summary>Base nest gap between color strip and content at scale 1.0.</summary>
+	public const int BaseColorNestGap = 1;
 
-	/// <summary>Expand/collapse chevron column (always reserved).</summary>
-	public const float CollapseWidth = 18f;
+	/// <summary>Base drag handle column width at scale 1.0.</summary>
+	public const float BaseDragWidth = 18f;
 
-	/// <summary>Issue / status indicator column (always reserved, full row height).</summary>
-	public const float IssueWidth = 14f;
+	/// <summary>Base expand/collapse chevron column width at scale 1.0.</summary>
+	public const float BaseCollapseWidth = 18f;
 
-	/// <summary>Horizontal indent applied once per nesting level under a parent.</summary>
-	public const float NestIndent = 16f;
+	/// <summary>Base issue / status indicator column width at scale 1.0.</summary>
+	public const float BaseIssueWidth = 14f;
 
-	/// <summary>Continue / follow mode column (cycle button).</summary>
-	public const float FollowWidth = 34f;
+	/// <summary>Base horizontal indent per nesting level at scale 1.0.</summary>
+	public const float BaseNestIndent = 16f;
 
-	/// <summary>Height of inline controls (LineEdit / compact buttons) inside a shell row.</summary>
-	public const float RowControlHeight = 20f;
+	/// <summary>Base continue / follow mode column width at scale 1.0.</summary>
+	public const float BaseFollowWidth = 34f;
 
-	/// <summary>Minimum height of the cue row strip (excluding nested children).</summary>
-	public const float RowMinHeight = 24f;
+	/// <summary>Base height of inline controls inside a shell row at scale 1.0.</summary>
+	public const float BaseRowControlHeight = 20f;
 
-	/// <summary>HBox separation used between shell row columns.</summary>
-	public const int RowSeparation = 2;
+	/// <summary>Base minimum height of the cue row strip at scale 1.0.</summary>
+	public const float BaseRowMinHeight = 24f;
 
-	/// <summary>Default cue-number column width.</summary>
+	/// <summary>Base HBox separation between shell row columns at scale 1.0.</summary>
+	public const int BaseRowSeparation = 2;
+
+	/// <summary>Base shell field font size at scale 1.0.</summary>
+	public const int BaseFontSize = 10;
+
+	/// <summary>Base cuelist header label font size at scale 1.0.</summary>
+	public const int BaseHeaderFontSize = 9;
+
+	/// <summary>Base icon max width for drag / chrome buttons at scale 1.0.</summary>
+	public const int BaseIconMaxWidth = 14;
+
+	/// <summary>Default cue-number column width (user-resizable, not multiplied by scale).</summary>
 	public const float DefaultNumberWidth = 48f;
 
 	/// <summary>Minimum cue-number column width.</summary>
@@ -65,15 +75,82 @@ public static class ShellColumnLayout
 	/// <summary>Maximum time-field width.</summary>
 	public const float MaxTimeWidth = 140f;
 
+	private static float _scale = 1.0f;
 	private static float _numberWidth = DefaultNumberWidth;
 	private static float _timeWidth = DefaultTimeWidth;
 
 	/// <summary>
-	/// Fired after a user-resizable column width changes. Listeners (shell rows, header) re-apply sizes.
+	/// Fired after a user-resizable column width or <see cref="Scale"/> changes.
+	/// Listeners (shell rows, header, zebra) re-apply sizes.
 	/// </summary>
 	public static event Action Changed;
 
-	/// <summary>User-resizable cue number column width.</summary>
+	/// <summary>
+	/// Cuelist UI scale factor (Small ≈ 0.85, Medium = 1.0, Large ≈ 1.25).
+	/// Multiplies row heights, fixed chrome, nest indent, and fonts only.
+	/// </summary>
+	public static float Scale
+	{
+		get => _scale;
+		set
+		{
+			float clamped = Mathf.Clamp(value, 0.5f, 2.0f);
+			if (Mathf.IsEqualApprox(_scale, clamped))
+				return;
+			_scale = clamped;
+			Changed?.Invoke();
+		}
+	}
+
+	/// <summary>Sets <see cref="Scale"/> without raising <see cref="Changed"/>.</summary>
+	/// <param name="scale">Desired scale factor.</param>
+	public static void SetScaleSilent(float scale)
+	{
+		_scale = Mathf.Clamp(scale, 0.5f, 2.0f);
+	}
+
+	// ── Scaled metrics ──────────────────────────────────────────────────────
+
+	/// <summary>Left color strip width (scaled).</summary>
+	public static float ColorWidth => Mathf.Max(1f, BaseColorWidth * _scale);
+
+	/// <summary>Horizontal gap between color strip and content (scaled, at least 1).</summary>
+	public static int ColorNestGap => Mathf.Max(1, Mathf.RoundToInt(BaseColorNestGap * _scale));
+
+	/// <summary>Drag handle column (scaled).</summary>
+	public static float DragWidth => Mathf.Max(12f, BaseDragWidth * _scale);
+
+	/// <summary>Expand/collapse chevron column (scaled).</summary>
+	public static float CollapseWidth => Mathf.Max(12f, BaseCollapseWidth * _scale);
+
+	/// <summary>Issue / status indicator column (scaled).</summary>
+	public static float IssueWidth => Mathf.Max(10f, BaseIssueWidth * _scale);
+
+	/// <summary>Horizontal indent per nesting level (scaled).</summary>
+	public static float NestIndent => Mathf.Max(8f, BaseNestIndent * _scale);
+
+	/// <summary>Continue / follow mode column (scaled).</summary>
+	public static float FollowWidth => Mathf.Max(24f, BaseFollowWidth * _scale);
+
+	/// <summary>Height of inline controls inside a shell row (scaled).</summary>
+	public static float RowControlHeight => Mathf.Max(14f, BaseRowControlHeight * _scale);
+
+	/// <summary>Minimum height of the cue row strip (scaled).</summary>
+	public static float RowMinHeight => Mathf.Max(16f, BaseRowMinHeight * _scale);
+
+	/// <summary>HBox separation between shell row columns (scaled, at least 1).</summary>
+	public static int RowSeparation => Mathf.Max(1, Mathf.RoundToInt(BaseRowSeparation * _scale));
+
+	/// <summary>Shell field font size (scaled).</summary>
+	public static int FontSize => Mathf.Max(8, Mathf.RoundToInt(BaseFontSize * _scale));
+
+	/// <summary>Cuelist header label font size (scaled).</summary>
+	public static int HeaderFontSize => Mathf.Max(7, Mathf.RoundToInt(BaseHeaderFontSize * _scale));
+
+	/// <summary>Icon max width for drag / chrome buttons (scaled).</summary>
+	public static int IconMaxWidth => Mathf.Max(10, Mathf.RoundToInt(BaseIconMaxWidth * _scale));
+
+	/// <summary>User-resizable cue number column width (absolute; not multiplied by scale).</summary>
 	public static float NumberWidth
 	{
 		get => _numberWidth;
@@ -122,7 +199,7 @@ public static class ShellColumnLayout
 	}
 
 	/// <summary>
-	/// Raises <see cref="Changed"/> so all listeners re-apply current widths.
+	/// Raises <see cref="Changed"/> so all listeners re-apply current widths and scale.
 	/// </summary>
 	public static void NotifyChanged()
 	{

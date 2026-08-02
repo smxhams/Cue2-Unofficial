@@ -584,13 +584,22 @@ public partial class UiUtilities : Node
     
 
 
+    /// <summary>
+    /// Applies content scale factor for UI density. Does not intentionally change the OS window
+    /// outer size — callers that need a design-time frame size should use <see cref="RescaleWindow"/>
+    /// only when no saved geometry exists.
+    /// </summary>
+    /// <param name="window">Target window.</param>
+    /// <param name="scale">User UI scale (typically 0.5–2.0).</param>
+    /// <param name="baseDisplayScale">HiDPI factor from <see cref="DisplayServer.ScreenGetScale"/>.</param>
     public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)
     {
         GD.Print($"UiUtilities:RescaleUi - Scale: {scale}, Display Scale: {baseDisplayScale}");
         try
         {
             var effectiveScale = scale * baseDisplayScale;
-            window.WrapControls = true;
+            // ContentScaleFactor only. Leaving WrapControls alone avoids growing/shrinking the
+            // outer frame when scale changes (which previously clobbered restored geometry).
             window.ContentScaleFactor = (float)effectiveScale;
             window.ChildControlsChanged();
         }
@@ -601,13 +610,22 @@ public partial class UiUtilities : Node
         }
     }
 
+    /// <summary>
+    /// Scales the window's outer pixel size by <paramref name="scale"/> and recenters.
+    /// Only for design-time / first-run defaults — never call after restoring saved geometry.
+    /// </summary>
     public static void RescaleWindow(Window window, double scale)
     {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return;
+        if (scale <= 0.0 || Mathf.IsEqualApprox((float)scale, 1f))
+            return;
+
         var oldSize = window.Size;
         var newSize = new Vector2I((int)(window.Size.X * scale), (int)(window.Size.Y * scale));
         window.Size = newSize;
-        var offsetX = window.Position.X + ((oldSize.X - newSize.X)/2);
-        var offsetY = window.Position.Y + ((oldSize.Y - newSize.Y)/2);
+        var offsetX = window.Position.X + ((oldSize.X - newSize.X) / 2);
+        var offsetY = window.Position.Y + ((oldSize.Y - newSize.Y) / 2);
         window.Position = new Vector2I((int)offsetX, (int)offsetY);
     }
 
@@ -664,8 +682,8 @@ public partial class UiUtilities : Node
     }
 
     /// <summary>
-    /// Toggles between maximized and windowed. Uses <see cref="Window.ModeEnum.Maximized"/>
-    /// (not Fullscreen) so borderless chrome and a normal restore rect are preserved.
+    /// Toggles between maximized and windowed. Prefer <see cref="ToggleFullscreen"/> for the
+    /// main window chrome; this remains for callers that want OS maximize rather than fullscreen.
     /// </summary>
     /// <param name="window">Target window.</param>
     public static void ToggleMaximize(Window window)
@@ -677,6 +695,22 @@ public partial class UiUtilities : Node
             window.Mode = Window.ModeEnum.Windowed;
         else
             window.Mode = Window.ModeEnum.Maximized;
+    }
+
+    /// <summary>
+    /// Toggles between non-exclusive fullscreen and windowed.
+    /// Does not use ExclusiveFullscreen (avoids black flashes / exclusive display takeover).
+    /// </summary>
+    /// <param name="window">Target window.</param>
+    public static void ToggleFullscreen(Window window)
+    {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return;
+
+        if (IsWindowFillScreen(window))
+            window.Mode = Window.ModeEnum.Windowed;
+        else
+            window.Mode = Window.ModeEnum.Fullscreen;
     }
 
     /// <summary>
@@ -727,25 +761,168 @@ public partial class UiUtilities : Node
 
     /// <summary>
     /// Converts a global window position to coordinates relative to the screen that contains
-    /// the top-left (or the window center as fallback).
+    /// the top-left (or the window center / nearest screen as fallback).
     /// </summary>
+    /// <remarks>
+    /// Always returns screen-relative coordinates. Older code returned the raw global position
+    /// when no screen contained the point, which later restores mis-placed the window (common
+    /// with multi-monitor and macOS coordinate quirks).
+    /// </remarks>
     public static Vector2I ToScreenRelativePosition(Vector2I globalPos, Vector2I windowSize)
     {
+        int count = DisplayServer.GetScreenCount();
+        if (count <= 0)
+            return globalPos;
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            if (new Rect2I(sPos, sSize).HasPoint(globalPos))
+                return globalPos - sPos;
+        }
+
+        Vector2I center = globalPos + (windowSize / 2);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            if (new Rect2I(sPos, sSize).HasPoint(center))
+                return globalPos - sPos;
+        }
+
+        int nearest = FindNearestScreen(center);
+        return globalPos - DisplayServer.ScreenGetPosition(nearest);
+    }
+
+    /// <summary>
+    /// Resolves a saved window position that may be screen-relative or (legacy) absolute global.
+    /// Picks the placement that keeps the most of the window on-screen.
+    /// </summary>
+    /// <param name="savedPosition">Position from user data (relative preferred; absolute tolerated).</param>
+    /// <param name="windowSize">Restored window size used for visibility scoring.</param>
+    /// <returns>Clamped global position suitable for <see cref="DisplayServer.WindowSetPosition"/>.</returns>
+    public static Vector2I ResolveSavedWindowPosition(Vector2I savedPosition, Vector2I windowSize)
+    {
+        int count = DisplayServer.GetScreenCount();
+        if (count <= 0)
+            return savedPosition;
+
+        Vector2I best = savedPosition;
+        long bestScore = -1;
+
+        void Consider(Vector2I absPos)
+        {
+            long score = ComputeOnScreenArea(absPos, windowSize);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = absPos;
+            }
+        }
+
+        // Prefer treating the value as relative to the screen under the mouse (session restore UX).
+        int mouseScreen = FindScreenAtPoint(DisplayServer.MouseGetPosition());
+        Consider(DisplayServer.ScreenGetPosition(mouseScreen) + savedPosition);
+
+        // Also try relative to every screen and as an absolute global (legacy bad saves).
+        for (int i = 0; i < count; i++)
+            Consider(DisplayServer.ScreenGetPosition(i) + savedPosition);
+        Consider(savedPosition);
+
+        // Final clamp onto the screen that best contains the chosen placement.
+        int host = FindNearestScreen(best + (windowSize / 2));
+        Vector2I hostPos = DisplayServer.ScreenGetPosition(host);
+        return ClampWindowPositionToScreen(host, best - hostPos);
+    }
+
+    /// <summary>
+    /// Clamps a window size so it does not exceed the virtual desktop (union of all monitors).
+    /// </summary>
+    public static Vector2I ClampWindowSizeToVirtualDesktop(Vector2I size, Vector2I minSize)
+    {
+        Vector2I desktop = ComputeVirtualDesktopSize();
+        int w = Mathf.Clamp(size.X, minSize.X, Mathf.Max(minSize.X, desktop.X));
+        int h = Mathf.Clamp(size.Y, minSize.Y, Mathf.Max(minSize.Y, desktop.Y));
+        return new Vector2I(w, h);
+    }
+
+    /// <summary>
+    /// Union of all monitor rectangles — upper bound for window size.
+    /// </summary>
+    public static Vector2I ComputeVirtualDesktopSize()
+    {
+        int screenCount = DisplayServer.GetScreenCount();
+        if (screenCount <= 0)
+            return new Vector2I(4096, 2160);
+
+        Vector2I minPos = new Vector2I(int.MaxValue, int.MaxValue);
+        Vector2I maxPos = new Vector2I(int.MinValue, int.MinValue);
+        for (int i = 0; i < screenCount; i++)
+        {
+            Vector2I pos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            minPos = new Vector2I(Mathf.Min(minPos.X, pos.X), Mathf.Min(minPos.Y, pos.Y));
+            maxPos = new Vector2I(Mathf.Max(maxPos.X, pos.X + sSize.X), Mathf.Max(maxPos.Y, pos.Y + sSize.Y));
+        }
+
+        return maxPos - minPos;
+    }
+
+    /// <summary>
+    /// Finds the screen whose center is nearest to <paramref name="point"/>.
+    /// </summary>
+    public static int FindNearestScreen(Vector2I point)
+    {
+        int count = DisplayServer.GetScreenCount();
+        if (count <= 0)
+            return 0;
+
+        int best = 0;
+        long bestDist = long.MaxValue;
+        for (int i = 0; i < count; i++)
+        {
+            Vector2I sPos = DisplayServer.ScreenGetPosition(i);
+            Vector2I sSize = DisplayServer.ScreenGetSize(i);
+            Vector2I center = sPos + (sSize / 2);
+            long dx = (long)point.X - center.X;
+            long dy = (long)point.Y - center.Y;
+            long dist = dx * dx + dy * dy;
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Approximate visible area of a window rect against the union of all screens.
+    /// </summary>
+    private static long ComputeOnScreenArea(Vector2I windowPos, Vector2I windowSize)
+    {
+        if (windowSize.X <= 0 || windowSize.Y <= 0)
+            return 0;
+
+        long area = 0;
         int count = DisplayServer.GetScreenCount();
         for (int i = 0; i < count; i++)
         {
             Vector2I sPos = DisplayServer.ScreenGetPosition(i);
             Vector2I sSize = DisplayServer.ScreenGetSize(i);
-            Rect2I screenRect = new Rect2I(sPos, sSize);
 
-            if (screenRect.HasPoint(globalPos))
-                return globalPos - sPos;
-
-            Vector2I center = globalPos + (windowSize / 2);
-            if (screenRect.HasPoint(center))
-                return globalPos - sPos;
+            int x0 = Mathf.Max(windowPos.X, sPos.X);
+            int y0 = Mathf.Max(windowPos.Y, sPos.Y);
+            int x1 = Mathf.Min(windowPos.X + windowSize.X, sPos.X + sSize.X);
+            int y1 = Mathf.Min(windowPos.Y + windowSize.Y, sPos.Y + sSize.Y);
+            int w = x1 - x0;
+            int h = y1 - y0;
+            if (w > 0 && h > 0)
+                area += (long)w * h;
         }
 
-        return globalPos;
+        return area;
     }
 }

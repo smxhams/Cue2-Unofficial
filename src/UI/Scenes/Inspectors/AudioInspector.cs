@@ -369,7 +369,9 @@ public partial class AudioInspector : Control
     /// </summary>
     private async void OnSyncFromHistory()
     {
-        if (_focusedCue == null) return;
+        // SyncShellInspector is global (shell pre-wait edits, etc.). Skip if this inspector
+        // is not in the live tree (tab not built / freed) to avoid get_node absolute-path errors.
+        if (!IsInsideTree() || _focusedCue == null) return;
         // Re-fetch cue in case instance was replaced (cuelist-scope restore).
         var cue = CueList.FetchCueFromId(_focusedCue.Id);
         if (cue == null)
@@ -394,7 +396,10 @@ public partial class AudioInspector : Control
         UpdateAudioUiFields(_focusedAudioComponent.AudioFile ?? string.Empty);
         // Output routing is not part of the scalar time fields — refresh dropdown + matrix too.
         PopulateOutputOptions();
-        BuildRoutingMatrix();
+        // Heavy matrix rebuild only when the routing UI is actually visible (avoid thrashing
+        // on every shell pre/post-wait keystroke commit while Audio tab is inactive).
+        if (_routingContainer != null && _routingContainer.Visible)
+            BuildRoutingMatrix();
 
         // History snapshots omit WaveformData; invalidate cache and regenerate peaks so start/end
         // selection colors + handles redraw after undo/redo.
@@ -869,7 +874,7 @@ public partial class AudioInspector : Control
     /// </summary>
     private async void BuildRoutingMatrix()
     {
-        if (_routingMatrixGrid == null)
+        if (!IsInsideTree() || _routingMatrixGrid == null)
             return;
 
         int gen = _shellSelectGeneration;
@@ -886,8 +891,14 @@ public partial class AudioInspector : Control
                 _routingContainer.Visible = false;
             return;
         }
-        
-        await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
+
+        var tree = GetTree();
+        if (tree == null)
+            return;
+
+        await ToSignal(tree, "process_frame"); // Wait a frame for existing children to fully clear.
+        if (!IsInsideTree())
+            return;
 
         // Selection may have changed while waiting (multi-select focus flood).
         if (gen != _shellSelectGeneration || _focusedAudioComponent == null)
@@ -1142,15 +1153,16 @@ public partial class AudioInspector : Control
     /// </summary>
     private void RefreshMediaPathDisplay()
     {
-        if (_fileUrl == null || _focusedAudioComponent == null)
+        if (!IsInsideTree() || _fileUrl == null || _focusedAudioComponent == null)
             return;
 
         string path = _focusedAudioComponent.AudioFile ?? string.Empty;
         if (!string.Equals(_fileUrl.Text, path, StringComparison.Ordinal))
             _fileUrl.Text = path;
 
-        // Re-check missing state after path rewrite / backup
-        GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue?.Id ?? -1);
+        // Re-check missing state after path rewrite / backup (autoloads via SceneTree root).
+        GetTree()?.Root?.GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")
+            ?.CheckCue(_focusedCue?.Id ?? -1);
         ApplyFileUrlMissingStyleFromHealth();
     }
 
@@ -1168,6 +1180,9 @@ public partial class AudioInspector : Control
     /// </summary>
     private void ApplyFileUrlMissingStyleFromHealth()
     {
+        if (!IsInsideTree())
+            return;
+
         if (_focusedCue == null || _focusedAudioComponent == null ||
             string.IsNullOrWhiteSpace(_focusedAudioComponent.AudioFile))
         {
@@ -1175,7 +1190,7 @@ public partial class AudioInspector : Control
             return;
         }
 
-        var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+        var health = GetTree()?.Root?.GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
         bool missing = health != null && health.IsPathMissing(_focusedCue.Id, _focusedAudioComponent.AudioFile);
         ApplyFileUrlMissingStyle(missing, missing ? "File Missing" : null);
     }

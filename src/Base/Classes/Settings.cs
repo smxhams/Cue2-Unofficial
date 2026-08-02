@@ -54,6 +54,18 @@ public partial class Settings : Node
     /// <summary>System default Go button scale (1.0 = base).</summary>
     public const float DefaultGoScale = 1.0f;
 
+    /// <summary>System default cuelist UI scale (1.0 = Medium).</summary>
+    public const float DefaultCueListScale = 1.0f;
+
+    /// <summary>Cuelist UI scale for Small option.</summary>
+    public const float CueListScaleSmall = 0.85f;
+
+    /// <summary>Cuelist UI scale for Medium option.</summary>
+    public const float CueListScaleMedium = 1.0f;
+
+    /// <summary>Cuelist UI scale for Large option.</summary>
+    public const float CueListScaleLarge = 1.25f;
+
     /// <summary>System default waveform peak bin count.</summary>
     public const int DefaultWaveformResolution = 4096;
 
@@ -247,6 +259,13 @@ public partial class Settings : Node
 
     public float UiScale = DefaultUiScale;
     public float GoScale = DefaultGoScale;
+
+    /// <summary>
+    /// Cuelist UI density scale (Small / Medium / Large). Affects shell row height, chrome,
+    /// and fonts only — not playback. Persisted with the showfile.
+    /// </summary>
+    public float CueListScale = DefaultCueListScale;
+
     public int WaveformResolution = DefaultWaveformResolution;
 
     /// <summary>
@@ -756,6 +775,7 @@ public partial class Settings : Node
         // General show scalars
         UiScale = DefaultUiScale;
         GoScale = DefaultGoScale;
+        CueListScale = DefaultCueListScale;
         WaveformResolution = DefaultWaveformResolution;
         StopFadeDuration = DefaultStopFadeDuration;
         MediaBackupEnabled = DefaultMediaBackupEnabled;
@@ -806,9 +826,10 @@ public partial class Settings : Node
         // MIDI session inputs
         GetNodeOrNull<MidiManager>("/root/MidiManager")?.ResetToDefaults();
 
-        // Notify live UI (settings general, GO scale, show mode, etc.)
+        // Notify live UI (settings general, GO scale, cuelist scale, show mode, etc.)
         _globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), CueListScale);
         NotifyShowModeChanged();
 
         GD.Print("Settings:ResetSettings - Show settings restored to defaults.");
@@ -857,6 +878,7 @@ public partial class Settings : Node
         
         saveTable.Add("UiScale", UiScale);
         saveTable.Add("GoScale", GoScale);
+        saveTable.Add("CueListScale", CueListScale);
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
@@ -968,6 +990,10 @@ public partial class Settings : Node
         _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         GoScale = settingsData.TryGetValue("GoScale", out value) ? (float)value : GoScale;
         _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+        CueListScale = settingsData.TryGetValue("CueListScale", out value)
+            ? (float)value
+            : DefaultCueListScale;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), CueListScale);
         WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
         StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
         // Default true for older shows that predate this setting
@@ -1167,6 +1193,11 @@ public partial class Settings : Node
         {
             GoScale = value.AsSingle();
             _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
+        }
+        if (TryGetSettingsValue(settingsData, "CueListScale", out value))
+        {
+            CueListScale = value.AsSingle();
+            _globalSignals.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), CueListScale);
         }
         if (TryGetSettingsValue(settingsData, "WaveformResolution", out value))
             WaveformResolution = value.AsInt32();
@@ -1393,6 +1424,9 @@ public partial class Settings : Node
                 return true;
             case "GoScale":
                 value = GoScale;
+                return true;
+            case "CueListScale":
+                value = CueListScale;
                 return true;
             case "WaveformResolution":
                 value = WaveformResolution;

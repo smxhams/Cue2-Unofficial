@@ -18,15 +18,13 @@ namespace Cue2.Shared;
 /// <remarks>
 /// Editor builds load from <c>res://bin/{platform}/</c>. Exported Godot C# builds cannot
 /// reliably <see cref="System.Runtime.InteropServices.NativeLibrary.Load"/> from a PCK, so
-/// post-export packaging must place shared libraries as real files and this helper searches:
-/// <list type="number">
-/// <item><description><c>{exe_dir}/bin/{platform}/</c></description></item>
-/// <item><description><c>{AppContext.BaseDirectory}/</c> (Godot C# <c>data_*</c> folder)</description></item>
-/// <item><description><c>{AppContext.BaseDirectory}/bin/{platform}/</c></description></item>
-/// <item><description><c>{exe_dir}/</c></description></item>
-/// <item><description><c>res://bin/{platform}/</c> via <see cref="ProjectSettings.GlobalizePath"/></description></item>
-/// </list>
-/// See <c>docs/export-packaging.md</c>.
+/// post-export packaging must place shared libraries as real files and this helper searches
+/// (see <see cref="GetCandidateDirectories"/> and <c>docs/export-packaging.md</c>).
+/// <para>
+/// macOS .app layout (preferred):
+/// <c>Contents/Frameworks/</c> for loadable dylibs, with optional
+/// <c>Contents/Resources/bin/macos/</c> as an LGPL-friendly replace path.
+/// </para>
 /// </remarks>
 public static class NativeLibPaths
 {
@@ -133,7 +131,7 @@ public static class NativeLibPaths
     /// <returns>Absolute directory paths (may not all exist).</returns>
     public static IReadOnlyList<string> GetCandidateDirectories(string platformDir)
     {
-        var dirs = new List<string>(8);
+        var dirs = new List<string>(16);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void Add(string dir)
@@ -151,7 +149,6 @@ public static class NativeLibPaths
                 return;
             }
 
-            // Normalize trailing separator for consistent combine/exists checks
             full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (seen.Add(full))
                 dirs.Add(full);
@@ -162,17 +159,86 @@ public static class NativeLibPaths
             ? string.Empty
             : Path.GetDirectoryName(exePath) ?? string.Empty;
 
-        if (!string.IsNullOrEmpty(exeDir))
-        {
-            Add(Path.Combine(exeDir, "bin", platformDir));
-            Add(exeDir);
-        }
+        string baseDir = AppContext.BaseDirectory ?? string.Empty;
+        if (!string.IsNullOrEmpty(baseDir))
+            baseDir = baseDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        string baseDir = AppContext.BaseDirectory;
+        // ── High priority: managed host directory (data_Cue2_*) and flat natives ──
         if (!string.IsNullOrEmpty(baseDir))
         {
             Add(baseDir);
             Add(Path.Combine(baseDir, "bin", platformDir));
+        }
+
+        // ── macOS .app bundle layout ──
+        // Executable is typically: App.app/Contents/MacOS/Cue2
+        // Prefer Contents/Frameworks (standard for loadable dylibs), then Resources/bin/macos.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) && !string.IsNullOrEmpty(exeDir))
+        {
+            string contentsDir = TryGetMacAppContentsDir(exeDir);
+            if (!string.IsNullOrEmpty(contentsDir))
+            {
+                string frameworks = Path.Combine(contentsDir, "Frameworks");
+                Add(frameworks);
+                Add(Path.Combine(frameworks, "bin", platformDir));
+
+                string resources = Path.Combine(contentsDir, "Resources");
+                Add(Path.Combine(resources, "bin", platformDir));
+                Add(Path.Combine(resources, "bin"));
+                Add(resources);
+
+                // Universal exports ship both data_Cue2_macos_arm64 and data_Cue2_macos_x86_64.
+                // BaseDirectory is the active arch; also probe siblings if needed.
+                try
+                {
+                    if (Directory.Exists(resources))
+                    {
+                        foreach (string dataDir in Directory.EnumerateDirectories(resources, "data_Cue2_*"))
+                        {
+                            Add(dataDir);
+                            Add(Path.Combine(dataDir, "bin", platformDir));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"NativeLibPaths:GetCandidateDirectories - Enumerate data_* failed: {ex.Message}");
+                }
+
+                Add(Path.Combine(contentsDir, "MacOS", "bin", platformDir));
+                Add(Path.Combine(contentsDir, "MacOS"));
+            }
+            else
+            {
+                // Loose macOS binary (not in .app): same layout as Windows next to the exe.
+                Add(Path.Combine(exeDir, "bin", platformDir));
+                Add(exeDir);
+            }
+        }
+        else if (!string.IsNullOrEmpty(exeDir))
+        {
+            // Windows / Linux: beside the host binary
+            Add(Path.Combine(exeDir, "bin", platformDir));
+            Add(exeDir);
+        }
+
+        // Parent of BaseDirectory (e.g. Resources/ when BaseDirectory is data_Cue2_*)
+        if (!string.IsNullOrEmpty(baseDir))
+        {
+            try
+            {
+                string parent = Directory.GetParent(baseDir)?.FullName;
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    Add(Path.Combine(parent, "bin", platformDir));
+                    Add(Path.Combine(parent, "Frameworks"));
+                    Add(parent);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
         // Editor / project checkout: real files under res://bin/{platform}/
@@ -187,6 +253,43 @@ public static class NativeLibPaths
         }
 
         return dirs;
+    }
+
+    /// <summary>
+    /// If <paramref name="exeDir"/> is <c>.../Something.app/Contents/MacOS</c>, returns the
+    /// <c>Contents</c> directory; otherwise empty.
+    /// </summary>
+    private static string TryGetMacAppContentsDir(string exeDir)
+    {
+        try
+        {
+            // .../App.app/Contents/MacOS
+            string dir = Path.GetFullPath(exeDir);
+            string leaf = Path.GetFileName(dir);
+            if (!leaf.Equals("MacOS", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            string contents = Directory.GetParent(dir)?.FullName;
+            if (string.IsNullOrEmpty(contents))
+                return string.Empty;
+
+            if (!Path.GetFileName(contents).Equals("Contents", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            // Optional sanity: parent ends with .app
+            string appBundle = Directory.GetParent(contents)?.FullName ?? string.Empty;
+            if (!string.IsNullOrEmpty(appBundle) &&
+                !appBundle.EndsWith(".app", StringComparison.OrdinalIgnoreCase))
+            {
+                // Still accept Contents/MacOS layout even if not named .app
+            }
+
+            return contents;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>
@@ -270,5 +373,23 @@ public static class NativeLibPaths
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Formats candidate directories for error logs (existing dirs marked with *).
+    /// </summary>
+    public static string FormatTriedDirectories(IReadOnlyList<string> tried)
+    {
+        if (tried == null || tried.Count == 0)
+            return "(no candidates)";
+
+        var parts = new List<string>(tried.Count);
+        foreach (string dir in tried)
+        {
+            bool exists = Directory.Exists(dir);
+            parts.Add(exists ? $"{dir} [*]" : dir);
+        }
+
+        return string.Join("; ", parts);
     }
 }

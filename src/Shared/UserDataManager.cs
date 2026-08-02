@@ -24,6 +24,8 @@ public partial class UserDataManager : Node
 
 	private Vector2I _lastWindowSize = Vector2I.Zero;
 	private bool _wasMaximized = false;
+	/// <summary>True when the last fill-screen state was fullscreen (vs OS maximize).</summary>
+	private bool _wasFullscreen = false;
 	private Vector2I _lastWindowPosition = Vector2I.Zero;
 
 	private Vector2I _lastSettingsWindowSize = Vector2I.Zero;
@@ -113,9 +115,15 @@ public partial class UserDataManager : Node
 	public Vector2I LastWindowSize => _lastWindowSize;
 
 	/// <summary>
-	/// Whether the main window was maximized when the application was last closed.
+	/// Whether the main window was fill-screen (maximized or fullscreen) when last closed.
 	/// </summary>
 	public bool WasMaximized => _wasMaximized;
+
+	/// <summary>
+	/// Whether the last fill-screen state was non-exclusive fullscreen (expand button)
+	/// rather than OS maximize (title double-click).
+	/// </summary>
+	public bool WasFullscreen => _wasFullscreen;
 
 	/// <summary>
 	/// The last recorded position of the window (relative to the top-left of the display it was on when last saved).
@@ -391,19 +399,29 @@ public partial class UserDataManager : Node
 	}
 
 	/// <summary>
-	/// Updates the stored main window size, position (relative to its display), and maximized state.
-	/// Position and size are only updated when not maximized. Persists immediately if changed.
+	/// Updates the stored main window size, position (relative to its display), and fill-screen state.
+	/// Position and size are only updated when not fill-screen. Persists immediately if changed.
 	/// </summary>
 	/// <param name="size">Window size in pixels.</param>
 	/// <param name="position">Position relative to the display's top-left.</param>
-	/// <param name="maximized">Whether the window is currently maximized.</param>
-	public void SetWindowState(Vector2I size, Vector2I position, bool maximized)
+	/// <param name="maximized">Whether the window is currently fill-screen (maximized or fullscreen).</param>
+	/// <param name="fullscreen">When <paramref name="maximized"/> is true, whether that fill is fullscreen
+	/// (expand button) rather than OS maximize (title double-click).</param>
+	public void SetWindowState(Vector2I size, Vector2I position, bool maximized, bool fullscreen = false)
 	{
 		bool changed = false;
 
 		if (maximized != _wasMaximized)
 		{
 			_wasMaximized = maximized;
+			changed = true;
+		}
+
+		// Clear fullscreen when leaving fill-screen; otherwise track the fill kind.
+		bool nextFullscreen = maximized && fullscreen;
+		if (nextFullscreen != _wasFullscreen)
+		{
+			_wasFullscreen = nextFullscreen;
 			changed = true;
 		}
 
@@ -587,6 +605,15 @@ public partial class UserDataManager : Node
 			{
 				_wasMaximized = maxVal.AsBool();
 			}
+			if (data.TryGetValue("WasFullscreen", out var fsVal))
+			{
+				_wasFullscreen = fsVal.AsBool();
+			}
+			else
+			{
+				// Pre-split prefs: treat fill-screen as maximize (not expand-fullscreen).
+				_wasFullscreen = false;
+			}
 
 			// Settings window state
 			if (data.TryGetValue("LastSettingsWindowSize", out var settingsSizeVal))
@@ -709,6 +736,7 @@ public partial class UserDataManager : Node
 			data["LastWindowPosition"] = winPos;
 
 			data["WasMaximized"] = _wasMaximized;
+			data["WasFullscreen"] = _wasFullscreen;
 
 			// Settings window state
 			var settingsWinSize = new Dictionary();

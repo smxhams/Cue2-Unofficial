@@ -111,17 +111,18 @@ public partial class ShellBar : PanelContainer
 		_collapseButton.Pressed += CollapsedPressed;
 		_cueNumLineEdit.GuiInput += OnCueNumGuiInput;
 		_cueNumLineEdit.EditingToggled += OnCueNumEditToggled;
+		_cueNumLineEdit.FocusExited += OnCueNumFocusExited;
+		_cueNumLineEdit.TextSubmitted += OnCueNumTextSubmitted;
 		_cueNameLineEdit.GuiInput += OnNameGuiInput;
 		_cueNameLineEdit.EditingToggled += OnNameEditToggled;
-		_preWaitLineEdit.EditingToggled += OnPreWaitEditToggled;
-		_postWaitLineEdit.EditingToggled += OnPostWaitEditToggled;
-		// Pre/duration/post do not use the name-field GuiInput path — still need right-click.
-		if (_preWaitLineEdit != null)
-			_preWaitLineEdit.GuiInput += OnTimeFieldGuiInput;
+		_cueNameLineEdit.FocusExited += OnNameFocusExited;
+		_cueNameLineEdit.TextSubmitted += OnNameTextSubmitted;
+		// Pre/post waits are always-editable time fields (not double-click-to-edit like name/num).
+		WireTimeField(_preWaitLineEdit, isPreWait: true);
+		WireTimeField(_postWaitLineEdit, isPreWait: false);
+		// Duration is read-only but still needs right-click context menu + selection.
 		if (_durationLineEdit != null)
 			_durationLineEdit.GuiInput += OnTimeFieldGuiInput;
-		if (_postWaitLineEdit != null)
-			_postWaitLineEdit.GuiInput += OnTimeFieldGuiInput;
 		if (_memoLineEdit != null)
 		{
 			_memoLineEdit.GuiInput += OnMemoGuiInput;
@@ -264,7 +265,7 @@ public partial class ShellBar : PanelContainer
 		_dragButton.ExpandIcon = true;
 		_dragButton.IconAlignment = HorizontalAlignment.Center;
 		_dragButton.VerticalIconAlignment = VerticalAlignment.Center;
-		_dragButton.AddThemeConstantOverride("icon_max_width", 14);
+		_dragButton.AddThemeConstantOverride("icon_max_width", ShellColumnLayout.IconMaxWidth);
 		// Brighter than the old dark-grey so the grabber is visible on shell chrome.
 		var grabberColor = new Color(0.72f, 0.78f, 0.82f, 0.95f);
 		_dragButton.AddThemeColorOverride("icon_normal_color", grabberColor);
@@ -283,6 +284,7 @@ public partial class ShellBar : PanelContainer
 	/// <summary>
 	/// Tight LineEdit padding so theme content margins don't force fields taller than the row.
 	/// Disables Godot's built-in right-click text menu (replaced by shell cue context menu).
+	/// Font size follows <see cref="ShellColumnLayout.Scale"/>.
 	/// </summary>
 	private static void ApplyCompactFieldStyle(LineEdit field)
 	{
@@ -291,14 +293,17 @@ public partial class ShellBar : PanelContainer
 		field.CustomMinimumSize = new Vector2(field.CustomMinimumSize.X, ShellColumnLayout.RowControlHeight);
 		field.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		field.Alignment = HorizontalAlignment.Left;
+		field.AddThemeFontSizeOverride("font_size", ShellColumnLayout.FontSize);
 		// Empty-ish flat style keeps height under control without fighting the global theme heavily.
+		float padH = Mathf.Max(2f, 4f * ShellColumnLayout.Scale);
+		float padV = Mathf.Max(1f, 2f * ShellColumnLayout.Scale);
 		var compact = new StyleBoxFlat
 		{
 			BgColor = new Color(0.12f, 0.12f, 0.12f, 0.55f),
-			ContentMarginLeft = 4,
-			ContentMarginRight = 4,
-			ContentMarginTop = 2,
-			ContentMarginBottom = 2
+			ContentMarginLeft = padH,
+			ContentMarginRight = padH,
+			ContentMarginTop = padV,
+			ContentMarginBottom = padV
 		};
 		compact.SetCornerRadiusAll(3);
 		field.AddThemeStyleboxOverride("normal", compact);
@@ -367,7 +372,7 @@ public partial class ShellBar : PanelContainer
 	}
 
 	/// <summary>
-	/// Applies shared column widths from <see cref="ShellColumnLayout"/> to this row.
+	/// Applies shared column widths and cuelist scale from <see cref="ShellColumnLayout"/> to this row.
 	/// Color strip lives in OuterHBox (full shell height including nested children).
 	/// Row layout: [Leading: Drag|Issue|Indent|Collapse|Num|Name(expand)] | [Trailing: Pre|Dur|Post|Follow].
 	/// Trailing is fixed-width and non-expanding so nest indent never shifts time columns.
@@ -381,7 +386,14 @@ public partial class ShellBar : PanelContainer
 		float timeW = ShellColumnLayout.TimeWidth;
 		float followW = ShellColumnLayout.FollowWidth;
 		float ctrlH = ShellColumnLayout.RowControlHeight;
+		float rowH = ShellColumnLayout.RowMinHeight;
 		int sep = ShellColumnLayout.RowSeparation;
+		int fontSize = ShellColumnLayout.FontSize;
+		int iconMax = ShellColumnLayout.IconMaxWidth;
+
+		// Keep nest gap / separations in sync when cuelist scale changes.
+		var outerHBox = GetNodeOrNull<HBoxContainer>("OuterHBox");
+		outerHBox?.AddThemeConstantOverride("separation", ShellColumnLayout.ColorNestGap);
 
 		// Full-height nest indicator: beside ContentVBox, not inside the cue row.
 		ConfigureColorPanelLayout();
@@ -390,23 +402,27 @@ public partial class ShellBar : PanelContainer
 			_dragButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, ctrlH);
 			_dragButton.SizeFlagsHorizontal = SizeFlags.Fill;
 			_dragButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_dragButton.AddThemeConstantOverride("icon_max_width", iconMax);
 		}
 		if (_collapseButton != null)
 		{
 			_collapseButton.CustomMinimumSize = new Vector2(ShellColumnLayout.CollapseWidth, ctrlH);
 			_collapseButton.SizeFlagsHorizontal = SizeFlags.Fill;
 			_collapseButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_collapseButton.AddThemeConstantOverride("icon_max_width", iconMax);
 		}
 		if (_issueIndicator != null)
 		{
 			_issueIndicator.CustomMinimumSize = new Vector2(ShellColumnLayout.IssueWidth, ctrlH);
 			_issueIndicator.SizeFlagsHorizontal = SizeFlags.Fill;
 			_issueIndicator.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_issueIndicator.AddThemeConstantOverride("icon_max_width", iconMax);
 		}
 
 		_cueNumLineEdit.CustomMinimumSize = new Vector2(numW, ctrlH);
 		_cueNumLineEdit.SizeFlagsHorizontal = SizeFlags.Fill;
 		_cueNumLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		_cueNumLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 
 		// Name absorbs indent; keep min small so deep nests shrink name, not the trailing band.
 		if (_cueNameLineEdit != null)
@@ -414,6 +430,7 @@ public partial class ShellBar : PanelContainer
 			_cueNameLineEdit.CustomMinimumSize = new Vector2(40f, ctrlH);
 			_cueNameLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 			_cueNameLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_cueNameLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 		}
 
 		if (_memoLineEdit != null)
@@ -421,6 +438,7 @@ public partial class ShellBar : PanelContainer
 			_memoLineEdit.CustomMinimumSize = new Vector2(40f, ctrlH);
 			_memoLineEdit.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 			_memoLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_memoLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 		}
 
 		// Fixed trailing band widths (Pre + Dur + Post + Follow + separations).
@@ -430,14 +448,17 @@ public partial class ShellBar : PanelContainer
 		_preWaitLineEdit.CustomMinimumSize = new Vector2(timeW, ctrlH);
 		_preWaitLineEdit.SizeFlagsHorizontal = SizeFlags.Fill;
 		_preWaitLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		_preWaitLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 
 		_durationLineEdit.CustomMinimumSize = new Vector2(timeW, ctrlH);
 		_durationLineEdit.SizeFlagsHorizontal = SizeFlags.Fill;
 		_durationLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		_durationLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 
 		_postWaitLineEdit.CustomMinimumSize = new Vector2(timeW, ctrlH);
 		_postWaitLineEdit.SizeFlagsHorizontal = SizeFlags.Fill;
 		_postWaitLineEdit.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		_postWaitLineEdit.AddThemeFontSizeOverride("font_size", fontSize);
 
 		if (_followButton != null)
 		{
@@ -445,6 +466,7 @@ public partial class ShellBar : PanelContainer
 			_followButton.SizeFlagsHorizontal = SizeFlags.Fill;
 			_followButton.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 			_followButton.Alignment = HorizontalAlignment.Center;
+			_followButton.AddThemeFontSizeOverride("font_size", fontSize);
 		}
 
 		if (_trailingHBox != null)
@@ -462,18 +484,33 @@ public partial class ShellBar : PanelContainer
 		{
 			_leadingHBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 			_leadingHBox.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+			_leadingHBox.AddThemeConstantOverride("separation", sep);
 		}
+
+		if (_trailingHBox != null)
+			_trailingHBox.AddThemeConstantOverride("separation", sep);
 
 		if (_rowHBox != null)
 		{
-			_rowHBox.CustomMinimumSize = new Vector2(0, ShellColumnLayout.RowMinHeight);
+			_rowHBox.CustomMinimumSize = new Vector2(0, rowH);
 			_rowHBox.SizeFlagsHorizontal = SizeFlags.ExpandFill;
 			_rowHBox.SizeFlagsVertical = SizeFlags.ShrinkBegin;
 			_rowHBox.Alignment = BoxContainer.AlignmentMode.Begin;
+			_rowHBox.AddThemeConstantOverride("separation", sep);
 		}
+
+		CustomMinimumSize = new Vector2(0, rowH);
 
 		// Nested shells must stretch to parent content width.
 		SizeFlagsHorizontal = SizeFlags.ExpandFill;
+
+		// Re-apply compact padding / font when cuelist scale changes mid-session.
+		ApplyCompactFieldStyle(_cueNumLineEdit);
+		ApplyCompactFieldStyle(_cueNameLineEdit);
+		ApplyCompactFieldStyle(_memoLineEdit);
+		ApplyCompactFieldStyle(_preWaitLineEdit);
+		ApplyCompactFieldStyle(_durationLineEdit);
+		ApplyCompactFieldStyle(_postWaitLineEdit);
 
 		ApplyTreeIndent();
 	}
@@ -566,8 +603,9 @@ public partial class ShellBar : PanelContainer
 	{
 		if (_cue != null && _cue.Id == cueId)
 		{
+			// Times only — do not re-run ApplyMemoMode/ApplyColumnLayout here (that thrash can
+			// interrupt or re-style the active pre/post LineEdit mid-commit).
 			RefreshTimesFromCue();
-			ApplyMemoMode();
 			QueueRedraw();
 		}
 	}
@@ -930,10 +968,8 @@ public partial class ShellBar : PanelContainer
 			CancelInlineEdits();
 
 		// Pre/post wait are normally always editable; lock them in show mode.
-		if (_preWaitLineEdit != null)
-			_preWaitLineEdit.Editable = !locked;
-		if (_postWaitLineEdit != null)
-			_postWaitLineEdit.Editable = !locked;
+		ConfigureTimeFieldEditability(_preWaitLineEdit, !locked);
+		ConfigureTimeFieldEditability(_postWaitLineEdit, !locked);
 
 		if (_followButton != null)
 			_followButton.Disabled = locked;
@@ -945,6 +981,48 @@ public partial class ShellBar : PanelContainer
 			_dragButton.MouseDefaultCursorShape = locked
 				? CursorShape.Arrow
 				: CursorShape.Drag;
+		}
+	}
+
+	/// <summary>
+	/// Applies focus/editable defaults so pre/post wait fields accept single-click typing.
+	/// </summary>
+	/// <param name="field">Pre-wait or post-wait LineEdit.</param>
+	/// <param name="editable">Whether the field should accept text input.</param>
+	private static void ConfigureTimeFieldEditability(LineEdit field, bool editable)
+	{
+		if (field == null) return;
+		field.Editable = editable;
+		// Always keep Click/All so a single click focuses and enters edit mode.
+		field.FocusMode = editable ? FocusModeEnum.All : FocusModeEnum.None;
+		field.MouseFilter = MouseFilterEnum.Stop;
+		field.SelectAllOnFocus = true;
+	}
+
+	/// <summary>
+	/// Wires pre/post wait for focus, submit, and context-menu input.
+	/// </summary>
+	/// <param name="field">Pre-wait or post-wait LineEdit.</param>
+	/// <param name="isPreWait">True for pre-wait; false for post-wait.</param>
+	private void WireTimeField(LineEdit field, bool isPreWait)
+	{
+		if (field == null) return;
+
+		ConfigureTimeFieldEditability(field, editable: true);
+		field.GuiInput += OnTimeFieldGuiInput;
+		if (isPreWait)
+		{
+			field.FocusEntered += OnPreWaitFocusEntered;
+			field.FocusExited += OnPreWaitFocusExited;
+			field.TextSubmitted += OnPreWaitTextSubmitted;
+			field.EditingToggled += OnPreWaitEditToggled;
+		}
+		else
+		{
+			field.FocusEntered += OnPostWaitFocusEntered;
+			field.FocusExited += OnPostWaitFocusExited;
+			field.TextSubmitted += OnPostWaitTextSubmitted;
+			field.EditingToggled += OnPostWaitEditToggled;
 		}
 	}
 
@@ -1003,37 +1081,85 @@ public partial class ShellBar : PanelContainer
 		{
 			if (IsCueEditingLocked()) return;
 			if (_isEditingCueNum) return;
-			_cueNumLineEdit.Editable = true;
-			_cueNumLineEdit.FocusMode = FocusModeEnum.Click;
-			_cueNumLineEdit.GrabFocus();
-			_isEditingCueNum = true;
+			BeginInlineCueNumEdit();
 		}
+	}
+
+	/// <summary>
+	/// Enters double-click inline edit for the cue number field.
+	/// </summary>
+	private void BeginInlineCueNumEdit()
+	{
+		if (_cueNumLineEdit == null || _cue == null) return;
+		_isEditingCueNum = true;
+		_cueNumLineEdit.Editable = true;
+		_cueNumLineEdit.FocusMode = FocusModeEnum.All;
+		_cueNumLineEdit.GrabFocus();
+		if (_cueNumLineEdit.HasMethod("edit") && !_cueNumLineEdit.IsEditing())
+			_cueNumLineEdit.Edit();
+		_cueNumLineEdit.SelectAll();
 	}
 
 	private void OnCueNumEditToggled(bool editing)
 	{
 		if (_cue == null) return;
-		if (_isEditingCueNum && editing == false)
+		if (IsCueEditingLocked())
 		{
-			_cueNumLineEdit.Editable = false;
-			string newNum = _cueNumLineEdit.Text ?? string.Empty;
-			if (!string.Equals(_cue.CueNum ?? string.Empty, newNum, System.StringComparison.Ordinal))
-			{
-				// Discrete commit when leaving inline edit (double-click to edit on shell).
-				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue number");
-				_cue.CueNum = newNum;
-				NotifyInspectorsOfCueEdit();
-			}
-			_cueNumLineEdit.FocusMode = FocusModeEnum.None;
-			_isEditingCueNum = false;
+			if (editing)
+				CancelInlineEdits();
+			return;
 		}
-		else if (_isEditingCueNum && !editing)
+
+		if (editing)
 		{
-			_cueNumLineEdit.Editable = true;
-			_cueNumLineEdit.FocusMode = FocusModeEnum.Click;
-			_cueNumLineEdit.GrabFocus();
 			_isEditingCueNum = true;
+			return;
 		}
+
+		CommitCueNumEdit(releaseFocus: false);
+	}
+
+	private void OnCueNumFocusExited()
+	{
+		CommitCueNumEdit(releaseFocus: false);
+	}
+
+	private void OnCueNumTextSubmitted(string _)
+	{
+		CommitCueNumEdit(releaseFocus: true);
+	}
+
+	/// <summary>
+	/// Commits double-click cue-number edit to the model and refreshes inspectors.
+	/// </summary>
+	/// <param name="releaseFocus">When true, clear focus after commit (Enter path).</param>
+	private void CommitCueNumEdit(bool releaseFocus)
+	{
+		if (!_isEditingCueNum || _cueNumLineEdit == null || _cue == null)
+			return;
+
+		_isEditingCueNum = false;
+		_cueNumLineEdit.Editable = false;
+		_cueNumLineEdit.FocusMode = FocusModeEnum.None;
+
+		if (IsCueEditingLocked() || _globalData?.HistoryManager?.IsRestoring == true)
+		{
+			_cueNumLineEdit.Text = _cue.CueNum ?? string.Empty;
+			if (releaseFocus && _cueNumLineEdit.HasFocus())
+				_cueNumLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+
+		string newNum = _cueNumLineEdit.Text ?? string.Empty;
+		if (!string.Equals(_cue.CueNum ?? string.Empty, newNum, System.StringComparison.Ordinal))
+		{
+			_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue number");
+			_cue.CueNum = newNum;
+			NotifyInspectorsOfCueEdit();
+		}
+
+		if (releaseFocus && _cueNumLineEdit.HasFocus())
+			_cueNumLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 	}
 
 	private void OnNameGuiInput(InputEvent @event)
@@ -1042,36 +1168,86 @@ public partial class ShellBar : PanelContainer
 		if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && mb.DoubleClick)
 		{
 			if (IsCueEditingLocked()) return;
-			_cueNameLineEdit.Editable = true;
-			_cueNameLineEdit.FocusMode = FocusModeEnum.Click;
-			_cueNameLineEdit.GrabFocus();
-			_isEditingName = true;
+			if (_isEditingName) return;
+			BeginInlineNameEdit();
 		}
+	}
+
+	/// <summary>
+	/// Enters double-click inline edit for the cue name field.
+	/// </summary>
+	private void BeginInlineNameEdit()
+	{
+		if (_cueNameLineEdit == null || _cue == null) return;
+		_isEditingName = true;
+		_cueNameLineEdit.Editable = true;
+		_cueNameLineEdit.FocusMode = FocusModeEnum.All;
+		_cueNameLineEdit.GrabFocus();
+		if (_cueNameLineEdit.HasMethod("edit") && !_cueNameLineEdit.IsEditing())
+			_cueNameLineEdit.Edit();
+		_cueNameLineEdit.SelectAll();
 	}
 
 	private void OnNameEditToggled(bool editing)
 	{
 		if (_cue == null) return;
-		if (_isEditingName && editing == false)
+		if (IsCueEditingLocked())
 		{
-			_cueNameLineEdit.Editable = false;
-			string newName = _cueNameLineEdit.Text ?? string.Empty;
-			if (!string.Equals(_cue.Name ?? string.Empty, newName, System.StringComparison.Ordinal))
-			{
-				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue name");
-				_cue.Name = newName;
-				NotifyInspectorsOfCueEdit();
-			}
-			_cueNameLineEdit.FocusMode = FocusModeEnum.None;
-			_isEditingName = false;
+			if (editing)
+				CancelInlineEdits();
+			return;
 		}
-		else if (_isEditingName && !editing)
+
+		if (editing)
 		{
-			_cueNameLineEdit.Editable = true;
-			_cueNameLineEdit.FocusMode = FocusModeEnum.Click;
-			_cueNameLineEdit.GrabFocus();
 			_isEditingName = true;
+			return;
 		}
+
+		CommitNameEdit(releaseFocus: false);
+	}
+
+	private void OnNameFocusExited()
+	{
+		CommitNameEdit(releaseFocus: false);
+	}
+
+	private void OnNameTextSubmitted(string _)
+	{
+		CommitNameEdit(releaseFocus: true);
+	}
+
+	/// <summary>
+	/// Commits double-click cue-name edit to the model and refreshes inspectors.
+	/// </summary>
+	/// <param name="releaseFocus">When true, clear focus after commit (Enter path).</param>
+	private void CommitNameEdit(bool releaseFocus)
+	{
+		if (!_isEditingName || _cueNameLineEdit == null || _cue == null)
+			return;
+
+		_isEditingName = false;
+		_cueNameLineEdit.Editable = false;
+		_cueNameLineEdit.FocusMode = FocusModeEnum.None;
+
+		if (IsCueEditingLocked() || _globalData?.HistoryManager?.IsRestoring == true)
+		{
+			_cueNameLineEdit.Text = _cue.Name ?? string.Empty;
+			if (releaseFocus && _cueNameLineEdit.HasFocus())
+				_cueNameLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+
+		string newName = _cueNameLineEdit.Text ?? string.Empty;
+		if (!string.Equals(_cue.Name ?? string.Empty, newName, System.StringComparison.Ordinal))
+		{
+			_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue name");
+			_cue.Name = newName;
+			NotifyInspectorsOfCueEdit();
+		}
+
+		if (releaseFocus && _cueNameLineEdit.HasFocus())
+			_cueNameLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 	}
 
 	private void OnMemoGuiInput(InputEvent @event)
@@ -1123,6 +1299,57 @@ public partial class ShellBar : PanelContainer
 		}
 	}
 
+	private void OnPreWaitFocusEntered()
+	{
+		if (_cue == null || _preWaitLineEdit == null) return;
+		if (IsCueEditingLocked())
+		{
+			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+			_preWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+		_isEditingPreWait = true;
+		// Godot 4.4+: keyboard focus alone does not always enter edit mode — force it.
+		if (_preWaitLineEdit.HasMethod("edit") && !_preWaitLineEdit.IsEditing())
+			_preWaitLineEdit.Edit();
+	}
+
+	private void OnPostWaitFocusEntered()
+	{
+		if (_cue == null || _postWaitLineEdit == null) return;
+		if (IsCueEditingLocked())
+		{
+			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+			_postWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+		_isEditingPostWait = true;
+		if (_postWaitLineEdit.HasMethod("edit") && !_postWaitLineEdit.IsEditing())
+			_postWaitLineEdit.Edit();
+	}
+
+	private void OnPreWaitTextSubmitted(string _)
+	{
+		CommitPreWaitEdit(releaseFocus: true);
+	}
+
+	private void OnPostWaitTextSubmitted(string _)
+	{
+		CommitPostWaitEdit(releaseFocus: true);
+	}
+
+	private void OnPreWaitFocusExited()
+	{
+		// Commit when leaving the field (click away / tab). EditingToggled may also fire —
+		// Commit* is idempotent via the editing flag.
+		CommitPreWaitEdit(releaseFocus: false);
+	}
+
+	private void OnPostWaitFocusExited()
+	{
+		CommitPostWaitEdit(releaseFocus: false);
+	}
+
 	private void OnPreWaitEditToggled(bool editing)
 	{
 		if (_cue == null) return;
@@ -1131,34 +1358,20 @@ public partial class ShellBar : PanelContainer
 			if (editing && _preWaitLineEdit != null)
 			{
 				_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
-				_preWaitLineEdit.ReleaseFocus();
+				_preWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 			}
 			_isEditingPreWait = false;
 			return;
 		}
-		if (_isEditingPreWait && editing == false)
+
+		if (editing)
 		{
-			var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
-			if (string.IsNullOrEmpty(ret) || !isValid)
-			{
-				_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
-			}
-			else if (System.Math.Abs(_cue.PreWait - time) >= 1e-9)
-			{
-				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit pre-wait");
-				_cue.PreWait = time;
-				_cue.CalculateTotalDuration();
-				_preWaitLineEdit.Text = ret;
-				NotifyInspectorsOfCueEdit();
-			}
-			else
-			{
-				_preWaitLineEdit.Text = ret;
-			}
-			_preWaitLineEdit.ReleaseFocus();
-			_isEditingPreWait = false;
+			_isEditingPreWait = true;
+			return;
 		}
-		else if (_isEditingPreWait == false && editing) _isEditingPreWait = true;
+
+		// Edit mode ended (Enter / Unedit / click away). Commit once.
+		CommitPreWaitEdit(releaseFocus: false);
 	}
 
 	private void OnPostWaitEditToggled(bool editing)
@@ -1169,34 +1382,102 @@ public partial class ShellBar : PanelContainer
 			if (editing && _postWaitLineEdit != null)
 			{
 				_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
-				_postWaitLineEdit.ReleaseFocus();
+				_postWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 			}
 			_isEditingPostWait = false;
 			return;
 		}
-		if (_isEditingPostWait && editing == false)
+
+		if (editing)
 		{
-			var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
-			if (string.IsNullOrEmpty(ret) || !isValid)
-			{
-				_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
-			}
-			else if (System.Math.Abs(_cue.PostWait - time) >= 1e-9)
-			{
-				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit post-wait");
-				_cue.PostWait = time;
-				_cue.CalculateTotalDuration();
-				_postWaitLineEdit.Text = ret;
-				NotifyInspectorsOfCueEdit();
-			}
-			else
-			{
-				_postWaitLineEdit.Text = ret;
-			}
-			_postWaitLineEdit.ReleaseFocus();
-			_isEditingPostWait = false;
+			_isEditingPostWait = true;
+			return;
 		}
-		else if (_isEditingPostWait == false && editing) _isEditingPostWait = true;
+
+		CommitPostWaitEdit(releaseFocus: false);
+	}
+
+	/// <summary>
+	/// Parses and applies the pre-wait field. Safe to call multiple times for the same edit session.
+	/// </summary>
+	/// <param name="releaseFocus">When true, unfocus after commit (Enter / TextSubmitted path).</param>
+	private void CommitPreWaitEdit(bool releaseFocus)
+	{
+		if (!_isEditingPreWait || _preWaitLineEdit == null || _cue == null)
+			return;
+
+		// Clear flag first so nested Unedit/FocusExited/UpdateShellBar cannot re-enter.
+		_isEditingPreWait = false;
+
+		if (IsCueEditingLocked() || _globalData?.HistoryManager?.IsRestoring == true)
+		{
+			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+			if (releaseFocus && _preWaitLineEdit.HasFocus())
+				_preWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+
+		var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
+		if (string.IsNullOrEmpty(ret) || !isValid)
+		{
+			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
+		}
+		else if (System.Math.Abs(_cue.PreWait - time) >= 1e-9)
+		{
+			_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit pre-wait");
+			_cue.PreWait = time;
+			_cue.CalculateTotalDuration();
+			_preWaitLineEdit.Text = ret;
+			NotifyInspectorsOfCueEdit();
+		}
+		else
+		{
+			_preWaitLineEdit.Text = ret;
+		}
+
+		if (releaseFocus && _preWaitLineEdit.HasFocus())
+			_preWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+	}
+
+	/// <summary>
+	/// Parses and applies the post-wait field. Safe to call multiple times for the same edit session.
+	/// </summary>
+	/// <param name="releaseFocus">When true, unfocus after commit (Enter / TextSubmitted path).</param>
+	private void CommitPostWaitEdit(bool releaseFocus)
+	{
+		if (!_isEditingPostWait || _postWaitLineEdit == null || _cue == null)
+			return;
+
+		_isEditingPostWait = false;
+
+		if (IsCueEditingLocked() || _globalData?.HistoryManager?.IsRestoring == true)
+		{
+			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+			if (releaseFocus && _postWaitLineEdit.HasFocus())
+				_postWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+			return;
+		}
+
+		var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
+		if (string.IsNullOrEmpty(ret) || !isValid)
+		{
+			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);
+		}
+		else if (System.Math.Abs(_cue.PostWait - time) >= 1e-9)
+		{
+			_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit post-wait");
+			_cue.PostWait = time;
+			_cue.CalculateTotalDuration();
+			_postWaitLineEdit.Text = ret;
+			NotifyInspectorsOfCueEdit();
+		}
+		else
+		{
+			_postWaitLineEdit.Text = ret;
+		}
+
+		if (releaseFocus && _postWaitLineEdit.HasFocus())
+			_postWaitLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 	}
 
 	/// <summary>
@@ -1435,11 +1716,39 @@ public partial class ShellBar : PanelContainer
 	}
 
 	/// <summary>
-	/// Right-click on time fields (pre/duration/post) — same shell context menu as the row.
+	/// Time-field GuiInput: right-click → shell context menu; left-click → select row
+	/// without AcceptEvent so the LineEdit can still take focus and enter edit mode.
 	/// </summary>
 	private void OnTimeFieldGuiInput(InputEvent @event)
 	{
-		OnInput(@event);
+		if (@event is not InputEventMouseButton mouseEvent || !mouseEvent.Pressed)
+			return;
+
+		if (mouseEvent.ButtonIndex == MouseButton.Right)
+		{
+			ShowShellContextMenu();
+			AcceptEvent();
+			return;
+		}
+
+		if (mouseEvent.ButtonIndex != MouseButton.Left)
+			return;
+
+		// Select this cue (shift/ctrl multi-select) but do not AcceptEvent — the LineEdit
+		// must still receive the click to focus and start editing pre/post wait.
+		if (Input.IsKeyPressed(Key.Shift))
+		{
+			_globalData?.ShellSelection?.SelectThrough(CueList.FetchCueFromId(CueId));
+			return;
+		}
+
+		if (Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.Meta))
+		{
+			_globalData?.ShellSelection?.AddSelection(CueList.FetchCueFromId(CueId));
+			return;
+		}
+
+		_globalData?.ShellSelection?.SelectIndividualShell(CueList.FetchCueFromId(CueId));
 	}
 
 	/// <summary>

@@ -629,7 +629,18 @@ public partial class MidiManager : Node
             return string.Empty;
 
         string platformDir = NativeLibPaths.GetPlatformDir(out _);
-        string path = NativeLibPaths.FindLibraryFile(fileName, platformDir, out _, out _);
+        string path = NativeLibPaths.FindLibraryFile(fileName, platformDir, out string foundDir, out var tried);
+        if (string.IsNullOrEmpty(path))
+        {
+            GD.PrintErr(
+                $"MidiManager:ResolveNativeLibraryPath - {fileName} not found. " +
+                $"Tried: {NativeLibPaths.FormatTriedDirectories(tried)}");
+        }
+        else
+        {
+            GD.Print($"MidiManager:ResolveNativeLibraryPath - Found {fileName} in {foundDir}");
+        }
+
         return path;
     }
 

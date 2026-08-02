@@ -5,7 +5,8 @@ using AppSettings = Cue2.Base.Classes.Settings;
 namespace Cue2.UI.Scenes.Settings;
 
 /// <summary>
-/// General settings panel: UI scale, Go button scale, stop fade-out, media backup, multi-edit, and select-new-cues.
+/// General settings panel: UI scale, Go button scale, cuelist scale, stop fade-out, media backup,
+/// multi-edit, select-new-cues, and timeline waveforms.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
 /// Values are stored with the showfile via <see cref="AppSettings"/>.
 /// </summary>
@@ -21,6 +22,9 @@ public partial class SettingsGeneral : ScrollContainer
 
     private OptionButton _goScaleOptionButton;
     private Button _goScaleResetButton;
+
+    private OptionButton _cueListScaleOptionButton;
+    private Button _cueListScaleResetButton;
 
     private SpinBox _stopFadeSpinBox;
     private Button _stopFadeResetButton;
@@ -42,6 +46,14 @@ public partial class SettingsGeneral : ScrollContainer
 
     /// <summary>Go scale option index → scale factor (matches OptionButton order).</summary>
     private static readonly float[] GoScaleValues = { 0.5f, 1.0f, 2.0f, 4.0f, 8.0f, 32.0f };
+
+    /// <summary>Cue list scale option index → scale factor (Small / Medium / Large).</summary>
+    private static readonly float[] CueListScaleValues =
+    {
+        AppSettings.CueListScaleSmall,
+        AppSettings.CueListScaleMedium,
+        AppSettings.CueListScaleLarge
+    };
 
     public override void _Ready()
     {
@@ -71,6 +83,16 @@ public partial class SettingsGeneral : ScrollContainer
         _goScaleResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
         _goScaleResetButton.Pressed += OnGoScaleResetPressed;
         _goScaleOptionButton.ItemSelected += OnGoScaleItemSelected;
+
+        _cueListScaleOptionButton = GetNodeOrNull<OptionButton>("%CueListScaleOptionButton");
+        _cueListScaleResetButton = GetNodeOrNull<Button>("%CueListScaleResetButton");
+        if (_cueListScaleResetButton != null)
+        {
+            _cueListScaleResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+            _cueListScaleResetButton.Pressed += OnCueListScaleResetPressed;
+        }
+        if (_cueListScaleOptionButton != null)
+            _cueListScaleOptionButton.ItemSelected += OnCueListScaleItemSelected;
 
         _stopFadeSpinBox = GetNode<SpinBox>("%StopFadeSpinBox");
         _stopFadeResetButton = GetNode<Button>("%StopFadeResetButton");
@@ -180,6 +202,13 @@ public partial class SettingsGeneral : ScrollContainer
                 _goScaleOptionButton.SetBlockSignals(false);
             }
 
+            if (_cueListScaleOptionButton != null)
+            {
+                _cueListScaleOptionButton.SetBlockSignals(true);
+                _cueListScaleOptionButton.Selected = CueListScaleToIndex(_globalData.Settings.CueListScale);
+                _cueListScaleOptionButton.SetBlockSignals(false);
+            }
+
             _stopFadeSpinBox?.SetValueNoSignal(_globalData.Settings.StopFadeDuration);
             _mediaBackupCheckBox?.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
             _multiEditCheckBox?.SetPressedNoSignal(_globalData.Settings.MultiEditEnabled);
@@ -198,6 +227,7 @@ public partial class SettingsGeneral : ScrollContainer
     {
         UpdateUiScaleResetButton();
         UpdateGoScaleResetButton();
+        UpdateCueListScaleResetButton();
         UpdateStopFadeResetButton();
         UpdateMediaBackupResetButton();
         UpdateMultiEditResetButton();
@@ -362,6 +392,81 @@ public partial class SettingsGeneral : ScrollContainer
             32.0f => "Nothing but Go",
             _ => scale.ToString("0.##")
         };
+    }
+
+    // ── Cue List Scale ────────────────────────────────────────────────────
+
+    private void OnCueListScaleItemSelected(long index)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        int i = (int)index;
+        if (i < 0 || i >= CueListScaleValues.Length)
+            i = CueListScaleToIndex(AppSettings.DefaultCueListScale);
+
+        float scale = CueListScaleValues[i];
+        if (Mathf.IsEqualApprox(_globalData.Settings.CueListScale, scale))
+        {
+            UpdateCueListScaleResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change cue list scale", null, "CueListScale");
+        _globalData.Settings.CueListScale = scale;
+        _globalSignals.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), _globalData.Settings.CueListScale);
+        UpdateCueListScaleResetButton();
+    }
+
+    private void OnCueListScaleResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (Mathf.IsEqualApprox(_globalData.Settings.CueListScale, AppSettings.DefaultCueListScale))
+        {
+            SyncSettings();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Reset cue list scale", null, "CueListScale");
+        _globalData.Settings.CueListScale = AppSettings.DefaultCueListScale;
+        SyncSettings();
+        _globalSignals.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), AppSettings.DefaultCueListScale);
+    }
+
+    private void UpdateCueListScaleResetButton()
+    {
+        if (_cueListScaleResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.CueListScale, AppSettings.DefaultCueListScale);
+        _cueListScaleResetButton.Visible = !atDefault;
+        if (!atDefault)
+            _cueListScaleResetButton.TooltipText = $"Reset to default: {CueListScaleLabel(AppSettings.DefaultCueListScale)}";
+    }
+
+    private static int CueListScaleToIndex(float scale)
+    {
+        for (int i = 0; i < CueListScaleValues.Length; i++)
+        {
+            if (Mathf.IsEqualApprox(CueListScaleValues[i], scale))
+                return i;
+        }
+        for (int i = 0; i < CueListScaleValues.Length; i++)
+        {
+            if (Mathf.IsEqualApprox(CueListScaleValues[i], AppSettings.DefaultCueListScale))
+                return i;
+        }
+        return 1;
+    }
+
+    private static string CueListScaleLabel(float scale)
+    {
+        if (Mathf.IsEqualApprox(scale, AppSettings.CueListScaleSmall))
+            return "Small";
+        if (Mathf.IsEqualApprox(scale, AppSettings.CueListScaleMedium))
+            return "Medium";
+        if (Mathf.IsEqualApprox(scale, AppSettings.CueListScaleLarge))
+            return "Large";
+        return scale.ToString("0.##");
     }
 
     // ── Stop Fade Out ─────────────────────────────────────────────────────

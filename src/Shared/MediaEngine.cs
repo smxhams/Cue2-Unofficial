@@ -73,20 +73,30 @@ public partial class MediaEngine : Node
             string libPath = NativeLibPaths.FindDirectoryContainingAll(fileNames, platformDir, out var tried);
             if (string.IsNullOrEmpty(libPath))
             {
-                string triedList = tried.Count > 0 ? string.Join("; ", tried) : "(no candidates)";
-                throw new DllNotFoundException(
+                string triedList = NativeLibPaths.FormatTriedDirectories(tried);
+                string msg =
                     $"FFmpeg libraries not found for {platformLabel}. Looked in: {triedList}. " +
-                    "After export, copy bin/{platform} natives next to the app (see docs/export-packaging.md).");
+                    "After export, place core FFmpeg dylibs/DLLs in Contents/Frameworks (macOS), " +
+                    "data_Cue2_*, or bin/{platform}/ (see docs/export-packaging.md).";
+                GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - {msg}");
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), msg, 2);
+                throw new DllNotFoundException(msg);
             }
 
             GD.Print($"MediaEngine:LoadFFmpegLibraries - Using {platformLabel} libs from: {libPath}");
+            GD.Print($"MediaEngine:LoadFFmpegLibraries - Candidates tried: {NativeLibPaths.FormatTriedDirectories(tried)}");
 
             // FFmpeg.AutoGen resolves further loads from RootPath
             ffmpeg.RootPath = libPath;
 
+            // Preload in dependency order so dyld/Windows loader can resolve siblings when
+            // install names use @loader_path (portable builds) rather than absolute Homebrew paths.
             foreach (string fileName in fileNames)
             {
                 string fullPath = Path.Combine(libPath, fileName);
+                if (!File.Exists(fullPath))
+                    throw new FileNotFoundException($"Missing FFmpeg library file: {fullPath}");
+
                 nint handle = NativeLibrary.Load(fullPath);
                 GD.Print($"MediaEngine:LoadFFmpegLibraries - Loaded {fileName} (handle: {handle})");
             }
@@ -96,10 +106,14 @@ public partial class MediaEngine : Node
         catch (DllNotFoundException ex)
         {
             GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Library not found: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"FFmpeg: {ex.Message}", 2);
         }
         catch (Exception ex)
         {
             GD.PrintErr($"MediaEngine:LoadFFmpegLibraries - Load error: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"FFmpeg load error: {ex.Message}", 2);
         }
     }
 

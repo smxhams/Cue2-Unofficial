@@ -36,19 +36,27 @@ public partial class GlobalStyles : Node
 	public static Color ZebraEven = new Color(0.145f, 0.155f, 0.165f, 1f);
 	public static Color ZebraOdd = new Color(0.105f, 0.112f, 0.120f, 1f);
 
-	/// <summary>Main title bar background while in Edit Mode (default chrome).</summary>
+	/// <summary>Main title bar background (edit/show share the same bar; accent is the window border).</summary>
 	public static Color TitleBarEditMode = new Color(0.059f, 0.059f, 0.059f, 1f);
 
-	/// <summary>
-	/// Main title bar background while in Show Mode (warm live-performance tint from HighColor palette).
-	/// </summary>
+	/// <summary>Legacy title-bar show tint (unused; show mode accents the window border).</summary>
 	public static Color TitleBarShowMode = new Color(HighColor5.R, HighColor5.G, HighColor5.B, 1f);
 
-	/// <summary>Title label colour in Edit Mode.</summary>
+	/// <summary>Title label colour (unchanged between edit and show mode).</summary>
 	public static Color TitleBarLabelEditMode = new Color(0.75f, 0.78f, 0.80f, 1f);
 
-	/// <summary>Title label colour in Show Mode (HighColor1 accent).</summary>
+	/// <summary>Legacy title label show accent (unused; show mode accents the window border).</summary>
 	public static Color TitleBarLabelShowMode = HighColor1;
+
+	/// <summary>
+	/// Main window border in Edit Mode (matches Cue2Base.tscn Border StyleBox default).
+	/// </summary>
+	public static Color WindowBorderEditMode = new Color(0.00392157f, 0.231373f, 0.25098f, 1f);
+
+	/// <summary>
+	/// Main window border in Show Mode — warm HighColor5 accent for live-performance visibility.
+	/// </summary>
+	public static Color WindowBorderShowMode = HighColor5;
 
 	// List zebra styles (legacy StyleBox accessors)
 	private static StyleBoxFlat _evenRowStyle;
