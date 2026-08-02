@@ -165,6 +165,8 @@ public partial class ControlComponentCard : PanelContainer
             _audioFadeLineEdit.TextSubmitted += OnAudioFadeSubmitted;
             _audioFadeLineEdit.FocusExited += OnAudioFadeFocusExited;
             _audioFadeLineEdit.TextChanged += _ => _audioFadeEditing = true;
+            // Relative fades may go above 0 dB; absolute commit still clamps in handler.
+            LineEditDbDragSlider.EnableSignedDb(_audioFadeLineEdit);
         }
 
         if (_opacityFadeLineEdit != null)
@@ -833,6 +835,10 @@ public partial class ControlComponentCard : PanelContainer
                     if (!_matrixCellEditing) return;
                     OnMatrixCellSubmitted(volumeEdit.Text, volumeEdit, row, col, force: false);
                 };
+                if (relative)
+                    LineEditDbDragSlider.EnableSignedDb(volumeEdit);
+                else
+                    LineEditDbDragSlider.EnableVolume(volumeEdit);
 
                 _matrixGrid.AddChild(volumeEdit);
             }

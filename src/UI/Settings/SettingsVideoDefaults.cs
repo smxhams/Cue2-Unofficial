@@ -141,6 +141,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _useAudioCheckBox.Toggled += OnUseAudioToggled;
         _audioVolumeInput.TextSubmitted += OnAudioVolumeSubmitted;
         _audioVolumeInput.FocusExited += OnAudioVolumeFocusExited;
+        LineEditDbDragSlider.EnableVolume(_audioVolumeInput);
         _panSlider.ValueChanged += OnPanSliderChanged;
         _panSlider.DragEnded += OnPanDragEnded;
         _panInput.TextSubmitted += OnPanSubmitted;

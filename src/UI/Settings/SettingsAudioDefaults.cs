@@ -93,6 +93,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
             _outputOption.ItemSelected += OnOutputSelected;
         _volumeInput.TextSubmitted += OnVolumeSubmitted;
         _volumeInput.FocusExited += OnVolumeFocusExited;
+        LineEditDbDragSlider.EnableVolume(_volumeInput);
         _panSlider.ValueChanged += OnPanSliderChanged;
         _panSlider.DragEnded += OnPanDragEnded;
         _panInput.TextSubmitted += OnPanSubmitted;

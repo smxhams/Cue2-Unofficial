@@ -72,6 +72,7 @@ public partial class SettingsAudio : ScrollContainer
         _declickSpinBox.ValueChanged += OnDeclickChanged;
         _masterVolumeInput.TextSubmitted += OnMasterVolumeSubmitted;
         _masterVolumeInput.FocusExited += OnMasterVolumeFocusExited;
+        LineEditDbDragSlider.EnableVolume(_masterVolumeInput);
         _masterMuteCheckBox.Toggled += OnMasterMuteToggled;
         _refreshDevicesButton.Pressed += RefreshOpenDevicesList;
 

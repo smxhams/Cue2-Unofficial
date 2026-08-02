@@ -192,6 +192,7 @@ public partial class VideoInspector : Control
 		_useAudioCheckButton.Toggled += OnUseAudioToggled;
 		_volumeInput.TextSubmitted += newText => VolumeInputSubmitted(newText, _volumeInput);
 		_volumeInput.FocusExited += () => VolumeInputSubmitted(_volumeInput.Text, _volumeInput);
+		LineEditDbDragSlider.EnableVolume(_volumeInput);
 		if (_panSlider != null)
 		{
 			_panSlider.MinValue = -100;
@@ -2819,6 +2820,7 @@ public partial class VideoInspector : Control
 				var col1 = col;
 				volumeEdit.TextSubmitted += (string newText) => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
 				volumeEdit.FocusExited += () => OnMatrixVolumeSubmitted(volumeEdit.Text, volumeEdit, row1, col1);
+				LineEditDbDragSlider.EnableVolume(volumeEdit);
 				_routingMatrixGrid.AddChild(volumeEdit);
 			}
 		}
