@@ -1079,46 +1079,104 @@ public partial class ActiveCue : GodotObject
         }
     }
 
+    /// <summary>
+    /// Starts this cue's media and non-control components, and runs control components.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Media / OSC / MIDI / cue-light / text always kick off in parallel and are never
+    /// delayed by control components that happen to appear earlier in the component list.
+    /// </para>
+    /// <para>
+    /// Controls run concurrently with that media batch. Order-sensitive transport actions
+    /// (GO, Start Now, Pause, Stop, Resume, Seek) are awaited in list order so e.g. GO then
+    /// Start Now still works. Long-running property animations (Fade, Translate Layer) are
+    /// fire-and-forget so a 10s fade cannot hold media start or later transport actions.
+    /// </para>
+    /// </remarks>
     private async Task TriggerComponents()
     {
-        // Media / OSC / cue-light kick off in parallel as we walk the list.
-        // Control components await in list order so GO can finish before Start Now, etc.
-        var parallel = new List<Task>();
+        var mediaAndInstant = new List<Task>();
+        var controls = new List<ControlComponent>();
 
         foreach (var comp in _cue.Components)
         {
             if (comp is AudioComponent audioComp)
             {
-                parallel.Add(TriggerAudioComponent(audioComp));
+                mediaAndInstant.Add(TriggerAudioComponent(audioComp));
             }
             else if (comp is VideoComponent videoComp)
             {
-                parallel.Add(TriggerVideoComponent(videoComp));
+                mediaAndInstant.Add(TriggerVideoComponent(videoComp));
             }
             else if (comp is TextComponent textComp)
             {
-                parallel.Add(TriggerTextComponent(textComp));
+                mediaAndInstant.Add(TriggerTextComponent(textComp));
             }
             else if (comp is CueLightComponent cueLightComp)
             {
-                parallel.Add(TriggerCueLightComponent(cueLightComp));
+                mediaAndInstant.Add(TriggerCueLightComponent(cueLightComp));
             }
             else if (comp is OscComponent oscComp)
             {
-                parallel.Add(TriggerOscComponent(oscComp));
+                mediaAndInstant.Add(TriggerOscComponent(oscComp));
             }
             else if (comp is MidiOutputComponent midiOutComp)
             {
-                parallel.Add(TriggerMidiOutputComponent(midiOutComp));
+                mediaAndInstant.Add(TriggerMidiOutputComponent(midiOutComp));
             }
             else if (comp is ControlComponent controlComp)
+            {
+                controls.Add(controlComp);
+            }
+        }
+
+        Task mediaTask = mediaAndInstant.Count > 0
+            ? Task.WhenAll(mediaAndInstant)
+            : Task.CompletedTask;
+        Task controlsTask = controls.Count > 0
+            ? RunControlComponentsInOrderAsync(controls)
+            : Task.CompletedTask;
+
+        // Media must not wait for control fades; controls still run in their own sequence.
+        await Task.WhenAll(mediaTask, controlsTask);
+    }
+
+    /// <summary>
+    /// True when the control action's <see cref="ControlComponent.ExecuteAsync"/> may take
+    /// many seconds (property animation). These must not gate media or later transport controls.
+    /// </summary>
+    private static bool IsLongRunningControlAction(ControlAction action) =>
+        action is ControlAction.Fade or ControlAction.TranslateLayer;
+
+    /// <summary>
+    /// Runs control components in list order. Transport actions are awaited; Fade / Translate
+    /// Layer are started without waiting for their full duration.
+    /// </summary>
+    /// <param name="controls">Control components in cue component order.</param>
+    private async Task RunControlComponentsInOrderAsync(List<ControlComponent> controls)
+    {
+        if (controls == null || controls.Count == 0)
+            return;
+
+        foreach (var controlComp in controls)
+        {
+            if (controlComp == null)
+                continue;
+
+            if (_isCleaned || _suppressContentCompleted)
+                return;
+
+            if (IsLongRunningControlAction(controlComp.Action))
+            {
+                // Panel completes when the fade/translate task finishes (see TriggerControlComponent finally).
+                _ = TriggerControlComponent(controlComp);
+            }
+            else
             {
                 await TriggerControlComponent(controlComp);
             }
         }
-
-        if (parallel.Count > 0)
-            await Task.WhenAll(parallel);
     }
 
     private async Task TriggerAudioComponent(AudioComponent audioComp)
@@ -1547,6 +1605,12 @@ public partial class ActiveCue : GodotObject
         try
         {
             await _pendingPreloadTask;
+            // Cleanup may have run while setup tasks were finishing — do not treat as ready.
+            if (_isCleaned || !_componentsSetup)
+            {
+                if (!_componentsSetup)
+                    _pendingPreloadTask = null;
+            }
         }
         catch (Exception ex)
         {
@@ -2357,6 +2421,9 @@ public partial class ActiveCue : GodotObject
     
     private async Task SetupComponents()
     {
+        if (!IsSetupStillValid())
+            return;
+
         var tasks = new List<Task>();
         foreach (var component in _cue.Components)
         {
@@ -2392,8 +2459,95 @@ public partial class ActiveCue : GodotObject
             }
         }
         await Task.WhenAll(tasks);
+
+        // Stop/cancel during preload may complete awaits after Cleanup — never mark ready or link CC.
+        if (!IsSetupStillValid())
+        {
+            GD.Print($"ActiveCue:SetupComponents - {_cue?.Name}: aborted after setup tasks (cleaned/invalid)");
+            return;
+        }
+
         LinkVideoSubtitlesToText();
         _componentsSetup = true;
+    }
+
+    /// <summary>
+    /// True when this ActiveCue may still attach playback nodes / component UI after an await.
+    /// </summary>
+    /// <remarks>
+    /// Call after every await in component setup. If false, discard any half-built playback
+    /// and return — do not touch freed bars or increment component counts.
+    /// </remarks>
+    private bool IsSetupStillValid()
+    {
+        if (_isCleaned)
+            return false;
+        if (!IsInstanceValid(this))
+            return false;
+        if (_activeCueBar == null || !IsInstanceValid(_activeCueBar))
+            return false;
+        if (_componentContainer != null && !IsInstanceValid(_componentContainer))
+            return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Tears down an audio playback that was never registered on this ActiveCue (setup abort / Init failure).
+    /// </summary>
+    private void DiscardOrphanAudioPlayback(ActiveAudioPlayback playback)
+    {
+        if (playback == null)
+            return;
+        try
+        {
+            playback.Clean();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:DiscardOrphanAudioPlayback - {_cue?.Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Tears down a video playback that was never registered (may already be parented under the bar).
+    /// </summary>
+    private void DiscardOrphanVideoPlayback(ActiveVideoPlayback playback)
+    {
+        if (playback == null)
+            return;
+        try
+        {
+            if (IsInstanceValid(playback))
+            {
+                playback.Clean();
+                if (IsInstanceValid(playback) && playback.IsInsideTree())
+                    playback.QueueFree();
+                else if (IsInstanceValid(playback))
+                    playback.Free();
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:DiscardOrphanVideoPlayback - {_cue?.Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Tears down a text playback that was never registered (may already be parented under the bar).
+    /// </summary>
+    private void DiscardOrphanTextPlayback(ActiveTextPlayback playback)
+    {
+        if (playback == null)
+            return;
+        try
+        {
+            if (IsInstanceValid(playback))
+                playback.Clean();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:DiscardOrphanTextPlayback - {_cue?.Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2454,8 +2608,12 @@ public partial class ActiveCue : GodotObject
 
     private async Task SetupAudioComponent(AudioComponent audioComponent)
     {
+        ActiveAudioPlayback playback = null;
         try
         {
+            if (!IsSetupStillValid())
+                return;
+
             // Fail fast: no output means playback can never produce sound or complete.
             if (!audioComponent.HasOutputAssigned)
             {
@@ -2485,11 +2643,21 @@ public partial class ActiveCue : GodotObject
             if (audioComponent.Metadata == null)
             {
                 audioComponent.Metadata = await _mediaEngine.GetAudioFileMetadataAsync(audioComponent.AudioFile);
+                if (!IsSetupStillValid())
+                    return;
             }
 
-            var playback = new ActiveAudioPlayback(audioComponent, _audioDevices);
+            playback = new ActiveAudioPlayback(audioComponent, _audioDevices);
             await playback.InitAsync();
-            
+
+            // Stop/cancel during open: do not attach UI or register streams on a freed ActiveCue.
+            if (!IsSetupStillValid())
+            {
+                DiscardOrphanAudioPlayback(playback);
+                playback = null;
+                return;
+            }
+
             // UI
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
@@ -2509,7 +2677,7 @@ public partial class ActiveCue : GodotObject
             // Component Logic
             _activeAudioComponents.Add(componentPanel, playback);
             _componentToAudio.Add(componentPanel, audioComponent);
-            
+            playback = null; // ownership transferred to maps / Cleanup
             
             pauseButton.Pressed += () => 
             {
@@ -2544,7 +2712,9 @@ public partial class ActiveCue : GodotObject
                 {
                     if (mb.Pressed)
                     {
-                        playback.IsSeeking = true;
+                        if (!_activeAudioComponents.TryGetValue(componentPanel, out var seekPb) || seekPb == null)
+                            return;
+                        seekPb.IsSeeking = true;
                         var localPos = progressBar.GetLocalMousePosition();
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
                         pendingContentSeekSec = percent * audioSeekSpan;
@@ -2556,17 +2726,21 @@ public partial class ActiveCue : GodotObject
                     else
                     {
                         // Release: perform the seek across playcount timeline
-                        if (playback.IsSeeking)
+                        if (!_activeAudioComponents.TryGetValue(componentPanel, out var seekPb) || seekPb == null)
+                            return;
+                        if (seekPb.IsSeeking)
                         {
-                            playback.SeekToTotalContentSeconds(pendingContentSeekSec);
+                            seekPb.SeekToTotalContentSeconds(pendingContentSeekSec);
                             SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                             GD.Print($"ActiveCue:ProgressBar - Sought to content {pendingContentSeekSec:F3}s on release");
                         }
-                        playback.IsSeeking = false;
+                        seekPb.IsSeeking = false;
                     }
                 }
-                else if (@event is InputEventMouseMotion && playback.IsSeeking)
+                else if (@event is InputEventMouseMotion)
                 {
+                    if (!_activeAudioComponents.TryGetValue(componentPanel, out var seekPb) || seekPb == null || !seekPb.IsSeeking)
+                        return;
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
                     pendingContentSeekSec = percent * audioSeekSpan;
@@ -2577,10 +2751,11 @@ public partial class ActiveCue : GodotObject
             };
 
             _activeComponentCount++;
-            WireAudioCompleted(playback, componentPanel);
+            WireAudioCompleted(_activeAudioComponents[componentPanel], componentPanel);
         }
         catch (Exception ex)
         {
+            DiscardOrphanAudioPlayback(playback);
             GD.Print($"ActiveCue:SetupAudioComponent - Exception: {ex.Message}");
             if (IsMissingFileException(ex, audioComponent.AudioFile))
                 ReportMissingMedia(audioComponent.AudioFile);
@@ -2628,8 +2803,12 @@ public partial class ActiveCue : GodotObject
     /// <param name="videoComponent"></param>
     private async Task SetupVideoComponent(VideoComponent videoComponent)
     {
+        ActiveVideoPlayback playback = null;
         try
         {
+            if (!IsSetupStillValid())
+                return;
+
             if (string.IsNullOrEmpty(videoComponent.VideoFile))
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -2651,6 +2830,8 @@ public partial class ActiveCue : GodotObject
             if (videoComponent.Metadata == null)
             {
                 videoComponent.Metadata = await _mediaEngine.GetVideoFileMetadataAsync(videoComponent.VideoFile);
+                if (!IsSetupStillValid())
+                    return;
             }
 
             if (videoComponent.IsImage)
@@ -2659,13 +2840,24 @@ public partial class ActiveCue : GodotObject
                 videoComponent.UseAudio = false;
                 videoComponent.RecalculateDuration();
             }
-            
-            var playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
+
+            if (!IsSetupStillValid())
+                return;
+
+            playback = new ActiveVideoPlayback(videoComponent, _audioDevices);
             // Must be in the scene tree so _Process can present video frames.
             // ActiveCue is a GodotObject (not a Node); parent under the active cue bar.
             _activeCueBar.AddChild(playback);
             await playback.InitAsync();
-            
+
+            // Stop/cancel during open: drop parented orphan (not yet in component maps).
+            if (!IsSetupStillValid())
+            {
+                DiscardOrphanVideoPlayback(playback);
+                playback = null;
+                return;
+            }
+
             // UI
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
@@ -2695,17 +2887,21 @@ public partial class ActiveCue : GodotObject
             // Component Logic
             _activeVideoComponents.Add(componentPanel, playback);
             _componentToVideo.Add(componentPanel, videoComponent);
-            
+            var registeredPlayback = playback;
+            playback = null; // ownership transferred to maps / Cleanup
+
             pauseButton.Pressed += () =>
             {
                 if (_isCleaned || !IsInstanceValid(componentPanel)) return;
-                if (!playback.IsPaused)
-                    playback.Pause();
+                if (!_activeVideoComponents.TryGetValue(componentPanel, out var pb) || pb == null)
+                    return;
+                if (!pb.IsPaused)
+                    pb.Pause();
                 else
-                    playback.Resume();
+                    pb.Resume();
 
                 if (IsInstanceValid(pauseButton) && IsInstanceValid(_activeCueBar))
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon(playback.IsPaused ? "Play" : "Pause", "AtlasIcons");
+                    pauseButton.Icon = _activeCueBar.GetThemeIcon(pb.IsPaused ? "Play" : "Pause", "AtlasIcons");
             };
 
             // Stop
@@ -2715,20 +2911,22 @@ public partial class ActiveCue : GodotObject
             var progressBar = componentPanel.GetNode<ProgressBar>("ComponentProgress");
             double pendingContentSeekSec = 0;
             double videoSeekSpan = videoComponent.Loop || videoComponent.TotalDuration < 0
-                ? (videoComponent.Duration > 0 ? videoComponent.Duration : Math.Max(0, playback.GetDuration()))
+                ? (videoComponent.Duration > 0 ? videoComponent.Duration : Math.Max(0, registeredPlayback.GetDuration()))
                 : Math.Max(0, videoComponent.TotalDuration);
             progressBar.GuiInput += (@event) =>
             {
+                if (!_activeVideoComponents.TryGetValue(componentPanel, out var seekPb) || seekPb == null)
+                    return;
                 if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
                 {
                     if (mb.Pressed)
                     {
-                        playback.IsSeeking = true;
+                        seekPb.IsSeeking = true;
                         var localPos = progressBar.GetLocalMousePosition();
                         // Still images held until stopped have no seekable timeline.
                         if (videoComponent.IsImage && videoSeekSpan <= 0)
                         {
-                            playback.IsSeeking = false;
+                            seekPb.IsSeeking = false;
                             return;
                         }
                         float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
@@ -2739,16 +2937,16 @@ public partial class ActiveCue : GodotObject
                     }
                     else
                     {
-                        if (playback.IsSeeking)
+                        if (seekPb.IsSeeking)
                         {
-                            playback.SeekToTotalContentSeconds(pendingContentSeekSec);
+                            seekPb.SeekToTotalContentSeconds(pendingContentSeekSec);
                             SyncHeadTimelineFromComponentSeek(pendingContentSeekSec);
                             GD.Print($"ActiveCue:ProgressBar - Sought to content {pendingContentSeekSec:F3}s on release");
                         }
-                        playback.IsSeeking = false;
+                        seekPb.IsSeeking = false;
                     }
                 }
-                else if (@event is InputEventMouseMotion && playback.IsSeeking)
+                else if (@event is InputEventMouseMotion && seekPb.IsSeeking)
                 {
                     var localPos = progressBar.GetLocalMousePosition();
                     float percent = Mathf.Clamp(localPos.X / progressBar.Size.X, 0f, 1f);
@@ -2759,7 +2957,7 @@ public partial class ActiveCue : GodotObject
                 }
             };
             ulong videoPanelId = componentPanel.GetInstanceId();
-            playback.TimeUpdated += time =>
+            registeredPlayback.TimeUpdated += time =>
             {
                 // Capture id only — panel may be freed before deferred UI runs.
                 double t = time;
@@ -2767,10 +2965,11 @@ public partial class ActiveCue : GodotObject
             };
             
             _activeComponentCount++;
-            WireVideoCompleted(playback, componentPanel);
+            WireVideoCompleted(registeredPlayback, componentPanel);
         }
         catch (Exception ex)
         {
+            DiscardOrphanVideoPlayback(playback);
             GD.Print($"ActiveCue:SetupVideoComponent - Exception: {ex.Message}, Stack: {ex.StackTrace}, Target: {ex.TargetSite}, {ex.InnerException}, {ex.Source}");
             if (IsMissingFileException(ex, videoComponent.VideoFile))
                 ReportMissingMedia(videoComponent.VideoFile);
@@ -2849,14 +3048,26 @@ public partial class ActiveCue : GodotObject
     /// <param name="textComponent">Text component to set up.</param>
     private Task SetupTextComponent(TextComponent textComponent)
     {
+        ActiveTextPlayback playback = null;
         try
         {
+            // No await here, but still race with Cleanup running on another stack after WhenAll start.
+            if (!IsSetupStillValid())
+                return Task.CompletedTask;
+
             textComponent.RecalculateDuration();
 
-            var playback = new ActiveTextPlayback(textComponent);
+            playback = new ActiveTextPlayback(textComponent);
             // Must be in the scene tree so _Process can drive the hold timer.
             _activeCueBar.AddChild(playback);
             playback.Init();
+
+            if (!IsSetupStillValid())
+            {
+                DiscardOrphanTextPlayback(playback);
+                playback = null;
+                return Task.CompletedTask;
+            }
 
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
@@ -2892,33 +3103,38 @@ public partial class ActiveCue : GodotObject
 
             _activeTextComponents.Add(componentPanel, playback);
             _componentToText.Add(componentPanel, textComponent);
+            var registeredPlayback = playback;
+            playback = null;
 
             pauseButton.Pressed += () =>
             {
                 if (_isCleaned || !IsInstanceValid(componentPanel)) return;
-                if (!playback.IsPaused)
-                    playback.Pause();
+                if (!_activeTextComponents.TryGetValue(componentPanel, out var pb) || pb == null)
+                    return;
+                if (!pb.IsPaused)
+                    pb.Pause();
                 else
-                    playback.Resume();
+                    pb.Resume();
 
                 if (IsInstanceValid(pauseButton) && IsInstanceValid(_activeCueBar))
-                    pauseButton.Icon = _activeCueBar.GetThemeIcon(playback.IsPaused ? "Play" : "Pause", "AtlasIcons");
+                    pauseButton.Icon = _activeCueBar.GetThemeIcon(pb.IsPaused ? "Play" : "Pause", "AtlasIcons");
             };
 
             stopButton.Pressed += async () => await StopTextComponent(componentPanel);
 
             ulong textPanelId = componentPanel.GetInstanceId();
-            playback.TimeUpdated += time =>
+            registeredPlayback.TimeUpdated += time =>
             {
                 double t = time;
                 Callable.From(() => UpdateTextUiByPanelId(t, textPanelId)).CallDeferred();
             };
 
             _activeComponentCount++;
-            WireTextCompleted(playback, componentPanel);
+            WireTextCompleted(registeredPlayback, componentPanel);
         }
         catch (Exception ex)
         {
+            DiscardOrphanTextPlayback(playback);
             GD.PrintErr($"ActiveCue:SetupTextComponent - Exception: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error activating text component for cue {_cue.Name}: {ex.Message}", 2);
@@ -3069,6 +3285,9 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
+            if (!IsSetupStillValid())
+                return Task.CompletedTask;
+
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             var labelText = $"{cueLightComponent.CueLight.Name} : {cueLightComponent.Action.ToString()}";
@@ -3102,6 +3321,9 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
+            if (!IsSetupStillValid())
+                return Task.CompletedTask;
+
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             var labelText = $"{oscComponent.OscConnection.Name} : {oscComponent.OscMessage}";
@@ -3133,6 +3355,9 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
+            if (!IsSetupStillValid())
+                return Task.CompletedTask;
+
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = midiComponent.GetDisplaySummary();
@@ -3165,6 +3390,9 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
+            if (!IsSetupStillValid())
+                return Task.CompletedTask;
+
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
 

@@ -37,6 +37,12 @@ public partial class SaveManager : Node
 	private bool _isOpenInProgress;
 
 	private VersionMismatchDialog _activeVersionDialog;
+
+	/// <summary>
+	/// True when the live session was opened from a showfile whose formatVersion is newer than
+	/// this build. Overwriting that file would re-stamp the current schema and can drop data.
+	/// </summary>
+	private bool _openedFromNewerFormat;
 	
 	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
@@ -63,9 +69,9 @@ public partial class SaveManager : Node
 		_autosaveTimer.Timeout += PerformAutosave;
 		AddChild(_autosaveTimer);
 
-		if (_globalData.LaunchLoadPath != null)
+		if (!string.IsNullOrEmpty(_globalData.StartupOpenPath))
 		{
-			LoadOnLaunch();
+			LoadStartupSession();
 		}
 		else
 		{
@@ -75,13 +81,15 @@ public partial class SaveManager : Node
 	}
 	
 	/// <summary>
-	/// Asynchronously loads a session file specified at launch, waiting for the next process frame to ensure the scene is ready.
+	/// Opens the showfile selected by startup preference (open last from user data), after one process frame.
 	/// </summary>
-	private async void LoadOnLaunch()
+	private async void LoadStartupSession()
 	{
 		await ToSignal(GetTree(), "process_frame");
-		GD.Print("SaveManager:LoadOnLaunch - Load On Launch");
-		OpenSelectedSession(_globalData.LaunchLoadPath);
+		string path = _globalData.StartupOpenPath;
+		GD.Print($"SaveManager:LoadStartupSession - Opening startup showfile: {path}");
+		if (!string.IsNullOrEmpty(path))
+			OpenSelectedSession(path);
 		ConfigureAutosave();
 	}
 
@@ -114,13 +122,23 @@ public partial class SaveManager : Node
 		if (_globalData.SessionName == null || _globalData.SessionPath == null)
 		{
 			SaveAs();
+			return;
 		}
-		else
+
+		// Never overwrite a newer-format original with this build's schema.
+		if (_openedFromNewerFormat)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-				$"Saving session to: {_globalData.SessionPath} with name: {_globalData.SessionName}:", 0);
-			SaveSession(_globalData.SessionPath);
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"This show was opened from a newer Cue2 format. Use Save As to write a copy " +
+				"this version can own — overwriting the original is blocked.",
+				(int)LogType.Warning);
+			SaveAs();
+			return;
 		}
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"Saving session to: {_globalData.SessionPath} with name: {_globalData.SessionName}:", 0);
+		SaveSession(_globalData.SessionPath);
 	}
 
 	/// <summary>
@@ -159,7 +177,8 @@ public partial class SaveManager : Node
 
 	private void OnSaveFileSelected(string path)
 	{
-		SaveSession(path);
+		// Save As always writes this build's format; user chose a new path (or accepted overwrite).
+		SaveSession(path, skipMediaBackup: false, clearNewerFormatGuard: true);
 	}
 	
 	
@@ -175,6 +194,18 @@ public partial class SaveManager : Node
 			return;
 		}
 
+		if (_openedFromNewerFormat)
+		{
+			GD.Print(
+				"SaveManager:ResaveSessionAfterMediaPathUpdate - Skipped (session opened from newer format; " +
+				"use Save As to create a this-version copy).");
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Media paths updated, but silent re-save was skipped because this show uses a newer format. " +
+				"Use Save As if you want a copy this version of Cue2 can own.",
+				(int)LogType.Warning);
+			return;
+		}
+
 		SaveSession(_globalData.SessionPath, skipMediaBackup: true);
 	}
 
@@ -184,8 +215,24 @@ public partial class SaveManager : Node
 	/// </summary>
 	/// <param name="selectedPath">The full path where the session file will be saved.</param>
 	/// <param name="skipMediaBackup">When true, does not enqueue media copies (used after path rewrite re-save).</param>
-	private void SaveSession(string selectedPath, bool skipMediaBackup = false)
+	/// <param name="clearNewerFormatGuard">
+	/// When true (Save As), clears the forward-compat open guard after a successful write.
+	/// </param>
+	private void SaveSession(string selectedPath, bool skipMediaBackup = false, bool clearNewerFormatGuard = false)
 	{
+		// Block accidental overwrite of a newer-format original via any path (autosave, etc.).
+		if (_openedFromNewerFormat &&
+		    !string.IsNullOrEmpty(_globalData.SessionPath) &&
+		    !clearNewerFormatGuard &&
+		    PathsEqual(selectedPath, _globalData.SessionPath))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"Save blocked: this show was opened from a newer Cue2 format. Use Save As to write a new file.",
+				(int)LogType.Warning);
+			GD.Print("SaveManager:SaveSession - Blocked overwrite of newer-format session path.");
+			return;
+		}
+
 		// Verify save folder structure (type-based: Audio, Video, Images, Waveforms)
 		var sessionPath = DirectoryUtils.PrepareSessionDirectory(selectedPath, out var folderPaths);
 		GD.Print($"SaveManager:SaveSession - Session path: {sessionPath} skipMediaBackup={skipMediaBackup}");
@@ -218,6 +265,10 @@ public partial class SaveManager : Node
 		}
 		file.StoreString(jsonString);
 		file.Close(); // Explicit close, though using handles it
+
+		// Successful Save As of a forward-compat open: this file is now owned by current format.
+		if (clearNewerFormatGuard)
+			_openedFromNewerFormat = false;
 
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 			skipMediaBackup
@@ -392,6 +443,11 @@ public partial class SaveManager : Node
 	/// Migrates (if needed), resets the session, and applies save data.
 	/// Called only after version matches or the user confirms Attempt Open.
 	/// </summary>
+	/// <remarks>
+	/// The live session is wiped only after migration succeeds. If load then fails, the
+	/// session is forced back to an empty New Session state and the path is <b>not</b>
+	/// added to recents (see <see cref="FailOpenAfterReset"/>).
+	/// </remarks>
 	/// <param name="selectedPath">Absolute path of the .c2 file.</param>
 	/// <param name="saveData">Already-parsed root dictionary (may be mutated by migration).</param>
 	/// <param name="fileVersion">Version metadata as read from the file.</param>
@@ -402,9 +458,11 @@ public partial class SaveManager : Node
 		ShowfileVersionInfo fileVersion,
 		bool userConfirmedMismatch)
 	{
+		bool sessionWiped = false;
 		try
 		{
 			// Migrate older (or stamp current) formats before applying to the live model.
+			// Session is not wiped yet — failed migration leaves the previous show intact.
 			if (ShowfileMigrator.NeedsMigration(fileVersion.FormatVersion) ||
 			    ShowfileMigrator.IsNewerThanSupported(fileVersion.FormatVersion) ||
 			    userConfirmedMismatch)
@@ -431,24 +489,44 @@ public partial class SaveManager : Node
 				ShowfileFormat.StampCurrentVersion(saveData);
 			}
 
-			// Wipe previous show only after version gate + successful migration.
+			if (!TryValidateOpenPayload(saveData, out var validateError))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Showfile rejected (session not changed): {validateError}", 2);
+				GD.PrintErr($"SaveManager:CompleteOpenSession - Validation failed: {validateError}");
+				return;
+			}
+
+			// Wipe previous show only after version gate + successful migration + shape check.
 			ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+			sessionWiped = true;
 
 			ApplySessionPaths(selectedPath);
 
-			LoadSessionFromData(saveData);
+			if (!LoadSessionFromData(saveData, out var loadError))
+			{
+				FailOpenAfterReset(selectedPath, loadError ?? "Unknown load error");
+				return;
+			}
 
-			// Document history is not retained across open/load.
+			// Success only: history, recents, autosave, title.
+			_openedFromNewerFormat = fileVersion.IsNewerFormat;
 			_globalData.HistoryManager?.Clear();
-
-			// Track in persistent recent files for "Open Recent" in header
 			_globalData.UserDataManager?.AddRecentShowFile(selectedPath);
-
 			ConfigureAutosave();
-
-			// Update title bar
 			GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")
 				?.CallDeferred("UpdateTitle");
+
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Session opened: {selectedPath}", 0);
+
+			if (_openedFromNewerFormat)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					"Opened a newer showfile format. Saving will not overwrite this file — use Save As " +
+					"to create a copy this version of Cue2 can own.",
+					(int)LogType.Warning);
+			}
 
 			if (userConfirmedMismatch)
 			{
@@ -458,10 +536,88 @@ public partial class SaveManager : Node
 		}
 		catch (Exception ex)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-				$"Failed to open session: {ex.Message}", 2);
 			GD.PrintErr($"SaveManager:CompleteOpenSession - Error: {ex.Message}\n{ex.StackTrace}");
+			if (sessionWiped)
+			{
+				// Previous show already gone — do not leave a half-applied open or pollute recents.
+				try
+				{
+					FailOpenAfterReset(selectedPath, ex.Message);
+				}
+				catch (Exception failEx)
+				{
+					GD.PrintErr($"SaveManager:CompleteOpenSession - FailOpenAfterReset: {failEx.Message}");
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Failed to open session: {ex.Message}", 2);
+				}
+			}
+			else
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Failed to open session (session not changed): {ex.Message}", 2);
+			}
 		}
+	}
+
+	/// <summary>
+	/// Lightweight pre-reset check so we do not wipe the live show for an obviously unusable file.
+	/// </summary>
+	/// <param name="saveData">Parsed showfile root.</param>
+	/// <param name="error">Human-readable failure reason.</param>
+	/// <returns>True when the payload is worth attempting a load after reset.</returns>
+	private static bool TryValidateOpenPayload(Dictionary saveData, out string error)
+	{
+		error = null;
+		if (saveData == null || saveData.Count == 0)
+		{
+			error = "Showfile is empty or not a valid object.";
+			return false;
+		}
+
+		// Accept shows that only have settings or only cues (legacy / partial tooling dumps),
+		// but reject non-dictionary blocks that would throw after wipe.
+		if (saveData.ContainsKey("settings"))
+		{
+			var settingsVar = saveData["settings"];
+			if (settingsVar.VariantType != Variant.Type.Dictionary)
+			{
+				error = "Showfile 'settings' block is not an object.";
+				return false;
+			}
+		}
+
+		if (saveData.ContainsKey("cues"))
+		{
+			var cuesVar = saveData["cues"];
+			if (cuesVar.VariantType != Variant.Type.Dictionary)
+			{
+				error = "Showfile 'cues' block is not an object.";
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// After a failed open that already wiped the previous show: force a clean empty session,
+	/// do not add the path to recents, and surface a clear error.
+	/// </summary>
+	/// <param name="selectedPath">Path that failed to open (for logs only).</param>
+	/// <param name="reason">Failure reason shown to the user.</param>
+	private void FailOpenAfterReset(string selectedPath, string reason)
+	{
+		GD.PrintErr($"SaveManager:FailOpenAfterReset - path={selectedPath} reason={reason}");
+
+		// Drop any half-applied settings/cues from the failed load.
+		ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+		_globalData.HistoryManager?.Clear();
+		ConfigureAutosave();
+		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")
+			?.CallDeferred("UpdateTitle");
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			$"Failed to open showfile — session reset to empty (not added to recents): {reason}", 2);
 	}
 
 	/// <summary>
@@ -550,6 +706,9 @@ public partial class SaveManager : Node
 		// Stop live playback before tearing down cues / devices
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
 
+		// New / failed open wipe — no longer protecting a newer-format original path.
+		_openedFromNewerFormat = false;
+
 		if (clearSessionIdentity)
 		{
 			// Detach from any saved show path (hotkey New may skip the menu path-clearing)
@@ -593,12 +752,19 @@ public partial class SaveManager : Node
 	/// Loads session data from an already-parsed (and optionally migrated) dictionary.
 	/// </summary>
 	/// <param name="saveData">Root showfile dictionary with settings/cues keys.</param>
-	private void LoadSessionFromData(Dictionary saveData)
+	/// <param name="error">On failure, a human-readable reason (null on success).</param>
+	/// <returns>
+	/// True when settings and cues were applied without throwing. False on null payload or
+	/// any exception (caller must treat the live model as unusable / half-applied).
+	/// </returns>
+	private bool LoadSessionFromData(Dictionary saveData, out string error)
 	{
+		error = null;
 		if (saveData == null)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to load session: save data is null.", 2);
-			return;
+			error = "Save data is null.";
+			GD.PrintErr("SaveManager:LoadSessionFromData - save data is null");
+			return false;
 		}
 
 		try
@@ -619,11 +785,13 @@ public partial class SaveManager : Node
 
 			// After settings + cues are linked, evaluate missing files / output / target layers.
 			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+			return true;
 		}
 		catch (Exception ex)
 		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to load session: {ex.Message}", 2);
+			error = ex.Message;
 			GD.PrintErr($"SaveManager:LoadSessionFromData - Error: {ex.Message}  \n{ex.StackTrace}");
+			return false;
 		}
 	}
 	
@@ -726,39 +894,74 @@ public partial class SaveManager : Node
 	}
 
 	/// <summary>
-	/// Removes old autosave backups so that only 'depth' most recent ones remain.
+	/// Path equality for save/open guards (normalized absolute paths, case-insensitive on Windows).
 	/// </summary>
+	private static bool PathsEqual(string a, string b)
+	{
+		if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+			return false;
+		try
+		{
+			string na = System.IO.Path.GetFullPath(a.Replace('\\', '/'));
+			string nb = System.IO.Path.GetFullPath(b.Replace('\\', '/'));
+			return string.Equals(na, nb, StringComparison.OrdinalIgnoreCase);
+		}
+		catch
+		{
+			return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+		}
+	}
+
+	/// <summary>
+	/// Removes old autosave backups so that only <paramref name="maxBackups"/> most recent ones remain.
+	/// </summary>
+	/// <remarks>
+	/// Uses <see cref="Directory.GetFiles"/> rather than Godot <see cref="DirAccess.GetNext"/> alone
+	/// (listing requires <c>ListDirBegin</c>; without it prune never saw any files and backups grew unbounded).
+	/// </remarks>
 	private void PruneAutosaveBackups(string backupDir, int maxBackups)
 	{
-		if (!DirAccess.DirExistsAbsolute(backupDir)) return;
+		if (maxBackups < 1)
+			maxBackups = 1;
 
-		var dir = DirAccess.Open(backupDir);
-		if (dir == null) return;
+		if (string.IsNullOrEmpty(backupDir) || !Directory.Exists(backupDir))
+			return;
 
 		var backupFiles = new System.Collections.Generic.List<string>();
-		string fileName = dir.GetNext();
-		while (!string.IsNullOrEmpty(fileName))
+		try
 		{
-			if (!dir.CurrentIsDir() && fileName.Contains("_autosave_") && fileName.EndsWith(".c2"))
+			foreach (string path in Directory.GetFiles(backupDir))
 			{
-				backupFiles.Add(backupDir + "/" + fileName);
+				string fileName = Path.GetFileName(path);
+				if (string.IsNullOrEmpty(fileName))
+					continue;
+				// Match CreateAutosaveBackup naming: {SessionName}_autosave_{timestamp}.c2
+				if (fileName.Contains("_autosave_", StringComparison.Ordinal) &&
+				    fileName.EndsWith(".c2", StringComparison.OrdinalIgnoreCase))
+				{
+					backupFiles.Add(path);
+				}
 			}
-			fileName = dir.GetNext();
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:PruneAutosaveBackups - Failed to list {backupDir}: {ex.Message}");
+			return;
 		}
 
-		if (backupFiles.Count <= maxBackups) return;
+		if (backupFiles.Count <= maxBackups)
+			return;
 
 		// Sort by last write time, oldest first
-		backupFiles.Sort((a, b) => File.GetLastWriteTime(a).CompareTo(File.GetLastWriteTime(b)));
+		backupFiles.Sort((a, b) => File.GetLastWriteTimeUtc(a).CompareTo(File.GetLastWriteTimeUtc(b)));
 
-		int count = backupFiles.Count;
-		int toDelete = count - maxBackups;
+		int toDelete = backupFiles.Count - maxBackups;
 		for (int i = 0; i < toDelete; i++)
 		{
 			try
 			{
 				File.Delete(backupFiles[i]);
-				GD.Print($"SaveManager:PruneAutosaveBackups - Deleted old backup {backupFiles[i]}");
+				GD.Print($"SaveManager:PruneAutosaveBackups - Deleted old backup {Path.GetFileName(backupFiles[i])}");
 			}
 			catch (Exception ex)
 			{

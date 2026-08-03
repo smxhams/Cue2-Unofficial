@@ -1456,6 +1456,9 @@ public partial class CueList : Control
 		if (source == null) return null;
 
 		var clone = CloneCueShallow(source);
+		if (clone == null)
+			return null;
+
 		CreateShellAndInsert(clone, container, insertIndex, newParentId);
 
 		// Children of the source go under the clone's child container, in ChildCues order
@@ -1480,58 +1483,39 @@ public partial class CueList : Control
 	}
 
 	/// <summary>
-	/// Creates a new cue with a fresh id and copies scalar fields + components from <paramref name="source"/>.
+	/// Creates a new cue with a fresh id and deep-copies all document fields from
+	/// <paramref name="source"/> (shell props, arming, triggers, components).
 	/// Does not copy ParentId/ChildCues (set by tree insert).
 	/// </summary>
-	private static Cue CloneCueShallow(Cue source)
+	/// <remarks>
+	/// Uses <see cref="Cue.GetData"/> / <see cref="Cue.ApplyFromData"/> so hotkey, clock,
+	/// MIDI, OSC trigger, and component data stay aligned with clipboard paste.
+	/// </remarks>
+	private Cue CloneCueShallow(Cue source)
 	{
-		var clone = new Cue();
-		clone.Name = source.Name;
-		clone.CueNum = source.CueNum;
-		clone.PreWait = source.PreWait;
-		clone.Duration = source.Duration;
-		clone.TotalDuration = source.TotalDuration;
-		clone.PostWait = source.PostWait;
-		clone.Follow = source.Follow;
-		clone.Expanded = source.Expanded;
-		clone.Color = source.Color;
-		clone.Notes = source.Notes;
-		clone.Memo = source.Memo;
-		clone.ParentId = -1;
-		clone.ChildCues = new List<int>();
+		if (source == null)
+			return null;
 
-		// Deep-copy components via serialize/deserialize
-		clone.Components.Clear();
-		foreach (var comp in source.Components)
+		try
 		{
-			if (comp == null) continue;
-			try
-			{
-				var compDict = comp.GetData();
-				compDict["Type"] = comp.Type;
-				ICueComponent newComp = comp.Type switch
-				{
-					"Audio" => new AudioComponent(),
-					"Video" => new VideoComponent(),
-					"Text" => new TextComponent(),
-					"Network" => new NetworkComponent(),
-					"CueLight" => new CueLightComponent(),
-					"OscComponent" => new OscComponent(),
-					"Control" => new ControlComponent(),
-					"MidiOutput" => new MidiOutputComponent(),
-					_ => null
-				};
-				if (newComp == null) continue;
-				newComp.LoadFromData(compDict);
-				clone.Components.Add(newComp);
-			}
-			catch (Exception ex)
-			{
-				GD.PrintErr($"CueList:CloneCueShallow - Failed to clone component {comp.Type}: {ex.Message}");
-			}
-		}
+			var data = DeepCloneDict(source.GetData());
+			// ApplyFromData keeps the new Cue's Id; clear hierarchy for the insert path.
+			data.Remove("Id");
+			data["ParentId"] = "-1";
+			data["ChildCues"] = new Godot.Collections.Array();
 
-		return clone;
+			var clone = new Cue();
+			clone.ApplyFromData(data);
+			clone.ParentId = -1;
+			clone.ChildCues = new List<int>();
+			RelinkCueComponents(clone);
+			return clone;
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"CueList:CloneCueShallow - Failed to clone cue \"{source.Name}\": {ex.Message}");
+			return null;
+		}
 	}
 
 	/// <summary>

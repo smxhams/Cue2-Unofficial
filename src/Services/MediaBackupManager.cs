@@ -77,6 +77,12 @@ public partial class MediaBackupManager : Node
     private bool _workerRunning;
     private CancellationTokenSource _cts;
 
+    /// <summary>
+    /// Bumped on New Session / open wipe so in-flight workers and deferred callbacks
+    /// never rewrite paths or silent-resave into the wrong show.
+    /// </summary>
+    private int _sessionEpoch;
+
     /// <summary>Set when any cue path was rewritten to a relative path during the current batch.</summary>
     private bool _pathsChangedThisBatch;
 
@@ -91,10 +97,15 @@ public partial class MediaBackupManager : Node
     }
 
     /// <summary>
-    /// Drops queued backup jobs (in-flight copy may still finish). Used on New Session.
+    /// Drops queued backup jobs and invalidates the current worker generation.
+    /// Used on New Session / open wipe so deferred path rewrites and silent re-saves
+    /// cannot target a different show. An in-flight <see cref="File.Copy"/> may still
+    /// finish writing to the previous show folder (harmless); its deferred apply is ignored.
     /// </summary>
     public void ClearPendingJobs()
     {
+        CancellationTokenSource toCancel = null;
+        int epoch;
         lock (_queueLock)
         {
             _queue.Clear();
@@ -103,8 +114,25 @@ public partial class MediaBackupManager : Node
             _completedJobs = 0;
             _currentOriginPath = string.Empty;
             _currentDestPath = string.Empty;
+            _pathsChangedThisBatch = false;
+            _sessionEpoch++;
+            epoch = _sessionEpoch;
+            toCancel = _cts;
+            // Leave _workerRunning alone — the worker exits on cancel/epoch and may
+            // restart itself if a later enqueue left work for the new epoch.
         }
-        GD.Print("MediaBackupManager:ClearPendingJobs - Pending media backup queue cleared.");
+
+        try
+        {
+            toCancel?.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        GD.Print($"MediaBackupManager:ClearPendingJobs - Queue cleared, sessionEpoch={epoch}.");
+        EmitProgressDeferred();
     }
 
     /// <summary>0–100 overall progress for the current batch.</summary>
@@ -489,12 +517,9 @@ public partial class MediaBackupManager : Node
 
             if (!_workerRunning)
             {
-                _workerRunning = true;
                 _totalJobs = _queue.Count;
                 _completedJobs = 0;
-                _cts = new CancellationTokenSource();
-                var token = _cts.Token;
-                Task.Run(() => WorkerLoop(token), token);
+                StartWorkerUnlocked();
             }
             else
             {
@@ -504,6 +529,27 @@ public partial class MediaBackupManager : Node
 
         EmitProgressDeferred();
         return true;
+    }
+
+    /// <summary>
+    /// Starts a background worker for the current <see cref="_sessionEpoch"/>. Caller must hold <see cref="_queueLock"/>.
+    /// </summary>
+    private void StartWorkerUnlocked()
+    {
+        _workerRunning = true;
+        try
+        {
+            _cts?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _cts = new CancellationTokenSource();
+        int epoch = _sessionEpoch;
+        var token = _cts.Token;
+        Task.Run(() => WorkerLoop(token, epoch), token);
     }
 
     /// <summary>
@@ -525,24 +571,28 @@ public partial class MediaBackupManager : Node
         return MediaBackupKind.Audio;
     }
 
-    private void WorkerLoop(CancellationToken token)
+    private void WorkerLoop(CancellationToken token, int epoch)
     {
+        bool completedCleanly = false;
         try
         {
             while (true)
             {
-                if (token.IsCancellationRequested)
+                if (token.IsCancellationRequested || !IsWorkerEpochCurrent(epoch))
                     break;
 
                 BackupJob job;
                 lock (_queueLock)
                 {
+                    if (!IsWorkerEpochCurrent(epoch) || token.IsCancellationRequested)
+                        break;
+
                     if (_queue.Count == 0)
                     {
-                        _workerRunning = false;
                         _currentOriginPath = string.Empty;
                         _currentDestPath = string.Empty;
                         _queuedSourceKeys.Clear();
+                        completedCleanly = true;
                         break;
                     }
 
@@ -554,6 +604,10 @@ public partial class MediaBackupManager : Node
                 EmitProgressDeferred();
 
                 MediaBackupResult result = ProcessJob(job);
+
+                // Drop results after New Session / open — do not rewrite the new show's paths.
+                if (token.IsCancellationRequested || !IsWorkerEpochCurrent(epoch))
+                    break;
 
                 Interlocked.Increment(ref _completedJobs);
 
@@ -570,9 +624,9 @@ public partial class MediaBackupManager : Node
                         GD.Print($"MediaBackupManager:WorkerLoop - Skipped copy (already present): {result.RelativePath}");
                     }
 
-                    // Ensure cue URLs are show-relative (no-op if already set immediately)
+                    // Epoch argument so deferred apply is a no-op after session wipe.
                     CallDeferred(nameof(DeferredApplyRelativePath),
-                        result.SourcePath, result.RelativePath);
+                        result.SourcePath, result.RelativePath, epoch);
                 }
                 else
                 {
@@ -591,17 +645,38 @@ public partial class MediaBackupManager : Node
         }
         finally
         {
+            bool emitCompleted = false;
             lock (_queueLock)
             {
                 _workerRunning = false;
                 _currentOriginPath = string.Empty;
                 _currentDestPath = string.Empty;
-                _queuedSourceKeys.Clear();
+
+                // Jobs enqueued for a newer session while this worker was finishing a copy:
+                // start a fresh worker for the current epoch (keys already tracked by Enqueue).
+                if (_queue.Count > 0)
+                {
+                    StartWorkerUnlocked();
+                }
+                else
+                {
+                    _queuedSourceKeys.Clear();
+                    // Only finish the batch UI / silent re-save for the worker's own epoch.
+                    emitCompleted = completedCleanly && epoch == _sessionEpoch;
+                }
             }
 
             EmitProgressDeferred();
-            CallDeferred(nameof(DeferredEmitCompleted));
+            if (emitCompleted)
+                CallDeferred(nameof(DeferredEmitCompleted), epoch);
         }
+    }
+
+    /// <summary>True when <paramref name="epoch"/> still matches the live session generation.</summary>
+    private bool IsWorkerEpochCurrent(int epoch)
+    {
+        lock (_queueLock)
+            return epoch == _sessionEpoch;
     }
 
     private MediaBackupResult ProcessJob(BackupJob job)
@@ -746,8 +821,16 @@ public partial class MediaBackupManager : Node
         return false;
     }
 
-    private void DeferredApplyRelativePath(string sourceAbsolute, string relativePath)
+    private void DeferredApplyRelativePath(string sourceAbsolute, string relativePath, int epoch)
     {
+        if (!IsWorkerEpochCurrent(epoch))
+        {
+            GD.Print(
+                $"MediaBackupManager:DeferredApplyRelativePath - Ignored path rewrite (session changed). " +
+                $"rel={relativePath}");
+            return;
+        }
+
         if (ApplyRelativePathToCues(sourceAbsolute, sourceAbsolute, relativePath))
         {
             _pathsChangedThisBatch = true;
@@ -805,8 +888,14 @@ public partial class MediaBackupManager : Node
             percent, busy, statusText, origin, dest, completed, total);
     }
 
-    private void DeferredEmitCompleted()
+    private void DeferredEmitCompleted(int epoch)
     {
+        if (!IsWorkerEpochCurrent(epoch))
+        {
+            GD.Print("MediaBackupManager:DeferredEmitCompleted - Ignored (session changed during backup).");
+            return;
+        }
+
         _globalSignals.EmitSignal(nameof(GlobalSignals.MediaBackupCompleted));
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Media backup: idle.", 0);
 
@@ -830,6 +919,14 @@ public partial class MediaBackupManager : Node
     {
         if (!_pathsChangedThisBatch)
             return;
+
+        // Never silent-resave after New Session / failed open left no show path.
+        if (string.IsNullOrEmpty(_globalData?.SessionPath))
+        {
+            _pathsChangedThisBatch = false;
+            GD.Print("MediaBackupManager:RequestSilentResaveIfNeeded - Skipped (no SessionPath).");
+            return;
+        }
 
         _pathsChangedThisBatch = false;
 

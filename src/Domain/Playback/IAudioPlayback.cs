@@ -43,4 +43,16 @@ public interface IAudioPlayback
 
     /// <summary>Source PCM format (always AudioF32LE).</summary>
     SDL.AudioFormat SourceFormat { get; set; }
+
+    /// <summary>
+    /// Called when an SDL output device used by this playback is disconnected (hot-unplug).
+    /// Implementations must drop the stream for <paramref name="logicalDeviceId"/> and either
+    /// continue on remaining devices or tear down the audio path when none remain.
+    /// </summary>
+    /// <param name="logicalDeviceId">SDL logical device id that was removed.</param>
+    /// <remarks>
+    /// <see cref="Cue2.Services.AudioDevices"/> removes this playback from its tracking map
+    /// for that device before calling this method — do not assume the device is still open.
+    /// </remarks>
+    void OnOutputDeviceLost(uint logicalDeviceId);
 }

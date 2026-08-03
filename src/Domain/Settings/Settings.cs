@@ -143,6 +143,11 @@ public partial class Settings : Node
     /// <summary>System default skip-if-disarmed for newly created cues.</summary>
     public const bool SystemDefaultCueSkipIfDisarmed = false;
 
+    /// <summary>
+    /// System default for only-one-active-instance (false = multiple concurrent GO instances allowed).
+    /// </summary>
+    public const bool SystemDefaultCueOnlyOneActiveInstance = false;
+
     // ── Audio component defaults (system factory values) ───────────────────
 
     /// <summary>System default linear volume for new audio components (1.0 = 0 dB).</summary>
@@ -394,6 +399,11 @@ public partial class Settings : Node
 
     /// <summary>Default skip-if-disarmed applied when a new cue is created.</summary>
     public bool CueDefaultSkipIfDisarmed = SystemDefaultCueSkipIfDisarmed;
+
+    /// <summary>
+    /// Default only-one-active-instance flag for new cues (false = multiple concurrent instances allowed).
+    /// </summary>
+    public bool CueDefaultOnlyOneActiveInstance = SystemDefaultCueOnlyOneActiveInstance;
 
     // ── Audio component defaults (show-scoped; applied on new AudioComponent) ─
 
@@ -1510,6 +1520,7 @@ public partial class Settings : Node
         CueDefaultColor = SystemDefaultCueColor;
         CueDefaultArmed = SystemDefaultCueArmed;
         CueDefaultSkipIfDisarmed = SystemDefaultCueSkipIfDisarmed;
+        CueDefaultOnlyOneActiveInstance = SystemDefaultCueOnlyOneActiveInstance;
     }
 
     /// <summary>
@@ -1526,6 +1537,7 @@ public partial class Settings : Node
         cue.Color = CueDefaultColor;
         cue.Armed = CueDefaultArmed;
         cue.SkipIfDisarmed = CueDefaultSkipIfDisarmed;
+        cue.OnlyOneActiveInstance = CueDefaultOnlyOneActiveInstance;
     }
 
     /// <summary>
@@ -1540,7 +1552,8 @@ public partial class Settings : Node
             ["Follow"] = (int)CueDefaultFollow,
             ["Color"] = CueDefaultColor.ToHtml(true),
             ["Armed"] = CueDefaultArmed ? 1 : 0,
-            ["SkipIfDisarmed"] = CueDefaultSkipIfDisarmed ? 1 : 0
+            ["SkipIfDisarmed"] = CueDefaultSkipIfDisarmed ? 1 : 0,
+            ["OnlyOneActiveInstance"] = CueDefaultOnlyOneActiveInstance ? 1 : 0
         };
     }
 
@@ -1548,7 +1561,7 @@ public partial class Settings : Node
     /// Loads cue shell defaults from a dictionary (showfile or history slice).
     /// Missing keys keep their current values.
     /// </summary>
-    /// <param name="data">Dictionary with PreWait, PostWait, Follow, Color, Armed, SkipIfDisarmed.</param>
+    /// <param name="data">Dictionary with PreWait, PostWait, Follow, Color, Armed, SkipIfDisarmed, OnlyOneActiveInstance.</param>
     public void ApplyCueDefaultsFromDict(Dictionary data)
     {
         if (data == null) return;
@@ -1569,6 +1582,8 @@ public partial class Settings : Node
             CueDefaultArmed = ReadBoolVariant(v);
         if (TryGetSettingsValue(data, "SkipIfDisarmed", out v))
             CueDefaultSkipIfDisarmed = ReadBoolVariant(v);
+        if (TryGetSettingsValue(data, "OnlyOneActiveInstance", out v))
+            CueDefaultOnlyOneActiveInstance = ReadBoolVariant(v);
     }
 
     /// <summary>
@@ -1581,7 +1596,8 @@ public partial class Settings : Node
                && CueDefaultFollow == SystemDefaultCueFollow
                && CueDefaultColor.IsEqualApprox(SystemDefaultCueColor)
                && CueDefaultArmed == SystemDefaultCueArmed
-               && CueDefaultSkipIfDisarmed == SystemDefaultCueSkipIfDisarmed;
+               && CueDefaultSkipIfDisarmed == SystemDefaultCueSkipIfDisarmed
+               && CueDefaultOnlyOneActiveInstance == SystemDefaultCueOnlyOneActiveInstance;
     }
 
     // ── Audio component defaults ───────────────────────────────────────────

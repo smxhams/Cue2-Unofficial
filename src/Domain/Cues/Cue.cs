@@ -231,6 +231,23 @@ public class Cue : ICue
     /// </summary>
     public bool ShouldSkipOnPlayhead => !Armed && SkipIfDisarmed;
 
+    private bool _onlyOneActiveInstance;
+
+    /// <summary>
+    /// When true, a new GO/activate of this cue hard-stops any existing active instance
+    /// before starting a new one. When false (default), multiple concurrent instances are allowed.
+    /// </summary>
+    /// <value>Default is <c>false</c> (stacking / re-trigger without killing prior instances).</value>
+    public bool OnlyOneActiveInstance
+    {
+        get => _onlyOneActiveInstance;
+        set
+        {
+            if (_onlyOneActiveInstance == value) return;
+            _onlyOneActiveInstance = value;
+        }
+    }
+
     private string _notes = string.Empty;
 
     /// <summary>
@@ -557,9 +574,11 @@ public class Cue : ICue
         _follow = data.ContainsKey("Follow") ? (FollowType)(int)data["Follow"] : FollowType.None;
         Expanded = data.TryGetValue("Expanded", out var expVal) ? expVal.AsBool() : false;
         Color = data.TryGetValue("Color", out var value) ? Color.FromString(value.AsString(), Color) : Color;
-        // Missing keys (legacy saves) default to armed / not skip.
+        // Missing keys (legacy saves) default to armed / not skip / multiple instances allowed.
         _armed = data.TryGetValue("Armed", out var armedVal) ? armedVal.AsBool() : true;
         _skipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal) && skipVal.AsBool();
+        _onlyOneActiveInstance = data.TryGetValue("OnlyOneActiveInstance", out var onlyOneVal)
+            && onlyOneVal.AsBool();
         _notes = data.TryGetValue("Notes", out var notesVal) ? notesVal.AsString() : string.Empty;
         _memo = data.TryGetValue("Memo", out var memoVal) && memoVal.AsBool();
 
@@ -860,19 +879,33 @@ public class Cue : ICue
         return TotalDuration;
     }
 
+    /// <summary>
+    /// Longest nested child occupancy under this group (content origin shared with parent body).
+    /// </summary>
+    /// <remarks>
+    /// Each child contributes <c>PreWait + Duration</c> only. Child <see cref="PostWait"/> is
+    /// sequence lead-in for siblings / follow chains, not nested body length, so it must not
+    /// inflate the parent group duration (or head progress / timeline).
+    /// </remarks>
+    /// <returns>Max nested span in seconds, or -1 if any child has infinite content.</returns>
     private double DurationOfChildren()
     {
         var longestDuration = 0.0;
         foreach (var childId in ChildCues)
         {
             var childCue = CueList.FetchCueFromId(childId);
-            if (childCue != null)
-            {
-                var childDuration = childCue.CalculateTotalDuration();
-                if (childDuration == -1) return childDuration; // Break if loop found
+            if (childCue == null)
+                continue;
 
-                if (childDuration > longestDuration) longestDuration = childDuration;
-            }
+            // Refresh child's Duration (includes that child's own nested content) without using
+            // child TotalDuration, which incorrectly added PostWait into the parent span.
+            childCue.CalculateTotalDuration();
+            if (childCue.Duration < 0)
+                return -1; // Loop / until-stopped content under the child tree
+
+            double nestedSpan = Math.Max(0.0, childCue.PreWait) + Math.Max(0.0, childCue.Duration);
+            if (nestedSpan > longestDuration)
+                longestDuration = nestedSpan;
         }
         return longestDuration;
     }
@@ -1492,6 +1525,7 @@ public class Cue : ICue
         dict.Add("Color", Color.ToHtml());
         dict.Add("Armed", Armed);
         dict.Add("SkipIfDisarmed", SkipIfDisarmed);
+        dict.Add("OnlyOneActiveInstance", OnlyOneActiveInstance);
         dict.Add("Notes", Notes ?? string.Empty);
         dict.Add("Memo", Memo);
         WriteHotkeyToData(dict);
@@ -1559,6 +1593,9 @@ public class Cue : ICue
         SkipIfDisarmed = data.TryGetValue("SkipIfDisarmed", out var skipVal)
             ? skipVal.AsBool()
             : SkipIfDisarmed;
+        OnlyOneActiveInstance = data.TryGetValue("OnlyOneActiveInstance", out var onlyOneVal)
+            ? onlyOneVal.AsBool()
+            : OnlyOneActiveInstance;
         Notes = data.TryGetValue("Notes", out var notesVal) ? notesVal.AsString() : Notes;
         Memo = data.TryGetValue("Memo", out var memoVal) ? memoVal.AsBool() : Memo;
 

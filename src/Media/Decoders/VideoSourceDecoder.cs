@@ -98,7 +98,16 @@ public sealed class VideoSourceDecoder : IDisposable
             {
                 if (_isDisposed) throw new ObjectDisposedException(nameof(VideoSourceDecoder));
                 CloseInternal();
-                OpenInternal(path, ringFrames);
+                try
+                {
+                    OpenInternal(path, ringFrames);
+                }
+                catch
+                {
+                    // Partial native allocs (format/codec/sws/frames/buffers) must not stick around.
+                    try { CloseInternal(); } catch { /* ignore secondary cleanup errors */ }
+                    throw;
+                }
             }
         });
     }
@@ -258,15 +267,23 @@ public sealed class VideoSourceDecoder : IDisposable
         _ringCapacity = Math.Clamp(ringFrames, 2, 32);
         int ret;
 
+        // Always free options — open_input failure used to leak the dict before throw.
         AVDictionary* options = null;
-        ffmpeg.av_dict_set(&options, "fflags", "+genpts", 0);
-        fixed (AVFormatContext** pCtx = &_formatCtx)
+        try
         {
-            ret = ffmpeg.avformat_open_input(pCtx, path, null, &options);
-            if (ret < 0)
-                throw new Exception($"VideoSourceDecoder:Open - open_input failed: {MediaEngine.GetFFmpegError(ret)}");
+            ffmpeg.av_dict_set(&options, "fflags", "+genpts", 0);
+            fixed (AVFormatContext** pCtx = &_formatCtx)
+            {
+                ret = ffmpeg.avformat_open_input(pCtx, path, null, &options);
+                if (ret < 0)
+                    throw new Exception($"VideoSourceDecoder:Open - open_input failed: {MediaEngine.GetFFmpegError(ret)}");
+            }
         }
-        ffmpeg.av_dict_free(&options);
+        finally
+        {
+            if (options != null)
+                ffmpeg.av_dict_free(&options);
+        }
 
         _formatCtx->flags |= ffmpeg.AVFMT_FLAG_GENPTS;
 

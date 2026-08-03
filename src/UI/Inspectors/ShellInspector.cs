@@ -50,6 +50,7 @@ public partial class ShellInspector : Control
 	private ColorPickerButton _colorPicker;
 	private CheckBox _armedCheckBox;
 	private CheckBox _skipIfDisarmedCheckBox;
+	private CheckBox _onlyOneActiveCheckBox;
 	private Button _deleteCueButton;
 
 	// Hotkey trigger UI
@@ -131,6 +132,7 @@ public partial class ShellInspector : Control
 		_colorPicker = GetNode<ColorPickerButton>("%ColourPickerButton");
 		_armedCheckBox = GetNodeOrNull<CheckBox>("%ArmedCheckBox");
 		_skipIfDisarmedCheckBox = GetNodeOrNull<CheckBox>("%SkipIfDisarmedCheckBox");
+		_onlyOneActiveCheckBox = GetNodeOrNull<CheckBox>("%OnlyOneActiveCheckBox");
 		_deleteCueButton = GetNodeOrNull<Button>("%DeleteCueButton");
 
 		_hotkeyEnabledCheckBox = GetNodeOrNull<CheckBox>("%HotkeyEnabledCheckBox");
@@ -183,6 +185,8 @@ public partial class ShellInspector : Control
 			_armedCheckBox.Toggled += OnArmedToggled;
 		if (_skipIfDisarmedCheckBox != null)
 			_skipIfDisarmedCheckBox.Toggled += OnSkipIfDisarmedToggled;
+		if (_onlyOneActiveCheckBox != null)
+			_onlyOneActiveCheckBox.Toggled += OnOnlyOneActiveToggled;
 
 		if (_hotkeyEnabledCheckBox != null)
 			_hotkeyEnabledCheckBox.Toggled += OnHotkeyEnabledToggled;
@@ -558,6 +562,9 @@ public partial class ShellInspector : Control
 			if (_skipIfDisarmedCheckBox != null)
 				_skipIfDisarmedCheckBox.SetPressedNoSignal(false);
 
+			if (_onlyOneActiveCheckBox != null)
+				_onlyOneActiveCheckBox.SetPressedNoSignal(false);
+
 			if (_isListeningForHotkey)
 				CancelHotkeyListening();
 
@@ -811,6 +818,8 @@ public partial class ShellInspector : Control
 				_armedCheckBox.SetPressedNoSignal(_focusedCue.Armed);
 			if (_skipIfDisarmedCheckBox != null)
 				_skipIfDisarmedCheckBox.SetPressedNoSignal(_focusedCue.SkipIfDisarmed);
+			if (_onlyOneActiveCheckBox != null)
+				_onlyOneActiveCheckBox.SetPressedNoSignal(_focusedCue.OnlyOneActiveInstance);
 
 			RefreshHotkeyUi();
 			RefreshClockUi();
@@ -1099,6 +1108,31 @@ public partial class ShellInspector : Control
 			if (cue.SkipIfDisarmed == pressed) continue;
 			cue.SkipIfDisarmed = pressed;
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
+		}
+	}
+
+	/// <summary>
+	/// Toggles only-one-active-instance for edit target(s).
+	/// </summary>
+	private void OnOnlyOneActiveToggled(bool pressed)
+	{
+		if (_isRefreshingUi) return;
+		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+
+		var targets = GetEditTargets();
+		if (targets.Count == 0) return;
+
+		if (!_isMultiEdit && targets.Count == 1 && targets[0].OnlyOneActiveInstance == pressed)
+			return;
+
+		RecordHistoryBeforeEdit(
+			pressed ? "Enable only one active instance" : "Allow multiple active instances",
+			pressed ? "Multi-edit only one active instance" : "Multi-edit allow multiple active instances");
+
+		foreach (var cue in targets)
+		{
+			if (cue.OnlyOneActiveInstance == pressed) continue;
+			cue.OnlyOneActiveInstance = pressed;
 		}
 	}
 

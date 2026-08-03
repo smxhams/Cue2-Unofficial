@@ -95,12 +95,18 @@ public partial class AudioDevices : Node
     private void CheckMissingDevices(uint removedPhysicalId)
     {
 	    GD.Print("AudioDevices:CheckMissingDevices - Checking for missing audio devices");
-	    if (_physicalIdToDeviceId.TryGetValue(removedPhysicalId, out int deviceId))
+	    if (!_physicalIdToDeviceId.TryGetValue(removedPhysicalId, out int deviceId))
+		    return;
+
+	    if (!_openDevices.TryGetValue(deviceId, out var device))
 	    {
-		    var device = _openDevices[deviceId];
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Audio device disconnected/lost: {device.Name}", 3);
-		    CloseAudioDevice(deviceId);
+		    _physicalIdToDeviceId.Remove(removedPhysicalId);
+		    return;
 	    }
+
+	    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+		    $"Audio device disconnected/lost: {device.Name}", 3);
+	    CloseAudioDevice(deviceId);
 	}
     
     /// <summary>
@@ -124,30 +130,72 @@ public partial class AudioDevices : Node
 	}
     
 	/// <summary>
-	/// Closes an open audio device by its ID, removes it from internal tracking, and logs the result.
+	/// Closes an open audio device by its ID: detaches active playback streams, removes tracking,
+	/// then closes the SDL device.
 	/// </summary>
 	/// <param name="deviceId">The ID of the audio device to close (key in _openDevices).</param>
 	/// <returns>True if successfully closed and removed; false on error.</returns>
     private bool CloseAudioDevice(int deviceId)
     {
-	    var device = _openDevices[deviceId];
+	    if (!_openDevices.TryGetValue(deviceId, out var device))
+		    return false;
+
+	    uint logicalId = device.LogicalId;
+	    string deviceName = device.Name ?? deviceId.ToString();
+
+	    // Snapshot playbacks bound to this logical device and drop tracking before SDL close
+	    // so fill threads are not treated as active on a dead handle.
+	    List<IAudioPlayback> affected;
+	    lock (_activeAudioPlaybacks)
+	    {
+		    if (_activeAudioPlaybacks.TryGetValue(logicalId, out var list))
+		    {
+			    affected = list.ToList();
+			    _activeAudioPlaybacks.Remove(logicalId);
+		    }
+		    else
+		    {
+			    affected = new List<IAudioPlayback>();
+		    }
+	    }
+
+	    foreach (var playback in affected)
+	    {
+		    if (playback == null)
+			    continue;
+		    try
+		    {
+			    playback.OnOutputDeviceLost(logicalId);
+		    }
+		    catch (Exception ex)
+		    {
+			    GD.PrintErr(
+				    $"AudioDevices:CloseAudioDevice - OnOutputDeviceLost for '{deviceName}': {ex.Message}");
+		    }
+	    }
+
 	    try
 	    {
-		    SDL.CloseAudioDevice(device.LogicalId);
+		    if (logicalId != 0)
+			    SDL.CloseAudioDevice(logicalId);
 		    _openDevices.Remove(deviceId);
 		    _physicalIdToDeviceId.Remove(device.PhysicalId);
-		    
-		    GD.Print("AudioDevices:CloseAudioDevice - Successfully closed device ID: " + deviceId);
+
+		    GD.Print(
+			    $"AudioDevices:CloseAudioDevice - Closed device ID {deviceId} ('{deviceName}'); " +
+			    $"detached {affected.Count} playback(s).");
 		    return true;
 	    }
 	    catch (Exception ex)
 	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
-			    $"Error closing device '{device.Name}' (ID: {deviceId}): {ex.Message}", 2);
+		    // Still drop bookkeeping so we do not keep a zombie open-device entry.
+		    _openDevices.Remove(deviceId);
+		    _physicalIdToDeviceId.Remove(device.PhysicalId);
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			    $"Error closing device '{deviceName}' (ID: {deviceId}): {ex.Message}", 2);
 		    GD.PrintErr("AudioDevices:CloseAudioDevice - Error closing device ID " + deviceId + ": " + ex.Message);
 		    return false;
 	    }
-	    
     }
 
     /// <summary>
@@ -169,38 +217,60 @@ public partial class AudioDevices : Node
 		    {
 			    GD.Print("    ^^ Device already opened");
 			    error = "";
-				return dev;
-			    
+			    return dev;
 		    }
 	    }
+
 	    var physicalDeviceId = GetAudioDevicePhysicalIdFromName(name);
-	    //Open audio device
-	    var audioDevice = SDL.OpenAudioDevice(physicalDeviceId, 0); // Zero is a null, this means device will open with its own settings
-	    if (audioDevice == 0)
+	    // Open with device-native settings (null/0 spec).
+	    uint logicalId = SDL.OpenAudioDevice(physicalDeviceId, 0);
+	    if (logicalId == 0)
 	    {
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioDevices:OpenAudioDevice - Failed to find and open audio device of name: {name} ", 3);
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			    $"AudioDevices:OpenAudioDevice - Failed to find and open audio device of name: {name} ", 3);
 		    error = "Failed to open audio device: " + SDL.GetError();
 		    return null;
 	    }
-	     
-	    //Register Device
-	    var device = new AudioDevice(name, audioDevice, out string adError);
-	    if (adError != "")
+
+	    // From here, any abort must CloseAudioDevice(logicalId) so SDL handles do not leak.
+	    try
 	    {
-		    error = adError;
+		    var device = new AudioDevice(name, logicalId, out string adError);
+		    if (!string.IsNullOrEmpty(adError))
+		    {
+			    error = adError;
+			    SDL.CloseAudioDevice(logicalId);
+			    return null;
+		    }
+
+		    ApplyDeviceFormat(device, logicalId);
+		    device.PhysicalId = physicalDeviceId;
+
+		    _openDevices.Add(device.DeviceId, device);
+		    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
+
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+
+		    error = "";
+		    return device;
+	    }
+	    catch (Exception ex)
+	    {
+		    try
+		    {
+			    SDL.CloseAudioDevice(logicalId);
+		    }
+		    catch (Exception closeEx)
+		    {
+			    GD.PrintErr($"AudioDevices:OpenAudioDevice - Close after failed open: {closeEx.Message}");
+		    }
+
+		    error = ex.Message;
+		    GD.PrintErr($"AudioDevices:OpenAudioDevice - {name}: {ex.Message}");
+		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+			    $"Failed to register audio device '{name}': {ex.Message}", 2);
 		    return null;
 	    }
-	    ApplyDeviceFormat(device, audioDevice);
-
-	    device.PhysicalId = physicalDeviceId;
-	    
-	    _openDevices.Add(device.DeviceId, device);
-	    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
-
-	    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
-
-	    error = "";
-	    return device;
     }
     
     /// <summary>

@@ -37,7 +37,14 @@ public static class ShowfileFormat
 	public const string AppVersionFullKey = "appVersionFull";
 
 	/// <summary>
+	/// Diagnostic key: which app build last opened a showfile without rewriting its format version
+	/// (e.g. a newer schema opened on an older app with user confirmation).
+	/// </summary>
+	public const string OpenedByAppVersionKey = "openedByAppVersion";
+
+	/// <summary>
 	/// Writes current app + format version metadata onto a save dictionary.
+	/// Use only when this build is the authoritative writer (save / successful migration).
 	/// </summary>
 	/// <param name="saveData">Root save dictionary (mutated in place).</param>
 	public static void StampCurrentVersion(Dictionary saveData)
@@ -48,6 +55,22 @@ public static class ShowfileFormat
 		saveData[FormatVersionKey] = CurrentFormatVersion;
 		saveData[AppVersionKey] = Cue2.Version.SemanticVersionString;
 		saveData[AppVersionFullKey] = Cue2.Version.FullVersionString;
+		// Clear forward-compat diagnostic once we fully own the schema.
+		if (saveData.ContainsKey(OpenedByAppVersionKey))
+			saveData.Remove(OpenedByAppVersionKey);
+	}
+
+	/// <summary>
+	/// Records that this app opened the file without claiming schema ownership.
+	/// Does <b>not</b> change <see cref="FormatVersionKey"/> (critical for newer-than-supported files).
+	/// </summary>
+	/// <param name="saveData">Root save dictionary (mutated in place).</param>
+	public static void StampOpenedByThisApp(Dictionary saveData)
+	{
+		if (saveData == null)
+			return;
+
+		saveData[OpenedByAppVersionKey] = Cue2.Version.SemanticVersionString;
 	}
 
 	/// <summary>
@@ -152,10 +175,11 @@ public readonly struct ShowfileVersionInfo
 		string.Equals(AppVersion, Cue2.Version.SemanticVersionString, StringComparison.Ordinal);
 
 	/// <summary>
-	/// True when the file is safe to open without prompting
-	/// (known version metadata matching this app and format).
+	/// True when the file is safe to open without a version prompt.
+	/// Schema (format) match is required; app marketing version may differ without a dialog
+	/// so patch releases do not nag on every open.
 	/// </summary>
-	public bool MatchesCurrent => MatchesCurrentFormat && MatchesCurrentApp;
+	public bool MatchesCurrent => MatchesCurrentFormat;
 
 	/// <summary>True when format is older than this build (migration may apply).</summary>
 	public bool IsOlderFormat =>

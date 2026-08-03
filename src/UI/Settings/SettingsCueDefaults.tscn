@@ -217,3 +217,29 @@ tooltip_text = "Reset to default"
 focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
+
+[node name="OnlyOneActiveRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OnlyOneActiveLabel" type="Label" parent="VBoxContainer/OnlyOneActiveRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Active instances"
+vertical_alignment = 1
+
+[node name="OnlyOneActiveCheckBox" type="CheckBox" parent="VBoxContainer/OnlyOneActiveRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Default for new cues. When on, GO hard-stops any existing instance of that cue before starting another. When off (default), multiple concurrent instances are allowed."
+focus_mode = 0
+text = "Only one active instance"
+
+[node name="OnlyOneActiveResetButton" type="Button" parent="VBoxContainer/OnlyOneActiveRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true

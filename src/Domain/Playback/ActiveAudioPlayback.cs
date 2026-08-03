@@ -143,35 +143,47 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     /// <summary>
     /// Opens the decoder, seeks to start, and prefetches PCM for low-latency GO.
     /// </summary>
+    /// <remarks>
+    /// On failure, calls <see cref="Clean"/> so a half-open decoder is never left alive
+    /// (callers must still discard the playback instance).
+    /// </remarks>
     public async Task InitAsync()
     {
-        RefreshAudioTuning();
+        try
+        {
+            RefreshAudioTuning();
 
-        // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
-        // subject to decoder size/duration caps. Short looping cues stay exact.
-        string mediaPath = ResolveMediaPath(_audioComponent.AudioFile);
-        await Decoder.OpenAsync(mediaPath, preferSampleAccurateStore: true);
-        SourceChannels = Decoder.Info.Channels;
-        SourceSampleRate = Decoder.Info.SampleRate;
-        SourceFormat = SDL.AudioFormat.AudioF32LE;
-        SourceBytesPerFrame = SourceChannels * sizeof(float);
+            // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
+            // subject to decoder size/duration caps. Short looping cues stay exact.
+            string mediaPath = ResolveMediaPath(_audioComponent.AudioFile);
+            await Decoder.OpenAsync(mediaPath, preferSampleAccurateStore: true);
+            SourceChannels = Decoder.Info.Channels;
+            SourceSampleRate = Decoder.Info.SampleRate;
+            SourceFormat = SDL.AudioFormat.AudioF32LE;
+            SourceBytesPerFrame = SourceChannels * sizeof(float);
 
-        if (!_useCustomEnd && Decoder.Info.DurationUs > 0)
-            _endTimeUs = Decoder.Info.DurationUs;
+            if (!_useCustomEnd && Decoder.Info.DurationUs > 0)
+                _endTimeUs = Decoder.Info.DurationUs;
 
-        if (_startTimeUs > 0)
-            Decoder.Seek(_startTimeUs);
-        else
+            if (_startTimeUs > 0)
+                Decoder.Seek(_startTimeUs);
+            else
+                Decoder.Prefetch(_audioTuning.PrefetchMs);
+
+            // Prefetch after seek as well
             Decoder.Prefetch(_audioTuning.PrefetchMs);
 
-        // Prefetch after seek as well
-        Decoder.Prefetch(_audioTuning.PrefetchMs);
+            int maxFrames = Math.Max(SourceSampleRate / 10, 1024); // ~100 ms chunk
+            _srcBuffer = new float[maxFrames * SourceChannels];
+            _mixBuffer = new float[maxFrames * 16]; // up to 16 out channels
 
-        int maxFrames = Math.Max(SourceSampleRate / 10, 1024); // ~100 ms chunk
-        _srcBuffer = new float[maxFrames * SourceChannels];
-        _mixBuffer = new float[maxFrames * 16]; // up to 16 out channels
-
-        GD.Print($"ActiveAudioPlayback:InitAsync - rate={SourceSampleRate} ch={SourceChannels} codec={Decoder.Info.CodecName}");
+            GD.Print($"ActiveAudioPlayback:InitAsync - rate={SourceSampleRate} ch={SourceChannels} codec={Decoder.Info.CodecName}");
+        }
+        catch
+        {
+            try { Clean(); } catch { /* ignore */ }
+            throw;
+        }
     }
 
     public bool IsFadingOut
@@ -1285,6 +1297,41 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     }
 
     private bool _completedEmitted;
+
+    /// <inheritdoc />
+    public void OnOutputDeviceLost(uint logicalDeviceId)
+    {
+        // Tracking for this logical id was already cleared by AudioDevices.CloseAudioDevice.
+        if (DeviceStreams != null && DeviceStreams.TryGetValue(logicalDeviceId, out var stream))
+        {
+            try
+            {
+                if (stream != IntPtr.Zero)
+                    SDL.DestroyAudioStream(stream);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            DeviceStreams.Remove(logicalDeviceId);
+        }
+
+        DeviceStreamChannels?.Remove(logicalDeviceId);
+
+        if (DeviceStreams == null || DeviceStreams.Count == 0)
+        {
+            GD.Print(
+                $"ActiveAudioPlayback:OnOutputDeviceLost - Device {logicalDeviceId} lost; no streams remain, cleaning up.");
+            Clean();
+        }
+        else
+        {
+            GD.Print(
+                $"ActiveAudioPlayback:OnOutputDeviceLost - Device {logicalDeviceId} lost; " +
+                $"{DeviceStreams.Count} stream(s) remain.");
+        }
+    }
 
     /// <summary>
     /// Tears down decoder, streams, and fill loop, then signals <see cref="Completed"/>.

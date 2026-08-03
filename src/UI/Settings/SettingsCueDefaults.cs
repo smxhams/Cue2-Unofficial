@@ -42,6 +42,9 @@ public partial class SettingsCueDefaults : ScrollContainer
     private CheckBox _skipIfDisarmedCheckBox;
     private Button _skipIfDisarmedResetButton;
 
+    private CheckBox _onlyOneActiveCheckBox;
+    private Button _onlyOneActiveResetButton;
+
     /// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
     private bool _isSyncingUi;
 
@@ -65,6 +68,8 @@ public partial class SettingsCueDefaults : ScrollContainer
         _armedResetButton = GetNode<Button>("%ArmedResetButton");
         _skipIfDisarmedCheckBox = GetNode<CheckBox>("%SkipIfDisarmedCheckBox");
         _skipIfDisarmedResetButton = GetNode<Button>("%SkipIfDisarmedResetButton");
+        _onlyOneActiveCheckBox = GetNodeOrNull<CheckBox>("%OnlyOneActiveCheckBox");
+        _onlyOneActiveResetButton = GetNodeOrNull<Button>("%OnlyOneActiveResetButton");
 
         SetupResetButton(_preWaitResetButton, OnPreWaitResetPressed);
         SetupResetButton(_postWaitResetButton, OnPostWaitResetPressed);
@@ -72,6 +77,8 @@ public partial class SettingsCueDefaults : ScrollContainer
         SetupResetButton(_colorResetButton, OnColorResetPressed);
         SetupResetButton(_armedResetButton, OnArmedResetPressed);
         SetupResetButton(_skipIfDisarmedResetButton, OnSkipIfDisarmedResetPressed);
+        if (_onlyOneActiveResetButton != null)
+            SetupResetButton(_onlyOneActiveResetButton, OnOnlyOneActiveResetPressed);
 
         EnsureFollowOptions();
 
@@ -83,6 +90,8 @@ public partial class SettingsCueDefaults : ScrollContainer
         _colorPicker.PopupClosed += OnColorPopupClosed;
         _armedCheckBox.Toggled += OnArmedToggled;
         _skipIfDisarmedCheckBox.Toggled += OnSkipIfDisarmedToggled;
+        if (_onlyOneActiveCheckBox != null)
+            _onlyOneActiveCheckBox.Toggled += OnOnlyOneActiveToggled;
 
         if (_historyManager != null)
             _historyManager.HistoryRestored += OnHistoryRestored;
@@ -155,6 +164,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
             _armedCheckBox?.SetPressedNoSignal(s.CueDefaultArmed);
             _skipIfDisarmedCheckBox?.SetPressedNoSignal(s.CueDefaultSkipIfDisarmed);
+            _onlyOneActiveCheckBox?.SetPressedNoSignal(s.CueDefaultOnlyOneActiveInstance);
 
             UpdateAllResetButtons();
         }
@@ -172,6 +182,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         UpdateColorResetButton();
         UpdateArmedResetButton();
         UpdateSkipIfDisarmedResetButton();
+        UpdateOnlyOneActiveResetButton();
     }
 
     private void RecordCueDefaultsHistory(string description)
@@ -516,6 +527,53 @@ public partial class SettingsCueDefaults : ScrollContainer
         RecordCueDefaultsHistory("Reset default skip if disarmed");
         _globalData.Settings.CueDefaultSkipIfDisarmed = AppSettings.SystemDefaultCueSkipIfDisarmed;
         SyncSettings();
+    }
+
+    private void OnOnlyOneActiveToggled(bool pressed)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (_globalData.Settings.CueDefaultOnlyOneActiveInstance == pressed)
+        {
+            UpdateOnlyOneActiveResetButton();
+            return;
+        }
+
+        RecordCueDefaultsHistory(pressed
+            ? "Default only one active instance"
+            : "Default allow multiple active instances");
+        _globalData.Settings.CueDefaultOnlyOneActiveInstance = pressed;
+        UpdateOnlyOneActiveResetButton();
+    }
+
+    private void OnOnlyOneActiveResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (_globalData.Settings.CueDefaultOnlyOneActiveInstance
+            == AppSettings.SystemDefaultCueOnlyOneActiveInstance)
+        {
+            SyncSettings();
+            return;
+        }
+
+        RecordCueDefaultsHistory("Reset default only one active instance");
+        _globalData.Settings.CueDefaultOnlyOneActiveInstance =
+            AppSettings.SystemDefaultCueOnlyOneActiveInstance;
+        SyncSettings();
+    }
+
+    private void UpdateOnlyOneActiveResetButton()
+    {
+        if (_onlyOneActiveResetButton == null || _globalData?.Settings == null) return;
+        bool atDefault = _globalData.Settings.CueDefaultOnlyOneActiveInstance
+                         == AppSettings.SystemDefaultCueOnlyOneActiveInstance;
+        _onlyOneActiveResetButton.Visible = !atDefault;
+        if (!atDefault)
+        {
+            string text = AppSettings.SystemDefaultCueOnlyOneActiveInstance ? "On" : "Off";
+            _onlyOneActiveResetButton.TooltipText = $"Reset to default: {text}";
+        }
     }
 
     private void UpdateSkipIfDisarmedResetButton()

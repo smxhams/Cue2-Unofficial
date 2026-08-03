@@ -80,8 +80,12 @@ public static class ShowfileMigrator
 			var newerLog = new StringBuilder();
 			newerLog.AppendLine(
 				$"Showfile format {fileFormatVersion} is newer than supported format {ShowfileFormat.CurrentFormatVersion}; skipping migration.");
-			// Still stamp app version for traceability after a successful partial load path.
-			ShowfileFormat.StampCurrentVersion(saveData);
+			// Do NOT stamp formatVersion to CurrentFormatVersion — that mislabels a newer schema
+			// and would cause a re-save to claim this build authored an unsupported layout.
+			// Keep the original formatVersion; record which older app opened the file.
+			ShowfileFormat.StampOpenedByThisApp(saveData);
+			newerLog.AppendLine(
+				$"Preserved formatVersion={fileFormatVersion}; recorded openedByAppVersion={Cue2.Version.SemanticVersionString}.");
 			return new MigrationResult
 			{
 				Success = true,

@@ -148,7 +148,16 @@ public sealed class AudioSourceDecoder : IDisposable
                 if (_isDisposed) throw new ObjectDisposedException(nameof(AudioSourceDecoder));
                 CloseInternal();
                 _preferSampleAccurateStore = preferSampleAccurateStore;
-                OpenInternal(path, streamIndex, ringMs);
+                try
+                {
+                    OpenInternal(path, streamIndex, ringMs);
+                }
+                catch
+                {
+                    // Partial native allocs (format/codec/swr/packet/frame) must not stick around.
+                    try { CloseInternal(); } catch { /* ignore secondary cleanup errors */ }
+                    throw;
+                }
             }
         });
     }

@@ -81,7 +81,11 @@ public partial class GlobalData : Node
 	public int VideoOutputWinNum;
 	public int UiOutputWinNum;
 
-	public string LaunchLoadPath;
+	/// <summary>
+	/// Absolute path of a showfile to open after app chrome is ready (e.g. Open last showfile preference).
+	/// Set only from <see cref="UserDataManager"/> startup prefs — not from CLI.
+	/// </summary>
+	public string StartupOpenPath;
 
 	// Prefer Settings.StopFadeDuration (session-persisted, editable in General settings).
 	
@@ -89,7 +93,6 @@ public partial class GlobalData : Node
 
 	// Settings
 	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
-	public bool AutoloadOnStartup = true; // Loads last active show on startup
 	public string ActiveShowFile; // URL of current show file to save to
 	public string SessionName;
 	public string SessionPath;
@@ -270,33 +273,17 @@ public partial class GlobalData : Node
 		
 		//AudioDevices = new AudioDevices();
 		//AddChild(AudioDevices);
-		
-		
 
-
-
-		var args = new List<string>(OS.GetCmdlineUserArgs()).Concat(new List<string>(OS.GetCmdlineArgs()));
-		foreach (var arg in args)
-		{
-			GD.Print("Launch argument detected: " + arg);
-			if (arg == "--file")
-			{
-				GD.Print("Opening file: " + args.Last());
-				LaunchLoadPath = args.Last(); 
-				
-			}
-		}
-
-		// Apply startup preference only if no explicit file was provided via command line.
-		if (LaunchLoadPath == null && UserDataManager != null)
+		// Startup show: Cue2 Preferences → Open last showfile (recents), not CLI --file.
+		if (UserDataManager != null)
 		{
 			if (UserDataManager.Startup == UserDataManager.StartupBehavior.OpenLastShowfile)
 			{
 				var recents = UserDataManager.GetRecentShowFiles();
 				if (recents.Count > 0)
 				{
-					LaunchLoadPath = recents[0];
-					GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + LaunchLoadPath);
+					StartupOpenPath = recents[0];
+					GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + StartupOpenPath);
 				}
 				else
 				{

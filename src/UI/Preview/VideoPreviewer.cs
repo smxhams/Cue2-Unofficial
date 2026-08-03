@@ -98,6 +98,8 @@ public partial class VideoPreviewer : Control
         catch (Exception ex)
         {
             GD.PrintErr($"VideoPreviewer:LoadDecoder - {ex.Message}");
+            // Drop half-open decoder / texture so repeated failed opens do not leak natives.
+            ClearDecoder();
         }
     }
 

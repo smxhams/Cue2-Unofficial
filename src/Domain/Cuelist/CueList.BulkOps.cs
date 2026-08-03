@@ -127,6 +127,11 @@ public partial class CueList
 						var job = queue.Dequeue();
 						var source = (Cue)job.Source;
 						var clone = CloneCueShallow(source);
+						if (clone == null)
+						{
+							GD.PrintErr($"CueList:DuplicateSelectedCues - Clone failed for \"{source?.Name}\"");
+							continue;
+						}
 						CreateShellAndInsert(clone, job.Container, job.InsertIndex, job.NewParentId);
 
 						if (job.IsTopLevelRoot)

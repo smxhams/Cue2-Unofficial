@@ -138,10 +138,14 @@ public partial class VersionMismatchDialog : Window
 		{
 			summary.AppendLine(
 				"The showfile format is newer than this version of Cue2 understands. " +
-				"Opening may fail, drop settings, or behave unexpectedly.");
+				"Opening may fail, drop settings, or behave unexpectedly. " +
+				"Cue2 will not re-label the file as this version’s format, and will not " +
+				"overwrite the original on Save — use Save As if you need a copy this app can own.");
 		}
 		else if (!fileVersion.MatchesCurrentApp)
 		{
+			// Informational only when dialog is shown for other reasons; same-format app
+			// mismatches no longer open this dialog by themselves.
 			summary.AppendLine(
 				"The file format matches, but the app version differs. " +
 				"Opening should usually work; review the show after load.");

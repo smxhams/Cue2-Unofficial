@@ -195,6 +195,12 @@ public partial class CueCommandExectutor : Node
             return;
         }
 
+        // Optional per-cue gate: hard-stop existing instances of this cue before a new GO.
+        // Default is off (multiple concurrent instances allowed). Chain peers are not
+        // stopped unless they share the same cue id as the head.
+        if (head.OnlyOneActiveInstance)
+            StopExistingRootInstancesOfCue(head.Id, hardStop: true);
+
         var chain = CueSequencePlanner.BuildChain(head);
         if (chain.Count == 0)
         {
@@ -933,6 +939,41 @@ public partial class CueCommandExectutor : Node
             {
                 if (active?.Cue != null && active.Cue.Id == cueId)
                     yield return active;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops live root <see cref="ActiveCue"/> instances whose cue id matches
+    /// <paramref name="cueId"/> (used when <see cref="Cue.OnlyOneActiveInstance"/> is set).
+    /// Nested group-child activations of other parents are also stopped when they share the id.
+    /// </summary>
+    /// <param name="cueId">Cue document id.</param>
+    /// <param name="hardStop">When true, stop with zero fade so re-GO can start immediately.</param>
+    private void StopExistingRootInstancesOfCue(int cueId, bool hardStop)
+    {
+        double? fade = hardStop ? 0.0 : null;
+        var matches = FindActiveCuesById(cueId).ToList();
+        if (matches.Count == 0)
+            return;
+
+        GD.Print(
+            $"CueCommandExecutor:StopExistingRootInstancesOfCue - Stopping {matches.Count} instance(s) of cue id {cueId} " +
+            $"(OnlyOneActiveInstance)");
+
+        foreach (var active in matches)
+        {
+            if (active == null || !GodotObject.IsInstanceValid(active))
+                continue;
+            try
+            {
+                // Root list entries: full stop. Nested instances also receive StopAll.
+                active.StopAll(propagateToChildren: true, fadeDurationOverride: fade);
+            }
+            catch (Exception ex)
+            {
+                GD.PrintErr(
+                    $"CueCommandExecutor:StopExistingRootInstancesOfCue - {active.Cue?.Name}: {ex.Message}");
             }
         }
     }

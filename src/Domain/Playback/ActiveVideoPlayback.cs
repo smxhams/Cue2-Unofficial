@@ -250,77 +250,89 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     /// <summary>
     /// Opens video (and audio) decoders, seeks to start, prefetches.
     /// </summary>
+    /// <remarks>
+    /// On failure after a partial open, calls <see cref="Clean"/> so native decoders and
+    /// layer hosts are not left half-initialized (callers must still free the node).
+    /// </remarks>
     public async Task InitAsync()
     {
-        GD.Print("ActiveVideoPlayback:InitAsync - Initializing...");
-        RefreshPresentTuning();
-        _currentPlayCount = 1;
-
-        string mediaPath = ResolveMediaPath(_videoComponent.VideoFile);
-        await _videoDecoder.OpenAsync(mediaPath);
-        // Do not replace image hold end with container duration (often 0 or N/A for stills).
-        if (!_videoComponent.IsImage && !_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
-            _endTimeUs = _videoDecoder.Info.DurationUs;
-
-        await TryLoadSubtitlesAsync(mediaPath);
-
-        if (_startTimeUs > 0)
-            _videoDecoder.Seek(_startTimeUs);
-        _videoDecoder.Prefetch(_presentTuning.PrefetchTarget);
-
-        int w = _videoDecoder.Info.Width;
-        int h = _videoDecoder.Info.Height;
-        _godotImage = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
-        _godotTexture = ImageTexture.CreateFromImage(_godotImage);
-        _displayRgba = new byte[_videoDecoder.Info.FrameByteSize];
-
-        foreach (var display in DisplaysManager.Outputs)
+        try
         {
-            var layerControl = display.AddLayer(_videoComponent.TargetLayerId);
-            var layerTextRect = layerControl.GetNode<TextureRect>("%LayerOutput");
-            layerTextRect.Texture = _godotTexture;
-            _targetLayers.Add(layerControl, layerTextRect);
-            layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
-        }
+            GD.Print("ActiveVideoPlayback:InitAsync - Initializing...");
+            RefreshPresentTuning();
+            _currentPlayCount = 1;
 
-        // Stay invisible until PlayAsync / FadeInAsync — Init assigns the shared texture early,
-        // so a non-zero modulate would flash the first decoded frame at full opacity.
-        _fadeAlpha = 0f;
-        SetVolume(0f);
-        RefreshVisualProperties();
+            string mediaPath = ResolveMediaPath(_videoComponent.VideoFile);
+            await _videoDecoder.OpenAsync(mediaPath);
+            // Do not replace image hold end with container duration (often 0 or N/A for stills).
+            if (!_videoComponent.IsImage && !_useCustomEnd && _videoDecoder.Info.DurationUs > 0)
+                _endTimeUs = _videoDecoder.Info.DurationUs;
 
-        if (_targetLayers.Count == 0)
-        {
-            _isExiting = true;
-            EmitSignalCompleted();
-            Clean();
-            return;
-        }
+            await TryLoadSubtitlesAsync(mediaPath);
 
-        if (_audioDecoder != null)
-        {
-            // Stream embedded audio (no full PCM expand) — long video soundtracks would
-            // otherwise pin tens/hundreds of MB on the LOH for the whole cue lifetime.
-            await _audioDecoder.OpenAsync(
-                mediaPath,
-                preferSampleAccurateStore: false);
-            SourceChannels = _audioDecoder.Info.Channels;
-            SourceSampleRate = _audioDecoder.Info.SampleRate;
-            SourceFormat = SDL.AudioFormat.AudioF32LE;
-            SourceBytesPerFrame = SourceChannels * sizeof(float);
-
-            RefreshAudioTuning();
             if (_startTimeUs > 0)
-                _audioDecoder.Seek(_startTimeUs);
-            _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
+                _videoDecoder.Seek(_startTimeUs);
+            _videoDecoder.Prefetch(_presentTuning.PrefetchTarget);
 
-            int maxFrames = Math.Max(SourceSampleRate / 10, 1024);
-            _audioSrcBuffer = new float[maxFrames * SourceChannels];
-            _audioMixBuffer = new float[maxFrames * 16];
+            int w = _videoDecoder.Info.Width;
+            int h = _videoDecoder.Info.Height;
+            _godotImage = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
+            _godotTexture = ImageTexture.CreateFromImage(_godotImage);
+            _displayRgba = new byte[_videoDecoder.Info.FrameByteSize];
+
+            foreach (var display in DisplaysManager.Outputs)
+            {
+                var layerControl = display.AddLayer(_videoComponent.TargetLayerId);
+                var layerTextRect = layerControl.GetNode<TextureRect>("%LayerOutput");
+                layerTextRect.Texture = _godotTexture;
+                _targetLayers.Add(layerControl, layerTextRect);
+                layerTextRect.TreeExited += () => OnLayerExited(layerTextRect);
+            }
+
+            // Stay invisible until PlayAsync / FadeInAsync — Init assigns the shared texture early,
+            // so a non-zero modulate would flash the first decoded frame at full opacity.
+            _fadeAlpha = 0f;
+            SetVolume(0f);
+            RefreshVisualProperties();
+
+            if (_targetLayers.Count == 0)
+            {
+                _isExiting = true;
+                EmitSignalCompleted();
+                Clean();
+                return;
+            }
+
+            if (_audioDecoder != null)
+            {
+                // Stream embedded audio (no full PCM expand) — long video soundtracks would
+                // otherwise pin tens/hundreds of MB on the LOH for the whole cue lifetime.
+                await _audioDecoder.OpenAsync(
+                    mediaPath,
+                    preferSampleAccurateStore: false);
+                SourceChannels = _audioDecoder.Info.Channels;
+                SourceSampleRate = _audioDecoder.Info.SampleRate;
+                SourceFormat = SDL.AudioFormat.AudioF32LE;
+                SourceBytesPerFrame = SourceChannels * sizeof(float);
+
+                RefreshAudioTuning();
+                if (_startTimeUs > 0)
+                    _audioDecoder.Seek(_startTimeUs);
+                _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
+
+                int maxFrames = Math.Max(SourceSampleRate / 10, 1024);
+                _audioSrcBuffer = new float[maxFrames * SourceChannels];
+                _audioMixBuffer = new float[maxFrames * 16];
+            }
+
+            SetProcess(false); // enabled on Play
+            GD.Print($"ActiveVideoPlayback:InitAsync - complete video={w}x{h} audio={_audioDecoder != null}");
         }
-
-        SetProcess(false); // enabled on Play
-        GD.Print($"ActiveVideoPlayback:InitAsync - complete video={w}x{h} audio={_audioDecoder != null}");
+        catch
+        {
+            try { Clean(); } catch { /* ignore */ }
+            throw;
+        }
     }
 
     /// <summary>
@@ -686,6 +698,43 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         _audioDecoder = null;
 
         GD.Print("ActiveVideoPlayback:DisableEmbeddedAudio - Audio path disabled; using wall-clock master.");
+    }
+
+    /// <inheritdoc />
+    public void OnOutputDeviceLost(uint logicalDeviceId)
+    {
+        // Tracking for this logical id was already cleared by AudioDevices.CloseAudioDevice.
+        if (DeviceStreams != null && DeviceStreams.TryGetValue(logicalDeviceId, out var stream))
+        {
+            try
+            {
+                if (stream != IntPtr.Zero)
+                    SDL.DestroyAudioStream(stream);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            DeviceStreams.Remove(logicalDeviceId);
+        }
+
+        DeviceStreamChannels?.Remove(logicalDeviceId);
+
+        if (DeviceStreams == null || DeviceStreams.Count == 0)
+        {
+            GD.Print(
+                $"ActiveVideoPlayback:OnOutputDeviceLost - Device {logicalDeviceId} lost; " +
+                "no audio streams remain — continuing video on wall clock.");
+            // Avoid double-notify: streams for this device already untracked; remaining empty.
+            DisableEmbeddedAudio();
+        }
+        else
+        {
+            GD.Print(
+                $"ActiveVideoPlayback:OnOutputDeviceLost - Device {logicalDeviceId} lost; " +
+                $"{DeviceStreams.Count} audio stream(s) remain.");
+        }
     }
 
     public async Task PlayAsync()
