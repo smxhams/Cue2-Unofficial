@@ -11,8 +11,11 @@ namespace Cue2.Domain.ShowSettings;
 /// independently of the session (.c2) showfile.
 /// </summary>
 /// <remarks>
-/// Keyboard Input Map and Cue2 Preferences live in user:// and are intentionally
-/// excluded — this format only covers show-scoped settings.
+/// Filter labels and ids match the show-scoped Settings tree item names exactly
+/// (English menu keys). Keyboard Input Map and Cue2 Preferences live in user://
+/// and are intentionally excluded — this format only covers show-scoped settings.
+/// Parent-only tree headers (Connections) have no filter. Runtime-only controls
+/// (master mute, output disable/blackout) are not serialized.
 /// </remarks>
 public static class SettingsExport
 {
@@ -33,10 +36,13 @@ public static class SettingsExport
     /// </summary>
     public readonly struct Category
     {
-        /// <summary>Stable id stored in export documents and used as UI checkbox metadata.</summary>
+        /// <summary>
+        /// Stable id stored in export documents and used as UI checkbox metadata.
+        /// Matches the Settings tree English menu key (same as <see cref="Label"/>).
+        /// </summary>
         public string Id { get; }
 
-        /// <summary>Label shown in the filter dropdown.</summary>
+        /// <summary>Label shown in the filter dropdown (Settings tree name).</summary>
         public string Label { get; }
 
         /// <summary>Settings serialization keys included when this category is selected.</summary>
@@ -45,8 +51,8 @@ public static class SettingsExport
         /// <summary>
         /// Creates a filter category.
         /// </summary>
-        /// <param name="id">Stable category id.</param>
-        /// <param name="label">UI label.</param>
+        /// <param name="id">Stable category id (Settings tree English name).</param>
+        /// <param name="label">UI label (must match the Settings tree item text).</param>
         /// <param name="keys">Settings keys to include.</param>
         public Category(string id, string label, params string[] keys)
         {
@@ -57,44 +63,103 @@ public static class SettingsExport
     }
 
     /// <summary>
-    /// All selectable export/import categories (order matches the Settings tree roughly).
+    /// All selectable export/import categories.
+    /// Order and names match the show-scoped Settings tree (excluding user prefs and stubs).
     /// </summary>
     public static readonly Category[] Categories =
     {
+        // Settings → General (plus related show scalars not currently on that panel)
         new("General", "General",
             "UiScale", "GoScale", "CueListScale", "WaveformResolution", "StopFadeDuration",
-            "MediaBackupEnabled", "MultiEditEnabled", "SelectNewCues", "ShowTimelineWaveforms"),
-        new("CueDefaults", "Cue Defaults",
-            "CueDefaults", "AudioDefaults", "VideoDefaults", "TextDefaults"),
-        new("Audio", "Audio", "AudioLatencyMode", "AudioDeclickMs", "AudioMasterVolume"),
-        new("AudioPatch", "Audio Output Patch", "AudioPatch", "AudioDevices"),
-        new("Displays", "Canvas / Displays", "Displays"),
-        new("VideoOutput", "Video Output",
+            "MediaBackupEnabled", "MultiEditEnabled", "SelectNewCues", "ShowTimelineWaveforms",
+            "ShowMode"),
+
+        // Settings → Audio
+        new("Audio", "Audio",
+            "AudioLatencyMode", "AudioDeclickMs", "AudioMasterVolume"),
+
+        // Settings → Audio → Audio Output Patch
+        new("Audio Output Patch", "Audio Output Patch",
+            "AudioPatch", "AudioDevices"),
+
+        // Settings → Video/Image (general video output panel; not Canvas topology)
+        new("Video/Image", "Video/Image",
             "OutputBackgroundColor", "VideoQualityMode", "VideoPreviewQuality", "OutputVSyncMode"),
-        // Cue Lights not shipped in v1 — category retained for a later release.
-        // new("CueLights", "Cue Lights",
+
+        // Settings → Video/Image → Canvas Editor
+        new("Canvas Editor", "Canvas Editor",
+            "Displays"),
+
+        // Settings → Connections → …
+        // Cue Lights not shipped in v1 — re-enable with the tree item.
+        // new("Cue Lights", "Cue Lights",
         //     "CueLights", "CueLightIdleColour", "CueLightGoColour",
         //     "CueLightStandbyColour", "CueLightCountInColour", "CueLightBrightness"),
-        new("OscConnections", "OSC Connections", "OscConnections"),
-        new("OscListen", "OSC Listener", "OscListen"),
-        new("OscInputMap", "OSC Input Map", "OscInputMap"),
-        new("Midi", "MIDI", "Midi"),
-        new("MidiInputMap", "MIDI Input Map", "MidiInputMap"),
+        new("OSC Connections", "OSC Connections", "OscConnections"),
+        new("OSC Listener", "OSC Listener", "OscListen"),
+        new("OSC Input Map", "OSC Input Map", "OscInputMap"),
+        new("MIDI", "MIDI", "Midi"),
+        new("MIDI Input Map", "MIDI Input Map", "MidiInputMap"),
+
+        // Settings → Cue Defaults (+ component default children)
+        new("Cue Defaults", "Cue Defaults", "CueDefaults"),
+        new("Audio Defaults", "Audio Defaults", "AudioDefaults"),
+        new("Video Defaults", "Video Defaults", "VideoDefaults"),
+        new("Text Defaults", "Text Defaults", "TextDefaults"),
     };
+
+    /// <summary>
+    /// Pre-rename category ids from early .c2settings files / tools → current tree-name ids.
+    /// Keys already in the file still load; this only maps category selection ids.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<string, string> LegacyCategoryIdMap =
+        new(StringComparer.Ordinal)
+        {
+            ["AudioPatch"] = "Audio Output Patch",
+            ["Displays"] = "Canvas Editor",
+            ["VideoOutput"] = "Video/Image",
+            ["OscConnections"] = "OSC Connections",
+            ["OscListen"] = "OSC Listener",
+            ["OscInputMap"] = "OSC Input Map",
+            ["Midi"] = "MIDI",
+            ["MidiInputMap"] = "MIDI Input Map",
+        };
 
     /// <summary>
     /// Resolves selected category ids to a de-duplicated ordered list of settings keys.
     /// Unknown ids are ignored. Empty or null selection yields an empty array (caller should treat as no-op).
+    /// Accepts current tree-name ids and legacy ids from earlier export builds.
     /// </summary>
-    /// <param name="categoryIds">Selected category ids (e.g. "AudioPatch"). Pass all category ids for a full export.</param>
+    /// <param name="categoryIds">Selected category ids (e.g. "Audio Output Patch"). Pass all category ids for a full export.</param>
     /// <returns>Settings keys suitable for <see cref="Settings.CaptureHistorySlice"/>.</returns>
     public static string[] ResolveKeys(IEnumerable<string> categoryIds)
     {
         if (categoryIds == null)
             return System.Array.Empty<string>();
 
-        var selected = new HashSet<string>(categoryIds.Where(id => !string.IsNullOrWhiteSpace(id)),
-            StringComparer.Ordinal);
+        var selected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in categoryIds)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            string id = raw.Trim();
+
+            // Early exports used a single "CueDefaults" category for shell + component defaults.
+            if (string.Equals(id, "CueDefaults", StringComparison.Ordinal))
+            {
+                selected.Add("Cue Defaults");
+                selected.Add("Audio Defaults");
+                selected.Add("Video Defaults");
+                selected.Add("Text Defaults");
+                continue;
+            }
+
+            if (LegacyCategoryIdMap.TryGetValue(id, out var mapped))
+                id = mapped;
+            selected.Add(id);
+        }
+
         if (selected.Count == 0)
             return System.Array.Empty<string>();
 

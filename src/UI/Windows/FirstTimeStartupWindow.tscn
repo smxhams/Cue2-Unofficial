@@ -108,48 +108,47 @@ layout_mode = 2
 size_flags_horizontal = 4
 text = "Let's \"Go\"!"
 
-[node name="LanguageRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="LanguageRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=830600041]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LanguageLabel" type="Label" parent="MarginContainer/VBoxContainer/LanguageRow"]
+[node name="LanguageLabel" type="Label" parent="MarginContainer/VBoxContainer/LanguageRow" unique_id=1223232515]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "Language"
 vertical_alignment = 1
 
-[node name="LanguageOptionButton" type="OptionButton" parent="MarginContainer/VBoxContainer/LanguageRow"]
+[node name="LanguageOptionButton" type="OptionButton" parent="MarginContainer/VBoxContainer/LanguageRow" unique_id=343183931]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-focus_mode = 0
 tooltip_text = "Application interface language. Applies immediately and is saved as a user preference."
+focus_mode = 0
 
-[node name="UiScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+[node name="UiScaleRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=1857283858]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="UiScaleLabel" type="Label" parent="MarginContainer/VBoxContainer/UiScaleRow"]
+[node name="UiScaleLabel" type="Label" parent="MarginContainer/VBoxContainer/UiScaleRow" unique_id=1661600261]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 text = "UI Scaling"
 vertical_alignment = 1
 
-[node name="UiScaleNum" type="LineEdit" parent="MarginContainer/VBoxContainer/UiScaleRow"]
+[node name="UiScaleNum" type="LineEdit" parent="MarginContainer/VBoxContainer/UiScaleRow" unique_id=50972086]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(72, 0)
 layout_mode = 2
 tooltip_text = "Scales whole UI.
 Caution: Will apply on Enter."
-focus_mode = 2
 text = "100%"
 alignment = 1
 max_length = 6
 
-[node name="UiScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/UiScaleRow"]
+[node name="UiScaleSlider" type="HSlider" parent="MarginContainer/VBoxContainer/UiScaleRow" unique_id=1332264839]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -162,14 +161,14 @@ max_value = 200.0
 value = 100.0
 rounded = true
 
-[node name="UiScaleResetButton" type="Button" parent="MarginContainer/VBoxContainer/UiScaleRow"]
+[node name="UiScaleResetButton" type="Button" parent="MarginContainer/VBoxContainer/UiScaleRow" unique_id=724602962]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
+tooltip_text = "Reset to default"
 focus_mode = 0
 theme_override_constants/icon_max_width = 12
 expand_icon = true
-visible = false
-tooltip_text = "Reset to default"
 
 [node name="SubWindowHandles" parent="." unique_id=2115200944 instance=ExtResource("3_handles")]

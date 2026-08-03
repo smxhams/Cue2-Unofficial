@@ -134,6 +134,8 @@ public partial class SettingsWindow : Window
 			if (panel != null)
 				LocalizeTree(panel);
 		}
+		// Filter checkboxes use the same English tree names as translation keys.
+		UpdateFilterButtonLabel();
 	}
 
 	/// <summary>
@@ -571,7 +573,9 @@ public partial class SettingsWindow : Window
 		if (selected.Count == 1)
 		{
 			var cat = SettingsExport.Categories.FirstOrDefault(c => c.Id == selected[0]);
-			_filterButton.Text = string.IsNullOrEmpty(cat.Label) ? selected[0] : cat.Label;
+			string label = string.IsNullOrEmpty(cat.Label) ? selected[0] : cat.Label;
+			// Tree-matched English labels are translation keys.
+			_filterButton.Text = T(label);
 			return;
 		}
 
@@ -993,8 +997,7 @@ public partial class SettingsWindow : Window
 		TreeItem tiMidiInputMap = _setTree.CreateItem(tiMidi);
 		SetTreeItemText(tiMidiInputMap, 0, "MIDI Input Map");
 		SetTreeItemTooltip(tiMidiInputMap, 0, "Assign MIDI controls to app actions (Go, Save, Undo, …)");
-		TreeItem tiArtNet = _setTree.CreateItem(tiConnections);
-		SetTreeItemText(tiArtNet, 0, "Art-Net");
+		// Art-Net: not shipped in this version — re-add under Connections when implementing.
 
 		// Cue defaults (shell + component defaults applied to newly created cues/components)
 		TreeItem tiDefaults = _setTree.CreateItem(root);
