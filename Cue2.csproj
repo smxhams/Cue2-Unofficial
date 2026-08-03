@@ -1,3 +1,7 @@
+<!--
+SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+SPDX-License-Identifier: MIT
+-->
 <Project Sdk="Godot.NET.Sdk/4.6.1">  
 <PropertyGroup>  
 <TargetFramework>net8.0</TargetFramework>  

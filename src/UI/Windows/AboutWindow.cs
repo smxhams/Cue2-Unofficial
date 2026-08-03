@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+// SPDX-License-Identifier: MIT
+
 using System;
 using Godot;
 using System.Collections.Generic;
@@ -46,7 +49,7 @@ public partial class AboutWindow : Window
         _licenseLinkButton = GetNode<LinkButton>("%LicenseLinkButton");
 
         _versionLabel.Text = $"Cue2 {Version.FullVersionString}";
-        _copyrightLabel.Text = "Copyright © 2025 Samuel Moxham";
+        _copyrightLabel.Text = "Copyright © 2025-2026 Samuel Moxham";
 
         _authorsRichTextLabel.Text = Authors;
         
@@ -143,7 +146,7 @@ public partial class AboutWindow : Window
     // License texts
     private const string Cue2License = @"Cue2 v0.1 : MIT License
 
-Copyright © 2025 Samuel Moxham
+Copyright © 2025-2026 Samuel Moxham
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the ""Software""), to deal

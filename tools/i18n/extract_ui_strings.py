@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+# SPDX-License-Identifier: MIT
+
 """Extract user-facing UI strings from Cue2 scenes for translation catalogs.
 
 Usage:

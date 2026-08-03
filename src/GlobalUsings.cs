@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+// SPDX-License-Identifier: MIT
+
 // Convenience usings after folder restructure.
 // Prefer explicit usings in new files when practical.
 global using Cue2.Domain.Cues;

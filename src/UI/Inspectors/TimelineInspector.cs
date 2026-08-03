@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+// SPDX-License-Identifier: MIT
+
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
 using Cue2.Domain.Devices;

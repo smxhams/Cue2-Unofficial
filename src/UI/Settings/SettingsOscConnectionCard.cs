@@ -1,8 +1,5 @@
-//==================================================================================//
-// SettingsOscConnectionCard.cs                                                     //
-// This file is part of Cue2                                                        //
-// http://cue2.live/                                                                //
-//==================================================================================//
+// SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+// SPDX-License-Identifier: MIT
 
 using System;
 using System.Collections.Generic;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
+// SPDX-License-Identifier: MIT
+
 using System;
 using Cue2.Domain.Cues;
 using Godot;
