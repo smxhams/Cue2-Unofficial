@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
@@ -30,6 +31,17 @@ public partial class MediaEngine : Node
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
+
+    /// <summary>
+    /// Limits concurrent FFmpeg waveform jobs so rapid focus changes cannot pile decode tasks.
+    /// </summary>
+    private readonly SemaphoreSlim _waveformSlots = new SemaphoreSlim(1, 1);
+
+    /// <summary>
+    /// In-flight waveform jobs keyed by absolute path + bin count (single-flight per media).
+    /// </summary>
+    private readonly object _waveformInflightLock = new object();
+    private readonly Dictionary<string, Task<byte[]>> _waveformInflight = new Dictionary<string, Task<byte[]>>();
     
     public override void _Ready()
     {
@@ -236,20 +248,26 @@ public partial class MediaEngine : Node
     
     
     /// <summary>
-    /// Generates a waveform peak envelope for an audio (or video) file using FFmpeg.
-    /// Audacity-style: decode once, stream min/max into fixed bins (no full-sample buffer).
-    /// Uses <see cref="Settings.WaveformResolution"/> when available; optional disk cache under
-    /// <see cref="GlobalData.SessionWaveformsPath"/>.
-    /// </summary>
-    /// <param name="path">Media file path with an audio stream.</param>
-    /// <returns>Serialized <see cref="WaveformPeaks"/> bytes, or empty on failure.</returns>
-    /// <summary>
     /// Resolves show-relative media paths against the current session directory.
     /// </summary>
     private string ResolveMediaPath(string path) =>
         _globalData?.ResolveMediaPath(path) ?? path;
 
-    public async Task<byte[]> GenerateWaveformAsync(string path)
+    /// <summary>
+    /// Generates a waveform peak envelope for an audio (or video) file using FFmpeg.
+    /// Audacity-style: decode once, stream min/max into fixed bins (no full-sample buffer).
+    /// Uses <see cref="Settings.WaveformResolution"/> when available; optional disk cache under
+    /// <see cref="GlobalData.SessionWaveformsPath"/>.
+    /// </summary>
+    /// <remarks>
+    /// Single-flight per path+resolution and a global one-at-a-time FFmpeg slot prevent rapid
+    /// focus changes from piling decode jobs. Pass a <paramref name="cancellationToken"/> from
+    /// inspectors so focus changes abandon awaits (and cancel a job that is still exclusive).
+    /// </remarks>
+    /// <param name="path">Media file path with an audio stream.</param>
+    /// <param name="cancellationToken">Cancels wait / in-flight exclusive decode when possible.</param>
+    /// <returns>Serialized <see cref="WaveformPeaks"/> bytes, or empty on failure/cancel.</returns>
+    public async Task<byte[]> GenerateWaveformAsync(string path, CancellationToken cancellationToken = default)
     {
         path = ResolveMediaPath(path);
         if (!File.Exists(path))
@@ -258,18 +276,24 @@ public partial class MediaEngine : Node
             return Array.Empty<byte>();
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Disk cache (session Waveforms/ folder when a show is open)
         string cachePath = TryGetWaveformCachePath(path);
         if (cachePath != null && File.Exists(cachePath))
         {
             try
             {
-                byte[] cached = await File.ReadAllBytesAsync(cachePath);
+                byte[] cached = await File.ReadAllBytesAsync(cachePath, cancellationToken).ConfigureAwait(false);
                 if (WaveformPeaks.FromBytes(cached) != null)
                 {
                     GD.Print($"MediaEngine:GenerateWaveformAsync - Cache hit: {Path.GetFileName(cachePath)}");
                     return cached;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                return Array.Empty<byte>();
             }
             catch (Exception ex)
             {
@@ -285,26 +309,88 @@ public partial class MediaEngine : Node
         }
         catch { /* Settings may not be ready */ }
 
-        GD.Print($"MediaEngine:GenerateWaveformAsync - Generating {binCount} bins for file.");
+        string flightKey = path + "\u001f" + binCount;
 
-        byte[] result = await Task.Run(() => GenerateWaveformCore(path, binCount));
-
-        if (result.Length > 0 && cachePath != null)
+        // Single-flight: concurrent requests for the same file share one decode.
+        Task<byte[]> job;
+        lock (_waveformInflightLock)
         {
-            try
+            if (_waveformInflight.TryGetValue(flightKey, out var existing) && !existing.IsCompleted)
             {
-                string dir = Path.GetDirectoryName(cachePath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-                await File.WriteAllBytesAsync(cachePath, result);
+                job = existing;
             }
-            catch (Exception ex)
+            else
             {
-                GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Cache write failed: {ex.Message}");
+                job = RunWaveformJobAsync(path, binCount, cachePath, flightKey);
+                _waveformInflight[flightKey] = job;
             }
         }
 
-        return result;
+        try
+        {
+            // Caller cancel abandons the wait; shared job may continue for other waiters / cache.
+            return await job.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return Array.Empty<byte>();
+        }
+    }
+
+    /// <summary>
+    /// Runs exclusive FFmpeg peak extraction (one slot), writes disk cache, clears inflight entry.
+    /// </summary>
+    private async Task<byte[]> RunWaveformJobAsync(string path, int binCount, string cachePath, string flightKey)
+    {
+        try
+        {
+            await _waveformSlots.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                // Re-check disk cache after waiting for the slot (another job may have filled it).
+                if (cachePath != null && File.Exists(cachePath))
+                {
+                    try
+                    {
+                        byte[] cached = await File.ReadAllBytesAsync(cachePath).ConfigureAwait(false);
+                        if (WaveformPeaks.FromBytes(cached) != null)
+                            return cached;
+                    }
+                    catch { /* fall through to generate */ }
+                }
+
+                GD.Print($"MediaEngine:GenerateWaveformAsync - Generating {binCount} bins for file.");
+                // Shared single-flight job is not tied to one caller's CT — finish so waiters/cache benefit.
+                byte[] result = await Task.Run(() => GenerateWaveformCore(path, binCount, CancellationToken.None))
+                    .ConfigureAwait(false);
+
+                if (result.Length > 0 && cachePath != null)
+                {
+                    try
+                    {
+                        string dir = Path.GetDirectoryName(cachePath);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                            Directory.CreateDirectory(dir);
+                        await File.WriteAllBytesAsync(cachePath, result).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Cache write failed: {ex.Message}");
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+                _waveformSlots.Release();
+            }
+        }
+        finally
+        {
+            lock (_waveformInflightLock)
+                _waveformInflight.Remove(flightKey);
+        }
     }
 
     private string TryGetWaveformCachePath(string mediaPath)
@@ -324,8 +410,12 @@ public partial class MediaEngine : Node
 
     /// <summary>
     /// Streaming peak extraction: bin samples as they decode (O(1) memory in sample count).
+    /// Reuses a single swr output buffer for the whole decode (no per-frame alloc).
     /// </summary>
-    private unsafe byte[] GenerateWaveformCore(string path, int binCount)
+    /// <param name="path">Absolute media path.</param>
+    /// <param name="binCount">Display bin resolution.</param>
+    /// <param name="ct">Cooperative cancel checked while demuxing.</param>
+    private unsafe byte[] GenerateWaveformCore(string path, int binCount, CancellationToken ct)
     {
         AVFormatContext* formatCtx = null;
         AVCodecContext* codecCtx = null;
@@ -334,9 +424,14 @@ public partial class MediaEngine : Node
         SwrContext* swrCtx = null;
         AVChannelLayout inChLayout = default;
         AVChannelLayout outChLayout = default;
+        // Reused mono float convert buffer (avoids per-frame av_samples_alloc).
+        byte* outBuffer = null;
+        int outBufferSamples = 0;
 
         try
         {
+            ct.ThrowIfCancellationRequested();
+
             int ret = ffmpeg.avformat_open_input(&formatCtx, path, null, null);
             if (ret < 0) throw new Exception($"Open failed: {GetFFmpegError(ret)}");
 
@@ -391,6 +486,7 @@ public partial class MediaEngine : Node
             float chunkMax = float.MinValue;
             int chunkCount = 0;
             long sampleIndex = 0;
+            int packetIter = 0;
 
             void FlushChunk()
             {
@@ -417,6 +513,10 @@ public partial class MediaEngine : Node
 
             while (ffmpeg.av_read_frame(formatCtx, packet) >= 0)
             {
+                // Cooperative cancel every 16 packets so focus changes can abort long files.
+                if ((packetIter++ & 15) == 0)
+                    ct.ThrowIfCancellationRequested();
+
                 if (packet->stream_index != audioStreamIndex)
                 {
                     ffmpeg.av_packet_unref(packet);
@@ -434,20 +534,26 @@ public partial class MediaEngine : Node
                         ffmpeg.swr_get_delay(swrCtx, codecCtx->sample_rate) + frame->nb_samples,
                         outRate, codecCtx->sample_rate, AVRounding.AV_ROUND_UP) + 256;
 
-                    byte* outBuffer = null;
-                    int linesize = 0;
-                    ret = ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0);
-                    if (ret < 0)
+                    if (maxOut > outBufferSamples || outBuffer == null)
                     {
-                        ffmpeg.av_frame_unref(frame);
-                        continue;
+                        if (outBuffer != null)
+                            ffmpeg.av_freep(&outBuffer);
+                        outBuffer = null;
+                        outBufferSamples = 0;
+                        int linesizeGrow = 0;
+                        if (ffmpeg.av_samples_alloc(&outBuffer, &linesizeGrow, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) < 0
+                            || outBuffer == null)
+                        {
+                            ffmpeg.av_frame_unref(frame);
+                            continue;
+                        }
+                        outBufferSamples = maxOut;
                     }
 
                     int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, maxOut, frame->extended_data, frame->nb_samples);
                     if (outSamples > 0)
                         Accumulate((float*)outBuffer, outSamples);
 
-                    ffmpeg.av_freep(&outBuffer);
                     ffmpeg.av_frame_unref(frame);
                 }
             }
@@ -456,29 +562,47 @@ public partial class MediaEngine : Node
             ffmpeg.avcodec_send_packet(codecCtx, null);
             while (ffmpeg.avcodec_receive_frame(codecCtx, frame) >= 0)
             {
+                ct.ThrowIfCancellationRequested();
                 int maxOut = (int)ffmpeg.av_rescale_rnd(
                     ffmpeg.swr_get_delay(swrCtx, codecCtx->sample_rate) + frame->nb_samples,
                     outRate, codecCtx->sample_rate, AVRounding.AV_ROUND_UP) + 256;
-                byte* outBuffer = null;
-                int linesize = 0;
-                if (ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0)
+                if (maxOut > outBufferSamples || outBuffer == null)
+                {
+                    if (outBuffer != null)
+                        ffmpeg.av_freep(&outBuffer);
+                    outBuffer = null;
+                    outBufferSamples = 0;
+                    int linesizeFlush = 0;
+                    if (ffmpeg.av_samples_alloc(&outBuffer, &linesizeFlush, 1, maxOut, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0
+                        && outBuffer != null)
+                        outBufferSamples = maxOut;
+                }
+                if (outBuffer != null && outBufferSamples > 0)
                 {
                     int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, maxOut, frame->extended_data, frame->nb_samples);
                     if (outSamples > 0)
                         Accumulate((float*)outBuffer, outSamples);
-                    ffmpeg.av_freep(&outBuffer);
                 }
                 ffmpeg.av_frame_unref(frame);
             }
             {
-                byte* outBuffer = null;
-                int linesize = 0;
-                if (ffmpeg.av_samples_alloc(&outBuffer, &linesize, 1, 4096, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0)
+                const int flushSamples = 4096;
+                if (flushSamples > outBufferSamples || outBuffer == null)
                 {
-                    int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, 4096, null, 0);
+                    if (outBuffer != null)
+                        ffmpeg.av_freep(&outBuffer);
+                    outBuffer = null;
+                    outBufferSamples = 0;
+                    int linesizeTail = 0;
+                    if (ffmpeg.av_samples_alloc(&outBuffer, &linesizeTail, 1, flushSamples, AVSampleFormat.AV_SAMPLE_FMT_FLT, 0) >= 0
+                        && outBuffer != null)
+                        outBufferSamples = flushSamples;
+                }
+                if (outBuffer != null && outBufferSamples > 0)
+                {
+                    int outSamples = ffmpeg.swr_convert(swrCtx, &outBuffer, flushSamples, null, 0);
                     if (outSamples > 0)
                         Accumulate((float*)outBuffer, outSamples);
-                    ffmpeg.av_freep(&outBuffer);
                 }
             }
 
@@ -518,6 +642,11 @@ public partial class MediaEngine : Node
             GD.Print($"MediaEngine:GenerateWaveformAsync - OK bins={binCount} samples={sampleIndex} chunks={chunkN}");
             return peaks.ToBytes();
         }
+        catch (OperationCanceledException)
+        {
+            GD.Print("MediaEngine:GenerateWaveformAsync - Cancelled");
+            return Array.Empty<byte>();
+        }
         catch (Exception ex)
         {
             GD.PrintErr($"MediaEngine:GenerateWaveformAsync - Error: {ex.Message}");
@@ -525,6 +654,8 @@ public partial class MediaEngine : Node
         }
         finally
         {
+            if (outBuffer != null)
+                ffmpeg.av_freep(&outBuffer);
             if (packet != null) ffmpeg.av_packet_free(&packet);
             if (frame != null) ffmpeg.av_frame_free(&frame);
             if (swrCtx != null) ffmpeg.swr_free(&swrCtx);
@@ -534,7 +665,7 @@ public partial class MediaEngine : Node
             ffmpeg.av_channel_layout_uninit(&outChLayout);
         }
     }
-    
+
     /// <summary>
     /// Gets metadata for a video file using FFmpeg (duration, width, height, frame rate, codec/format, and audio metadata if present).
     /// Fast extraction without full decoding; supports broad formats (MP4, AVI, etc.).

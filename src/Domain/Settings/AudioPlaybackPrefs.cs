@@ -51,6 +51,23 @@ public readonly struct AudioPresentTuning
     }
 
     /// <summary>
+    /// Streaming decoder ring capacity (ms) large enough for <see cref="PrefetchMs"/> and
+    /// SDL fill targets so prefetch does not overflow a 400 ms ring under PreferStability.
+    /// </summary>
+    /// <remarks>
+    /// Formula: <c>max(400, PrefetchMs * 2, TargetBufferMs * 3)</c>, capped at 10 s.
+    /// PreferStability (prefetch 1400 ms) → 2800 ms ring.
+    /// </remarks>
+    public int RecommendedRingMs
+    {
+        get
+        {
+            int ms = Math.Max(400, Math.Max(PrefetchMs * 2, TargetBufferMs * 3));
+            return Math.Clamp(ms, 400, 10_000);
+        }
+    }
+
+    /// <summary>
     /// Resolves latency mode + declick duration to concrete fill knobs.
     /// </summary>
     /// <param name="mode">User-facing latency mode.</param>

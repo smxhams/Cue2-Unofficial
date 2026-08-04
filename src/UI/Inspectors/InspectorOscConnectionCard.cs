@@ -91,6 +91,7 @@ public partial class InspectorOscConnectionCard : PanelContainer
         _commandLineEdit?.ReleaseFocus();
         if (_oscComponent == null) return;
         if (_oscComponent.OscMessage == text) return;
+        if (IsHistoryRestoring()) return;
 
         RecordCueHistory("Edit OSC command");
         _oscComponent.OscMessage = text;
@@ -112,6 +113,7 @@ public partial class InspectorOscConnectionCard : PanelContainer
         _argsLineEdit?.ReleaseFocus();
         if (_oscComponent == null) return;
         if (_oscComponent.ArgsText == text) return;
+        if (IsHistoryRestoring()) return;
 
         RecordCueHistory("Edit OSC args");
         _oscComponent.ArgsText = text ?? string.Empty;
@@ -156,12 +158,23 @@ public partial class InspectorOscConnectionCard : PanelContainer
         }
     }
 
+    /// <summary>
+    /// True while HistoryManager is applying an undo/redo restore (do not re-record).
+    /// </summary>
+    private bool IsHistoryRestoring()
+    {
+        var gd = GetNodeOrNull<GlobalData>("/root/GlobalData");
+        return gd?.HistoryManager?.IsRestoring == true;
+    }
+
     private void RecordCueHistory(string description)
     {
         var gd = GetNodeOrNull<GlobalData>("/root/GlobalData");
-        int cueId = gd?.FocusedCue ?? -1;
+        if (gd?.HistoryManager == null || gd.HistoryManager.IsRestoring)
+            return;
+        int cueId = gd.FocusedCue;
         if (cueId >= 0)
-            gd?.HistoryManager?.RecordCueChange(cueId, description);
+            gd.HistoryManager.RecordCueChange(cueId, description);
     }
 
     private void RemoveComponent()

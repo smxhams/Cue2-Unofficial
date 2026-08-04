@@ -17,6 +17,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Cue2.UI.Inspectors;
@@ -32,6 +33,9 @@ public partial class TimelineInspector : Control
     private GlobalSignals _globalSignals;
     private HistoryManager _historyManager;
     private MediaEngine _mediaEngine;
+
+    /// <summary>Cancels in-flight timeline waveform batch when the view reloads.</summary>
+    private CancellationTokenSource _waveformCts;
 
     private Cue _focusedCue;
 
@@ -110,6 +114,8 @@ public partial class TimelineInspector : Control
     private Vector2 _initialBarPos;
     private Vector2 _initialMousePos;
     private Cue _draggedCue;
+    /// <summary>True after the first real pre-wait change in the current drag (history recorded).</summary>
+    private bool _preWaitDragHistoryRecorded;
     private double _lastClickTime;
     private int _lastClickCueId = -1;
 
@@ -148,6 +154,10 @@ public partial class TimelineInspector : Control
     /// </summary>
     public override void _ExitTree()
     {
+        try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+        try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+        _waveformCts = null;
+
         if (_globalSignals != null)
         {
             _globalSignals.ShellFocused -= ShellSelected;
@@ -1596,9 +1606,16 @@ public partial class TimelineInspector : Control
     {
         if (_mediaEngine == null || items == null) return;
 
+        // Cancel prior batch (rapid rebuild / toggle waveforms / focus) — single-flight engine
+        // still shares in-flight path jobs; this abandons UI wait and stops starting more cues.
+        try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+        try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+        _waveformCts = new CancellationTokenSource();
+        var ct = _waveformCts.Token;
+
         foreach (var item in items)
         {
-            if (gen != _timelineLoadGeneration || !IsInstanceValid(this))
+            if (gen != _timelineLoadGeneration || !IsInstanceValid(this) || ct.IsCancellationRequested)
                 return;
 
             var cue = item.Cue;
@@ -1606,7 +1623,11 @@ public partial class TimelineInspector : Control
 
             try
             {
-                await EnsureCueWaveformDataAsync(cue);
+                await EnsureCueWaveformDataAsync(cue, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception ex)
             {
@@ -1614,7 +1635,7 @@ public partial class TimelineInspector : Control
                 continue;
             }
 
-            if (gen != _timelineLoadGeneration || !IsInstanceValid(this))
+            if (gen != _timelineLoadGeneration || !IsInstanceValid(this) || ct.IsCancellationRequested)
                 return;
 
             if (!_cueToBar.TryGetValue(cue, out var bar) || bar == null || !IsInstanceValid(bar))
@@ -1636,7 +1657,7 @@ public partial class TimelineInspector : Control
     /// Ensures <see cref="AudioComponent.WaveformData"/> / video waveform is populated via
     /// <see cref="MediaEngine.GenerateWaveformAsync"/> (cache hit or generate).
     /// </summary>
-    private async Task EnsureCueWaveformDataAsync(Cue cue)
+    private async Task EnsureCueWaveformDataAsync(Cue cue, CancellationToken ct = default)
     {
         if (cue == null || _mediaEngine == null) return;
 
@@ -1645,7 +1666,7 @@ public partial class TimelineInspector : Control
         {
             if (audio.WaveformData == null || audio.WaveformData.Length == 0)
             {
-                byte[] data = await _mediaEngine.GenerateWaveformAsync(audio.AudioFile);
+                byte[] data = await _mediaEngine.GenerateWaveformAsync(audio.AudioFile, ct);
                 if (data != null && data.Length > 0)
                     audio.WaveformData = data;
             }
@@ -1657,7 +1678,7 @@ public partial class TimelineInspector : Control
         {
             if (video.WaveformData == null || video.WaveformData.Length == 0)
             {
-                byte[] data = await _mediaEngine.GenerateWaveformAsync(video.VideoFile);
+                byte[] data = await _mediaEngine.GenerateWaveformAsync(video.VideoFile, ct);
                 if (data != null && data.Length > 0)
                     video.WaveformData = data;
             }
@@ -1994,6 +2015,10 @@ public partial class TimelineInspector : Control
     /// <param name="event">The input event.</param>
     /// <param name="cue">The associated cue.</param>
     /// <param name="bar">The visual bar representation.</param>
+    /// <remarks>
+    /// History is recorded on the first real pre-wait change during a drag, not on mouse-down,
+    /// so a click without drag does not push an empty undo step (P1-20).
+    /// </remarks>
     private void HandleBarInput(InputEvent @event, Cue cue, ColorRect bar)
     {
         if (@event is InputEventMouseButton mouseButton)
@@ -2011,6 +2036,7 @@ public partial class TimelineInspector : Control
                         EnsurePlayheadVisible();
                         _lastClickCueId = -1;
                         _dragging = false;
+                        _preWaitDragHistoryRecorded = false;
                         GrabFocusSafe();
                         GetViewport()?.SetInputAsHandled();
                         return;
@@ -2022,16 +2048,17 @@ public partial class TimelineInspector : Control
                     _initialBarPos = bar.Position;
                     _initialMousePos = GetViewport().GetMousePosition();
                     _draggedCue = cue;
-                    _globalData?.HistoryManager?.RecordCueChange(
-                        cue.Id, "Edit pre-wait (timeline)", $"cue:{cue.Id}:timeline-prewait");
+                    // Do not RecordCueChange here — click without drag would create a no-op undo step.
+                    _preWaitDragHistoryRecorded = false;
                     GrabFocusSafe();
                 }
                 else
                 {
-                    if (_draggedCue != null)
+                    if (_draggedCue != null && _preWaitDragHistoryRecorded)
                         _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_draggedCue.Id}:timeline-prewait");
                     _dragging = false;
                     _draggedCue = null;
+                    _preWaitDragHistoryRecorded = false;
                     _globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
                 }
             }
@@ -2058,6 +2085,15 @@ public partial class TimelineInspector : Control
                 if (_cueToBar.TryGetValue(cue, out var liveBar) && liveBar != null && IsInstanceValid(liveBar))
                     ApplyBarGeometry(liveBar, cue, ComputeActionStart(cue), out _, out _);
                 return;
+            }
+
+            // First real change in this drag: capture pre-change memento (coalesced for the drag).
+            if (!_preWaitDragHistoryRecorded
+                && _globalData?.HistoryManager?.IsRestoring != true)
+            {
+                _globalData?.HistoryManager?.RecordCueChange(
+                    cue.Id, "Edit pre-wait (timeline)", $"cue:{cue.Id}:timeline-prewait");
+                _preWaitDragHistoryRecorded = true;
             }
 
             cue.PreWait = newPreWait;

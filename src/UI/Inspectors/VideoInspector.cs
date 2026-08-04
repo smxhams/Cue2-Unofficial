@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
@@ -52,6 +53,9 @@ public partial class VideoInspector : Control
 	/// abandons after awaits.
 	/// </summary>
 	private int _shellSelectGeneration;
+
+	/// <summary>Cancels in-flight waveform generation when focus/file changes.</summary>
+	private CancellationTokenSource _waveformCts;
 	
 	// Ui Nodes
 	private Label _infoLabel;
@@ -244,6 +248,40 @@ public partial class VideoInspector : Control
 		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
 		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
 		_previewCollapseButton.Pressed += PreviewToggled;
+	}
+
+	/// <inheritdoc />
+	public override void _ExitTree()
+	{
+		// Invalidate in-flight ShellSelected / waveform work so callbacks no-op after free.
+		_shellSelectGeneration++;
+		CancelWaveformWork();
+		ClearFileDialog();
+
+		try
+		{
+			if (_videoPreviewer != null && IsInstanceValid(_videoPreviewer))
+				_videoPreviewer.ClearDecoder();
+		}
+		catch
+		{
+			/* best-effort during exit */
+		}
+
+		if (_globalSignals != null)
+		{
+			_globalSignals.ShellFocused -= ShellSelected;
+			_globalSignals.SyncShellInspector -= RefreshMediaPathDisplay;
+			_globalSignals.SyncShellInspector -= OnSyncFromHistory;
+			_globalSignals.CueMediaHealthChanged -= OnCueMediaHealthChanged;
+			_globalSignals.DisplaysChanged -= OnDisplaysChangedForTargetLayers;
+		}
+
+		_focusedCue = null;
+		_focusedVideoComponent = null;
+		_videoTargets.Clear();
+
+		base._ExitTree();
 	}
 
 	private void AssignUiNodeParameters()
@@ -614,6 +652,7 @@ public partial class VideoInspector : Control
 
 		if (cueId < 0)
 		{
+			CancelWaveformWork();
 			_focusedCue = null;
 			_focusedVideoComponent = null;
 			_isMultiEdit = false;
@@ -633,6 +672,9 @@ public partial class VideoInspector : Control
 			try { _videoPreviewer?.ClearDecoder(); } catch { /* optional */ }
 			return;
 		}
+
+		// New focus — abandon prior waveform wait so jobs do not pile.
+		var waveformCt = RestartWaveformToken();
 
 		_isMultiEdit = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
 		if (_isMultiEdit)
@@ -734,7 +776,7 @@ public partial class VideoInspector : Control
 			_videoPreviewer.ClearDecoder();
 		}
 
-		await RefreshAudioUiState();
+		await RefreshAudioUiState(waveformCt);
 		if (gen != _shellSelectGeneration || _focusedCue == null) return;
 
 		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
@@ -896,7 +938,8 @@ public partial class VideoInspector : Control
 	/// <param name="filePath">The dropped file path.</param>
 	public void SetVideoFileUrlFromDrop(string filePath)
 	{
-		if (_focusedCue == null)
+		bool multi = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
+		if (!multi && _focusedCue == null)
 		{
 			GD.Print("VideoInspector:SetVideoFileUrlFromDrop - No cue selected");
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "VideoInspector:No cue selected for video file drop", 2);
@@ -906,13 +949,17 @@ public partial class VideoInspector : Control
 	}
 	
 	/// <summary>
-	/// Sets the video file for the focused cue: create or replace component, load metadata, generate waveform, refresh UI.
+	/// Sets the video/image file for the focused cue (or all multi-edit selected cues):
+	/// create or replace component, load metadata, generate waveform, refresh UI.
 	/// </summary>
 	/// <param name="filePath">The video file path.</param>
 	/// <param name="resetInOutPoints">If true, start/end are reset to full file; otherwise clamp to new duration.</param>
 	private async void SetVideoFile(string filePath, bool resetInOutPoints)
 	{
-		if (_focusedCue == null) return;
+		bool multi = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
+		var multiCues = multi ? InspectorMultiEditSupport.GetSelectedCues() : null;
+		if (!multi && _focusedCue == null) return;
+		if (multi && (multiCues == null || multiCues.Count == 0)) return;
 
 		string resolvedPath = _globalData?.ResolveMediaPath(filePath) ?? filePath;
 		if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(resolvedPath))
@@ -939,46 +986,89 @@ public partial class VideoInspector : Control
 			GD.PrintErr($"VideoInspector:SetVideoFile - Media backup: {ex.Message}");
 		}
 
-		// Resolve or create component; always assign the path (AddVideoComponent alone does not update existing).
-		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
-		bool isNewComponent = existingVideo == null;
 		bool isImage = VideoComponent.IsImagePath(resolvedPath);
-		if (_focusedCue != null)
-			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
-				isNewComponent
-					? (isImage ? "Add image component" : "Add video component")
-					: (isImage ? "Change image file" : "Change video file"));
-		if (existingVideo != null)
+		VideoFileMetadata fileMetadata = null;
+		try
 		{
-			_focusedVideoComponent = existingVideo;
-			bool pathChanged = !string.Equals(existingVideo.VideoFile, pathToStore, StringComparison.OrdinalIgnoreCase);
-			bool wasImage = existingVideo.IsImage;
-			existingVideo.VideoFile = pathToStore;
-			existingVideo.IsImage = isImage;
-			if (pathChanged)
+			fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(resolvedPath);
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"VideoInspector:SetVideoFile - Metadata error: {ex.Message}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"VideoInspector:SetVideoFile - Metadata error: {ex.Message}", 2);
+			return;
+		}
+		if (fileMetadata == null)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"VideoInspector:SetVideoFile - Failed to read metadata for {Path.GetFileName(filePath)}", 2);
+			return;
+		}
+
+		if (multi)
+		{
+			bool anyNew = multiCues.Any(c => c.GetVideoComponent() == null);
+			string singleDesc = anyNew
+				? (isImage ? "Add image component" : "Add video component")
+				: (isImage ? "Change image file" : "Change video file");
+			InspectorMultiEditSupport.RecordBeforeEdit(
+				_globalData,
+				multiCues.Count > 1,
+				multiCues[^1],
+				singleDesc,
+				anyNew
+					? (isImage ? "Multi-add image components" : "Multi-add video components")
+					: (isImage ? "Multi-edit image file" : "Multi-edit video file"));
+
+			byte[] sharedWave = null;
+			if (!isImage && fileMetadata.AudioChannels > 0)
 			{
-				// Force re-fetch of metadata/waveform for the new file
-				existingVideo.WaveformData = null;
-				existingVideo.Metadata = null;
-			}
-			// Switching media kind resets timing model.
-			if (wasImage != isImage || (pathChanged && isImage))
-			{
-				existingVideo.StartTime = 0.0;
-				existingVideo.EndTime = -1.0;
-				if (isImage)
+				try
 				{
-					// Prefer show image-hold default when becoming / replacing an image.
-					double hold = _globalData?.Settings?.VideoDefaultImageDuration ?? 0.0;
-					existingVideo.Duration = Math.Max(0.0, hold);
-					existingVideo.TotalDuration = hold <= 0 ? -1.0 : hold;
+					sharedWave = await _mediaEngine.GenerateWaveformAsync(pathToStore, RestartWaveformToken());
+				}
+				catch (OperationCanceledException)
+				{
+					return;
+				}
+				catch (Exception ex)
+				{
+					GD.PrintErr($"VideoInspector:SetVideoFile multi - Waveform: {ex.Message}");
 				}
 			}
+
+			foreach (var cue in multiCues)
+			{
+				var existing = cue.GetVideoComponent();
+				bool isNew = existing == null;
+				VideoComponent comp = existing ?? cue.AddVideoComponent(pathToStore);
+				ApplyVideoFileToComponent(comp, pathToStore, isImage, fileMetadata, isNew, resetInOutPoints, sharedWave);
+				cue.CalculateTotalDuration();
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
+				GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(cue.Id);
+			}
+
+			_globalSignals.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+			int focusId = _focusedCue?.Id ?? multiCues[^1].Id;
+			ShellSelected(focusId);
+			return;
 		}
+
+		// Single-cue path
+		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
+		bool isNewComponent = existingVideo == null;
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
+			isNewComponent
+				? (isImage ? "Add image component" : "Add video component")
+				: (isImage ? "Change image file" : "Change video file"));
+		if (existingVideo != null)
+			_focusedVideoComponent = existingVideo;
 		else
-		{
 			_focusedVideoComponent = _focusedCue.AddVideoComponent(pathToStore);
-		}
+
+		ApplyVideoFileToComponent(
+			_focusedVideoComponent, pathToStore, isImage, fileMetadata, isNewComponent, resetInOutPoints, null);
 
 		_fileUrl.Text = pathToStore;
 		_inspectorContent.Visible = true;
@@ -988,93 +1078,29 @@ public partial class VideoInspector : Control
 		_cachedPeaks = null;
 		_cachedPeaksSource = null;
 
-		try
-		{
-			var fileMetadata = await _mediaEngine.GetVideoFileMetadataAsync(resolvedPath);
-			if (fileMetadata == null)
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-					$"VideoInspector:SetVideoFile - Failed to read metadata for {Path.GetFileName(filePath)}", 2);
-				return;
-			}
-
-			_focusedVideoComponent.Metadata = fileMetadata;
-			_focusedVideoComponent.IsImage = isImage;
-			_focusedVideoComponent.HasAudio = !isImage && fileMetadata.AudioChannels > 0;
-			// New components already have UseAudio from show VideoDefaults — only enable if the file has audio.
-			// File replacements default to using audio when present (previous behaviour).
-			if (isNewComponent)
-				_focusedVideoComponent.UseAudio =
-					_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio;
-			else
-				_focusedVideoComponent.UseAudio = _focusedVideoComponent.HasAudio;
-			_focusedVideoComponent.ScaledWidth = fileMetadata.Width;
-			_focusedVideoComponent.ScaledHeight = fileMetadata.Height;
-
-			var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
-
-			if (isImage)
-			{
-				_focusedVideoComponent.StartTime = 0.0;
-				_focusedVideoComponent.EndTime = -1.0;
-				// Preserve user Duration when replacing image-for-image unless forced reset.
-				// New components keep ApplyVideoDefaults image-hold; do not force 0 here.
-				if (resetInOutPoints)
-					_focusedVideoComponent.Duration = 0.0;
-				GD.Print($"VideoInspector:SetVideoFile - Image loaded: {fileMetadata.Width}x{fileMetadata.Height}, hold={_focusedVideoComponent.Duration}s");
-			}
-			else if (resetInOutPoints || isNewComponent)
-			{
-				_focusedVideoComponent.StartTime = 0.0;
-				_focusedVideoComponent.EndTime = -1.0;
-				GD.Print($"VideoInspector:SetVideoFile - Metadata loaded: Duration {fileDuration}s, HasAudio: {_focusedVideoComponent.HasAudio}");
-			}
-			else
-			{
-				if (fileDuration > 0 && _focusedVideoComponent.StartTime >= fileDuration)
-				{
-					_focusedVideoComponent.StartTime = 0.0;
-					GD.Print("VideoInspector:SetVideoFile - Reset start time (exceeded file duration)");
-				}
-
-				if (fileDuration > 0 && _focusedVideoComponent.EndTime >= 0 && _focusedVideoComponent.EndTime > fileDuration)
-				{
-					_focusedVideoComponent.EndTime = -1.0;
-					GD.Print("VideoInspector:SetVideoFile - Reset end time to undefined (exceeded file duration)");
-				}
-				else if (_focusedVideoComponent.EndTime >= 0 &&
-				         _focusedVideoComponent.EndTime <= _focusedVideoComponent.StartTime)
-				{
-					_focusedVideoComponent.EndTime = -1.0;
-					GD.Print("VideoInspector:SetVideoFile - Reset end time to undefined (was <= start time)");
-				}
-			}
-
-			_focusedVideoComponent.RecalculateDuration();
-			_focusedCue.CalculateTotalDuration();
-		}
-		catch (Exception ex)
-		{
-			GD.PrintErr($"VideoInspector:SetVideoFile - Metadata error: {ex.Message}");
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-				$"VideoInspector:SetVideoFile - Metadata error: {ex.Message}", 2);
-			return;
-		}
-
-		UpdateVideoUiFields(pathToStore);
+		_focusedCue.CalculateTotalDuration();
 
 		// Always regenerate waveform when audio is present (RefreshAudioUiState skips if old data remains)
 		if (_focusedVideoComponent.HasAudio && _focusedVideoComponent.UseAudio)
 		{
 			try
 			{
-				_focusedVideoComponent.WaveformData =
-					await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
-				if (_focusedVideoComponent.WaveformData == null || _focusedVideoComponent.WaveformData.Length == 0)
+				var wave = await _mediaEngine.GenerateWaveformAsync(
+					_focusedVideoComponent.VideoFile, RestartWaveformToken());
+				if (_focusedVideoComponent == null) return;
+				if (wave == null || wave.Length == 0)
 				{
 					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 						$"VideoInspector:SetVideoFile - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
 				}
+				else
+				{
+					_focusedVideoComponent.WaveformData = wave;
+				}
+			}
+			catch (OperationCanceledException)
+			{
+				return;
 			}
 			catch (Exception ex)
 			{
@@ -1083,6 +1109,7 @@ public partial class VideoInspector : Control
 			}
 		}
 
+		UpdateVideoUiFields(pathToStore);
 		await RefreshAudioUiState();
 
 		// Preview decoder for new path
@@ -1104,12 +1131,91 @@ public partial class VideoInspector : Control
 		if (_deleteVideoComponentButton != null)
 			_deleteVideoComponentButton.Visible = true;
 	}
+
+	/// <summary>
+	/// Applies a resolved media path + metadata onto one video component (create path already assigned).
+	/// </summary>
+	private void ApplyVideoFileToComponent(
+		VideoComponent comp,
+		string pathToStore,
+		bool isImage,
+		VideoFileMetadata fileMetadata,
+		bool isNewComponent,
+		bool resetInOutPoints,
+		byte[] sharedWaveform)
+	{
+		if (comp == null || fileMetadata == null) return;
+
+		bool pathChanged = !string.Equals(comp.VideoFile, pathToStore, StringComparison.OrdinalIgnoreCase);
+		bool wasImage = comp.IsImage;
+		comp.VideoFile = pathToStore;
+		comp.IsImage = isImage;
+		if (pathChanged)
+		{
+			comp.WaveformData = null;
+			comp.Metadata = null;
+		}
+
+		// Switching media kind resets timing model.
+		if (wasImage != isImage || (pathChanged && isImage))
+		{
+			comp.StartTime = 0.0;
+			comp.EndTime = -1.0;
+			if (isImage)
+			{
+				double hold = _globalData?.Settings?.VideoDefaultImageDuration ?? 0.0;
+				comp.Duration = Math.Max(0.0, hold);
+				comp.TotalDuration = hold <= 0 ? -1.0 : hold;
+			}
+		}
+
+		comp.Metadata = fileMetadata;
+		comp.IsImage = isImage;
+		comp.HasAudio = !isImage && fileMetadata.AudioChannels > 0;
+		if (isNewComponent)
+			comp.UseAudio = comp.HasAudio && comp.UseAudio;
+		else
+			comp.UseAudio = comp.HasAudio;
+		comp.ScaledWidth = fileMetadata.Width;
+		comp.ScaledHeight = fileMetadata.Height;
+
+		var fileDuration = fileMetadata.Duration > 0 ? fileMetadata.Duration : 0.0;
+
+		if (isImage)
+		{
+			comp.StartTime = 0.0;
+			comp.EndTime = -1.0;
+			if (resetInOutPoints)
+				comp.Duration = 0.0;
+		}
+		else if (resetInOutPoints || isNewComponent)
+		{
+			comp.StartTime = 0.0;
+			comp.EndTime = -1.0;
+		}
+		else
+		{
+			if (fileDuration > 0 && comp.StartTime >= fileDuration)
+				comp.StartTime = 0.0;
+
+			if (fileDuration > 0 && comp.EndTime >= 0 && comp.EndTime > fileDuration)
+				comp.EndTime = -1.0;
+			else if (comp.EndTime >= 0 && comp.EndTime <= comp.StartTime)
+				comp.EndTime = -1.0;
+		}
+
+		if (sharedWaveform != null && sharedWaveform.Length > 0 && comp.HasAudio && comp.UseAudio)
+			comp.WaveformData = sharedWaveform;
+
+		comp.RecalculateDuration();
+	}
 	
 	/// <summary>
 	/// Refreshes the audio-related UI elements based on the current VideoComponent's audio state.
 	/// Handles visibility of audio controls, labels, output options, routing matrix, and waveform.
 	/// </summary>
-	private async Task RefreshAudioUiState()
+	/// <param name="waveformCt">Optional cancel token for waveform generate (focus change).</param>
+	private async Task RefreshAudioUiState(CancellationToken waveformCt = default)
 	{
 		if (_focusedVideoComponent == null)
 			return;
@@ -1145,11 +1251,23 @@ public partial class VideoInspector : Control
 				{
 					try
 					{
-						_focusedVideoComponent.WaveformData = await _mediaEngine.GenerateWaveformAsync(_focusedVideoComponent.VideoFile);
-						if (_focusedVideoComponent.WaveformData.Length == 0)
+						var ct = waveformCt.CanBeCanceled ? waveformCt : RestartWaveformToken();
+						var wave = await _mediaEngine.GenerateWaveformAsync(
+							_focusedVideoComponent.VideoFile, ct);
+						if (_focusedVideoComponent == null) return;
+						if (wave == null || wave.Length == 0)
 						{
-							_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:RefreshAudioUiState - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
+							if (!ct.IsCancellationRequested)
+								_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:RefreshAudioUiState - Waveform generation failed for {_focusedVideoComponent.VideoFile}", 2);
 						}
+						else
+						{
+							_focusedVideoComponent.WaveformData = wave;
+						}
+					}
+					catch (OperationCanceledException)
+					{
+						return;
 					}
 					catch (Exception ex)
 					{
@@ -1359,16 +1477,18 @@ public partial class VideoInspector : Control
 
 	private void OnPanSliderChanged(double value)
 	{
-		if (_isUpdatingPanUi || _focusedCue == null || _focusedVideoComponent == null) return;
+		if (_isUpdatingPanUi || _isSyncingUi) return;
+		var targets = GetVideoTargets();
+		if (targets.Count == 0) return;
 		if (_globalData?.HistoryManager?.IsRestoring == true) return;
 		if (!IsStereoAudioSource) return;
 
 		float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
-		if (Math.Abs(_focusedVideoComponent.Pan - pan) < 1e-6f) return;
+		if (targets.All(t => Math.Abs(t.Component.Pan - pan) < 1e-6f)) return;
 
-		_globalData?.HistoryManager?.RecordCueChange(
-			_focusedCue.Id, "Edit video audio pan", $"cue:{_focusedCue.Id}:video:pan");
-		_focusedVideoComponent.Pan = pan;
+		RecordVideoHistory("Edit video audio pan", VideoCoalesceKey("pan"));
+		foreach (var (_, comp) in targets)
+			comp.Pan = pan;
 
 		_isUpdatingPanUi = true;
 		try
@@ -1385,8 +1505,9 @@ public partial class VideoInspector : Control
 
 	private void OnPanSliderDragEnded(bool valueChanged)
 	{
-		if (_focusedCue == null) return;
-		_globalData?.HistoryManager?.EndCoalesceSession($"cue:{_focusedCue.Id}:video:pan");
+		var key = VideoCoalesceKey("pan");
+		if (!string.IsNullOrEmpty(key))
+			_globalData?.HistoryManager?.EndCoalesceSession(key);
 	}
 
 	/// <summary>
@@ -1394,7 +1515,8 @@ public partial class VideoInspector : Control
 	/// </summary>
 	private void PanInputSubmitted(string text)
 	{
-		if (_focusedCue == null || _focusedVideoComponent == null || _panInput == null) return;
+		var targets = GetVideoTargets();
+		if (targets.Count == 0 || _panInput == null) return;
 		if (_globalData?.HistoryManager?.IsRestoring == true) return;
 		if (_isUpdatingPanUi) return;
 		if (!IsStereoAudioSource)
@@ -1406,7 +1528,7 @@ public partial class VideoInspector : Control
 		if (!UiUtilities.TryParsePan(text, out float pan))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid pan format: {text}", 1);
-			_panInput.Text = UiUtilities.FormatPan(_focusedVideoComponent.Pan);
+			_panInput.Text = UiUtilities.FormatPan(_focusedVideoComponent?.Pan ?? 0f);
 			if (_panInput.HasFocus()) _panInput.ReleaseFocus();
 			return;
 		}
@@ -1414,15 +1536,16 @@ public partial class VideoInspector : Control
 		pan = Mathf.Clamp(pan, -1f, 1f);
 		_panInput.Text = UiUtilities.FormatPan(pan);
 
-		if (Math.Abs(_focusedVideoComponent.Pan - pan) < 1e-6f)
+		if (targets.All(t => Math.Abs(t.Component.Pan - pan) < 1e-6f))
 		{
 			SyncPanUiFromComponent();
 			if (_panInput.HasFocus()) _panInput.ReleaseFocus();
 			return;
 		}
 
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video audio pan");
-		_focusedVideoComponent.Pan = pan;
+		RecordVideoHistory("Edit video audio pan");
+		foreach (var (_, comp) in targets)
+			comp.Pan = pan;
 		SyncPanUiFromComponent();
 		RefreshRoutingInputPanLabels();
 		if (_panInput.HasFocus()) _panInput.ReleaseFocus();
@@ -1541,7 +1664,14 @@ public partial class VideoInspector : Control
 		if (_focusedVideoComponent.UseSubtitles == pressed)
 			return;
 
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video closed captions");
+		// Enabling CC may also auto-add a Text component — record once so one Undo
+		// reverts the flag and the added text together (P1-08).
+		bool willAddText = pressed && _focusedCue.GetTextComponent() == null;
+		string historyDesc = willAddText
+			? "Enable closed captions (add text)"
+			: "Edit video closed captions";
+		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, historyDesc);
+
 		_focusedVideoComponent.UseSubtitles = pressed;
 
 		if (pressed)
@@ -1554,9 +1684,8 @@ public partial class VideoInspector : Control
 					_focusedVideoComponent.SubtitleStreamIndex = first.StreamIndex;
 			}
 
-			if (_focusedCue.GetTextComponent() == null)
+			if (willAddText)
 			{
-				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add text for closed captions");
 				var text = _focusedCue.AddTextComponent();
 				// CC slave timing: hold until video stops.
 				text.Duration = 0;
@@ -1632,15 +1761,15 @@ public partial class VideoInspector : Control
 
 	/// <summary>
 	/// Handles image hold-duration edits. 0 / blank / negative = until stopped.
+	/// Applies to all multi-edit image targets.
 	/// </summary>
 	/// <param name="text">Submitted duration text.</param>
 	private void OnImageDurationSubmitted(string text)
 	{
-		if (_focusedCue == null || _focusedVideoComponent == null || !_focusedVideoComponent.IsImage)
+		var targets = GetVideoTargets().Where(t => t.Component.IsImage).ToList();
+		if (targets.Count == 0)
 			return;
-		if (_globalData?.HistoryManager?.IsRestoring == true)
-			return;
-		if (!_focusedCue.Components.Contains(_focusedVideoComponent))
+		if (_isSyncingUi || _globalData?.HistoryManager?.IsRestoring == true)
 			return;
 
 		try
@@ -1659,7 +1788,7 @@ public partial class VideoInspector : Control
 				{
 					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 						$"Invalid image duration: {text}", 1);
-					UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+					UpdateVideoUiFields(_focusedVideoComponent?.VideoFile ?? string.Empty);
 					if (_durationValue.HasFocus())
 						_durationValue.ReleaseFocus();
 					return;
@@ -1667,18 +1796,19 @@ public partial class VideoInspector : Control
 				newDuration = Math.Max(0, secs);
 			}
 
-			if (Math.Abs(_focusedVideoComponent.Duration - newDuration) < 1e-9)
+			if (targets.All(t => Math.Abs(t.Component.Duration - newDuration) < 1e-9))
 			{
-				UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+				UpdateVideoUiFields(_focusedVideoComponent?.VideoFile ?? string.Empty);
 				if (_durationValue.HasFocus())
 					_durationValue.ReleaseFocus();
 				return;
 			}
 
-			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit image duration");
-			_focusedVideoComponent.Duration = newDuration;
+			RecordVideoHistory("Edit image duration");
+			foreach (var (_, comp) in targets)
+				comp.Duration = newDuration;
 			SyncDuration();
-			UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+			UpdateVideoUiFields(_focusedVideoComponent?.VideoFile ?? string.Empty);
 			if (_durationValue.HasFocus())
 				_durationValue.ReleaseFocus();
 			GD.Print($"VideoInspector:OnImageDurationSubmitted - Image hold duration set to {newDuration}s");
@@ -1688,7 +1818,7 @@ public partial class VideoInspector : Control
 			GD.PrintErr($"VideoInspector:OnImageDurationSubmitted - {ex.Message}");
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 				$"Error parsing image duration: {ex.Message}", 2);
-			UpdateVideoUiFields(_focusedVideoComponent.VideoFile ?? string.Empty);
+			UpdateVideoUiFields(_focusedVideoComponent?.VideoFile ?? string.Empty);
 		}
 	}
 
@@ -1713,19 +1843,16 @@ public partial class VideoInspector : Control
 	/// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
 	/// Blank or -1 input sets end time to undefined.
 	/// End times at or beyond file duration are clamped to full duration (EndTime=-1).
+	/// Applies to all multi-edit video targets (images use OnImageDurationSubmitted).
 	/// </summary>
 	/// <param name="text">The submitted text.</param>
 	/// <param name="textField">The LineEdit field.</param>
 	private void TimeFieldSubmitted(string text, LineEdit textField)
 	{
-		if (_focusedCue == null || _focusedVideoComponent == null || textField == null)
+		var targets = GetVideoTargets().Where(t => !t.Component.IsImage).ToList();
+		if (targets.Count == 0 || textField == null)
 			return;
-		// Images use OnImageDurationSubmitted instead of start/end points.
-		if (_focusedVideoComponent.IsImage)
-			return;
-		if (_globalData?.HistoryManager?.IsRestoring == true)
-			return;
-		if (!_focusedCue.Components.Contains(_focusedVideoComponent))
+		if (_isSyncingUi || _globalData?.HistoryManager?.IsRestoring == true)
 			return;
 
 		try
@@ -1734,33 +1861,35 @@ public partial class VideoInspector : Control
 			{
 				if (textField == _startTimeInput)
 				{
-					if (Math.Abs(_focusedVideoComponent.StartTime) < 1e-9)
+					if (targets.All(t => Math.Abs(t.Component.StartTime) < 1e-9))
 						return;
-					_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video start time");
-					_focusedVideoComponent.StartTime = 0.0;
+					RecordVideoHistory("Edit video start time");
+					foreach (var (_, comp) in targets)
+						comp.StartTime = 0.0;
 					textField.Text = "00:00.000";
 					textField.TooltipText = "00m:00s.000ms";
 					GD.Print("VideoInspector:TimeFieldSubmitted - Start time reset to 0");
 				}
 				else if (textField == _endTimeInput)
 				{
-					if (_focusedVideoComponent.EndTime < 0)
+					if (targets.All(t => t.Component.EndTime < 0))
 						return;
-					_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video end time");
-					_focusedVideoComponent.EndTime = -1.0; // Undefined = play to end
-					double metaDur = _focusedVideoComponent.Metadata?.Duration ?? 0;
+					RecordVideoHistory("Edit video end time");
+					foreach (var (_, comp) in targets)
+						comp.EndTime = -1.0; // Undefined = play to end
+					double metaDur = _focusedVideoComponent?.Metadata?.Duration ?? 0;
 					textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
 					textField.TooltipText = "End time undefined (plays full file)";
 					GD.Print("VideoInspector:TimeFieldSubmitted - End time set to undefined (full)");
 				}
-				
+
 				SyncDuration();
 				if (textField.HasFocus())
 					textField.ReleaseFocus();
 				_ = DrawWaveform();
 				return;
 			}
-			
+
 			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime, out bool isValid);
 
 			if (!isValid || string.IsNullOrEmpty(time))
@@ -1775,52 +1904,74 @@ public partial class VideoInspector : Control
 
 			if (textField == _startTimeInput)
 			{
-				if (Math.Abs(_focusedVideoComponent.StartTime - timeSecs) < 1e-9)
+				if (targets.All(t => Math.Abs(t.Component.StartTime - timeSecs) < 1e-9))
 				{
 					textField.Text = time;
 					textField.TooltipText = labeledTime;
 					return;
 				}
-				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video start time");
-				_focusedVideoComponent.StartTime = timeSecs;
+				RecordVideoHistory("Edit video start time");
+				foreach (var (_, comp) in targets)
+					comp.StartTime = timeSecs;
 			}
 			else if (textField == _endTimeInput)
 			{
-				// At or beyond file duration = play to end (same as blank field).
-				double fileDuration = _focusedVideoComponent.Metadata?.Duration ?? 0;
-				if (fileDuration > 0 && timeSecs >= fileDuration)
+				// At or beyond each file's duration = play to end for that target.
+				bool anyChange = false;
+				foreach (var (_, comp) in targets)
 				{
-					if (_focusedVideoComponent.EndTime < 0)
+					double fileDuration = comp.Metadata?.Duration ?? 0;
+					if (fileDuration > 0 && timeSecs >= fileDuration)
 					{
-						textField.Text = $"Full ({UiUtilities.FormatTime(fileDuration)})";
-						textField.TooltipText = "End time undefined (plays full file)";
-						return;
+						if (comp.EndTime >= 0)
+							anyChange = true;
 					}
-					_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video end time");
-					_focusedVideoComponent.EndTime = -1.0;
-					textField.Text = $"Full ({UiUtilities.FormatTime(fileDuration)})";
-					textField.TooltipText = "End time undefined (plays full file)";
-					GD.Print("VideoInspector:TimeFieldSubmitted - End time clamped to full (exceeded file duration)");
-					SyncDuration();
-					if (textField.HasFocus())
-						textField.ReleaseFocus();
-					_ = DrawWaveform();
-					return;
+					else if (Math.Abs(comp.EndTime - timeSecs) >= 1e-9)
+					{
+						anyChange = true;
+					}
 				}
 
-				if (Math.Abs(_focusedVideoComponent.EndTime - timeSecs) < 1e-9)
+				if (!anyChange)
 				{
 					textField.Text = time;
 					textField.TooltipText = labeledTime;
 					return;
 				}
-				_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video end time");
-				_focusedVideoComponent.EndTime = timeSecs;
+
+				RecordVideoHistory("Edit video end time");
+				foreach (var (_, comp) in targets)
+				{
+					double fileDuration = comp.Metadata?.Duration ?? 0;
+					if (fileDuration > 0 && timeSecs >= fileDuration)
+						comp.EndTime = -1.0;
+					else
+						comp.EndTime = timeSecs;
+				}
+
+				// Primary display: full if primary clamped, else formatted time.
+				double primaryDur = _focusedVideoComponent?.Metadata?.Duration ?? 0;
+				if (primaryDur > 0 && timeSecs >= primaryDur)
+				{
+					textField.Text = $"Full ({UiUtilities.FormatTime(primaryDur)})";
+					textField.TooltipText = "End time undefined (plays full file)";
+				}
+				else
+				{
+					textField.Text = time;
+					textField.TooltipText = labeledTime;
+				}
+
+				SyncDuration();
+				if (textField.HasFocus())
+					textField.ReleaseFocus();
+				_ = DrawWaveform();
+				return;
 			}
 
 			textField.Text = time;
 			textField.TooltipText = labeledTime;
-            
+
 			SyncDuration();
 			if (textField.HasFocus())
 				textField.ReleaseFocus();
@@ -2216,14 +2367,20 @@ public partial class VideoInspector : Control
 	/// <param name="textField">The LineEdit field.</param>
 	private void VolumeInputSubmitted(string text, LineEdit textField)
 	{
-		if (_focusedCue == null || _focusedVideoComponent == null || textField == null) return;
-		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		var targets = GetVideoTargets();
+		if (targets.Count == 0 || textField == null) return;
+		if (_isSyncingUi || _globalData?.HistoryManager?.IsRestoring == true) return;
 		try
 		{
 			if (!float.TryParse(text.Replace("dB", "").Trim(), out var dbValue))
 			{
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Invalid volume format: {text}", 1);
-				textField.Text = $"{UiUtilities.LinearToDb((float)_focusedVideoComponent.Volume)}dB";
+				float fallback = _focusedVideoComponent != null
+					? (_focusedVideoComponent.UseAudio
+						? _focusedVideoComponent.AudioVolume
+						: (float)_focusedVideoComponent.Volume)
+					: 1f;
+				textField.Text = $"{UiUtilities.LinearToDb(fallback)}dB";
 				if (textField.HasFocus()) textField.ReleaseFocus();
 				return;
 			}
@@ -2234,22 +2391,25 @@ public partial class VideoInspector : Control
 			float volume = (float)UiUtilities.DbToLinear(dbValue.ToString());
 			var dbReturn = UiUtilities.LinearToDb(volume);
 			textField.Text = $"{dbReturn}dB";
-			float current = _focusedVideoComponent.UseAudio
-				? _focusedVideoComponent.AudioVolume
-				: (float)_focusedVideoComponent.Volume;
-			if (Math.Abs(current - volume) < 1e-6f)
+
+			bool unchanged = targets.All(t =>
+			{
+				float current = t.Component.UseAudio ? t.Component.AudioVolume : (float)t.Component.Volume;
+				return Math.Abs(current - volume) < 1e-6f;
+			});
+			if (unchanged)
 			{
 				if (textField.HasFocus()) textField.ReleaseFocus();
 				return;
 			}
-			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video volume");
-			if (_focusedVideoComponent.UseAudio)
+
+			RecordVideoHistory("Edit video volume");
+			foreach (var (_, comp) in targets)
 			{
-				_focusedVideoComponent.AudioVolume = volume;
-			}
-			else
-			{
-				_focusedVideoComponent.Volume = volume;
+				if (comp.UseAudio)
+					comp.AudioVolume = volume;
+				else
+					comp.Volume = volume;
 			}
 			if (textField.HasFocus()) textField.ReleaseFocus();
 		}
@@ -2266,8 +2426,9 @@ public partial class VideoInspector : Control
 	/// <param name="index">The selected index.</param>
 	private void OutputOptionSelected(long index)
 	{
-		if (_focusedCue == null || _focusedVideoComponent == null) return;
-		if (_globalData?.HistoryManager?.IsRestoring == true) return;
+		var targets = GetVideoTargets();
+		if (targets.Count == 0 || _focusedVideoComponent == null) return;
+		if (_isSyncingUi || _globalData?.HistoryManager?.IsRestoring == true) return;
 
 		var item = _outputOptionButton.GetItemText((int)index);
 
@@ -2310,34 +2471,61 @@ public partial class VideoInspector : Control
 			newDirect = null;
 		}
 
-		bool unchanged =
-			newPatchId == _focusedVideoComponent.PatchId
+		// No-op when every target already has this routing.
+		bool unchanged = targets.All(t =>
+			newPatchId == t.Component.PatchId
 			&& string.Equals(
 				newDirect ?? string.Empty,
-				_focusedVideoComponent.DirectOutput ?? string.Empty,
-				StringComparison.Ordinal);
+				t.Component.DirectOutput ?? string.Empty,
+				StringComparison.Ordinal));
 		if (unchanged)
 			return;
 
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video audio output");
+		RecordVideoHistory("Edit video audio output");
 
-		if (item.StartsWith("Patch"))
+		void ApplyRouting(VideoComponent comp)
 		{
-			GD.Print($"VideoInspector:OutputOptionSelected - Patch selected with id {newPatchId}");
-			if (newPatch != null)
+			if (item.StartsWith("Patch"))
 			{
-				_focusedVideoComponent.Patch = newPatch;
-				_focusedVideoComponent.PatchId = newPatchId;
-				_focusedVideoComponent.DirectOutput = null;
-				GD.Print($"VideoInspector:OutputOptionSelected - Patch set to: {newPatch.Name}");
+				if (newPatch != null)
+				{
+					comp.Patch = newPatch;
+					comp.PatchId = newPatchId;
+					comp.DirectOutput = null;
+				}
+				else
+				{
+					comp.Patch = null;
+					comp.PatchId = -1;
+					comp.DirectOutput = null;
+				}
+			}
+			else if (item.StartsWith("Direct Output"))
+			{
+				comp.DirectOutput = newDirect;
+				comp.Patch = null;
+				comp.PatchId = -1;
 			}
 			else
 			{
+				comp.DirectOutput = null;
+				comp.Patch = null;
+				comp.PatchId = -1;
+			}
+		}
+
+		foreach (var (cue, comp) in targets)
+		{
+			ApplyRouting(comp);
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(cue.Id);
+		}
+
+		if (item.StartsWith("Patch"))
+		{
+			if (newPatch == null)
+			{
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 					$"VideoInspector:OutputOptionSelected - Patch ID {newPatchId} not found, resetting output", 1);
-				_focusedVideoComponent.Patch = null;
-				_focusedVideoComponent.PatchId = -1;
-				_focusedVideoComponent.DirectOutput = null;
 				_outputOptionButton.SetBlockSignals(true);
 				_outputOptionButton.Select(0);
 				_outputOptionButton.SetBlockSignals(false);
@@ -2346,22 +2534,13 @@ public partial class VideoInspector : Control
 		}
 		else if (item.StartsWith("Direct Output"))
 		{
-			GD.Print($"VideoInspector:OutputOptionSelected - Direct output selected: {newDirect}");
-			_focusedVideoComponent.DirectOutput = newDirect;
-			_focusedVideoComponent.Patch = null;
-			_focusedVideoComponent.PatchId = -1;
 			BuildRoutingMatrix();
 		}
-		else
+		else if (_routingContainer != null)
 		{
-			// No output
-			_focusedVideoComponent.DirectOutput = null;
-			_focusedVideoComponent.Patch = null;
-			_focusedVideoComponent.PatchId = -1;
+			// "No output" — hide matrix for single-target; multi keeps primary matrix if still routed.
 			_routingContainer.Visible = false;
 		}
-
-		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
 	}
 
 	/// <summary>
@@ -2913,6 +3092,27 @@ public partial class VideoInspector : Control
 	/// <summary>
 	/// Updates the waveform display from peak data and start/end selection.
 	/// </summary>
+	/// <summary>
+	/// Cancels any prior waveform wait without starting a new one (clear focus).
+	/// </summary>
+	private void CancelWaveformWork()
+	{
+		try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+		try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+		_waveformCts = null;
+	}
+
+	/// <summary>
+	/// Cancels any prior waveform job and returns a fresh token for the next generate.
+	/// </summary>
+	private CancellationToken RestartWaveformToken()
+	{
+		try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+		try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+		_waveformCts = new CancellationTokenSource();
+		return _waveformCts.Token;
+	}
+
 	private async Task DrawWaveform()
 	{
 		if (_waveformAccordian == null || _waveformAccordian.Visible == false) return;
@@ -2990,29 +3190,44 @@ public partial class VideoInspector : Control
 		{
 			if (mouseButton.Pressed)
 			{
-				// One step per drag (record only on press; motion does not re-record).
-				if (_focusedCue != null)
-					_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video start time");
+				// Continuous drag session: one undo step for the whole drag (all multi targets).
+				RecordVideoHistory("Edit video start time", VideoCoalesceKey("start-drag"));
 				_isDraggingStart = true;
 			}
 			else if (_isDraggingStart)
 			{
 				SyncDuration();
 				_isDraggingStart = false;
+				var key = VideoCoalesceKey("start-drag");
+				if (!string.IsNullOrEmpty(key))
+					_globalData?.HistoryManager?.EndCoalesceSession(key);
 			}
 		}
 		else if (@event is InputEventMouseMotion && _isDraggingStart)
 		{
+			if (_focusedVideoComponent == null) return;
 			float localX = _waveformPanel.GetLocalMousePosition().X;
 			float norm = _waveformDisplay.XToFileNorm(localX);
 			double duration = _focusedVideoComponent.Metadata?.Duration ?? 0;
 			if (duration <= 0) return;
+			// Keep start before end (primary waveform geometry).
 			float endN = _focusedVideoComponent.EndTime < 0
 				? 1f
 				: (float)(_focusedVideoComponent.EndTime / duration);
-			norm = Mathf.Clamp(norm, 0f, endN - 0.001f);
-			_focusedVideoComponent.StartTime = norm * duration;
-			_startTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.StartTime);
+			norm = Mathf.Min(norm, endN - 0.001f);
+			norm = Mathf.Max(0f, norm);
+			double startSecs = norm * duration;
+			foreach (var (_, comp) in GetVideoTargets())
+			{
+				if (comp.IsImage) continue;
+				double d = comp.Metadata?.Duration ?? duration;
+				if (d <= 0) d = duration;
+				float localEndN = comp.EndTime < 0 ? 1f : (float)(comp.EndTime / d);
+				float localNorm = Mathf.Min(norm, localEndN - 0.001f);
+				localNorm = Mathf.Max(0f, localNorm);
+				comp.StartTime = localNorm * d;
+			}
+			_startTimeInput.Text = UiUtilities.FormatTime(startSecs);
 			_ = DrawWaveform();
 		}
 	}
@@ -3023,26 +3238,40 @@ public partial class VideoInspector : Control
 		{
 			if (mouseButton.Pressed)
 			{
-				if (_focusedCue != null)
-					_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video end time");
+				RecordVideoHistory("Edit video end time", VideoCoalesceKey("end-drag"));
 				_isDraggingEnd = true;
 			}
 			else if (_isDraggingEnd)
 			{
 				SyncDuration();
 				_isDraggingEnd = false;
+				var key = VideoCoalesceKey("end-drag");
+				if (!string.IsNullOrEmpty(key))
+					_globalData?.HistoryManager?.EndCoalesceSession(key);
 			}
 		}
 		else if (@event is InputEventMouseMotion && _isDraggingEnd)
 		{
+			if (_focusedVideoComponent == null) return;
 			float localX = _waveformPanel.GetLocalMousePosition().X;
 			float norm = _waveformDisplay.XToFileNorm(localX);
 			double duration = _focusedVideoComponent.Metadata?.Duration ?? 0;
 			if (duration <= 0) return;
 			float startN = (float)(_focusedVideoComponent.StartTime / duration);
-			norm = Mathf.Clamp(norm, startN + 0.001f, 1f);
-			_focusedVideoComponent.EndTime = norm * duration;
-			_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
+			norm = Mathf.Max(norm, startN + 0.001f);
+			norm = Mathf.Min(1f, norm);
+			double endSecs = norm * duration;
+			foreach (var (_, comp) in GetVideoTargets())
+			{
+				if (comp.IsImage) continue;
+				double d = comp.Metadata?.Duration ?? duration;
+				if (d <= 0) d = duration;
+				float localStartN = (float)(comp.StartTime / d);
+				float localNorm = Mathf.Max(norm, localStartN + 0.001f);
+				localNorm = Mathf.Min(1f, localNorm);
+				comp.EndTime = localNorm * d;
+			}
+			_endTimeInput.Text = UiUtilities.FormatTime(endSecs);
 			_ = DrawWaveform();
 		}
 	}
@@ -3079,11 +3308,27 @@ public partial class VideoInspector : Control
 
 
 	/// <summary>
-	/// Clears the file dialog instance.
+	/// Clears the file dialog instance (safe if already null or freed).
 	/// </summary>
 	private void ClearFileDialog()
 	{
-		_fileDialog.QueueFree();
+		if (_fileDialog == null)
+			return;
+
+		try
+		{
+			if (IsInstanceValid(_fileDialog))
+			{
+				_fileDialog.FileSelected -= FileSelected;
+				_fileDialog.Canceled -= ClearFileDialog;
+				_fileDialog.QueueFree();
+			}
+		}
+		catch
+		{
+			/* best-effort during exit */
+		}
+
 		_fileDialog = null;
 	}
 }

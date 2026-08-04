@@ -490,22 +490,36 @@ public partial class OscListen
         var executor = _globalData?.CueCommandExectutor;
         if (executor == null) return true;
 
-        bool anyActive = false;
-        foreach (var cue in cues)
+        // Inspect live transport: paused instances must Resume, not re-Pause.
+        // Previous logic treated any active instance as Pause — once paused, toggle never resumed.
+        bool anyPlaying = false;
+        bool anyPaused = false;
+        var selectedIds = new HashSet<int>(cues.Select(c => c.Id));
+        foreach (var root in executor.ActiveCues)
         {
-            foreach (var root in executor.ActiveCues)
+            if (root == null || !GodotObject.IsInstanceValid(root)) continue;
+            foreach (var active in root.EnumerateSelfAndDescendants())
             {
-                if (root == null || !GodotObject.IsInstanceValid(root)) continue;
-                foreach (var a in root.EnumerateSelfAndDescendants())
-                {
-                    if (a?.Cue?.Id == cue.Id) { anyActive = true; break; }
-                }
-                if (anyActive) break;
+                if (active?.Cue == null || !selectedIds.Contains(active.Cue.Id)) continue;
+                if (active.IsTransportPaused)
+                    anyPaused = true;
+                else
+                    anyPlaying = true;
             }
-            if (anyActive) break;
         }
 
-        var action = anyActive ? ControlAction.Pause : ControlAction.Resume;
+        ControlAction action;
+        if (anyPlaying)
+            action = ControlAction.Pause;
+        else if (anyPaused)
+            action = ControlAction.Resume;
+        else
+        {
+            // Nothing live for selection — Resume is a no-op but documents intent.
+            LogBuiltIn("TogglePauseSelected: no active instances", LogType.Info);
+            return true;
+        }
+
         foreach (var cue in cues)
             executor.ApplyControlAction(action, cue.Id);
         LogBuiltIn($"TogglePauseSelected: {action}", LogType.Info);
@@ -619,6 +633,9 @@ public partial class OscListen
     {
         var cues = ResolveCues(parts, msg, lookup);
         if (cues.Count == 0) { LogBuiltIn($"Arm{LookupLabel(lookup)}: no matching cue", LogType.Warning); return true; }
+
+        // Collect real changes first so we can record one undo step (cue or cuelist scope).
+        var changes = new List<(Cue Cue, bool Next)>();
         foreach (var cue in cues)
         {
             bool next = toggle ? !cue.Armed : armed;
@@ -627,7 +644,40 @@ public partial class OscListen
                 LogBuiltIn($"{(next ? "Arm" : "Disarm")}: \"{cue.Name}\" already", LogType.Info);
                 continue;
             }
+            changes.Add((cue, next));
+        }
+
+        if (changes.Count == 0)
+            return true;
+
+        var history = _globalData?.HistoryManager;
+        if (history != null && !history.IsRestoring)
+        {
+            if (changes.Count == 1)
+            {
+                bool next = changes[0].Next;
+                history.RecordCueChange(
+                    changes[0].Cue.Id,
+                    next ? "Arm cue (OSC)" : "Disarm cue (OSC)");
+            }
+            else
+            {
+                // Mixed arm/disarm toggle across selection still one structural snapshot.
+                bool allArm = changes.All(c => c.Next);
+                bool allDisarm = changes.All(c => !c.Next);
+                string desc = allArm
+                    ? "Arm cues (OSC)"
+                    : allDisarm
+                        ? "Disarm cues (OSC)"
+                        : "Toggle arm cues (OSC)";
+                history.RecordCuelistChange(desc);
+            }
+        }
+
+        foreach (var (cue, next) in changes)
+        {
             cue.Armed = next;
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
             LogBuiltIn($"{(next ? "Arm" : "Disarm")}: \"{cue.Name}\" (id={cue.Id})", LogType.Info);
         }
         return true;

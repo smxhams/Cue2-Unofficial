@@ -176,10 +176,19 @@ public readonly struct ShowfileVersionInfo
 
 	/// <summary>
 	/// True when the file is safe to open without a version prompt.
-	/// Schema (format) match is required; app marketing version may differ without a dialog
-	/// so patch releases do not nag on every open.
+	/// Only the schema <see cref="FormatVersion"/> is required to match — app marketing
+	/// versions (patch/minor bumps) may differ so opening a show after a Cue2 update does not nag.
 	/// </summary>
+	/// <remarks>
+	/// Prefer this (or <see cref="RequiresVersionConfirmation"/>) over checking app version.
+	/// </remarks>
 	public bool MatchesCurrent => MatchesCurrentFormat;
+
+	/// <summary>
+	/// True when SaveManager should show <c>VersionMismatchDialog</c> before open.
+	/// Format older/newer/legacy → confirm. Same format, different app version → no dialog.
+	/// </summary>
+	public bool RequiresVersionConfirmation => !MatchesCurrentFormat;
 
 	/// <summary>True when format is older than this build (migration may apply).</summary>
 	public bool IsOlderFormat =>

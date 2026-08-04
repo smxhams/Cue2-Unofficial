@@ -23,8 +23,15 @@ namespace Cue2.Media.Decoders;
 /// </summary>
 public sealed class AudioSourceDecoder : IDisposable
 {
-    /// <summary>Default ring capacity in milliseconds of audio (streaming mode).</summary>
+    /// <summary>
+    /// Default ring capacity in milliseconds of audio (streaming mode).
+    /// Prefer callers pass a ring sized for their <c>AudioPresentTuning.RecommendedRingMs</c>
+    /// so prefetch targets up to PreferStability (1400 ms) fit without overflow.
+    /// </summary>
     public const int DefaultRingMs = 400;
+
+    /// <summary>Hard upper bound for streaming ring capacity (milliseconds).</summary>
+    public const int MaxRingMs = 10_000;
 
     /// <summary>Default prefetch target in milliseconds (streaming mode).</summary>
     public const int DefaultPrefetchMs = 800;
@@ -413,9 +420,13 @@ public sealed class AudioSourceDecoder : IDisposable
         if (_packet == null || _frame == null)
             throw new Exception("AudioSourceDecoder:Open - packet/frame alloc failed.");
 
-        int ringSamples = Math.Max(channels * sampleRate * ringMs / 1000, channels * 1024);
+        int clampedMs = Math.Clamp(ringMs, DefaultRingMs, MaxRingMs);
+        int ringSamples = Math.Max(channels * sampleRate * clampedMs / 1000, channels * 1024);
         _ring = new PcmRingBuffer(ringSamples);
         _convertScratch = new float[channels * 8192];
+        GD.Print(
+            $"AudioSourceDecoder:Open - streaming ring {clampedMs} ms " +
+            $"({ringSamples} floats, {channels} ch @ {sampleRate} Hz)");
 
         long durationUs = 0;
         if (stream->duration > 0 && stream->duration != ffmpeg.AV_NOPTS_VALUE)
@@ -1100,14 +1111,16 @@ public sealed class AudioSourceDecoder : IDisposable
         while (offset < usableSamples)
         {
             int free = _ring.Free;
-            if (free <= 0)
-            {
-                GD.Print("AudioSourceDecoder:ConvertFrame - ring full, dropping overflow samples");
+            // Only write whole sample-frames; stop when the ring cannot take another frame.
+            // Callers (Prefetch / DecodeMore) should stop decoding when Free < channels so this
+            // path is rare — reserved for a single oversized converted frame vs remaining space.
+            if (free < channels)
                 break;
-            }
+
             int chunk = Math.Min(usableSamples - offset, free);
             chunk -= chunk % channels;
-            if (chunk <= 0) break;
+            if (chunk <= 0)
+                break;
 
             if (chunk > _convertScratch.Length)
                 _convertScratch = new float[chunk];
@@ -1115,8 +1128,11 @@ public sealed class AudioSourceDecoder : IDisposable
             Marshal.Copy((IntPtr)(fptr + offset), _convertScratch, 0, chunk);
             int written = _ring.Write(_convertScratch.AsSpan(0, chunk));
             offset += written;
-            if (written < chunk) break;
+            if (written < chunk)
+                break;
         }
+        // Any remaining samples in this converted frame are discarded only when the ring is full;
+        // with RecommendedRingMs sizing, Prefetch stops before that under normal load.
     }
 
     private unsafe void FlushSwrToRingUnlocked()

@@ -233,6 +233,12 @@ public partial class ActiveCue : GodotObject
     }
 
     /// <summary>
+    /// True when cue-level transport is paused (content, pre-wait, or media).
+    /// Used by OSC TogglePauseSelected and control tooling.
+    /// </summary>
+    public bool IsTransportPaused => _isPaused;
+
+    /// <summary>
     /// Pauses transport for this active cue (media + children). Used by control components.
     /// </summary>
     public void RequestPause()
@@ -523,7 +529,9 @@ public partial class ActiveCue : GodotObject
     private bool _isRewindingContent;
 
     /// <summary>
-    /// Child cue ids that have already finished (or been finished by seek). Never resurrected on scrub-back.
+    /// Child cue ids that have already finished (or been finished by seek) during this activation.
+    /// Cleared when rewinding to pre-wait or content t≈0 so a scrub-to-start can re-fire children.
+    /// Mid-timeline scrub-back does not resurrect finished children.
     /// </summary>
     private readonly HashSet<int> _finishedChildCueIds = new();
 
@@ -961,7 +969,7 @@ public partial class ActiveCue : GodotObject
 
     /// <summary>
     /// Spawns nested active cues under this bar's child list and starts them.
-    /// Skips children that have already finished this activation (no resurrect on scrub-back).
+    /// Skips children listed in <see cref="_finishedChildCueIds"/> (mid-timeline scrub-back).
     /// When a pending body seek is set (play-from-playhead), children that have already ended
     /// at that content time are not started; others are queued to start at that body time.
     /// </summary>
@@ -2011,8 +2019,17 @@ public partial class ActiveCue : GodotObject
 
         SetTimelineSeconds(absoluteTimelineSeconds);
 
+        // Scrub to content start: allow finished children to re-fire (P1-18).
+        // Mid-timeline scrub-back still skips _finishedChildCueIds.
+        bool atContentStart = contentTimeSeconds <= 1e-3;
+        if (atContentStart && _finishedChildCueIds.Count > 0)
+        {
+            GD.Print(
+                $"ActiveCue:SeekIntoContentRegion - {_cue?.Name}: content t≈0 — clearing {_finishedChildCueIds.Count} finished child id(s)");
+            _finishedChildCueIds.Clear();
+        }
+
         // Content was rewound away (e.g. scrubbed into pre-wait) — restart playback.
-        // Finished children are not resurrected (see <see cref="_finishedChildCueIds"/>).
         if (!_contentPlaybackActive)
         {
             _pendingTimelineSeekSeconds = absoluteTimelineSeconds;
@@ -2020,9 +2037,13 @@ public partial class ActiveCue : GodotObject
             return;
         }
 
-        // Do not resurrect finished / inactive children on scrub-back — only seek still-live ones.
         SeekOwnMediaToContentTime(contentTimeSeconds);
         PropagateTimelineSeekToChildren(contentTimeSeconds);
+
+        // Re-spawn children that finished earlier when scrubbing back to the content origin.
+        if (atContentStart)
+            StartChildCues();
+
         UpdateHeadProgressUi();
     }
 
@@ -2048,6 +2069,7 @@ public partial class ActiveCue : GodotObject
 
     /// <summary>
     /// Stops nested children and parks own media so pre-wait can be re-entered without freeing this cue.
+    /// Clears <see cref="_finishedChildCueIds"/> so re-entering content re-fires nested children (P1-18).
     /// </summary>
     private void TearDownContentPlaybackForRewind()
     {
@@ -2068,6 +2090,8 @@ public partial class ActiveCue : GodotObject
                 }
             }
             _childActiveCues.Clear();
+            // Scrub into pre-wait is a full content rewind — allow children to re-fire on next start.
+            _finishedChildCueIds.Clear();
         }
         finally
         {
@@ -2293,7 +2317,43 @@ public partial class ActiveCue : GodotObject
 
         double absolute = _preWaitSecondsHonored + contentLocalSeconds;
         SetTimelineSeconds(absolute);
-        UpdateHeadProgressUi();
+        // Force head bar to the scrub target even if a decoder seek is still in flight
+        // (UpdateHeadProgressUi would otherwise early-return and leave a stale fill).
+        ApplyHeadProgressDisplay(absolute, GetPlayableTimelineDuration());
+    }
+
+    /// <summary>
+    /// True when any active media component has an async seek in flight.
+    /// </summary>
+    private bool AnyComponentDecoderSeeking()
+    {
+        foreach (var pb in _activeAudioComponents.Values)
+        {
+            if (pb != null && !pb.IsStopped && pb.IsDecoderSeeking)
+                return true;
+        }
+        foreach (var pb in _activeVideoComponents.Values)
+        {
+            if (pb != null && !pb.IsStopped && pb.IsDecoderSeeking)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Writes head progress bar + time labels for a fixed elapsed position (scrub hold / force).
+    /// </summary>
+    private void ApplyHeadProgressDisplay(double elapsed, double playable)
+    {
+        if (_headProgressBar == null || !IsInstanceValid(_headProgressBar))
+            return;
+        UpdateHeadTimeLabels(elapsed, playable);
+        if (playable < 0)
+            _headProgressBar.Value = 0;
+        else if (playable <= 1e-9)
+            _headProgressBar.Value = 0;
+        else
+            _headProgressBar.Value = Math.Clamp(elapsed / playable * 100.0, 0.0, 100.0);
     }
 
     /// <summary>
@@ -2365,6 +2425,11 @@ public partial class ActiveCue : GodotObject
         if (_isCleaned || _headProgressBar == null || !IsInstanceValid(_headProgressBar))
             return;
         if (_headIsSeeking)
+            return;
+
+        // While any component is mid async seek, hold the last scrub/preview head position
+        // so the bar does not flick back to the pre-seek playhead.
+        if (AnyComponentDecoderSeeking())
             return;
 
         double playable = GetPlayableTimelineDuration();
@@ -3321,13 +3386,57 @@ public partial class ActiveCue : GodotObject
     {
         try
         {
-            if (!IsSetupStillValid())
+            if (!IsSetupStillValid() || oscComponent == null)
                 return Task.CompletedTask;
+
+            // Relink if the live connection was dropped after load / settings restore.
+            if (oscComponent.OscConnection == null && oscComponent.OscConnectionId != 0)
+            {
+                oscComponent.OscConnection = OscConnections.GetCueOscConnection(oscComponent.OscConnectionId);
+            }
+
+            if (oscComponent.OscConnection == null)
+            {
+                // Do not abort the rest of component setup — show a missing-connection shell and continue.
+                string missingName = oscComponent.OscConnectionId != 0
+                    ? $"missing OSC id {oscComponent.OscConnectionId}"
+                    : "no OSC connection";
+                GD.PrintErr(
+                    $"ActiveCue:SetupOscComponent - {_cue?.Name}: {missingName}; skipping live send UI.");
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                    $"OSC component on \"{_cue?.Name}\" has no connection ({missingName}).", 1);
+
+                PanelContainer missingPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
+                _componentContainer.AddChild(missingPanel);
+                var missingLabel = missingPanel.GetNodeOrNull<Label>("%ComponentLabel");
+                if (missingLabel != null)
+                {
+                    string msg = string.IsNullOrEmpty(oscComponent.OscMessage)
+                        ? "(no path)"
+                        : oscComponent.OscMessage;
+                    missingLabel.Text = $"[Missing OSC] {msg}";
+                }
+                var typeIconMissing = missingPanel.GetNodeOrNull<Button>("%ComponentIcon");
+                if (typeIconMissing != null && _activeCueBar != null)
+                    typeIconMissing.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+                missingPanel.GetNodeOrNull<Button>("%ComponentPause")?.QueueFree();
+                var stopMissing = missingPanel.GetNodeOrNull<Button>("%ComponentStop");
+                missingPanel.GetNodeOrNull<Label>("%ComponentTime")?.QueueFree();
+                if (stopMissing != null && _activeCueBar != null)
+                {
+                    stopMissing.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
+                    stopMissing.Pressed += () => HandleOscComponentCompleted(missingPanel);
+                }
+                _activeOscComponents.Add(missingPanel, oscComponent);
+                _activeComponentCount++;
+                return Task.CompletedTask;
+            }
 
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
-            var labelText = $"{oscComponent.OscConnection.Name} : {oscComponent.OscMessage}";
-            componentPanel.GetNode<Label>("%ComponentLabel").Text = labelText;
+            string connName = oscComponent.OscConnection.Name ?? "OSC";
+            string path = oscComponent.OscMessage ?? string.Empty;
+            componentPanel.GetNode<Label>("%ComponentLabel").Text = $"{connName} : {path}";
             var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree(); // No pause implemented
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
@@ -3475,7 +3584,8 @@ public partial class ActiveCue : GodotObject
             ? (float)(contentElapsed / progressSpan * 100.0)
             : 0f;
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
-        if (!audioPlayback.IsSeeking)
+        // Hold bar while user scrubs or async decoder seek is still in flight.
+        if (!audioPlayback.IsSeeking && !audioPlayback.IsDecoderSeeking)
         {
             timeLabel.Text = UiUtilities.FormatTime(contentElapsed);
             progressBar.Value = progressPercentage;
@@ -3519,7 +3629,8 @@ public partial class ActiveCue : GodotObject
                 : 0f;
         }
         var timeLabel = componentPanel.GetNode<Label>("ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
-        if (!videoPlayback.IsSeeking)
+        // Hold bar while user scrubs or async decoder seek is still in flight.
+        if (!videoPlayback.IsSeeking && !videoPlayback.IsDecoderSeeking)
         {
             timeLabel.Text = UiUtilities.FormatTime(contentElapsed);
             progressBar.Value = progressPercentage;

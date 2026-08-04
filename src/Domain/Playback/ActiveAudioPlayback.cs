@@ -74,6 +74,18 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     private CancellationTokenSource _fillCts;
     private Task _fillTask;
 
+    /// <summary>Cancels in-flight seek+prefetch workers when a newer seek supersedes them.</summary>
+    private CancellationTokenSource _seekCts;
+    private volatile bool _seekInProgress;
+    /// <summary>Target media time for the in-flight seek (UI/position hold).</summary>
+    private long _seekTargetUs;
+
+    /// <summary>
+    /// True while an async decoder seek is in flight. Progress UI should hold the scrub target
+    /// and not sample the live decoder position until this clears.
+    /// </summary>
+    public bool IsDecoderSeeking => _seekInProgress;
+
     private long _startTimeUs;
     private long _endTimeUs;
     private bool _useCustomEnd;
@@ -155,8 +167,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
             // Prefer sample-accurate PCM store for lossy codecs (fixes MP3 loop drift),
             // subject to decoder size/duration caps. Short looping cues stay exact.
+            // Streaming path (long/lossy overflow): ring sized for PrefetchMs / TargetBufferMs.
             string mediaPath = ResolveMediaPath(_audioComponent.AudioFile);
-            await Decoder.OpenAsync(mediaPath, preferSampleAccurateStore: true);
+            await Decoder.OpenAsync(
+                mediaPath,
+                preferSampleAccurateStore: true,
+                ringMs: _audioTuning.RecommendedRingMs);
             SourceChannels = Decoder.Info.Channels;
             SourceSampleRate = Decoder.Info.SampleRate;
             SourceFormat = SDL.AudioFormat.AudioF32LE;
@@ -385,7 +401,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 // SceneTree/GetNode is not allowed. Use last main-thread snapshot of _audioTuning.
 
                 bool hold;
-                lock (_lock) hold = IsPaused || IsStopped || _fillSuspended;
+                lock (_lock) hold = IsPaused || IsStopped || _fillSuspended || _seekInProgress;
                 if (hold)
                 {
                     Thread.Sleep(FillLoopSleepMs);
@@ -889,32 +905,33 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
     public void Resume()
     {
+        long resumeAtUs;
         lock (_lock)
         {
             if (!IsPaused || IsStopped) return;
-            _fillSuspended = true;
+            resumeAtUs = _pausedAtUs;
+            _pausedAtUs = 0;
+            // Unpause before async seek so FinishSeekWorker can re-prime.
+            IsPaused = false;
         }
 
-        try
+        if (resumeAtUs > 0)
         {
-            RefreshAudioTuning();
-            if (_pausedAtUs > 0)
+            // Seek worker holds fill until complete, then primes (same path as scrub Seek).
+            Seek(resumeAtUs);
+        }
+        else
+        {
+            lock (_lock) _fillSuspended = true;
+            try
             {
-                Decoder.Seek(_pausedAtUs);
-                Decoder.Prefetch(Math.Max(50, _audioTuning.PrefetchMs / 2));
-                _pausedAtUs = 0;
+                RefreshAudioTuning();
+                ArmDeclickRamp();
+                PrefillStreams();
             }
-
-            // Streams were cleared on pause; re-prime before fill can underrun.
-            ArmDeclickRamp();
-            PrefillStreams();
-        }
-        finally
-        {
-            lock (_lock)
+            finally
             {
-                IsPaused = false;
-                _fillSuspended = false;
+                lock (_lock) _fillSuspended = false;
             }
         }
 
@@ -1217,9 +1234,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
     /// <summary>
     /// Estimated audible position: decoder position minus average SDL queue latency.
+    /// While an async seek is in flight, returns the seek target so progress UI does not snap back.
     /// </summary>
     private long GetPlaybackPositionUs()
     {
+        if (_seekInProgress)
+            return _seekTargetUs;
         if (Decoder == null) return _startTimeUs;
         long decUs = Decoder.PositionUs;
         long queuedUs = 0;
@@ -1240,6 +1260,11 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         return pos < _startTimeUs ? _startTimeUs : pos;
     }
 
+    /// <summary>
+    /// Seeks to media time <paramref name="timestampUs"/>. Heavy streaming seek/trim + prefetch
+    /// run on a worker so scrub does not freeze the UI. PCM-store seeks are still dispatched
+    /// to the worker for a uniform completion path.
+    /// </summary>
     public void Seek(long timestampUs)
     {
         try
@@ -1249,8 +1274,12 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             {
                 wasPaused = IsPaused;
                 _fillSuspended = true;
-                IsPaused = true;
+                // Hold paused until worker finishes when we need to resume after.
+                if (!wasPaused && !IsStopped)
+                    IsPaused = true;
             }
+
+            CancelSeekWorker(releaseFillHold: false);
 
             RefreshAudioTuning();
 
@@ -1264,35 +1293,117 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             if (_endTimeUs < long.MaxValue)
                 clamped = Math.Min(clamped, _endTimeUs);
 
-            Decoder.Seek(clamped);
-            Decoder.Prefetch(Math.Max(50, _audioTuning.PrefetchMs / 2));
             _framesDelivered = 0;
             _pausedAtUs = clamped;
+            _seekTargetUs = clamped;
 
-            // Re-prime when seeking during active play so the device never sees an empty queue.
             bool resumeAfter = !wasPaused && !IsStopped;
-            if (resumeAfter)
-            {
-                ArmDeclickRamp();
-                PrefillStreams();
-            }
+            var decoder = Decoder;
+            int prefetchMs = Math.Max(50, _audioTuning.PrefetchMs / 2);
+            var cts = new CancellationTokenSource();
+            _seekCts = cts;
+            _seekInProgress = true;
 
-            lock (_lock)
+            Task.Run(() =>
             {
-                _fillSuspended = false;
-                if (resumeAfter)
+                try
                 {
-                    IsPaused = false;
-                    _pausedAtUs = 0;
+                    cts.Token.ThrowIfCancellationRequested();
+                    decoder?.Seek(clamped);
+                    cts.Token.ThrowIfCancellationRequested();
+                    decoder?.Prefetch(prefetchMs);
                 }
-            }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"ActiveAudioPlayback:SeekWorker - {ex.Message}");
+                }
+                finally
+                {
+                    if (!cts.IsCancellationRequested)
+                    {
+                        long us = clamped;
+                        bool resume = resumeAfter;
+                        // GodotObject: Callable.From needs a live instance; complete via Task continuation
+                        // that only touches managed state, then schedule main-thread prime if needed.
+                        FinishSeekWorker(cts, us, resume);
+                    }
+                }
+            }, cts.Token);
 
-            GD.Print($"ActiveAudioPlayback:Seek - Sought to {clamped} us");
+            GD.Print($"ActiveAudioPlayback:Seek - Queued seek to {clamped} us");
         }
         catch (Exception ex)
         {
             GD.PrintErr($"ActiveAudioPlayback:Seek - {ex.Message}");
             lock (_lock) _fillSuspended = false;
+            _seekInProgress = false;
+        }
+    }
+
+    /// <summary>
+    /// Completes an async seek: re-prime streams when resuming play, release fill hold.
+    /// Safe to call from a worker — SDL prime and state updates are lock-guarded / fill-thread compatible.
+    /// </summary>
+    private void FinishSeekWorker(CancellationTokenSource cts, long clampedUs, bool resumeAfter)
+    {
+        if (cts == null || cts.IsCancellationRequested)
+            return;
+        if (!ReferenceEquals(_seekCts, cts))
+            return;
+        if (IsStopped)
+        {
+            lock (_lock) _fillSuspended = false;
+            _seekInProgress = false;
+            return;
+        }
+
+        try
+        {
+            if (resumeAfter && !IsStopped)
+            {
+                ArmDeclickRamp();
+                PrefillStreams();
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveAudioPlayback:FinishSeekWorker - {ex.Message}");
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _fillSuspended = false;
+                if (resumeAfter && !IsStopped)
+                {
+                    IsPaused = false;
+                    _pausedAtUs = 0;
+                }
+                else if (!resumeAfter)
+                {
+                    // Stay parked at seek target while paused (scrub while paused).
+                    _pausedAtUs = clampedUs;
+                }
+            }
+            _seekInProgress = false;
+        }
+    }
+
+    /// <summary>Cancels any in-flight seek worker without waiting for completion.</summary>
+    private void CancelSeekWorker(bool releaseFillHold = true)
+    {
+        try { _seekCts?.Cancel(); } catch { /* ignore */ }
+        try { _seekCts?.Dispose(); } catch { /* ignore */ }
+        _seekCts = null;
+        _seekInProgress = false;
+        if (releaseFillHold)
+        {
+            lock (_lock)
+                _fillSuspended = false;
         }
     }
 
@@ -1352,6 +1463,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         }
 
         StopFillLoop();
+        CancelSeekWorker();
         _fadeCts?.Cancel();
 
         if (Decoder != null)

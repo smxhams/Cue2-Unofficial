@@ -27,6 +27,7 @@ public partial class ControlInspector : Control
 {
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private HistoryManager _historyManager;
 
     private PackedScene _controlCardScene =
         SceneLoader.LoadPackedScene("res://src/UI/Inspectors/ControlComponentCard.tscn", out _);
@@ -50,6 +51,7 @@ public partial class ControlInspector : Control
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _historyManager = _globalData?.HistoryManager;
 
         _infoLabel = GetNode<Label>("%InfoLabel");
         _infoLabel.AddThemeColorOverride("font_color", GlobalStyles.DisabledColor);
@@ -78,6 +80,10 @@ public partial class ControlInspector : Control
             _addTranslateLayerButton.Pressed += () => AddControlComponent(ControlAction.TranslateLayer);
 
         _globalSignals.ShellFocused += ShellSelected;
+        // Undo/redo and shell-prop syncs replace component instances — rebuild cards from live model.
+        _globalSignals.SyncShellInspector += OnSyncShellInspector;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
         VisibilityChanged += OnVisibilityChanged;
 
         // Start empty until a shell is selected.
@@ -91,14 +97,61 @@ public partial class ControlInspector : Control
         if (_globalSignals != null)
         {
             _globalSignals.ShellFocused -= ShellSelected;
+            _globalSignals.SyncShellInspector -= OnSyncShellInspector;
         }
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
         VisibilityChanged -= OnVisibilityChanged;
     }
 
     private void OnVisibilityChanged()
     {
-        if (Visible && _focusedCue != null)
-            LoadCards();
+        if (Visible)
+            RefreshFromLiveModel();
+    }
+
+    /// <summary>
+    /// After cue undo/redo, rebuild control cards from the restored model (drop orphan refs).
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Cue
+            && scope != (int)HistoryManager.HistoryScope.Cuelist)
+            return;
+        if (!Visible)
+            return;
+        RefreshFromLiveModel();
+    }
+
+    /// <summary>
+    /// External model edits (including history restore side-paths) that emit SyncShellInspector.
+    /// </summary>
+    private void OnSyncShellInspector()
+    {
+        if (!IsInsideTree() || !Visible)
+            return;
+        RefreshFromLiveModel();
+    }
+
+    /// <summary>
+    /// Re-resolves the focused cue and rebuilds cards from current components.
+    /// </summary>
+    private void RefreshFromLiveModel()
+    {
+        int focusId = _globalData?.FocusedCue ?? _focusedCue?.Id ?? -1;
+        _focusedCue = focusId >= 0 ? CueList.FetchCueFromId(focusId) : null;
+
+        if (_focusedCue == null)
+        {
+            if (_infoLabel != null) _infoLabel.Visible = true;
+            if (_contentRoot != null) _contentRoot.Visible = false;
+            ClearCards();
+            return;
+        }
+
+        if (_infoLabel != null) _infoLabel.Visible = false;
+        if (_contentRoot != null) _contentRoot.Visible = true;
+        LoadCards();
     }
 
     private void ShellSelected(int cueId)

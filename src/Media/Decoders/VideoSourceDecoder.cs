@@ -114,7 +114,8 @@ public sealed class VideoSourceDecoder : IDisposable
 
     /// <summary>
     /// Pulls the next decoded RGBA frame.
-    /// Decodes on demand if the ring is empty.
+    /// Decodes on demand if the ring is empty — avoid on the main/UI thread; prefer
+    /// <see cref="TryTakeFrame"/> + background <see cref="Prefetch"/>.
     /// </summary>
     /// <param name="frame">Receives frame data (Rgba may be recycled on a later ReadFrame — copy if needed).</param>
     /// <param name="ct">Cancellation token.</param>
@@ -140,8 +141,25 @@ public sealed class VideoSourceDecoder : IDisposable
     }
 
     /// <summary>
+    /// Takes the next frame from the ring only (no decode). Safe for the present/UI path.
+    /// </summary>
+    /// <param name="frame">Receives frame data when true.</param>
+    /// <returns>True if a buffered frame was returned.</returns>
+    public bool TryTakeFrame(out VideoFrame frame)
+    {
+        frame = null;
+        lock (_lock)
+        {
+            if (_isDisposed || !_isOpen || _ready.Count == 0) return false;
+            frame = _ready.Dequeue();
+            _lastPtsUs = frame.PtsUs;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Peeks next frame PTS without consuming, decoding if needed.
-    /// Returns false if none available.
+    /// Prefer <see cref="TryPeekPtsBuffered"/> on the present/UI path.
     /// </summary>
     public bool TryPeekPts(out long ptsUs)
     {
@@ -160,7 +178,24 @@ public sealed class VideoSourceDecoder : IDisposable
     }
 
     /// <summary>
+    /// Peeks next buffered frame PTS without decoding. Safe for the present/UI path.
+    /// </summary>
+    /// <param name="ptsUs">PTS of the head frame when true.</param>
+    /// <returns>True when the ring has at least one frame.</returns>
+    public bool TryPeekPtsBuffered(out long ptsUs)
+    {
+        ptsUs = 0;
+        lock (_lock)
+        {
+            if (_ready.Count == 0) return false;
+            ptsUs = _ready.Peek().PtsUs;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Decodes ahead until the ring has approximately <paramref name="targetFrames"/> frames.
+    /// Intended for worker threads; can block for multiple decode cycles.
     /// </summary>
     public void Prefetch(int targetFrames = DefaultRingFrames / 2)
     {
@@ -177,6 +212,7 @@ public sealed class VideoSourceDecoder : IDisposable
 
     /// <summary>
     /// Seeks to <paramref name="timestampUs"/> microseconds. Keyframe seek + decode-discard to target.
+    /// Blocks while discarding to the target — call from a worker (see <see cref="SeekAsync"/>).
     /// </summary>
     public unsafe void Seek(long timestampUs)
     {
@@ -222,6 +258,20 @@ public sealed class VideoSourceDecoder : IDisposable
             // Discard until first frame with PTS >= target
             DiscardUntilUnlocked(timestampUs);
         }
+    }
+
+    /// <summary>
+    /// Worker-thread seek. Prefer this (or Task.Run of <see cref="Seek"/>) over calling Seek on the main thread.
+    /// </summary>
+    /// <param name="timestampUs">Target media time in microseconds.</param>
+    /// <param name="ct">Cancellation token (checked before seek; discard itself is not mid-abortable).</param>
+    public Task SeekAsync(long timestampUs, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            Seek(timestampUs);
+        }, ct);
     }
 
     /// <summary>Clears the frame ring without seeking.</summary>
@@ -390,7 +440,9 @@ public sealed class VideoSourceDecoder : IDisposable
     private unsafe void DiscardUntilUnlocked(long targetUs)
     {
         int safety = 0;
-        const int maxIterations = 100_000;
+        // Cap discard work per seek so a bad stream cannot spin forever on a worker.
+        // ~GOP-length discards after keyframe seek; 30k packet/frame steps is generous for 4K.
+        const int maxIterations = 30_000;
 
         while (safety++ < maxIterations && !_endOfStream)
         {

@@ -2,24 +2,28 @@
 // SPDX-License-Identifier: MIT
 
 using System;
-using Godot;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Cue2.UI.Popups;
 using Cue2.UI.Shell;
 using Cue2.UI.Utilities;
+using Godot;
 using Godot.Collections;
 
 namespace Cue2.Services;
 
 /// <summary>
 /// Manages saving and loading of session data, including cues and settings.
-/// Handles file dialogs, encryption via Godot's FileAccess, and data serialization/deserialization using Godot's Json.
+/// Handles file dialogs and serialization via Godot's Json (plain UTF-8 .c2 files).
 /// </summary>
 /// <remarks>
 /// Showfiles are versioned via <see cref="ShowfileFormat"/>. On open, version is checked
 /// <b>before</b> session reset; mismatches prompt <see cref="VersionMismatchDialog"/> and may
 /// run <see cref="ShowfileMigrator"/> before load.
+/// <para>
+/// Storage format is <b>plain UTF-8 JSON</b> (not encrypted). This is not a security boundary.
+/// </para>
 /// </remarks>
 public partial class SaveManager : Node
 {
@@ -43,10 +47,14 @@ public partial class SaveManager : Node
 	/// this build. Overwriting that file would re-stamp the current schema and can drop data.
 	/// </summary>
 	private bool _openedFromNewerFormat;
-	
-	private string _decodepass = "f8237hr8hnfv3fH@#R";
 
-	private Timer _autosaveTimer;
+	/// <summary>
+	/// Bumped on each save start; completions for older generations skip UI side-effects
+	/// so a rapid Save + Save As does not apply stale success handlers.
+	/// </summary>
+	private int _saveGeneration;
+
+	private Godot.Timer _autosaveTimer;
 
 	public override void _Ready()
 	{
@@ -65,7 +73,7 @@ public partial class SaveManager : Node
 		
 		
 		// Setup autosave timer (disabled by default until interval set)
-		_autosaveTimer = new Timer { OneShot = false };
+		_autosaveTimer = new Godot.Timer { OneShot = false };
 		_autosaveTimer.Timeout += PerformAutosave;
 		AddChild(_autosaveTimer);
 
@@ -143,14 +151,18 @@ public partial class SaveManager : Node
 
 	/// <summary>
 	/// Opens the save file dialog to allow the user to choose a directory and name for the session.
+	/// Reuses a single dialog instance so repeated Save As does not leak FileDialog nodes.
 	/// </summary>
 	private void SaveAs()
 	{
-		_saveDialog = _saveDialogScene.Instantiate<FileDialog>();
-		AddChild(_saveDialog);
-		_saveDialog.FileSelected += OnSaveFileSelected;
-		_saveDialog.FileMode = FileDialog.FileModeEnum.SaveFile;
-		_saveDialog.AddFilter("*.c2 ; Cue2 Session");
+		EnsureSaveDialog();
+		if (_saveDialog == null)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"SaveManager:SaveAs - Could not create save dialog.", (int)LogType.Error);
+			return;
+		}
+
 		if (!string.IsNullOrEmpty(_globalData.SessionPath))
 		{
 			try
@@ -171,14 +183,48 @@ public partial class SaveManager : Node
 				GD.Print($"SaveManager:SaveAs - Error setting initial directory from session path: {ex.Message}");
 			}
 		}
-		_saveDialog.Visible = true;
+
+		_saveDialog.PopupCentered();
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "SaveManager:SaveAs - Waiting on save directory and show name to continue save", 0);
+	}
+
+	/// <summary>
+	/// Lazily creates and wires the Save As <see cref="FileDialog"/> once.
+	/// </summary>
+	private void EnsureSaveDialog()
+	{
+		if (_saveDialog != null && IsInstanceValid(_saveDialog))
+			return;
+
+		if (_saveDialogScene == null)
+		{
+			GD.PrintErr("SaveManager:EnsureSaveDialog - Save dialog scene is null.");
+			return;
+		}
+
+		_saveDialog = _saveDialogScene.Instantiate<FileDialog>();
+		AddChild(_saveDialog);
+		_saveDialog.FileMode = FileDialog.FileModeEnum.SaveFile;
+		_saveDialog.Access = FileDialog.AccessEnum.Filesystem;
+		// Filters only once at create — re-adding on every SaveAs stacked filters on old path.
+		_saveDialog.ClearFilters();
+		_saveDialog.AddFilter("*.c2 ; Cue2 Session");
+		_saveDialog.FileSelected += OnSaveFileSelected;
+		_saveDialog.Canceled += OnSaveDialogCanceled;
 	}
 
 	private void OnSaveFileSelected(string path)
 	{
+		if (_saveDialog != null && IsInstanceValid(_saveDialog))
+			_saveDialog.Hide();
 		// Save As always writes this build's format; user chose a new path (or accepted overwrite).
 		SaveSession(path, skipMediaBackup: false, clearNewerFormatGuard: true);
+	}
+
+	private void OnSaveDialogCanceled()
+	{
+		if (_saveDialog != null && IsInstanceValid(_saveDialog))
+			_saveDialog.Hide();
 	}
 	
 	
@@ -211,7 +257,8 @@ public partial class SaveManager : Node
 
 	/// <summary>
 	/// Saves the current session data to the specified path and name.
-	/// Creates necessary folders, serializes data to JSON, encrypts it, and writes to file.
+	/// Builds the save dictionary on the main thread (Godot node graph), then JSON-stringifies
+	/// and encrypt-writes on a worker so large shows do not freeze the UI (P1-15).
 	/// </summary>
 	/// <param name="selectedPath">The full path where the session file will be saved.</param>
 	/// <param name="skipMediaBackup">When true, does not enqueue media copies (used after path rewrite re-save).</param>
@@ -219,6 +266,14 @@ public partial class SaveManager : Node
 	/// When true (Save As), clears the forward-compat open guard after a successful write.
 	/// </param>
 	private void SaveSession(string selectedPath, bool skipMediaBackup = false, bool clearNewerFormatGuard = false)
+	{
+		_ = SaveSessionAsync(selectedPath, skipMediaBackup, clearNewerFormatGuard);
+	}
+
+	/// <summary>
+	/// Async save implementation. Prefer this when the caller can await (autosave).
+	/// </summary>
+	private async Task SaveSessionAsync(string selectedPath, bool skipMediaBackup = false, bool clearNewerFormatGuard = false)
 	{
 		// Block accidental overwrite of a newer-format original via any path (autosave, etc.).
 		if (_openedFromNewerFormat &&
@@ -233,7 +288,7 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Verify save folder structure (type-based: Audio, Video, Images, Waveforms)
+		// Verify save folder structure (type-based: Audio, Video, Images, Waveforms) — main thread I/O dirs.
 		var sessionPath = DirectoryUtils.PrepareSessionDirectory(selectedPath, out var folderPaths);
 		GD.Print($"SaveManager:SaveSession - Session path: {sessionPath} skipMediaBackup={skipMediaBackup}");
 
@@ -246,25 +301,51 @@ public partial class SaveManager : Node
 
 		// Session paths must be known before serializing so relative media URLs resolve correctly
 		ApplySessionPaths(sessionPath, folderPaths);
-		
-		
-		// SAVE DATA
-		var saveData = BuildSaveDataDictionary();
 
-		// Serialize to JSON
-		string jsonString = Json.Stringify(saveData);
-		
-		// Write encrypted file directly (no temp file)
-		using var file = Godot.FileAccess.OpenEncryptedWithPass(sessionPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
-		if (file == null)
+		// Snapshot on main thread (touches Cuelist / Settings / Godot nodes).
+		Dictionary saveData;
+		try
 		{
-			Error err = Godot.FileAccess.GetOpenError();
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to open file for writing: {selectedPath} with error: {err}", 2);
-			GD.PrintErr($"SaveManager:SaveSession - Failed to open file: {selectedPath} Error: {err}");
+			saveData = BuildSaveDataDictionary();
+		}
+		catch (Exception ex)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to build save data: {ex.Message}", 2);
+			GD.PrintErr($"SaveManager:SaveSession - BuildSaveDataDictionary: {ex.Message}");
 			return;
 		}
-		file.StoreString(jsonString);
-		file.Close(); // Explicit close, though using handles it
+
+		int gen = Interlocked.Increment(ref _saveGeneration);
+		string pathForWrite = sessionPath;
+
+		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Saving session…", 0);
+
+		(bool Ok, string Error) writeResult;
+		try
+		{
+			// Heavy work: stringify large JSON + plain disk write (off main thread).
+			writeResult = await Task.Run(() => WritePlainShowfile(pathForWrite, saveData))
+				.ConfigureAwait(true);
+		}
+		catch (Exception ex)
+		{
+			writeResult = (false, ex.Message);
+		}
+
+		// Superseded by a newer Save/Save As — do not touch recents / UI for the stale job.
+		if (gen != Volatile.Read(ref _saveGeneration))
+		{
+			GD.Print($"SaveManager:SaveSession - Superseded (gen {gen}); discarding completion for {pathForWrite}");
+			return;
+		}
+
+		if (!writeResult.Ok)
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to write showfile: {selectedPath} ({writeResult.Error})", 2);
+			GD.PrintErr($"SaveManager:SaveSession - Write failed: {pathForWrite} Error: {writeResult.Error}");
+			return;
+		}
 
 		// Successful Save As of a forward-compat open: this file is now owned by current format.
 		if (clearNewerFormatGuard)
@@ -298,6 +379,31 @@ public partial class SaveManager : Node
 
 		// Update title (in case signal timing)
 		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
+	}
+
+	/// <summary>
+	/// JSON-stringify + plain UTF-8 write. Intended for a worker thread (no Godot node access).
+	/// Showfiles are not encrypted — open, editable JSON for an open-source tool.
+	/// </summary>
+	/// <param name="sessionPath">Absolute .c2 path.</param>
+	/// <param name="saveData">Snapshot dictionary built on the main thread.</param>
+	/// <returns>Success flag and error text.</returns>
+	private static (bool Ok, string Error) WritePlainShowfile(string sessionPath, Dictionary saveData)
+	{
+		try
+		{
+			string jsonString = Json.Stringify(saveData);
+			if (string.IsNullOrEmpty(jsonString))
+				return (false, "JSON stringify produced empty output.");
+
+			// Prefer System.IO for plain UTF-8 so worker-thread writes are reliable.
+			System.IO.File.WriteAllText(sessionPath, jsonString);
+			return (true, null);
+		}
+		catch (Exception ex)
+		{
+			return (false, ex.Message);
+		}
 	}
 
 	/// <summary>
@@ -354,7 +460,7 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Peek encrypted JSON without mutating the live session.
+		// Peek plain JSON without mutating the live session.
 		if (!TryReadSaveData(selectedPath, out var saveData, out string readError))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -368,13 +474,23 @@ public partial class SaveManager : Node
 			$"SaveManager:OpenSelectedSession - File version: {fileVersion.ToDisplayString()}; " +
 			$"app: {Cue2.Version.SemanticVersionString} format {ShowfileFormat.CurrentFormatVersion}");
 
-		if (fileVersion.MatchesCurrent)
+		// Gate only on schema formatVersion — not appVersion. Patch releases keep the same
+		// format and must open without a blocking dialog (P1-13).
+		if (!fileVersion.RequiresVersionConfirmation)
 		{
+			if (!fileVersion.MatchesCurrentApp && !string.IsNullOrEmpty(fileVersion.AppVersion))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Showfile app version differs ({fileVersion.AppVersion} → {Cue2.Version.SemanticVersionString}); " +
+					$"format {fileVersion.FormatVersion} matches — opening without prompt.",
+					0);
+			}
+
 			CompleteOpenSession(selectedPath, saveData, fileVersion, userConfirmedMismatch: false);
 			return;
 		}
 
-		// Version differs: confirm before any open/reset actions.
+		// Format older/newer/unknown: confirm before any open/reset actions.
 		ShowVersionMismatchDialog(selectedPath, saveData, fileVersion);
 	}
 
@@ -621,7 +737,7 @@ public partial class SaveManager : Node
 	}
 
 	/// <summary>
-	/// Decrypts and parses a showfile without modifying session state.
+	/// Reads and parses a plain UTF-8 JSON showfile without modifying session state.
 	/// </summary>
 	/// <param name="selectedPath">Absolute path to the .c2 file.</param>
 	/// <param name="saveData">Parsed root dictionary on success.</param>
@@ -632,18 +748,37 @@ public partial class SaveManager : Node
 		saveData = null;
 		error = null;
 
+		string jsonString;
 		try
 		{
-			using var file = Godot.FileAccess.OpenEncryptedWithPass(
-				selectedPath, Godot.FileAccess.ModeFlags.Read, _decodepass);
-			if (file == null)
+			if (!System.IO.File.Exists(selectedPath))
 			{
-				Error err = Godot.FileAccess.GetOpenError();
-				error = $"Failed to open file for reading: {selectedPath} (error {err})";
+				error = "file not found";
 				return false;
 			}
+			jsonString = System.IO.File.ReadAllText(selectedPath);
+		}
+		catch (Exception ex)
+		{
+			error = ex.Message;
+			return false;
+		}
 
-			string jsonString = file.GetAsText();
+		if (string.IsNullOrWhiteSpace(jsonString))
+		{
+			error = "empty or unreadable";
+			return false;
+		}
+
+		string trimmed = jsonString.TrimStart();
+		if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+		{
+			error = "not JSON text (expected plain UTF-8 .c2)";
+			return false;
+		}
+
+		try
+		{
 			using var json = new Json();
 			Error parseResult = json.Parse(jsonString);
 			if (parseResult != Error.Ok)
@@ -655,7 +790,7 @@ public partial class SaveManager : Node
 			saveData = json.Data.AsGodotDictionary();
 			if (saveData == null)
 			{
-				error = "Showfile root is not a dictionary.";
+				error = "root is not a dictionary";
 				return false;
 			}
 
@@ -826,7 +961,7 @@ public partial class SaveManager : Node
 	/// Performs an autosave by saving the current session data as a backup.
 	/// Also ensures the main file is up to date.
 	/// </summary>
-	private void PerformAutosave()
+	private async void PerformAutosave()
 	{
 		if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
 		{
@@ -837,18 +972,18 @@ public partial class SaveManager : Node
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Performing autosave...", 0);
 		GD.Print("SaveManager:PerformAutosave - Autosave triggered.");
 
-		// First, update the main file
-		SaveSession(_globalData.SessionPath);
+		// First, update the main file (off-main stringify/write)
+		await SaveSessionAsync(_globalData.SessionPath);
 
-		// Then create a backup copy in the Backups folder
-		CreateAutosaveBackup();
+		// Then create a timestamped backup in the session's Backups folder.
+		await CreateAutosaveBackupAsync();
 	}
 
 	/// <summary>
 	/// Creates a timestamped backup of the current session in the session's Backups folder.
 	/// Prunes old backups to respect the BackupDepth setting.
 	/// </summary>
-	private void CreateAutosaveBackup()
+	private async Task CreateAutosaveBackupAsync()
 	{
 		if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
 			return;
@@ -870,20 +1005,24 @@ public partial class SaveManager : Node
 			string backupName = $"{_globalData.SessionName}_autosave_{timestamp}.c2";
 			string backupPath = backupDir + "/" + backupName;
 
-			// Serialize current data (same as SaveSession, including version stamps)
+			// Snapshot on main; stringify + plain write on worker (same as SaveSession).
 			var saveData = BuildSaveDataDictionary();
-			string jsonString = Json.Stringify(saveData);
+			var writeResult = await Task.Run(() => WritePlainShowfile(backupPath, saveData))
+				.ConfigureAwait(true);
 
-			using var file = Godot.FileAccess.OpenEncryptedWithPass(backupPath, Godot.FileAccess.ModeFlags.Write, _decodepass);
-			if (file != null)
+			if (writeResult.Ok)
 			{
-				file.StoreString(jsonString);
-				file.Close();
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Autosave backup created: {backupName}", 0);
 				GD.Print($"SaveManager:CreateAutosaveBackup - Backup saved to {backupPath}");
 			}
+			else
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Autosave backup failed: {writeResult.Error}", 2);
+				GD.PrintErr($"SaveManager:CreateAutosaveBackup - Write failed: {writeResult.Error}");
+			}
 
-			// Prune old backups
+			// Prune old backups (directory listing on main)
 			PruneAutosaveBackups(backupDir, depth);
 		}
 		catch (Exception ex)

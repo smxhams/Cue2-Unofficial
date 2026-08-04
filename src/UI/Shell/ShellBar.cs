@@ -1278,35 +1278,62 @@ public partial class ShellBar : PanelContainer
 	private void OnMemoEditToggled(bool editing)
 	{
 		if (_cue == null || _memoLineEdit == null) return;
-		if (_isEditingMemo && editing == false)
+		// Mirror name/number: block edit entry in Show Mode; cancel any in-progress session.
+		if (IsCueEditingLocked())
 		{
-			_memoLineEdit.Editable = false;
-			string newNotes = _memoLineEdit.Text ?? string.Empty;
-			// Compare against flattened form so multi-line notes are not wiped by an unchanged display.
-			string flatCurrent = FlattenNotesForShell(_cue.Notes);
-			if (!string.Equals(flatCurrent, newNotes, System.StringComparison.Ordinal))
-			{
-				_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue notes");
-				_cue.Notes = newNotes;
-				NotifyInspectorsOfCueEdit();
-			}
-			else
-			{
-				_memoLineEdit.Text = flatCurrent;
-			}
-			_memoLineEdit.FocusMode = FocusModeEnum.None;
-			_isEditingMemo = false;
+			if (editing)
+				CancelInlineEdits();
+			return;
+		}
+
+		if (editing)
+		{
+			_isEditingMemo = true;
+			return;
+		}
+
+		CommitMemoEdit();
+	}
+
+	/// <summary>
+	/// Commits double-click memo-notes edit to the model (same guards as name/number).
+	/// </summary>
+	private void CommitMemoEdit()
+	{
+		if (!_isEditingMemo || _memoLineEdit == null || _cue == null)
+			return;
+
+		_isEditingMemo = false;
+		_memoLineEdit.Editable = false;
+		_memoLineEdit.FocusMode = FocusModeEnum.None;
+
+		string flatCurrent = FlattenNotesForShell(_cue.Notes);
+		if (IsCueEditingLocked() || _globalData?.HistoryManager?.IsRestoring == true)
+		{
+			// Restore display from model; do not record during undo/redo or Show Mode.
+			_memoLineEdit.Text = flatCurrent;
 			_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue.Notes)
 				? "Memo cue — double-click to edit notes."
 				: _cue.Notes;
+			return;
 		}
-		else if (_isEditingMemo && !editing)
+
+		string newNotes = _memoLineEdit.Text ?? string.Empty;
+		// Compare against flattened form so multi-line notes are not wiped by an unchanged display.
+		if (!string.Equals(flatCurrent, newNotes, System.StringComparison.Ordinal))
 		{
-			_memoLineEdit.Editable = true;
-			_memoLineEdit.FocusMode = FocusModeEnum.Click;
-			_memoLineEdit.GrabFocus();
-			_isEditingMemo = true;
+			_globalData?.HistoryManager?.RecordCueChange(_cue.Id, "Edit cue notes");
+			_cue.Notes = newNotes;
+			NotifyInspectorsOfCueEdit();
 		}
+		else
+		{
+			_memoLineEdit.Text = flatCurrent;
+		}
+
+		_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue.Notes)
+			? "Memo cue — double-click to edit notes."
+			: _cue.Notes;
 	}
 
 	private void OnPreWaitFocusEntered()

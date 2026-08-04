@@ -89,6 +89,20 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     private CancellationTokenSource _videoPrefetchCts;
     private Task _videoPrefetchTask;
 
+    /// <summary>Cancels in-flight seek+prefetch workers when a newer seek supersedes them.</summary>
+    private CancellationTokenSource _seekCts;
+    private Task _seekTask;
+    /// <summary>True while a seek worker owns the decoders (present path must not touch them).</summary>
+    private volatile bool _seekInProgress;
+    /// <summary>Target media time for the in-flight seek (UI/master clock hold).</summary>
+    private long _seekTargetUs;
+
+    /// <summary>
+    /// True while an async decoder seek is in flight. Progress UI should hold the scrub target
+    /// and not sample the live master clock until this clears.
+    /// </summary>
+    public bool IsDecoderSeeking => _seekInProgress;
+
     private Dictionary<Control, TextureRect> _targetLayers = new();
 
     private readonly object _lock = new object();
@@ -270,9 +284,15 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
             await TryLoadSubtitlesAsync(mediaPath);
 
-            if (_startTimeUs > 0)
-                _videoDecoder.Seek(_startTimeUs);
-            _videoDecoder.Prefetch(_presentTuning.PrefetchTarget);
+            // Seek + prefetch off the main thread (GOP discard / decode can take many ms).
+            long startUs = _startTimeUs;
+            int videoPrefetch = _presentTuning.PrefetchTarget;
+            await Task.Run(() =>
+            {
+                if (startUs > 0)
+                    _videoDecoder.Seek(startUs);
+                _videoDecoder.Prefetch(videoPrefetch);
+            });
 
             int w = _videoDecoder.Info.Width;
             int h = _videoDecoder.Info.Height;
@@ -307,18 +327,25 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             {
                 // Stream embedded audio (no full PCM expand) — long video soundtracks would
                 // otherwise pin tens/hundreds of MB on the LOH for the whole cue lifetime.
+                // Ring sized from latency mode so PreferStability prefetch (1400 ms) fits.
+                RefreshAudioTuning();
                 await _audioDecoder.OpenAsync(
                     mediaPath,
-                    preferSampleAccurateStore: false);
+                    preferSampleAccurateStore: false,
+                    ringMs: _audioTuning.RecommendedRingMs);
                 SourceChannels = _audioDecoder.Info.Channels;
                 SourceSampleRate = _audioDecoder.Info.SampleRate;
                 SourceFormat = SDL.AudioFormat.AudioF32LE;
                 SourceBytesPerFrame = SourceChannels * sizeof(float);
 
-                RefreshAudioTuning();
-                if (_startTimeUs > 0)
-                    _audioDecoder.Seek(_startTimeUs);
-                _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
+                long audioStartUs = _startTimeUs;
+                int audioPrefetchMs = _audioTuning.PrefetchMs;
+                await Task.Run(() =>
+                {
+                    if (audioStartUs > 0)
+                        _audioDecoder.Seek(audioStartUs);
+                    _audioDecoder.Prefetch(audioPrefetchMs);
+                });
 
                 int maxFrames = Math.Max(SourceSampleRate / 10, 1024);
                 _audioSrcBuffer = new float[maxFrames * SourceChannels];
@@ -559,6 +586,11 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     /// </remarks>
     private long GetMasterClockUs()
     {
+        // Hold at seek target while the worker discards/prefetches so progress bars do not
+        // snap back to the pre-seek audio/wall position.
+        if (_seekInProgress)
+            return _seekTargetUs;
+
         if (_audioDecoder != null && UseAudio && HasBoundAudioStreams)
         {
             long audioUs = _audioDecoder.PositionUs;
@@ -797,11 +829,21 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     /// <summary>
     /// Shared present logic used by _Process and the first Play tick.
+    /// Never heavy-decodes on the main thread: pulls only from the ring; the prefetch
+    /// worker refills. Skips while a seek worker owns the decoder.
     /// </summary>
     private void PresentCatchUpFrames()
     {
         if (!_isPlaying || IsPaused || IsStopped || _isExiting || _videoDecoder == null)
             return;
+
+        // Seek/discard holds the decoder lock for a long time — skip present rather than stall UI.
+        // Still emit TimeUpdated at the seek target so progress bars hold (not snap back).
+        if (_seekInProgress)
+        {
+            EmitSignal(SignalName.TimeUpdated, _seekTargetUs / (double)MicrosecondsPerSecond);
+            return;
+        }
 
         long masterUs = GetMasterClockUs();
         EmitSignal(SignalName.TimeUpdated, masterUs / (double)MicrosecondsPerSecond);
@@ -826,14 +868,14 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             return;
         }
 
-        // Still image: decode/present once, then hold the frame until duration (or manual stop).
+        // Still image: take one buffered frame (init already prefetched), then hold.
         // Keep re-applying modulate every tick so stop fade-out / fade-in alpha is visible
         // (video gets this for free via PresentFrame; stills would otherwise freeze at full opacity).
         if (_videoComponent.IsImage)
         {
             if (!_imageFramePresented)
             {
-                if (_videoDecoder.ReadFrame(out VideoFrame frame))
+                if (_videoDecoder.TryTakeFrame(out VideoFrame frame))
                 {
                     PresentFrame(frame);
                     _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
@@ -860,9 +902,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
         int presented = 0;
         int maxPresentPerTick = _presentTuning.MaxPresentPerTick;
+        // Cap late drops per tick so a large catch-up never monopolises the main thread.
+        int maxLateDrops = Math.Max(maxPresentPerTick, 8);
+        int lateDrops = 0;
         while (presented < maxPresentPerTick)
         {
-            if (!_videoDecoder.TryPeekPts(out long nextPts))
+            // Ring-only: never DecodeMore on the present path.
+            if (!_videoDecoder.TryPeekPtsBuffered(out long nextPts))
             {
                 if (_videoDecoder.EndOfStream)
                     HandleSegmentEnd();
@@ -873,12 +919,16 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (lateness < -_presentTuning.PresentEarlyToleranceUs)
                 break;
 
-            if (!_videoDecoder.ReadFrame(out VideoFrame frame))
+            if (!_videoDecoder.TryTakeFrame(out VideoFrame frame))
                 break;
 
-            if (lateness > _presentTuning.MaxLatenessUs && _videoDecoder.TryPeekPts(out long peek2) && peek2 <= masterUs)
+            if (lateness > _presentTuning.MaxLatenessUs
+                && lateDrops < maxLateDrops
+                && _videoDecoder.TryPeekPtsBuffered(out long peek2)
+                && peek2 <= masterUs)
             {
                 _videoDecoder.ReleaseFrameBuffer(frame.Rgba);
+                lateDrops++;
                 presented++;
                 continue;
             }
@@ -929,22 +979,25 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
 
     public void Resume()
     {
+        long resumeAtUs = 0;
         lock (_lock)
         {
             if (!IsPaused || IsStopped) return;
-            if (_pausedAtUs > 0)
-            {
-                // Seek while still paused so the fill loop stays held; prime after unpause.
-                SeekInternal(_pausedAtUs, restartClock: true);
-                _pausedAtUs = 0;
-            }
+            resumeAtUs = _pausedAtUs;
+            _pausedAtUs = 0;
+            // Unpause before async seek so FinishSeekWorker can re-prime audio.
             IsPaused = false;
             _wallClock.Restart();
         }
 
-        // Streams were cleared on pause; re-prime before the fill loop can underrun.
-        if (_audioDecoder != null && HasBoundAudioStreams)
+        if (resumeAtUs > 0)
         {
+            // Seek worker holds fill until decode+prefetch complete, then primes.
+            SeekInternal(resumeAtUs, restartClock: true);
+        }
+        else if (_audioDecoder != null && HasBoundAudioStreams)
+        {
+            // Streams were cleared on pause; re-prime before the fill loop can underrun.
             RefreshAudioTuning();
             ArmDeclickRamp();
             PrefillAudioStreams();
@@ -1078,56 +1131,150 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
     }
 
+    /// <summary>
+    /// Seeks video (+ embedded audio) to <paramref name="timestampUs"/>.
+    /// Heavy FFmpeg seek/discard/prefetch runs on a worker so scrub does not freeze the UI.
+    /// </summary>
     private void SeekInternal(long timestampUs, bool restartClock)
     {
         // Hold the fill loop so it cannot PutAudioStreamData across a Clear (stale PCM after seek).
         // Do not use public IsSeeking here — that flag is also held for the whole UI scrub drag.
+        // Keep fill suspended across cancel → new seek (do not release the hold here).
+        CancelSeekWorker(releaseFillHold: false);
+
+        var cts = new CancellationTokenSource();
+        _seekCts = cts;
+        _seekTargetUs = timestampUs;
+        _seekInProgress = true;
+
         lock (_lock)
         {
             _audioFillSuspended = true;
         }
 
-        try
+        if (DeviceStreams != null)
         {
-            if (DeviceStreams != null)
+            foreach (var stream in DeviceStreams.Values)
+                SDL.ClearAudioStream(stream);
+        }
+
+        // Always park the wall clock at the seek target so silent-video masters and UI
+        // match immediately (audio master still holds via _seekTargetUs until finish).
+        _wallMediaOriginUs = timestampUs;
+        if (restartClock && _isPlaying && !IsPaused)
+            _wallClock.Restart();
+        else if (!restartClock)
+            _wallClock.Reset();
+
+        RefreshPresentTuning();
+        RefreshAudioTuning();
+
+        var video = _videoDecoder;
+        var audio = _audioDecoder;
+        int videoPrefetch = _presentTuning.PrefetchTarget;
+        int audioPrefetchMs = _audioTuning.PrefetchMs;
+        bool shouldPrime;
+        lock (_lock)
+            shouldPrime = audio != null && _isPlaying && !IsPaused && HasBoundAudioStreams;
+
+        _seekTask = Task.Run(() =>
+        {
+            try
             {
-                foreach (var stream in DeviceStreams.Values)
-                    SDL.ClearAudioStream(stream);
-            }
+                cts.Token.ThrowIfCancellationRequested();
+                video?.Seek(timestampUs);
+                cts.Token.ThrowIfCancellationRequested();
+                video?.Prefetch(videoPrefetch);
 
-            _videoDecoder?.Seek(timestampUs);
-            _videoDecoder?.Prefetch(_presentTuning.PrefetchTarget);
-
-            if (_audioDecoder != null)
-            {
-                RefreshAudioTuning();
-                _audioDecoder.FlushBuffers();
-                _audioDecoder.Seek(timestampUs);
-                _audioDecoder.Prefetch(_audioTuning.PrefetchMs);
-
-                // When audible, re-prime the device queue so resume is continuous (no underrun click).
-                bool shouldPrime;
-                lock (_lock)
-                    shouldPrime = _isPlaying && !IsPaused && HasBoundAudioStreams;
-                if (shouldPrime)
+                if (audio != null)
                 {
-                    ArmDeclickRamp();
-                    PrefillAudioStreams();
+                    cts.Token.ThrowIfCancellationRequested();
+                    audio.FlushBuffers();
+                    audio.Seek(timestampUs);
+                    audio.Prefetch(audioPrefetchMs);
                 }
             }
-
-            if (restartClock)
+            catch (OperationCanceledException)
             {
-                _wallMediaOriginUs = timestampUs;
-                if (_isPlaying && !IsPaused)
-                    _wallClock.Restart();
+                // Superseded by a newer seek or teardown.
             }
+            catch (Exception ex)
+            {
+                GD.PrintErr($"ActiveVideoPlayback:SeekWorker - {ex.Message}");
+            }
+            finally
+            {
+                // Complete only if this generation is still current.
+                if (!cts.IsCancellationRequested)
+                {
+                    bool prime = shouldPrime;
+                    Callable.From(() => FinishSeekWorker(cts, prime)).CallDeferred();
+                }
+            }
+        }, cts.Token);
+    }
+
+    /// <summary>
+    /// Main-thread completion for an async seek: re-prime audio and release present/fill holds.
+    /// </summary>
+    private void FinishSeekWorker(CancellationTokenSource cts, bool shouldPrime)
+    {
+        if (cts == null || cts.IsCancellationRequested)
+            return;
+        // Superseded by a newer seek generation.
+        if (!ReferenceEquals(_seekCts, cts))
+            return;
+        if (_isExiting || IsStopped)
+        {
+            lock (_lock) _audioFillSuspended = false;
+            _seekInProgress = false;
+            return;
+        }
+
+        try
+        {
+            if (shouldPrime && _audioDecoder != null && HasBoundAudioStreams)
+            {
+                ArmDeclickRamp();
+                PrefillAudioStreams();
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveVideoPlayback:FinishSeekWorker - {ex.Message}");
         }
         finally
         {
             lock (_lock)
             {
                 _audioFillSuspended = false;
+            }
+            _seekInProgress = false;
+        }
+    }
+
+    /// <summary>Cancels any in-flight seek worker without waiting for completion.</summary>
+    /// <param name="releaseFillHold">
+    /// When true (teardown), also clears <see cref="_audioFillSuspended"/>.
+    /// When false (chained seek), leave the hold so the fill loop cannot race the next clear.
+    /// </param>
+    private void CancelSeekWorker(bool releaseFillHold = true)
+    {
+        try
+        {
+            _seekCts?.Cancel();
+        }
+        catch { /* ignore */ }
+        finally
+        {
+            try { _seekCts?.Dispose(); } catch { /* ignore */ }
+            _seekCts = null;
+            _seekTask = null;
+            _seekInProgress = false;
+            if (releaseFillHold)
+            {
+                lock (_lock)
+                    _audioFillSuspended = false;
             }
         }
     }
@@ -1145,7 +1292,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
                 {
                     bool paused;
                     lock (_lock) paused = IsPaused || IsStopped || _isExiting || !_isPlaying;
-                    if (paused)
+                    if (paused || _seekInProgress)
                     {
                         Thread.Sleep(10);
                         continue;
@@ -1534,6 +1681,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             _isPlaying = false;
         }
         SetProcess(false);
+        CancelSeekWorker();
         StopVideoPrefetchLoop();
         StopAudioFillLoop();
         _wallClock.Stop();
@@ -1763,6 +1911,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         }
 
         SetProcess(false);
+        CancelSeekWorker();
         StopVideoPrefetchLoop();
         StopAudioFillLoop();
         _wallClock.Stop();
@@ -1957,6 +2106,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
         IsStopped = true;
         _isPlaying = false;
         SetProcess(false);
+        CancelSeekWorker();
         StopVideoPrefetchLoop();
         StopAudioFillLoop();
         if (DeviceStreams != null)

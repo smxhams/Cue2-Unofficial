@@ -48,7 +48,11 @@ public partial class Settings : Node
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
     private AudioDevices _audioDevices;
-    private static Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
+    /// <summary>
+    /// Per-session audio output patches (instance field — not static, so each Settings
+    /// autoload owns its table and tests/multiple instances cannot share patches).
+    /// </summary>
+    private Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
     private DisplaysManager _displaysManager;
 
     /// <summary>System default UI scale (1.0 = 100%).</summary>
@@ -959,10 +963,13 @@ public partial class Settings : Node
         if (settingsData.TryGetValue("AudioDevices", out var devices))
         {
             GD.Print($"Settings:LoadSettings - Loading AudioDevices");
-            var deviceArray = (Array<string>)devices;
+            // Soft convert — hard cast (Array<string>) throws when JSON yields Array or Variant mix.
+            var deviceArray = devices.AsGodotArray();
             foreach (var device in deviceArray)
             {
-                _audioDevices.OpenAudioDevice(device, out var _);
+                string deviceName = device.AsString();
+                if (string.IsNullOrEmpty(deviceName)) continue;
+                _audioDevices.OpenAudioDevice(deviceName, out var _);
             }
         }
 
@@ -977,14 +984,22 @@ public partial class Settings : Node
             }
             _audioOutputPatches.Clear();
 
-            foreach (var patch in (Dictionary)patchs)
+            if (patchs.VariantType == Variant.Type.Dictionary)
             {
-                var patchAsDict = patch.Value.AsGodotDictionary();
-                var patchObj = AudioOutputPatch.FromData(patchAsDict);
-                if (patchObj != null)
-                    AddPatch(patchObj);
-                else
-                    GD.PrintErr("Settings:LoadSettings - Failed to deserialize an audio output patch.");
+                var patchDict = patchs.AsGodotDictionary();
+                foreach (var patchKey in patchDict.Keys)
+                {
+                    var patchAsDict = patchDict[patchKey].AsGodotDictionary();
+                    var patchObj = AudioOutputPatch.FromData(patchAsDict);
+                    if (patchObj != null)
+                        AddPatch(patchObj);
+                    else
+                        GD.PrintErr("Settings:LoadSettings - Failed to deserialize an audio output patch.");
+                }
+            }
+            else
+            {
+                GD.PrintErr($"Settings:LoadSettings - AudioPatch is not a Dictionary (got {patchs.VariantType}).");
             }
 
             // Older showfiles with an empty patch table still get a usable Default Patch.

@@ -77,14 +77,15 @@ public partial class HistoryManager : Node
 	public delegate void HistoryRestoredEventHandler(int scope);
 
 	/// <summary>
-	/// Whether there is at least one undo step available.
+	/// Whether there is at least one undo step that can actually apply right now.
+	/// In Show Mode, cue/cuelist steps are skipped (menu stays disabled if only those remain).
 	/// </summary>
-	public bool CanUndo => _undoStack.Count > 0;
+	public bool CanUndo => FindApplicableIndex(_undoStack) >= 0;
 
 	/// <summary>
-	/// Whether there is at least one redo step available.
+	/// Whether there is at least one redo step that can actually apply right now.
 	/// </summary>
-	public bool CanRedo => _redoStack.Count > 0;
+	public bool CanRedo => FindApplicableIndex(_redoStack) >= 0;
 
 	/// <summary>
 	/// Maximum undo steps, from user preferences.
@@ -111,6 +112,8 @@ public partial class HistoryManager : Node
 		_globalSignals.Undo += Undo;
 		_globalSignals.Redo += Redo;
 		_globalSignals.NewSession += Clear;
+		// Show Mode changes which scopes are applicable — refresh Edit menu CanUndo/CanRedo.
+		_globalSignals.ShowModeChanged += OnShowModeChanged;
 
 		GD.Print("HistoryManager:_Ready - Initialized (scoped history).");
 	}
@@ -122,7 +125,13 @@ public partial class HistoryManager : Node
 			_globalSignals.Undo -= Undo;
 			_globalSignals.Redo -= Redo;
 			_globalSignals.NewSession -= Clear;
+			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		}
+	}
+
+	private void OnShowModeChanged(bool _)
+	{
+		EmitSignal(SignalName.HistoryChanged);
 	}
 
 	/// <summary>
@@ -304,11 +313,16 @@ public partial class HistoryManager : Node
 	}
 
 	/// <summary>
-	/// Restores the previous scoped state from the undo stack.
+	/// Restores the previous applicable scoped state from the undo stack.
+	/// In Show Mode, walks past cue/cuelist steps (left on the stack for Edit Mode) to the next
+	/// settings/selection entry so Undo is never a silent no-op while the menu claims it can undo.
 	/// </summary>
 	public void Undo()
 	{
-		if (!CanUndo || _isRestoring) return;
+		if (_isRestoring) return;
+
+		int idx = FindApplicableIndex(_undoStack);
+		if (idx < 0) return;
 
 		HistoryEntry target = null;
 		HistoryEntry redoEntry = null;
@@ -316,29 +330,18 @@ public partial class HistoryManager : Node
 		try
 		{
 			_activeCoalesceKey = null;
-			target = _undoStack[^1];
+			target = _undoStack[idx];
 
-			// Show Mode: ignore undo steps that would mutate cues / cuelist structure.
-			// Settings and selection undos still apply. Cue steps stay on the stack until Edit Mode.
-			if (IsCueScopeBlockedInShowMode(target.Scope))
+			if (idx < _undoStack.Count - 1)
 			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-					"Undo skipped: cue/cuelist changes are locked in Show Mode.", (int)LogType.Info);
-				return;
-			}
-
-			// Frame-sliced bulk cuelist ops must finish before any restore touches the list.
-			if (IsCuelistBulkBusy(target.Scope))
-			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-					"Undo skipped: a cuelist operation is still in progress.", (int)LogType.Info);
-				return;
+				int skipped = _undoStack.Count - 1 - idx;
+				GD.Print($"HistoryManager:Undo - Skipping {skipped} Show Mode-locked step(s) above '{target.Description}'");
 			}
 
 			// Capture redo state BEFORE popping, so a capture failure cannot discard the undo entry.
 			redoEntry = CaptureCurrentForScope(target);
 
-			_undoStack.RemoveAt(_undoStack.Count - 1);
+			_undoStack.RemoveAt(idx);
 			popped = true;
 			_redoStack.Add(redoEntry);
 
@@ -357,7 +360,11 @@ public partial class HistoryManager : Node
 			{
 				if (_redoStack.Count > 0 && ReferenceEquals(_redoStack[^1], redoEntry))
 					_redoStack.RemoveAt(_redoStack.Count - 1);
-				_undoStack.Add(target);
+				// Re-insert at original index when possible.
+				if (idx >= 0 && idx <= _undoStack.Count)
+					_undoStack.Insert(idx, target);
+				else
+					_undoStack.Add(target);
 			}
 
 			GD.PrintErr($"HistoryManager:Undo - Failed: {ex.Message}\n{ex.StackTrace}");
@@ -369,11 +376,14 @@ public partial class HistoryManager : Node
 	}
 
 	/// <summary>
-	/// Re-applies a previously undone scoped state.
+	/// Re-applies a previously undone scoped state (skips Show Mode-blocked cue/cuelist steps).
 	/// </summary>
 	public void Redo()
 	{
-		if (!CanRedo || _isRestoring) return;
+		if (_isRestoring) return;
+
+		int idx = FindApplicableIndex(_redoStack);
+		if (idx < 0) return;
 
 		HistoryEntry target = null;
 		HistoryEntry undoEntry = null;
@@ -381,25 +391,17 @@ public partial class HistoryManager : Node
 		try
 		{
 			_activeCoalesceKey = null;
-			target = _redoStack[^1];
+			target = _redoStack[idx];
 
-			if (IsCueScopeBlockedInShowMode(target.Scope))
+			if (idx < _redoStack.Count - 1)
 			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-					"Redo skipped: cue/cuelist changes are locked in Show Mode.", (int)LogType.Info);
-				return;
-			}
-
-			if (IsCuelistBulkBusy(target.Scope))
-			{
-				_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-					"Redo skipped: a cuelist operation is still in progress.", (int)LogType.Info);
-				return;
+				int skipped = _redoStack.Count - 1 - idx;
+				GD.Print($"HistoryManager:Redo - Skipping {skipped} Show Mode-locked step(s) above '{target.Description}'");
 			}
 
 			undoEntry = CaptureCurrentForScope(target);
 
-			_redoStack.RemoveAt(_redoStack.Count - 1);
+			_redoStack.RemoveAt(idx);
 			popped = true;
 			_undoStack.Add(undoEntry);
 			TrimToMaxDepth();
@@ -418,7 +420,10 @@ public partial class HistoryManager : Node
 			{
 				if (_undoStack.Count > 0 && ReferenceEquals(_undoStack[^1], undoEntry))
 					_undoStack.RemoveAt(_undoStack.Count - 1);
-				_redoStack.Add(target);
+				if (idx >= 0 && idx <= _redoStack.Count)
+					_redoStack.Insert(idx, target);
+				else
+					_redoStack.Add(target);
 			}
 
 			GD.PrintErr($"HistoryManager:Redo - Failed: {ex.Message}\n{ex.StackTrace}");
@@ -441,6 +446,26 @@ public partial class HistoryManager : Node
 		_redoStack.Clear();
 		EmitSignal(SignalName.HistoryChanged);
 		GD.Print("HistoryManager:Clear - History cleared.");
+	}
+
+	/// <summary>
+	/// Index of the topmost stack entry that Undo/Redo may apply now, or -1 if none.
+	/// Skips Show Mode-blocked cue/cuelist steps and bulk-op-busy scopes.
+	/// </summary>
+	private int FindApplicableIndex(List<HistoryEntry> stack)
+	{
+		if (stack == null || stack.Count == 0)
+			return -1;
+		for (int i = stack.Count - 1; i >= 0; i--)
+		{
+			var scope = stack[i].Scope;
+			if (IsCueScopeBlockedInShowMode(scope))
+				continue;
+			if (IsCuelistBulkBusy(scope))
+				continue;
+			return i;
+		}
+		return -1;
 	}
 
 	/// <summary>

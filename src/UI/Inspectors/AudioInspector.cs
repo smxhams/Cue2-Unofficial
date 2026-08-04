@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
@@ -60,6 +61,9 @@ public partial class AudioInspector : Control
     /// abandons after awaits.
     /// </summary>
     private int _shellSelectGeneration;
+
+    /// <summary>Cancels in-flight waveform generation when focus/file changes.</summary>
+    private CancellationTokenSource _waveformCts;
     
     // Ui Nodes
     private Label _infoLabel;
@@ -261,6 +265,29 @@ public partial class AudioInspector : Control
         _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
         _buttonSelectFile.Pressed += OpenFileDialog;
         
+    }
+
+    /// <inheritdoc />
+    public override void _ExitTree()
+    {
+        // Invalidate in-flight ShellSelected / waveform work so callbacks no-op after free.
+        _shellSelectGeneration++;
+        CancelWaveformWork();
+        ClearFileDialog();
+
+        if (_globalSignals != null)
+        {
+            _globalSignals.ShellFocused -= ShellSelected;
+            _globalSignals.SyncShellInspector -= RefreshMediaPathDisplay;
+            _globalSignals.SyncShellInspector -= OnSyncFromHistory;
+            _globalSignals.CueMediaHealthChanged -= OnCueMediaHealthChanged;
+        }
+
+        _focusedCue = null;
+        _focusedAudioComponent = null;
+        _audioTargets.Clear();
+
+        base._ExitTree();
     }
     
     /// <summary>
@@ -515,9 +542,12 @@ public partial class AudioInspector : Control
         {
             try
             {
-                _focusedAudioComponent.WaveformData =
-                    await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                var wave = await _mediaEngine.GenerateWaveformAsync(
+                    _focusedAudioComponent.AudioFile, RestartWaveformToken());
+                if (_focusedAudioComponent != null && wave != null && wave.Length > 0)
+                    _focusedAudioComponent.WaveformData = wave;
             }
+            catch (OperationCanceledException) { /* focus moved */ }
             catch (Exception ex)
             {
                 GD.PrintErr($"AudioInspector:OnSyncFromHistory - Waveform regen failed: {ex.Message}");
@@ -1373,6 +1403,7 @@ public partial class AudioInspector : Control
 
         if (cueId < 0)
         {
+            CancelWaveformWork();
             _focusedCue = null;
             _focusedAudioComponent = null;
             _isMultiEdit = false;
@@ -1394,7 +1425,9 @@ public partial class AudioInspector : Control
         _isMultiEdit = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
         if (_isMultiEdit)
         {
-            await LoadMultiEditAudio(gen, cueId);
+            // Cancel prior single-cue jobs; multi-edit starts its own token.
+            var multiCt = RestartWaveformToken();
+            await LoadMultiEditAudio(gen, cueId, multiCt);
             return;
         }
 
@@ -1414,6 +1447,9 @@ public partial class AudioInspector : Control
             BuildRoutingMatrix();
             return;
         }
+
+        // New cue focus — cancel prior waveform and start a fresh job token.
+        var waveformCt = RestartWaveformToken();
         _focusedCue = CueList.FetchCueFromId(cueId);
 
         if (_focusedCue == null)
@@ -1474,13 +1510,19 @@ public partial class AudioInspector : Control
             GD.Print("AudioInspector:ShellSelected - No waveform found");
             try
             {
-                var wave = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                var wave = await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile, waveformCt);
                 if (gen != _shellSelectGeneration || _focusedAudioComponent == null) return;
-                _focusedAudioComponent.WaveformData = wave;
-                if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
+                if (wave == null || wave.Length == 0)
                 {
-                    _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
+                    if (!waveformCt.IsCancellationRequested)
+                        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"AudioInspector:ShellSelected - Waveform generation failed for {_focusedAudioComponent.AudioFile}", 2);
+                    return;
                 }
+                _focusedAudioComponent.WaveformData = wave;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception ex)
             {
@@ -1507,7 +1549,7 @@ public partial class AudioInspector : Control
     /// <summary>
     /// Loads multi-edit audio UI for the current selection.
     /// </summary>
-    private async Task LoadMultiEditAudio(int gen, int focusedCueId)
+    private async Task LoadMultiEditAudio(int gen, int focusedCueId, CancellationToken waveformCt = default)
     {
         _audioTargets = InspectorMultiEditSupport.CollectComponentTargets(c => c.GetAudioComponent());
         _focusedCue = CueList.FetchCueFromId(focusedCueId);
@@ -1576,8 +1618,15 @@ public partial class AudioInspector : Control
         {
             try
             {
-                _focusedAudioComponent.WaveformData =
-                    await _mediaEngine.GenerateWaveformAsync(_focusedAudioComponent.AudioFile);
+                var wave = await _mediaEngine.GenerateWaveformAsync(
+                    _focusedAudioComponent.AudioFile, waveformCt);
+                if (gen != _shellSelectGeneration || _focusedAudioComponent == null) return;
+                if (wave != null && wave.Length > 0)
+                    _focusedAudioComponent.WaveformData = wave;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception ex)
             {
@@ -1784,6 +1833,27 @@ public partial class AudioInspector : Control
         {
             _isSyncingUi = false;
         }
+    }
+
+    /// <summary>
+    /// Cancels any prior waveform wait without starting a new one (clear focus).
+    /// </summary>
+    private void CancelWaveformWork()
+    {
+        try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+        try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+        _waveformCts = null;
+    }
+
+    /// <summary>
+    /// Cancels any prior waveform job and returns a fresh token for the next generate.
+    /// </summary>
+    private CancellationToken RestartWaveformToken()
+    {
+        try { _waveformCts?.Cancel(); } catch { /* ignore */ }
+        try { _waveformCts?.Dispose(); } catch { /* ignore */ }
+        _waveformCts = new CancellationTokenSource();
+        return _waveformCts.Token;
     }
 
     private void StyleWaveformHandles()
@@ -2289,13 +2359,21 @@ public partial class AudioInspector : Control
         try
         {
             // Use absolute source for waveform while background copy may still be running
-            _focusedAudioComponent.WaveformData =
-                await _mediaEngine.GenerateWaveformAsync(resolvedPath);
-            if (_focusedAudioComponent.WaveformData == null || _focusedAudioComponent.WaveformData.Length == 0)
+            var wave = await _mediaEngine.GenerateWaveformAsync(resolvedPath, RestartWaveformToken());
+            if (_focusedAudioComponent == null) return;
+            if (wave == null || wave.Length == 0)
             {
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"AudioInspector:SetAudioFile - Waveform generation failed for {pathToStore}", 2);
             }
+            else
+            {
+                _focusedAudioComponent.WaveformData = wave;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex)
         {
@@ -2326,11 +2404,27 @@ public partial class AudioInspector : Control
     }
 
     /// <summary>
-    /// Clears the file dialog instance.
+    /// Clears the file dialog instance (safe if already null or freed).
     /// </summary>
     private void ClearFileDialog()
     {
-        _fileDialog.QueueFree();
+        if (_fileDialog == null)
+            return;
+
+        try
+        {
+            if (IsInstanceValid(_fileDialog))
+            {
+                _fileDialog.FileSelected -= FileSelected;
+                _fileDialog.Canceled -= ClearFileDialog;
+                _fileDialog.QueueFree();
+            }
+        }
+        catch
+        {
+            /* best-effort during exit */
+        }
+
         _fileDialog = null;
     }
     

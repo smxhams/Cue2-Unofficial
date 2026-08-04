@@ -21,6 +21,7 @@ public partial class ConnectionInspector : Control
 {
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    private HistoryManager _historyManager;
 
     private PackedScene _cueLightComponentCardScene = SceneLoader.LoadPackedScene("uid://cfl3cwoqby4lo", out string _);
     private PackedScene _oscComponentCardScene = SceneLoader.LoadPackedScene("uid://cst0ttvboq673", out string _);
@@ -35,15 +36,21 @@ public partial class ConnectionInspector : Control
     private FlowContainer _connectionCardContainer;
     private PanelContainer _blankConnectionCard;
     private OptionButton _availableConnectionsButton;
+
+    /// <summary>True while rebuilding cards from model so child handlers do not re-record.</summary>
+    private bool _isSyncingUi;
     
     
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
+        _historyManager = _globalData?.HistoryManager;
         _midiManager = GetNodeOrNull<MidiManager>("/root/MidiManager");
 
         _globalSignals.ShellFocused += ShellSelected;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored += OnHistoryRestored;
         if (_midiManager != null)
             _midiManager.MidiStateChanged += OnMidiStateChanged;
 
@@ -66,11 +73,42 @@ public partial class ConnectionInspector : Control
     {
         if (_globalSignals != null)
             _globalSignals.ShellFocused -= ShellSelected;
+        if (_historyManager != null)
+            _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_midiManager != null)
             _midiManager.MidiStateChanged -= OnMidiStateChanged;
         if (_availableConnectionsButton != null)
             _availableConnectionsButton.ItemSelected -= OnConnectionSelected;
         base._ExitTree();
+    }
+
+    /// <summary>
+    /// After cue undo/redo, rebuild connection cards from the restored model.
+    /// </summary>
+    private void OnHistoryRestored(int scope)
+    {
+        if (scope != (int)HistoryManager.HistoryScope.Cue
+            && scope != (int)HistoryManager.HistoryScope.Cuelist)
+            return;
+        if (!Visible || _connectionCardContainer == null || !_connectionCardContainer.Visible)
+            return;
+
+        // Re-resolve focused cue (component list may have been replaced).
+        int focusId = _globalData?.FocusedCue ?? -1;
+        _focusedCue = focusId >= 0 ? CueList.FetchCueFromId(focusId) : null;
+        LoadConnections();
+    }
+
+    /// <summary>
+    /// Records a cue history step unless undo/redo restore or UI sync is in progress.
+    /// </summary>
+    private void RecordCueHistory(string description)
+    {
+        if (_isSyncingUi || _historyManager == null || _historyManager.IsRestoring)
+            return;
+        if (_focusedCue == null)
+            return;
+        _historyManager.RecordCueChange(_focusedCue.Id, description);
     }
 
     /// <summary>
@@ -87,79 +125,87 @@ public partial class ConnectionInspector : Control
     {
         if (!Visible || !_connectionCardContainer.Visible) return;
 
-        // Clean out existing cards
-        foreach (var child in _connectionCardContainer.GetChildren())
+        _isSyncingUi = true;
+        try
         {
-            if (child == _blankConnectionCard) continue;
-            child.QueueFree();
-        }
-        
-        // Load options button in Blank Connection Card (OSC / cue lights / session MIDI outputs).
-        _availableConnectionsButton.Clear();
-        _availableConnectionsButton.Disabled = false;
-        _availableConnectionsButton.AddItem("Select Connection");
-
-        int index = 1;
-        var availableConnections = _globalData.GetAvailableConnections();
-        foreach (var kvp in availableConnections)
-        {
-            var connectionType = (string)kvp.Value;
-            var connectionObj = kvp.Key;
-
-            if (connectionObj.Obj is CueLight cueLight)
+            // Clean out existing cards
+            foreach (var child in _connectionCardContainer.GetChildren())
             {
-                string displayText = $"{connectionType} - {cueLight.Name}";
-                _availableConnectionsButton.AddItem(displayText, index);
-                _availableConnectionsButton.SetItemMetadata(index, cueLight);
-                index++;
+                if (child == _blankConnectionCard) continue;
+                child.QueueFree();
             }
-            else if (connectionObj.Obj is CueOscConnection cueOscConnection)
+
+            // Load options button in Blank Connection Card (OSC / cue lights / session MIDI outputs).
+            _availableConnectionsButton.Clear();
+            _availableConnectionsButton.Disabled = false;
+            _availableConnectionsButton.AddItem("Select Connection");
+
+            int index = 1;
+            var availableConnections = _globalData.GetAvailableConnections();
+            foreach (var kvp in availableConnections)
             {
-                string displayText = $"{connectionType} - {cueOscConnection.Name}";
-                _availableConnectionsButton.AddItem(displayText, index);
-                _availableConnectionsButton.SetItemMetadata(index, cueOscConnection);
-                index++;
+                var connectionType = (string)kvp.Value;
+                var connectionObj = kvp.Key;
+
+                if (connectionObj.Obj is CueLight cueLight)
+                {
+                    string displayText = $"{connectionType} - {cueLight.Name}";
+                    _availableConnectionsButton.AddItem(displayText, index);
+                    _availableConnectionsButton.SetItemMetadata(index, cueLight);
+                    index++;
+                }
+                else if (connectionObj.Obj is CueOscConnection cueOscConnection)
+                {
+                    string displayText = $"{connectionType} - {cueOscConnection.Name}";
+                    _availableConnectionsButton.AddItem(displayText, index);
+                    _availableConnectionsButton.SetItemMetadata(index, cueOscConnection);
+                    index++;
+                }
+                else
+                {
+                    GD.Print($"ConnectionInspector:LoadConnections - Unsupported connection type: {connectionObj.VariantType}");
+                }
+            }
+
+            // Session MIDI outputs (string metadata "midi:DeviceName").
+            if (_midiManager != null)
+            {
+                foreach (string outName in _midiManager.SessionOutputNames)
+                {
+                    if (string.IsNullOrEmpty(outName)) continue;
+                    _availableConnectionsButton.AddItem($"MIDI Output - {outName}", index);
+                    _availableConnectionsButton.SetItemMetadata(index, "midi:" + outName);
+                    index++;
+                }
+            }
+
+            if (index == 1)
+            {
+                // Only the placeholder was added.
+                _availableConnectionsButton.Clear();
+                _availableConnectionsButton.AddItem("No available connections");
+                _availableConnectionsButton.Disabled = true;
             }
             else
             {
-                GD.Print($"ConnectionInspector:LoadConnections - Unsupported connection type: {connectionObj.VariantType}");
+                _availableConnectionsButton.Select(0);
             }
-        }
 
-        // Session MIDI outputs (string metadata "midi:DeviceName").
-        if (_midiManager != null)
-        {
-            foreach (string outName in _midiManager.SessionOutputNames)
+            // Load existing connection cards on the focused cue.
+            if (_focusedCue == null) return;
+            foreach (var component in _focusedCue.Components)
             {
-                if (string.IsNullOrEmpty(outName)) continue;
-                _availableConnectionsButton.AddItem($"MIDI Output - {outName}", index);
-                _availableConnectionsButton.SetItemMetadata(index, "midi:" + outName);
-                index++;
+                if (component is CueLightComponent cueLightComp)
+                    LoadCueLightComponentCard(cueLightComp);
+                else if (component is OscComponent oscComp)
+                    LoadOscComponentCard(oscComp);
+                else if (component is MidiOutputComponent midiOut)
+                    LoadMidiOutputComponentCard(midiOut);
             }
         }
-
-        if (index == 1)
+        finally
         {
-            // Only the placeholder was added.
-            _availableConnectionsButton.Clear();
-            _availableConnectionsButton.AddItem("No available connections");
-            _availableConnectionsButton.Disabled = true;
-        }
-        else
-        {
-            _availableConnectionsButton.Select(0);
-        }
-        
-        // Load existing connection cards on the focused cue.
-        if (_focusedCue == null) return;
-        foreach (var component in _focusedCue.Components)
-        {
-            if (component is CueLightComponent cueLightComp)
-                LoadCueLightComponentCard(cueLightComp);
-            else if (component is OscComponent oscComp)
-                LoadOscComponentCard(oscComp);
-            else if (component is MidiOutputComponent midiOut)
-                LoadMidiOutputComponentCard(midiOut);
+            _isSyncingUi = false;
         }
     }
 
@@ -185,8 +231,8 @@ public partial class ConnectionInspector : Control
 
     public void RemoveComponent(ICueComponent component)
     {
-        if (_focusedCue != null)
-            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove connection component");
+        if (_focusedCue == null || component == null) return;
+        RecordCueHistory("Remove connection component");
         _focusedCue.RemoveICueComponent(component);
         // Refresh tab content indicators (dot on Connection tab).
         _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
@@ -232,9 +278,9 @@ public partial class ConnectionInspector : Control
         { 
             try 
             {
+                if (_isSyncingUi || _historyManager?.IsRestoring == true) return;
                 if ((int)cueLightComp.Action == (int)index) return;
-                if (_focusedCue != null)
-                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue light action");
+                RecordCueHistory("Edit cue light action");
                 cueLightComp.Action = (CueLightAction)index; 
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated action for CueLightComponent in Cue {_focusedCue.Id} to {cueLightComp.Action}", 0); 
             } 
@@ -247,6 +293,7 @@ public partial class ConnectionInspector : Control
         // Handle countInLineEdit changes (optional, but for completeness) 
         countInLineEdit.TextSubmitted += (string newText) =>
         {
+            if (_isSyncingUi || _historyManager?.IsRestoring == true) return;
             var time = UiUtilities.ParseAndFormatTime(newText, out var seconds, out bool isValid);
             if (!isValid || string.IsNullOrEmpty(time))
             {
@@ -258,8 +305,7 @@ public partial class ConnectionInspector : Control
 
             if (Math.Abs(cueLightComp.CountInTime - (float)seconds) >= 1e-6f)
             {
-                if (_focusedCue != null)
-                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue light count-in");
+                RecordCueHistory("Edit cue light count-in");
                 cueLightComp.CountInTime = (float)seconds;
             }
 
@@ -269,6 +315,7 @@ public partial class ConnectionInspector : Control
         };
         countInLineEdit.FocusExited += () =>
         {
+            if (_isSyncingUi || _historyManager?.IsRestoring == true) return;
             var time = UiUtilities.ParseAndFormatTime(countInLineEdit.Text, out var seconds, out bool isValid);
             if (!isValid || string.IsNullOrEmpty(time))
             {
@@ -278,8 +325,7 @@ public partial class ConnectionInspector : Control
 
             if (Math.Abs(cueLightComp.CountInTime - (float)seconds) >= 1e-6f)
             {
-                if (_focusedCue != null)
-                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit cue light count-in");
+                RecordCueHistory("Edit cue light count-in");
                 cueLightComp.CountInTime = (float)seconds;
             }
 
@@ -291,8 +337,8 @@ public partial class ConnectionInspector : Control
         { 
             try 
             {
-                if (_focusedCue != null)
-                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove cue light component");
+                if (_focusedCue == null || _isSyncingUi || _historyManager?.IsRestoring == true) return;
+                RecordCueHistory("Remove cue light component");
                 _focusedCue.Components.Remove(cueLightComp); 
                 _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed CueLightComponent from Cue {_focusedCue.Id}", 0); 
                 LoadConnections();
@@ -308,6 +354,9 @@ public partial class ConnectionInspector : Control
     private void OnConnectionSelected(long selectedIndex)
     {
         if (selectedIndex < 0 || _availableConnectionsButton == null) return;
+        if (_isSyncingUi || _historyManager?.IsRestoring == true) return;
+        if (_focusedCue == null) return;
+
         var selectedMetadata = _availableConnectionsButton.GetItemMetadata((int)selectedIndex);
 
         // MIDI outputs use string metadata "midi:DeviceName".
@@ -317,9 +366,9 @@ public partial class ConnectionInspector : Control
             if (meta != null && meta.StartsWith("midi:", StringComparison.Ordinal))
             {
                 string deviceName = meta.Substring("midi:".Length);
-                if (_focusedCue != null && !string.IsNullOrEmpty(deviceName))
+                if (!string.IsNullOrEmpty(deviceName))
                 {
-                    _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add MIDI output component");
+                    RecordCueHistory("Add MIDI output component");
                     var midiComp = new MidiOutputComponent
                     {
                         OutputDeviceName = deviceName,
@@ -343,8 +392,7 @@ public partial class ConnectionInspector : Control
         if (selectedObj is CueLight selectedCueLight)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: Cue Light - {selectedCueLight.Name}", 0);
-            if (_focusedCue != null)
-                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add cue light component");
+            RecordCueHistory("Add cue light component");
             var cueLightComponent = new CueLightComponent { CueLight = selectedCueLight, CueLightId = selectedCueLight.Id };
             _focusedCue.AddICueComponent(cueLightComponent);
             LoadConnections();
@@ -353,8 +401,7 @@ public partial class ConnectionInspector : Control
         else if (selectedObj is CueOscConnection selectedOscConnection)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Selected connection: OSC Connection - {selectedOscConnection.Name}", 0);
-            if (_focusedCue != null)
-                _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add OSC component");
+            RecordCueHistory("Add OSC component");
             var oscComponent = new OscComponent { OscConnection = selectedOscConnection, OscConnectionId = selectedOscConnection.Id };
             _focusedCue.AddICueComponent(oscComponent);
             LoadConnections();
