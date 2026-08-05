@@ -194,38 +194,54 @@ public partial class GlobalSignals : Node
 	private readonly Dictionary<TextEdit, Control.GuiInputEventHandler> _textEditHooks = new();
 
 	/// <summary>
+	/// OptionButtons that swallow Space so they do not open/close via ui_accept Space
+	/// (Space is reserved for the Go InputMap action).
+	/// </summary>
+	private readonly Dictionary<OptionButton, Control.GuiInputEventHandler> _optionButtonHooks = new();
+
+	/// <summary>
 	/// Scans the tree for LineEdit/TextEdit and wires focus + Esc (and Enter unfocus for LineEdit).
 	/// Focus signals drive <see cref="InputActionsListener"/> so typing does not fire hotkeys.
+	/// Also wires OptionButtons so Space does not open the dropdown (Go uses Space).
 	/// </summary>
 	public override void _Ready()
 	{
-		// Scan for existing text fields at startup
-		ScanForTextFields(GetTree().Root);
+		// Scan for existing text fields / OptionButtons at startup
+		ScanForUiKeyboardPolicy(GetTree().Root);
 
 		// Listen for new nodes added dynamically (inspectors, settings cards, SpinBox embeds, etc.)
 		GetTree().NodeAdded += OnNodeAdded;
 		GetTree().NodeRemoved += OnNodeRemoved;
 	}
 
-	private void ScanForTextFields(Node node)
+	/// <summary>
+	/// Recursively wires keyboard policy for text fields and OptionButtons under <paramref name="node"/>.
+	/// </summary>
+	private void ScanForUiKeyboardPolicy(Node node)
 	{
 		if (node is LineEdit or TextEdit)
 			ConnectFocusSignals(node);
+		else if (node is OptionButton optionButton)
+			ConnectOptionButtonSpaceBlock(optionButton);
 
 		foreach (Node child in node.GetChildren())
-			ScanForTextFields(child);
+			ScanForUiKeyboardPolicy(child);
 	}
 
 	private void OnNodeAdded(Node node)
 	{
 		if (node is LineEdit or TextEdit)
 			ConnectFocusSignals(node);
+		else if (node is OptionButton optionButton)
+			ConnectOptionButtonSpaceBlock(optionButton);
 	}
 
 	private void OnNodeRemoved(Node node)
 	{
 		if (node is LineEdit or TextEdit)
 			DisconnectFocusSignals(node);
+		else if (node is OptionButton optionButton)
+			DisconnectOptionButtonSpaceBlock(optionButton);
 	}
 
 	/// <summary>
@@ -335,6 +351,71 @@ public partial class GlobalSignals : Node
 
 		// Belt-and-braces: submit can race with engine re-focus on the same frame.
 		lineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+	}
+
+	/// <summary>
+	/// Prevents OptionButton from treating Space as ui_accept (open/close dropdown).
+	/// Mouse click and Enter still work. Space remains available for the Go action.
+	/// </summary>
+	/// <remarks>
+	/// Godot emits <see cref="Control.GuiInput"/> before BaseButton's virtual
+	/// <c>_gui_input</c>; marking the event handled here stops the built-in activation.
+	/// <see cref="Input.IsActionJustPressed"/> still sees Space for InputMap.
+	/// </remarks>
+	private void ConnectOptionButtonSpaceBlock(OptionButton optionButton)
+	{
+		if (optionButton == null || !GodotObject.IsInstanceValid(optionButton))
+			return;
+		if (_optionButtonHooks.ContainsKey(optionButton))
+			return;
+
+		Control.GuiInputEventHandler gui = @event => OnOptionButtonGuiInput(optionButton, @event);
+		optionButton.GuiInput += gui;
+		_optionButtonHooks[optionButton] = gui;
+	}
+
+	/// <summary>
+	/// Removes Space-block handler when an OptionButton leaves the tree.
+	/// </summary>
+	private void DisconnectOptionButtonSpaceBlock(OptionButton optionButton)
+	{
+		if (optionButton == null)
+			return;
+		if (!_optionButtonHooks.TryGetValue(optionButton, out var gui))
+			return;
+
+		if (GodotObject.IsInstanceValid(optionButton))
+			optionButton.GuiInput -= gui;
+		_optionButtonHooks.Remove(optionButton);
+	}
+
+	/// <summary>
+	/// Swallows Space on a focused OptionButton so the popup does not toggle.
+	/// </summary>
+	private static void OnOptionButtonGuiInput(OptionButton optionButton, InputEvent @event)
+	{
+		if (optionButton == null || !GodotObject.IsInstanceValid(optionButton))
+			return;
+		if (!IsSpaceKeyPressed(@event))
+			return;
+
+		// Do not open/close the list on Space. Leave the key for app Go (and do not activate).
+		optionButton.AcceptEvent();
+	}
+
+	/// <summary>
+	/// True when Space was just pressed (ignores key-repeat and modifiers are allowed).
+	/// </summary>
+	private static bool IsSpaceKeyPressed(InputEvent @event)
+	{
+		if (@event is not InputEventKey key || !key.Pressed || key.Echo)
+			return false;
+
+		// Prefer physical/key codes; unicode 32 covers some layouts.
+		return key.Keycode == Key.Space
+			|| key.PhysicalKeycode == Key.Space
+			|| key.KeyLabel == Key.Space
+			|| key.Unicode == 32;
 	}
 
 	private void FocusEntered()

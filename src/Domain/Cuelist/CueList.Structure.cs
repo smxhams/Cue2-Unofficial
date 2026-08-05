@@ -216,13 +216,16 @@ public partial class CueList
 	/// <summary>
 	/// Creates one or more cues from dropped media files and inserts them according to the given parameters.
 	/// This is the main entry point for file drag-and-drop cue creation.
-	/// Supports single/multiple files, audio/video/images, group wrapping, and precise insert positions.
+	/// Supports single/multiple files, audio/video/images, group wrapping, parent-per-file, and precise insert positions.
 	/// </summary>
 	/// <param name="files">Full paths to valid media files.</param>
 	/// <param name="targetCueId">If dropping relative to a specific cue/shell, its ID; otherwise -1.</param>
 	/// <param name="insertMode">Desired position relative to target (ignored or treated as AtEnd if no target).</param>
-	/// <param name="asGroup">When true and multiple files, wrap the created cues inside a new parent group cue.</param>
-	public void CreateCuesFromDroppedFiles(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
+	/// <param name="multiFileMode">
+	/// Structure for multiple files. Single-file drops always create one media cue
+	/// (modes other than <see cref="MultiFileDropMode.SeparateCues"/> are ignored when <paramref name="files"/> has one path).
+	/// </param>
+	public void CreateCuesFromDroppedFiles(string[] files, int targetCueId, DropInsertMode insertMode, MultiFileDropMode multiFileMode = MultiFileDropMode.SeparateCues)
 	{
 		if (BlockIfShowMode("create cues from dropped files") || BlockIfBulkBusy("create cues from dropped files")) return;
 		if (files == null || files.Length == 0) return;
@@ -232,11 +235,15 @@ public partial class CueList
 		var mediaEngine = GetNodeOrNull<MediaEngine>("/root/MediaEngine");
 		var newCues = new List<Cue>();
 		Cue groupCue = null;
+		Cue firstParentForFocus = null;
 
 		// Determine insertion base location once
 		var (targetContainer, baseInsertIndex, parentIdForNew) = ResolveInsertLocation(targetCueId, insertMode);
 
-		if (asGroup && files.Length > 1)
+		bool useSingleGroup = multiFileMode == MultiFileDropMode.WrapInOneGroup && files.Length > 1;
+		bool useParentPerFile = multiFileMode == MultiFileDropMode.ParentPerFile && files.Length > 1;
+
+		if (useSingleGroup)
 		{
 			// Create a wrapper group cue first (shell defaults, then override display name)
 			groupCue = new Cue();
@@ -244,7 +251,7 @@ public partial class CueList
 			groupCue.Name = $"Group ({files.Length} files)";
 			groupCue.CueNum = groupCue.Id.ToString();
 
-			var groupShell = CreateShellAndInsert(groupCue, targetContainer, baseInsertIndex, parentIdForNew);
+			CreateShellAndInsert(groupCue, targetContainer, baseInsertIndex, parentIdForNew);
 			newCues.Add(groupCue);
 
 			// Subsequent children go into the group's child container, at end of it
@@ -261,10 +268,48 @@ public partial class CueList
 		{
 			if (!File.Exists(filePath)) continue;
 
+			string baseName = Path.GetFileNameWithoutExtension(filePath);
+			if (string.IsNullOrWhiteSpace(baseName))
+				baseName = null;
+
+			// Optional empty parent for ParentPerFile mode (2 cues per file)
+			Cue perFileParent = null;
+			VBoxContainer mediaContainer = targetContainer;
+			int mediaInsertIndex;
+			int mediaParentId = parentIdForNew;
+
+			if (useParentPerFile)
+			{
+				perFileParent = new Cue();
+				_globalData?.Settings?.ApplyShellDefaults(perFileParent);
+				perFileParent.Name = baseName ?? $"Cue {perFileParent.Id}";
+				perFileParent.CueNum = perFileParent.Id.ToString();
+
+				CreateShellAndInsert(perFileParent, targetContainer, currentIndex, parentIdForNew);
+				newCues.Add(perFileParent);
+				firstParentForFocus ??= perFileParent;
+
+				// Next sibling parent inserts after this parent shell
+				currentIndex = (perFileParent.ShellBar?.GetIndex() ?? currentIndex) + 1;
+
+				mediaContainer = perFileParent.ShellBar?.ShellChildContainer ?? targetContainer;
+				mediaInsertIndex = mediaContainer.GetChildCount();
+				mediaParentId = perFileParent.Id;
+				perFileParent.Expanded = true;
+			}
+			else if (useSingleGroup)
+			{
+				// Always append inside the shared group
+				mediaInsertIndex = mediaContainer.GetChildCount();
+			}
+			else
+			{
+				mediaInsertIndex = currentIndex;
+			}
+
 			var cue = new Cue();
 			_globalData?.Settings?.ApplyShellDefaults(cue);
-			string baseName = Path.GetFileNameWithoutExtension(filePath);
-			cue.Name = string.IsNullOrWhiteSpace(baseName) ? $"Cue {cue.Id}" : baseName;
+			cue.Name = baseName ?? $"Cue {cue.Id}";
 			cue.CueNum = cue.Id.ToString();
 
 			// Add the appropriate component
@@ -287,18 +332,24 @@ public partial class CueList
 			}
 			else
 			{
-				continue; // should have been filtered
+				// Should have been filtered; drop orphan empty parent if we already inserted one
+				if (perFileParent != null)
+				{
+					int orphanIndex = perFileParent.ShellBar?.GetIndex() ?? -1;
+					if (orphanIndex >= 0 && orphanIndex < currentIndex)
+						currentIndex = orphanIndex;
+					RemoveCue(perFileParent);
+					newCues.Remove(perFileParent);
+					if (firstParentForFocus == perFileParent)
+						firstParentForFocus = null;
+				}
+				continue;
 			}
 
-			// For children inside a just-created group, always append to keep order simple
-			int useIndex = (groupCue != null && parentIdForNew == groupCue.Id)
-				? targetContainer.GetChildCount()
-				: currentIndex;
+			CreateShellAndInsert(cue, mediaContainer, mediaInsertIndex, mediaParentId);
 
-			var shell = CreateShellAndInsert(cue, targetContainer, useIndex, parentIdForNew);
-
-			// Advance only for non-group-child sequential inserts
-			if (!(groupCue != null && parentIdForNew == groupCue.Id))
+			// Advance sibling insert index for separate (non-group, non parent-per-file) mode
+			if (!useSingleGroup && !useParentPerFile)
 			{
 				currentIndex = targetContainer.GetChildCount();
 			}
@@ -307,6 +358,10 @@ public partial class CueList
 
 			// Kick off async metadata + waveform (fire and forget with logging)
 			_ = ApplyMetadataToNewCueAsync(cue, filePath, mediaEngine);
+
+			// Parent duration depends on child media
+			if (perFileParent != null)
+				perFileParent.CalculateTotalDuration();
 		}
 
 		if (newCues.Count == 0)
@@ -315,8 +370,8 @@ public partial class CueList
 			return;
 		}
 
-		// Optionally select the first newly created cue (or the group if we made one)
-		var cueToFocus = groupCue ?? newCues.FirstOrDefault();
+		// Optionally select the first newly created top-level structure (group, first parent, or first cue)
+		var cueToFocus = groupCue ?? firstParentForFocus ?? newCues.FirstOrDefault();
 		MaybeSelectNewCue(cueToFocus);
 
 		// Recalculate durations for affected area (simple: recalc the new ones + parents)
@@ -326,10 +381,15 @@ public partial class CueList
 		}
 		if (groupCue != null) groupCue.CalculateTotalDuration();
 
+		string structureNote = useSingleGroup
+			? " (grouped)"
+			: useParentPerFile
+				? " (parent per file)"
+				: "";
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-			$"CueList: Created {newCues.Count} cue(s) from drop" + (groupCue != null ? " (grouped)" : ""), (int)LogType.Info);
+			$"CueList: Created {newCues.Count} cue(s) from drop{structureNote}", (int)LogType.Info);
 
-		GD.Print($"CueList:CreateCuesFromDroppedFiles - Created {newCues.Count} cue(s).");
+		GD.Print($"CueList:CreateCuesFromDroppedFiles - Created {newCues.Count} cue(s){structureNote}.");
 	}
 
 	/// <summary>

@@ -38,7 +38,13 @@ public partial class AudioOutputPatch : Godot.GodotObject
     // <Device name, device output channnel, list of audio channel ID's>>
     public System.Collections.Generic.Dictionary<int, string> Channels { get; set; } // List of audio channels>
     private int _channelId { get; set; } = 0;
-    public float Volume { get; set; } = 1.0f; // Master volume of patch
+    /// <summary>
+    /// Patch sub-master gain applied to all routed audio on this patch (linear 0…1).
+    /// Multiplied after cue/component volume and before device outputs in the mix path.
+    /// Default 1.0 (0 dB).
+    /// </summary>
+    /// <value>Linear amplitude scale; 1.0 = unity, 0 = silence.</value>
+    public float Volume { get; set; } = 1.0f;
 
 
     /// <summary>

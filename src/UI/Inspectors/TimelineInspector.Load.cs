@@ -605,7 +605,8 @@ public partial class TimelineInspector
 
     /// <summary>
     /// One playback segment length for display (not × playcount / not infinite span).
-    /// For looping cues this is a single cycle; for finite cues the full content duration.
+    /// For looping cues this is a single cycle; for finite cues the full content duration
+    /// (includes nested children when they extend the parent).
     /// </summary>
     private static double GetBarDisplayDurationSeconds(Cue cue)
     {
@@ -613,6 +614,77 @@ public partial class TimelineInspector
         if (!IsInfiniteLoopCue(cue))
             return Math.Max(0, cue.Duration);
         return GetSingleCycleDurationSeconds(cue);
+    }
+
+    /// <summary>
+    /// Duration of this cue's own audio/video content only (excludes nested children).
+    /// Used to size the waveform so child-extended parent bars do not stretch peaks.
+    /// </summary>
+    /// <returns>
+    /// Linear seconds of own media (including play-count for finite audio/video),
+    /// <c>-1</c> if own media loops indefinitely, or <c>0</c> if no media.
+    /// </returns>
+    private static double GetCueOwnMediaDurationSeconds(Cue cue)
+    {
+        if (cue == null) return 0;
+
+        double contents = 0;
+        bool hasMedia = false;
+
+        var audio = cue.GetAudioComponent();
+        if (audio != null)
+        {
+            hasMedia = true;
+            if (audio.Loop)
+                return -1;
+            // Prefer TotalDuration (segment × play count); fall back to Duration × PlayCount.
+            double audioDur = audio.TotalDuration;
+            if (audioDur <= 1e-9 && audio.Duration > 0)
+                audioDur = audio.Duration * Math.Max(1, audio.PlayCount);
+            if (audioDur > contents)
+                contents = audioDur;
+        }
+
+        var video = cue.GetVideoComponent();
+        if (video != null)
+        {
+            hasMedia = true;
+            if (video.Loop || video.TotalDuration < 0)
+                return -1;
+            double videoDur = video.TotalDuration;
+            if (videoDur <= 1e-9 && video.Duration > 0)
+                videoDur = video.Duration * Math.Max(1, video.PlayCount);
+            if (videoDur > contents)
+                contents = videoDur;
+        }
+
+        if (!hasMedia)
+            return 0;
+        return Math.Max(0, contents);
+    }
+
+    /// <summary>
+    /// Pixel width for the in-bar waveform control at the current zoom.
+    /// Matches own-media time scale; clamped to the bar so it never overflows.
+    /// </summary>
+    /// <param name="cue">Cue that owns the media waveform.</param>
+    /// <param name="barDisplayWidth">Full bar width in pixels (may include child extension).</param>
+    /// <returns>Width in pixels for the waveform layer (0 if no drawable media span).</returns>
+    private float ComputeWaveformDisplayWidth(Cue cue, float barDisplayWidth)
+    {
+        if (cue == null || barDisplayWidth <= 0.5f || _scale <= 1e-6f)
+            return 0f;
+
+        double mediaDur = GetCueOwnMediaDurationSeconds(cue);
+        // Own infinite loop: one display cycle (matches forced PlayCount = 1 on the wave).
+        if (mediaDur < 0)
+            mediaDur = GetSingleCycleDurationSeconds(cue);
+
+        if (mediaDur <= 1e-9)
+            return 0f;
+
+        float waveW = (float)(mediaDur * _scale);
+        return Mathf.Clamp(waveW, 0f, barDisplayWidth);
     }
 
     /// <summary>

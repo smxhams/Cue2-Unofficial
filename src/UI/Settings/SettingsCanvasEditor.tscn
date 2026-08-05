@@ -357,6 +357,26 @@ size_flags_horizontal = 3
 placeholder_text = "Height"
 alignment = 1
 
+[node name="CanvasTestPatternRow" type="HBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/CanvasProps" unique_id=1847118720]
+layout_mode = 2
+
+[node name="CanvasTestPatternCheckBox" type="CheckBox" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/CanvasProps/CanvasTestPatternRow" unique_id=1847118721]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+text = "Test Pattern"
+
+[node name="CanvasTestPatternResetButton" type="Button" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent/CanvasProps/CanvasTestPatternRow" unique_id=1847118722]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
 [node name="OutputProps" type="VBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/RightPanel/RightVBox/PropsScroll/PropsContent" unique_id=546475739]
 unique_name_in_owner = true
 visible = false

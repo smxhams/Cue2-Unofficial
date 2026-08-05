@@ -584,7 +584,8 @@ public partial class OscListen : Node
                 if (_replySender == null || _replySenderKey != key)
                 {
                     CloseReplySenderUnlocked();
-                    _replySender = new OscSender(host, port);
+                    // Ephemeral local port — never bind the listen port for outbound replies.
+                    _replySender = new OscSender(host, localPort: 0, port);
                     _replySender.Connect();
                     _replySenderKey = key;
                 }
@@ -806,9 +807,16 @@ public partial class OscListen : Node
                 if (receiver == null) break;
                 OscPacket packet = receiver.Receive();
                 if (!_running) break;
+                if (packet == null) continue;
+
+                if (packet.Error != OscPacketError.None)
+                {
+                    EnqueueMonitorLine($"— UDP parse error: {packet.ErrorMessage}");
+                    continue;
+                }
 
                 IPEndPoint origin = null;
-                try { origin = packet?.Origin; }
+                try { origin = packet.Origin; }
                 catch { /* older Rug.Osc */ }
 
                 EnqueuePacket(packet, origin);
@@ -816,9 +824,20 @@ public partial class OscListen : Node
             catch (Exception ex)
             {
                 if (!_running) break;
+
+                // Rug.Osc throws on Close() — expected shutdown path.
+                string msg = ex.Message ?? string.Empty;
+                if (msg.IndexOf("disconnected", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("closed", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("SocketIsClosed", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    break;
+                }
+
+                // Transient wait/parse errors must not kill the UDP listener for the session.
                 GD.PrintErr($"OscListen:ReceiveLoopUdp - {ex.Message}");
                 EnqueueMonitorLine($"— UDP receive error: {ex.Message}");
-                break;
+                try { Thread.Sleep(25); } catch { /* ignore */ }
             }
         }
     }

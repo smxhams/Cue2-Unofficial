@@ -262,13 +262,13 @@ public partial class ActiveCue
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = Path.GetFileName(audioComponent.AudioFile);
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
             timeLabel.Text = UiUtilities.FormatTime(audioComponent.TotalDuration);
             
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Audio2", "AtlasIcons");
+            typeIcon.Texture = _activeCueBar.GetThemeIcon("Audio2", "AtlasIcons");
             // If cue is already paused (global pause during setup), show resume icon.
             pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
@@ -462,7 +462,7 @@ public partial class ActiveCue
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = Path.GetFileName(videoComponent.VideoFile);
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
@@ -474,12 +474,12 @@ public partial class ActiveCue
             // Prefer Image icon when available; fall back to Video.
             try
             {
-                typeIcon.Icon = _activeCueBar.GetThemeIcon(
+                typeIcon.Texture = _activeCueBar.GetThemeIcon(
                     videoComponent.IsImage ? "Image" : "Video", "AtlasIcons");
             }
             catch
             {
-                typeIcon.Icon = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
+                typeIcon.Texture = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
             }
             pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
@@ -672,7 +672,7 @@ public partial class ActiveCue
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = textComponent.GetDisplayLabel();
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             var pauseButton = componentPanel.GetNode<Button>("%ComponentPause");
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
@@ -684,13 +684,13 @@ public partial class ActiveCue
 
             try
             {
-                typeIcon.Icon = _activeCueBar.GetThemeIcon("Text", "AtlasIcons");
+                typeIcon.Texture = _activeCueBar.GetThemeIcon("Text", "AtlasIcons");
             }
             catch
             {
                 try
                 {
-                    typeIcon.Icon = _activeCueBar.GetThemeIcon("Label", "AtlasIcons");
+                    typeIcon.Texture = _activeCueBar.GetThemeIcon("Label", "AtlasIcons");
                 }
                 catch
                 {
@@ -892,13 +892,13 @@ public partial class ActiveCue
             _componentContainer.AddChild(componentPanel);
             var labelText = $"{cueLightComponent.CueLight.Name} : {cueLightComponent.Action.ToString()}";
             componentPanel.GetNode<Label>("%ComponentLabel").Text = labelText;
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree(); // No pause implemented
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             var timeLabel = componentPanel.GetNode<Label>("%ComponentTime");
             timeLabel.Text = UiUtilities.FormatTime(cueLightComponent.CountInTime);
             
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+            typeIcon.Texture = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
             
             _activeCueLightComponents.Add(componentPanel, cueLightComponent);
@@ -951,9 +951,9 @@ public partial class ActiveCue
                         : oscComponent.OscMessage;
                     missingLabel.Text = $"[Missing OSC] {msg}";
                 }
-                var typeIconMissing = missingPanel.GetNodeOrNull<Button>("%ComponentIcon");
+                var typeIconMissing = missingPanel.GetNodeOrNull<TextureRect>("%ComponentIcon");
                 if (typeIconMissing != null && _activeCueBar != null)
-                    typeIconMissing.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+                    typeIconMissing.Texture = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
                 missingPanel.GetNodeOrNull<Button>("%ComponentPause")?.QueueFree();
                 var stopMissing = missingPanel.GetNodeOrNull<Button>("%ComponentStop");
                 missingPanel.GetNodeOrNull<Label>("%ComponentTime")?.QueueFree();
@@ -972,11 +972,11 @@ public partial class ActiveCue
             string connName = oscComponent.OscConnection.Name ?? "OSC";
             string path = oscComponent.OscMessage ?? string.Empty;
             componentPanel.GetNode<Label>("%ComponentLabel").Text = $"{connName} : {path}";
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree(); // No pause implemented
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
-            typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+            typeIcon.Texture = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
             
             _activeOscComponents.Add(componentPanel, oscComponent);
@@ -1005,13 +1005,13 @@ public partial class ActiveCue
             PanelContainer componentPanel = _componentProgressBarScene.Instantiate<PanelContainer>();
             _componentContainer.AddChild(componentPanel);
             componentPanel.GetNode<Label>("%ComponentLabel").Text = midiComponent.GetDisplaySummary();
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree();
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
             try
             {
-                typeIcon.Icon = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
+                typeIcon.Texture = _activeCueBar.GetThemeIcon("Connection", "AtlasIcons");
             }
             catch { /* optional */ }
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
@@ -1047,7 +1047,7 @@ public partial class ActiveCue
             componentPanel.GetNode<Label>("%ComponentLabel").Text =
                 $"{ControlComponent.GetActionDisplayName(controlComponent.Action)} → {targetLabel}";
 
-            var typeIcon = componentPanel.GetNode<Button>("%ComponentIcon");
+            var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree();
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
             componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
@@ -1061,7 +1061,7 @@ public partial class ActiveCue
                 ControlAction.StartNow => "Skip",
                 _ => "Play"
             };
-            typeIcon.Icon = _activeCueBar.GetThemeIcon(iconName, "AtlasIcons");
+            typeIcon.Texture = _activeCueBar.GetThemeIcon(iconName, "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
             _activeControlComponents.Add(componentPanel, controlComponent);

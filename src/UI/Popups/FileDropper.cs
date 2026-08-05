@@ -49,6 +49,24 @@ public enum DropInsertMode
 }
 
 /// <summary>
+/// How multiple dropped media files should be turned into cues.
+/// </summary>
+public enum MultiFileDropMode
+{
+    /// <summary>One top-level (or sibling) cue per file with media on that cue.</summary>
+    SeparateCues = 0,
+
+    /// <summary>One empty group parent; each file is a child cue with media.</summary>
+    WrapInOneGroup = 1,
+
+    /// <summary>
+    /// For each file: create an empty parent cue and a single child cue that holds the media component
+    /// (2 cues per file).
+    /// </summary>
+    ParentPerFile = 2
+}
+
+/// <summary>
 /// User choices returned from the file drop confirmation popup.
 /// </summary>
 public class FileDropChoices
@@ -57,9 +75,25 @@ public class FileDropChoices
     public DropInsertMode InsertMode { get; set; } = DropInsertMode.Below;
 
     /// <summary>
-    /// For multiple files: if true, create a single Group cue and place the per-file cues as its children.
+    /// For multiple files: how to structure the created cues.
+    /// Ignored when only one file is dropped.
     /// </summary>
-    public bool CreateAsGroup { get; set; } = false;
+    public MultiFileDropMode MultiFileMode { get; set; } = MultiFileDropMode.SeparateCues;
+
+    /// <summary>
+    /// Legacy convenience: true when <see cref="MultiFileMode"/> is <see cref="MultiFileDropMode.WrapInOneGroup"/>.
+    /// </summary>
+    public bool CreateAsGroup
+    {
+        get => MultiFileMode == MultiFileDropMode.WrapInOneGroup;
+        set
+        {
+            if (value)
+                MultiFileMode = MultiFileDropMode.WrapInOneGroup;
+            else if (MultiFileMode == MultiFileDropMode.WrapInOneGroup)
+                MultiFileMode = MultiFileDropMode.SeparateCues;
+        }
+    }
 }
 
 // ===========================
@@ -85,12 +119,15 @@ public class FileDropChoices
 //
 // 6. Multiple files (any valid mix of audio/video) dropped on CueList background:
 //    - SHOW popup.
-//    - Options: "separate cues" (default) or "wrap in one Group cue".
+//    - Options:
+//        a) separate cues (default) — N media cues
+//        b) wrap all in one Group — 1 empty parent + N media children
+//        c) each file under own parent — 2N cues (empty parent + media child per file)
 //    - Insert at end / after selection.
 //
 // 7. Multiple files dropped over a specific ShellBar:
-//    - SHOW popup with BOTH position choices + separate-vs-group.
-//    - Creates N cues (or 1 group + N children) inserted at chosen relation to target.
+//    - SHOW popup with BOTH position choices + multi-file structure options.
+//    - Creates N / 1+N / 2N cues inserted at chosen relation to target.
 //
 // 8. Mixed valid + invalid files in one drop:
 //    - Silently filter to only supported extensions (audio + video + images as video).
@@ -239,7 +276,7 @@ public partial class FileDropper : Control
         {
             GD.Print("FileDropper: Auto-creating single cue from list drop (no popup).");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"FileDropper: Creating cue from dropped file: {Path.GetFileName(validFiles[0])}", (int)LogType.Info);
-            CreateCuesFromDrop(validFiles.ToArray(), targetCueId: -1, DropInsertMode.AtEnd, asGroup: false);
+            CreateCuesFromDrop(validFiles.ToArray(), targetCueId: -1, DropInsertMode.AtEnd, MultiFileDropMode.SeparateCues);
             return;
         }
 
@@ -282,7 +319,7 @@ public partial class FileDropper : Control
         string[] files = _pendingDropFiles;
         int targetId = _pendingTargetCueId;
         var mode = choices.InsertMode;
-        bool asGroup = choices.CreateAsGroup;
+        var multiMode = choices.MultiFileMode;
 
         if (_activeFileDropPopup != null)
         {
@@ -298,8 +335,8 @@ public partial class FileDropper : Control
             return;
         }
 
-        GD.Print($"FileDropper: Popup confirmed. mode={mode}, asGroup={asGroup}, target={targetId}, count={files.Length}");
-        CreateCuesFromDrop(files, targetId, mode, asGroup);
+        GD.Print($"FileDropper: Popup confirmed. mode={mode}, multiMode={multiMode}, target={targetId}, count={files.Length}");
+        CreateCuesFromDrop(files, targetId, mode, multiMode);
     }
 
     private void OnPopupCancelled()
@@ -423,7 +460,7 @@ public partial class FileDropper : Control
     /// Creates cues from dropped files using the supplied parameters.
     /// Delegates to CueList.
     /// </summary>
-    private void CreateCuesFromDrop(string[] files, int targetCueId, DropInsertMode insertMode, bool asGroup)
+    private void CreateCuesFromDrop(string[] files, int targetCueId, DropInsertMode insertMode, MultiFileDropMode multiFileMode)
     {
         if (files == null || files.Length == 0) return;
 
@@ -433,7 +470,7 @@ public partial class FileDropper : Control
             return;
         }
 
-        _globalData.Cuelist.CreateCuesFromDroppedFiles(files, targetCueId, insertMode, asGroup);
+        _globalData.Cuelist.CreateCuesFromDroppedFiles(files, targetCueId, insertMode, multiFileMode);
     }
 
     // --- Helpers ---

@@ -63,7 +63,49 @@ public partial class SettingsCanvasEditor
         _isUpdatingProps = true;
         _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
         _canvasSizeYLineEdit.Text = _canvas.CanvasSize.Y.ToString();
+        _canvasTestPatternCheckBox.ButtonPressed = _canvas.TestPatternEnabled;
+        UpdateCanvasResetButtons();
         _isUpdatingProps = false;
+    }
+
+    /// <summary>
+    /// Shows reset affordances for canvas properties that differ from defaults.
+    /// </summary>
+    private void UpdateCanvasResetButtons()
+    {
+        if (_canvas == null)
+            return;
+
+        SetResetVisible(_canvasTestPatternResetButton, _canvas.TestPatternEnabled != DefaultTestPattern,
+            "Reset to default: Off");
+    }
+
+    /// <summary>
+    /// Enables or disables the full-canvas test pattern from canvas properties.
+    /// </summary>
+    /// <param name="toggled">New checkbox state.</param>
+    private void OnCanvasTestPatternToggled(bool toggled)
+    {
+        if (_isUpdatingProps || _canvas == null)
+            return;
+        if (_canvas.TestPatternEnabled == toggled)
+            return;
+
+        RecordDisplaysHistory(toggled ? "Enable canvas test pattern" : "Disable canvas test pattern");
+        _displaysManager.ToggleCanvasTestPattern(toggled);
+        UpdateCanvasResetButtons();
+    }
+
+    /// <summary>
+    /// Resets canvas test pattern to off (default).
+    /// </summary>
+    private void OnCanvasTestPatternResetPressed()
+    {
+        if (_canvas == null)
+            return;
+        RecordDisplaysHistory("Reset canvas test pattern");
+        _displaysManager.ToggleCanvasTestPattern(DefaultTestPattern);
+        LoadCanvasProps();
     }
 
     private void LoadScreenProps()

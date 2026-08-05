@@ -110,6 +110,7 @@ public partial class VideoOutputDevice : Window, IDisposable
     private ColorRect _blackoutOverlay;
 
     private TestPattern _testPattern;
+    private TestPattern _canvasTestPattern;
     private Dictionary<int, TestPattern> _layerTestPatterns = new();
     
     private PackedScene _displayLayerPackedScene = SceneLoader.LoadPackedScene("uid://dwnssjgckgb8p", out _);
@@ -1121,6 +1122,59 @@ public partial class VideoOutputDevice : Window, IDisposable
     }
 
     /// <summary>
+    /// Shows, updates, or removes the canvas-wide test pattern slice for this output.
+    /// </summary>
+    /// <param name="enable">True to show/update; false to remove.</param>
+    /// <param name="rect">Rect in this output's local coordinates (typically full canvas size,
+    /// positioned so the pattern origin aligns with canvas (0,0)).</param>
+    /// <param name="label">Display name drawn on the pattern (e.g. "Canvas").</param>
+    public void SetCanvasTestPattern(bool enable, Rect2 rect, string label = "Canvas")
+    {
+        if (enable)
+        {
+            Vector2I size = (Vector2I)rect.Size;
+            Vector2I pos = (Vector2I)rect.Position;
+            string name = string.IsNullOrEmpty(label) ? "Canvas" : label;
+            if (_canvasTestPattern == null || !GodotObject.IsInstanceValid(_canvasTestPattern))
+            {
+                _canvasTestPattern = new TestPattern(size, pos, name);
+                AddChild(_canvasTestPattern);
+            }
+            else
+            {
+                _canvasTestPattern.ApplyLayout(size, pos, name);
+            }
+        }
+        else
+        {
+            RemoveCanvasTestPattern();
+        }
+    }
+
+    /// <summary>
+    /// Removes the canvas-wide test pattern if present.
+    /// </summary>
+    public void RemoveCanvasTestPattern()
+    {
+        if (_canvasTestPattern == null)
+            return;
+
+        if (GodotObject.IsInstanceValid(_canvasTestPattern))
+        {
+            if (_canvasTestPattern.GetParent() == this)
+                RemoveChild(_canvasTestPattern);
+            _canvasTestPattern.QueueFree();
+        }
+        _canvasTestPattern = null;
+    }
+
+    /// <summary>
+    /// True when a canvas-wide test pattern is currently shown on this output.
+    /// </summary>
+    public bool CanvasTestPatternStatus() =>
+        _canvasTestPattern != null && GodotObject.IsInstanceValid(_canvasTestPattern);
+
+    /// <summary>
     /// Adds or updates a layer test pattern at the given local rect.
     /// </summary>
     /// <param name="layerId">Layer identity.</param>
@@ -1275,6 +1329,18 @@ public partial class VideoOutputDevice : Window, IDisposable
             }
             catch { /* ignore */ }
             _testPattern = null;
+        }
+
+        if (_canvasTestPattern != null && IsInstanceValid(_canvasTestPattern))
+        {
+            try
+            {
+                if (_canvasTestPattern.GetParent() == this)
+                    RemoveChild(_canvasTestPattern);
+                _canvasTestPattern.QueueFree();
+            }
+            catch { /* ignore */ }
+            _canvasTestPattern = null;
         }
 
         foreach (var kvp in _layerTestPatterns.ToList())

@@ -199,8 +199,13 @@ public partial class TimelineInspector
             // Looping cues: draw one cycle only (playCount forced to 1 for display).
             if (infinite)
                 wave.PlayCount = 1;
+
+            // Waveform maps peaks across its control width. Parent bars often extend past
+            // own media when children are longer — keep time accuracy by sizing the wave
+            // to own-media duration only; the remainder of the bar stays empty.
+            float waveW = ComputeWaveformDisplayWidth(cue, displayWidth);
             wave.Position = Vector2.Zero;
-            wave.Size = bar.Size;
+            wave.Size = new Vector2(waveW, barH);
             wave.QueueRedraw();
         }
 

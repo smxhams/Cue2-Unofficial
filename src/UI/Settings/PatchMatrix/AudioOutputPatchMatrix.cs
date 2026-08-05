@@ -17,6 +17,7 @@ using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
 using Cue2.UI.Popups;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings.PatchMatrix;
 
@@ -44,9 +45,29 @@ public partial class AudioOutputPatchMatrix : Control
     private VBoxContainer _channelList;
     private GridContainer _patchMatrix;
     private LineEdit _patchName;
+    private LineEdit _patchVolumeInput;
     private Button _deletePatchButton;
     private Button _addChannelButton;
-    
+    private bool _isSyncingVolumeUi;
+
+    /// <summary>Device-header strip (columns) — part of the expandable channel/routing body.</summary>
+    private Control _deviceHeadersContainer;
+    /// <summary>Channel name list + Add Channel.</summary>
+    private Control _channelListContainer;
+    /// <summary>Routing checkbox grid panel.</summary>
+    private Control _matrixPanelContainer;
+
+    private Control _expandedChrome;
+    private Control _collapsedChrome;
+    private Button _expandedButton;
+    private Button _collapsedButton;
+
+    /// <summary>
+    /// When true, channel list + device headers + routing matrix are visible.
+    /// When false, only the patch header (name / refresh / delete / accordion) is shown.
+    /// </summary>
+    private bool _channelsExpanded = true;
+
     private bool _isRebuilding;
     private bool _isDisposed;
     private ResourceInUseDeleteDialog _activeDeleteDialog;
@@ -77,7 +98,17 @@ public partial class AudioOutputPatchMatrix : Control
             
         _deviceContainer = GetNode<HBoxContainer>("%DeviceOutputsListHBoxContainer");
         _patchMatrix = GetNode<GridContainer>("%PatchMatrixContainer");
-        _channelList = GetNode<VBoxContainer>("%ChannelList"); 
+        _channelList = GetNode<VBoxContainer>("%ChannelList");
+        _deviceHeadersContainer = GetNode<Control>("%TopContainer");
+        _channelListContainer = GetNode<Control>("%LeftContainer");
+        _matrixPanelContainer = GetNode<Control>("%MatrixPanelContainer");
+
+        _expandedChrome = GetNode<Control>("%Expanded");
+        _collapsedChrome = GetNode<Control>("%Collapsed");
+        _expandedButton = GetNode<Button>("%ExpandedButton");
+        _collapsedButton = GetNode<Button>("%CollapsedButton");
+        _expandedButton.Pressed += OnCollapseChannelsPressed;
+        _collapsedButton.Pressed += OnExpandChannelsPressed;
         
         
         // Load its patch info
@@ -88,6 +119,12 @@ public partial class AudioOutputPatchMatrix : Control
         _patchName.TextChanged += PatchNameOnTextChanged;
         _patchName.TextSubmitted += _ => _patchName.ReleaseFocus();
         _patchName.FocusExited += OnPatchNameFocusExited;
+
+        _patchVolumeInput = GetNode<LineEdit>("%PatchVolumeInput");
+        _patchVolumeInput.TextSubmitted += OnPatchVolumeSubmitted;
+        _patchVolumeInput.FocusExited += OnPatchVolumeFocusExited;
+        LineEditDbDragSlider.EnableVolume(_patchVolumeInput);
+        SyncPatchVolumeUi();
         
         _deletePatchButton = GetNode<Button>("%DeletePatchButton");
         _deletePatchButton.Pressed += DeletePatchButtonPressed;
@@ -98,7 +135,139 @@ public partial class AudioOutputPatchMatrix : Control
         // Signal from AudioDevices events (hotplug etc). We unsubscribe in _ExitTree.
         _globalSignals.AudioDevicesChanged += SyncAudioDeviceDisplays;
 
+        ApplyChannelsExpandedUi();
         SyncAudioDeviceDisplays();
+    }
+
+    /// <summary>
+    /// Formats and displays the patch sub-master volume in dB without recording history.
+    /// </summary>
+    private void SyncPatchVolumeUi()
+    {
+        if (_patchVolumeInput == null || !GodotObject.IsInstanceValid(_patchVolumeInput))
+            return;
+
+        float linear = Patch != null && GodotObject.IsInstanceValid(Patch)
+            ? Mathf.Clamp(Patch.Volume, 0f, 1f)
+            : 1f;
+
+        _isSyncingVolumeUi = true;
+        _patchVolumeInput.Text = FormatPatchVolumeDb(linear);
+        _isSyncingVolumeUi = false;
+    }
+
+    /// <summary>Formats linear patch volume as a dB LineEdit string (e.g. "0.0dB").</summary>
+    private static string FormatPatchVolumeDb(float linear) =>
+        $"{UiUtilities.LinearToDb(Mathf.Clamp(linear, 0f, 1f))}dB";
+
+    private void OnPatchVolumeSubmitted(string text)
+    {
+        CommitPatchVolume(text);
+    }
+
+    private void OnPatchVolumeFocusExited()
+    {
+        if (_isSyncingVolumeUi || _patchVolumeInput == null || !GodotObject.IsInstanceValid(_patchVolumeInput))
+            return;
+        CommitPatchVolume(_patchVolumeInput.Text);
+    }
+
+    /// <summary>
+    /// Parses dB text, updates <see cref="AudioOutputPatch.Volume"/>, and records settings history.
+    /// Live playback already multiplies by this value in <c>AudioMixMatrix</c>.
+    /// </summary>
+    /// <param name="text">Submitted volume text (e.g. "-6dB" or "-6").</param>
+    private void CommitPatchVolume(string text)
+    {
+        if (_isSyncingVolumeUi || _isDisposed)
+            return;
+        if (_patchVolumeInput == null || !GodotObject.IsInstanceValid(_patchVolumeInput))
+            return;
+        if (Patch == null || !GodotObject.IsInstanceValid(Patch))
+            return;
+        if (_globalData?.HistoryManager?.IsRestoring == true)
+            return;
+
+        try
+        {
+            if (!float.TryParse(text.Replace("dB", "").Replace("db", "").Trim(), out var dbValue))
+            {
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    $"Invalid patch volume: {text}", 1);
+                SyncPatchVolumeUi();
+                return;
+            }
+
+            // Match AudioInspector / master volume: positive values treated as attenuation.
+            if (dbValue > 0f)
+                dbValue = -dbValue;
+
+            float linear = UiUtilities.DbToLinear(dbValue);
+            _isSyncingVolumeUi = true;
+            _patchVolumeInput.Text = FormatPatchVolumeDb(linear);
+            _isSyncingVolumeUi = false;
+
+            if (Math.Abs(Patch.Volume - linear) < 1e-6f)
+            {
+                if (_patchVolumeInput.HasFocus())
+                    _patchVolumeInput.ReleaseFocus();
+                return;
+            }
+
+            RecordPatchHistory("Change patch volume");
+            Patch.Volume = linear;
+            _globalData?.Settings?.UpdatePatch(Patch);
+
+            if (_patchVolumeInput.HasFocus())
+                _patchVolumeInput.ReleaseFocus();
+        }
+        catch (Exception ex)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Error parsing patch volume: {ex.Message}", 2);
+            SyncPatchVolumeUi();
+        }
+    }
+
+    /// <summary>
+    /// Collapses the channel list, device headers, and routing matrix (header chrome only).
+    /// </summary>
+    private void OnCollapseChannelsPressed()
+    {
+        if (!_channelsExpanded) return;
+        _channelsExpanded = false;
+        ApplyChannelsExpandedUi();
+    }
+
+    /// <summary>
+    /// Expands the channel list, device headers, and routing matrix.
+    /// </summary>
+    private void OnExpandChannelsPressed()
+    {
+        if (_channelsExpanded) return;
+        _channelsExpanded = true;
+        ApplyChannelsExpandedUi();
+    }
+
+    /// <summary>
+    /// Applies accordion visibility for channel/routing body and chevron chrome.
+    /// </summary>
+    private void ApplyChannelsExpandedUi()
+    {
+        bool showBody = _channelsExpanded;
+
+        if (_deviceHeadersContainer != null && GodotObject.IsInstanceValid(_deviceHeadersContainer))
+            _deviceHeadersContainer.Visible = showBody;
+        if (_channelListContainer != null && GodotObject.IsInstanceValid(_channelListContainer))
+            _channelListContainer.Visible = showBody;
+        if (_matrixPanelContainer != null && GodotObject.IsInstanceValid(_matrixPanelContainer))
+            _matrixPanelContainer.Visible = showBody;
+
+        // Expanded chrome = chevron-down (click to collapse). Collapsed chrome = chevron-right (click to expand).
+        if (_expandedChrome != null && GodotObject.IsInstanceValid(_expandedChrome))
+            _expandedChrome.Visible = showBody;
+        if (_collapsedChrome != null && GodotObject.IsInstanceValid(_collapsedChrome))
+            _collapsedChrome.Visible = !showBody;
     }
 
     /// <summary>
@@ -731,10 +900,19 @@ public partial class AudioOutputPatchMatrix : Control
         // Disconnect direct child signal handlers (release any captured references in method groups).
         if (_patchName != null && GodotObject.IsInstanceValid(_patchName))
             _patchName.TextChanged -= PatchNameOnTextChanged;
+        if (_patchVolumeInput != null && GodotObject.IsInstanceValid(_patchVolumeInput))
+        {
+            _patchVolumeInput.TextSubmitted -= OnPatchVolumeSubmitted;
+            _patchVolumeInput.FocusExited -= OnPatchVolumeFocusExited;
+        }
         if (_deletePatchButton != null && GodotObject.IsInstanceValid(_deletePatchButton))
             _deletePatchButton.Pressed -= DeletePatchButtonPressed;
         if (_addChannelButton != null && GodotObject.IsInstanceValid(_addChannelButton))
             _addChannelButton.Pressed -= AddChannelButtonPressed;
+        if (_expandedButton != null && GodotObject.IsInstanceValid(_expandedButton))
+            _expandedButton.Pressed -= OnCollapseChannelsPressed;
+        if (_collapsedButton != null && GodotObject.IsInstanceValid(_collapsedButton))
+            _collapsedButton.Pressed -= OnExpandChannelsPressed;
 
         // Proactively QueueFree all objects we generated while building the matrix UI.
         // These include: channel HBoxes + their Buttons/LineEdits, device header Panels,

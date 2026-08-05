@@ -102,6 +102,8 @@ public partial class SettingsCanvasEditor : Control
     private Control _canvasProps;
     private LineEdit _canvasSizeXLineEdit;
     private LineEdit _canvasSizeYLineEdit;
+    private CheckBox _canvasTestPatternCheckBox;
+    private Button _canvasTestPatternResetButton;
 
     // Properties – screen
     private Control _outputProps;
@@ -586,6 +588,8 @@ private void BindNodes()
 
         _canvasSizeXLineEdit = GetNode<LineEdit>("%CanvasSizeX");
         _canvasSizeYLineEdit = GetNode<LineEdit>("%CanvasSizeY");
+        _canvasTestPatternCheckBox = GetNode<CheckBox>("%CanvasTestPatternCheckBox");
+        _canvasTestPatternResetButton = GetNode<Button>("%CanvasTestPatternResetButton");
 
         _canvasOutlinePanel = GetNode<Panel>("%CanvasOutlinePanel");
         _subViewportContainer = GetNode<SubViewportContainer>("%SubViewportContainer");
@@ -654,6 +658,7 @@ private void BindNodes()
         var icon = GetThemeIcon("Refresh", "AtlasIcons");
         foreach (var btn in new[]
                  {
+                     _canvasTestPatternResetButton,
                      _screenOutputResetButton, _screenSizeResetButton, _screenKeepAspectResetButton,
                      _screenPosResetButton, _screenDisplayOffsetResetButton, _screenTransparentResetButton,
                      _screenTestPatternResetButton, _layerSizeResetButton, _layerKeepAspectResetButton,
@@ -722,6 +727,8 @@ private void BindNodes()
 
         _canvasSizeXLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
         _canvasSizeYLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
+        _canvasTestPatternCheckBox.Toggled += OnCanvasTestPatternToggled;
+        _canvasTestPatternResetButton.Pressed += OnCanvasTestPatternResetPressed;
 
         _zoomInButton.Pressed += ZoomIn;
         _zoomOutButton.Pressed += ZoomOut;

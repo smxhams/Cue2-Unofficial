@@ -494,14 +494,25 @@ public partial class CueOscConnection : GodotObject
                 }
             }
 
+            // IMPORTANT: localPort must be 0 (ephemeral). Rug.Osc's (address, port) / (local, remote, port)
+            // constructors bind the *local* socket to the same port number as the remote destination.
+            // With SO_REUSEADDR that steals/shares the OSC listen port, so the app can no longer
+            // receive UDP OSC (TCP still works). Always use localPort=0 for senders.
             if (!string.IsNullOrEmpty(NetworkInterface))
             {
-                _sender = new OscSender(localAddress, Address, Port);
+                _sender = new OscSender(
+                    localAddress,
+                    localPort: 0,
+                    Address,
+                    Port,
+                    timeToLive: 8,
+                    messageBufferSize: OscSender.DefaultMessageBufferSize,
+                    maxPacketSize: OscSocket.DefaultPacketSize);
                 GD.Print($"CueOscConnection:InitialiseSender - UDP via {NetworkInterface} → {Name}@{Address}:{Port}");
             }
             else
             {
-                _sender = new OscSender(Address, Port);
+                _sender = new OscSender(Address, localPort: 0, Port);
                 GD.Print($"CueOscConnection:InitialiseSender - UDP auto → {Name}@{Address}:{Port}");
             }
             _sender.Connect();

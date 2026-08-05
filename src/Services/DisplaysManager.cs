@@ -262,10 +262,12 @@ public partial class DisplaysManager : Node
 
         Canvas ??= new Canvas();
         Canvas.SetCanvasSize(new Vector2I(1920, 1080));
+        Canvas.TestPatternEnabled = false;
 
         AddLayer("Default", 0);
         EnsureDefaultScreen();
 
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
         ApplyLayerDrawOrderToOutputs();
         ClearRuntimeOutputControls();
@@ -337,6 +339,7 @@ public partial class DisplaysManager : Node
             output.Show();
         output.SetCanvasReference(Canvas);
         ApplyPresentationToOutput(output);
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
 
         string dest = GetOutputDestinationLabel(output);
@@ -399,6 +402,7 @@ public partial class DisplaysManager : Node
             output.UpdateOutputRegion();
         }
 
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
 
         string dest = GetOutputDestinationLabel(output);
@@ -568,6 +572,7 @@ public partial class DisplaysManager : Node
             output.ForceRefreshOutput();
         }
 
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
             "DisplaysManager: Refreshed all screens and outputs.", 0);
@@ -599,6 +604,7 @@ public partial class DisplaysManager : Node
             output.UpdateOutputRegion();
             // Screen moved on canvas — layer rects are relative to screen origin.
             output.UpdateAllLayerDisplayRects();
+            UpdateCanvasTestPatterns();
             UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
@@ -619,6 +625,7 @@ public partial class DisplaysManager : Node
                 output.ClearWindowDismissed();
             output.UpdateOutputRegion();
             output.RefreshScreenTestPattern();
+            UpdateCanvasTestPatterns();
             UpdateAllLayerTestPatterns();
             _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
@@ -857,6 +864,68 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
+    /// Enables or disables the full-canvas test pattern on all screens.
+    /// Each output shows the portion of the canvas pattern that intersects its region
+    /// so alignment grids line up across multi-monitor setups.
+    /// </summary>
+    /// <param name="toggle">True to show; false to remove.</param>
+    public void ToggleCanvasTestPattern(bool toggle)
+    {
+        if (Canvas == null)
+            return;
+
+        Canvas.TestPatternEnabled = toggle;
+        if (!toggle)
+        {
+            foreach (var output in Outputs)
+                output.RemoveCanvasTestPattern();
+        }
+        else
+        {
+            UpdateCanvasTestPatterns();
+        }
+
+        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+            $"{(toggle ? "Enabled" : "Disabled")} canvas test pattern.", 0);
+    }
+
+    /// <summary>
+    /// Updates (or removes) the canvas-wide test pattern on every output from current geometry.
+    /// </summary>
+    public void UpdateCanvasTestPatterns()
+    {
+        if (Canvas == null)
+            return;
+
+        if (!Canvas.TestPatternEnabled)
+        {
+            foreach (var output in Outputs)
+                output.RemoveCanvasTestPattern();
+            return;
+        }
+
+        Rect2 canvasRect = new Rect2(0, 0, Canvas.CanvasSize.X, Canvas.CanvasSize.Y);
+        foreach (var output in Outputs)
+        {
+            if (output == null || !GodotObject.IsInstanceValid(output))
+                continue;
+
+            Rect2 outputRect = new Rect2(output.CanvasPosition, output.OutputSize);
+            Rect2 clippedRect = canvasRect.Intersection(outputRect);
+            if (clippedRect.Size.X > 0 && clippedRect.Size.Y > 0)
+            {
+                // Canvas origin in local space of the clipped output content (same basis as layer TPs).
+                Vector2 localPos = Vector2.Zero - clippedRect.Position;
+                output.SetCanvasTestPattern(true, new Rect2(localPos, Canvas.CanvasSize), "Canvas");
+            }
+            else
+            {
+                output.RemoveCanvasTestPattern();
+            }
+        }
+    }
+
+    /// <summary>
     /// Toggles the test pattern for a layer on intersecting outputs.
     /// </summary>
     /// <param name="layerId">The layer ID.</param>
@@ -939,7 +1008,8 @@ public partial class DisplaysManager : Node
         {
             var output = Outputs.Find(o => o.OutputId == outputId);
             output?.RefreshScreenTestPattern();
-            // Screen move/resize changes local origins for every layer pattern on that output.
+            // Screen move/resize changes local origins for canvas + layer patterns on that output.
+            UpdateCanvasTestPatterns();
             UpdateAllLayerTestPatterns();
             return;
         }
@@ -952,6 +1022,7 @@ public partial class DisplaysManager : Node
 
         foreach (var output in Outputs)
             output.RefreshScreenTestPattern();
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
     }
 
@@ -1279,6 +1350,8 @@ public partial class DisplaysManager : Node
                 output.ToggleTestPattern(enabled);
         }
 
+        // Canvas flag was loaded with Canvas.LoadFromData — rebuild overlays on live windows.
+        UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
         ApplyLayerDrawOrderToOutputs();
         ApplyOutputPresentationState();

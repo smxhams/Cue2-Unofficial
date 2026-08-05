@@ -31,7 +31,7 @@ public partial class FileDropPopup : Window
 	private Button _createButton;
 
 	private DropInsertMode _chosenInsertMode = DropInsertMode.Below;
-	private bool _chosenAsGroup = false;
+	private MultiFileDropMode _chosenMultiFileMode = MultiFileDropMode.SeparateCues;
 
 	/// <summary>
 	/// Raised when the user confirms the drop action with their choices.
@@ -86,7 +86,7 @@ public partial class FileDropPopup : Window
 		_targetCueId = targetCueId;
 
 		_chosenInsertMode = DropInsertMode.Below;
-		_chosenAsGroup = false;
+		_chosenMultiFileMode = MultiFileDropMode.SeparateCues;
 
 		PopulateOptions();
 	}
@@ -153,29 +153,50 @@ public partial class FileDropPopup : Window
 			container.AddChild(new HSeparator());
 			container.AddChild(new Label { Text = "Multiple Files Action:" });
 
-			var separateBtn = new CheckBox { Text = "Create separate cue for each file (recommended)", ButtonPressed = !_chosenAsGroup };
-			var groupBtn = new CheckBox { Text = "Wrap all files inside one new Group cue", ButtonPressed = _chosenAsGroup };
-
-			separateBtn.Toggled += pressed =>
-			{
-				if (pressed)
-				{
-					_chosenAsGroup = false;
-					groupBtn.ButtonPressed = false;
-				}
-			};
-			groupBtn.Toggled += pressed =>
-			{
-				if (pressed)
-				{
-					_chosenAsGroup = true;
-					separateBtn.ButtonPressed = false;
-				}
-			};
-
-			container.AddChild(separateBtn);
-			container.AddChild(groupBtn);
+			var multiContainer = new VBoxContainer();
+			multiContainer.AddThemeConstantOverride("separation", 2);
+			multiContainer.AddChild(CreateMultiFileChoice(
+				"Create separate cue for each file (recommended)",
+				MultiFileDropMode.SeparateCues,
+				isDefault: true));
+			multiContainer.AddChild(CreateMultiFileChoice(
+				"Wrap all files inside one new Group cue",
+				MultiFileDropMode.WrapInOneGroup));
+			multiContainer.AddChild(CreateMultiFileChoice(
+				"Create each file as child of its own parent cue",
+				MultiFileDropMode.ParentPerFile));
+			container.AddChild(multiContainer);
 		}
+	}
+
+	/// <summary>
+	/// Builds a mutually exclusive checkbox for multi-file structure mode.
+	/// </summary>
+	private CheckBox CreateMultiFileChoice(string text, MultiFileDropMode mode, bool isDefault = false)
+	{
+		var cb = new CheckBox
+		{
+			Text = text,
+			ButtonPressed = isDefault || _chosenMultiFileMode == mode
+		};
+
+		if (isDefault) _chosenMultiFileMode = mode;
+
+		cb.Toggled += pressed =>
+		{
+			if (!pressed) return;
+
+			_chosenMultiFileMode = mode;
+			var parent = cb.GetParent();
+			if (parent == null) return;
+			foreach (Node sibling in parent.GetChildren())
+			{
+				if (sibling is CheckBox other && other != cb)
+					other.ButtonPressed = false;
+			}
+		};
+
+		return cb;
 	}
 
 	private CheckBox CreatePositionChoice(string text, DropInsertMode mode, bool isDefault = false)
@@ -214,7 +235,7 @@ public partial class FileDropPopup : Window
 		var choices = new FileDropChoices
 		{
 			InsertMode = _chosenInsertMode,
-			CreateAsGroup = _chosenAsGroup
+			MultiFileMode = _chosenMultiFileMode
 		};
 
 		Confirmed?.Invoke(choices);

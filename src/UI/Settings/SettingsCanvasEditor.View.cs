@@ -59,6 +59,9 @@ public partial class SettingsCanvasEditor
             _canvasSizeXLineEdit.ReleaseFocus();
             _canvasSizeYLineEdit.ReleaseFocus();
 
+            // Canvas size changes re-clip screens — keep canvas TP geometry aligned.
+            _displaysManager?.UpdateCanvasTestPatterns();
+
             RefreshCanvasSelectButtonText();
             UpdateCanvasGizmos();
 
