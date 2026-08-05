@@ -33,12 +33,16 @@ Absolute: media time. Relative: ± offset from current position.,Absolute: media
 Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.,Absolute: target % (0–100). Relative: delta %.
 Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.,Absolute: target dB (−60…0). Relative: delta dB.
 Action:,Action:,Action:,Action:
+ActionName,ActionName,ActionName,ActionName
 Active Cues,Active Cues,Tohu hohe,Cues activas
+Active instances,Active instances,Active instances,Active instances
+Active instances:,Active instances:,Active instances:,Active instances:
 "Add a new cue.
 Inserts below selection.","Add a new cue.
 Inserts below selection.","Add a new cue.
 Inserts below selection.","Add a new cue.
 Inserts below selection."
+Add Channel +,Add Channel +,Add Channel +,Add Channel +
 Add control:,Add control:,Add control:,Add control:
 Add input:,Add input:,Add input:,Add input:
 Add output:,Add output:,Add output:,Add output:
@@ -66,6 +70,7 @@ Audio,Audio,Oro,Audio
 Audio Defaults,Audio Defaults,Taunoa oro,Predeterminados de audio
 Audio output,Audio output,Audio output,Audio output
 Audio Output Patch,Audio Output Patch,Pātene putanga oro,Matriz de salida de audio
+Audio Patch,Audio Patch,Audio Patch,Audio Patch
 Audio volume,Audio volume,Audio volume,Audio volume
 "Autosave Interval (min, 0=off)","Autosave Interval (min, 0=off)","Wā tiaki-aunoa (meneti, 0=weto)","Intervalo de autoguardado (min, 0=off)"
 Autowrap,Autowrap,Autowrap,Autowrap
@@ -93,15 +98,21 @@ Capture,Capture,Capture,Capture
 Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.,Capture the next MIDI message as this cue's trigger. Esc or click again cancels.
 Change canvas position,Change canvas position,Change canvas position,Change canvas position
 Change layer size,Change layer size,Change layer size,Change layer size
+Channel 1,Channel 1,Channel 1,Channel 1
 Check File Presence,Check File Presence,Tirohia te noho o ngā kōnae,Comprobar presencia de archivos
 Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file,Choose which settings categories are included when saving or loading a settings file
 Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.,Choose which weekdays the clock trigger may fire.
 Clear,Clear,Clear,Clear
+Clear binding,Clear binding,Clear binding,Clear binding
 Clear logs,Clear logs,Ūkui rātaka,Borrar registros
+Clear MIDI binding,Clear MIDI binding,Clear MIDI binding,Clear MIDI binding
+Clear OSC binding (no OSC for this action),Clear OSC binding (no OSC for this action),Clear OSC binding (no OSC for this action),Clear OSC binding (no OSC for this action)
 Clear Recent,Clear Recent,Ūkui nā nātata,Borrar recientes
 Clear target,Clear target,Clear target,Clear target
 Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. ,Click a binding to reassign. Press Esc to cancel. 
 Click or drag to set the playhead,Click or drag to set the playhead,Click or drag to set the playhead,Click or drag to set the playhead
+Click to capture MIDI binding. Esc cancels.,Click to capture MIDI binding. Esc cancels.,Click to capture MIDI binding. Esc cancels.,Click to capture MIDI binding. Esc cancels.
+Click to change binding,Click to change binding,Click to change binding,Click to change binding
 Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.
 Clock,Clock,Clock,Clock
 Close all displays,Close all displays,Close all displays,Close all displays
@@ -113,6 +124,7 @@ Collapse One Layer,Collapse One Layer,Whakaiti taumata kotahi,Contraer un nivel
 Colour,Colour,Colour,Colour
 Colour:,Colour:,Tae:,Color:
 Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.,Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always allowed when list is set.
+Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. 
 Connection controls,Connection controls,Connection controls,Connection controls
 Connections,Connections,Hononga,Conexiones
 Cont.,Cont.,Haere.,Cont.
@@ -170,11 +182,13 @@ Auto-continue: After this cue's pre-wait ends, arm the next cue (it shows Contin
 Auto-follow: When this cue completes, arm the next cue (it shows Follow + this post-wait)."
 Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.,Cue-2 is a simple and free playback software for events.
 Cue2,Cue2,Cue2,Cue2
+Cue2 ,Cue2 ,Cue2 ,Cue2 
 Cue2 Log,Cue2 Log,Cue2 Log,Cue2 Log
 Cue2 Preferences,Cue2 Preferences,Manakohanga Cue2,Preferencias de Cue2
 Cue2 Settings,Cue2 Settings,Cue2 Settings,Cue2 Settings
 Cues,Cues,Tohu,Cues
 Cut,Cut,Tapahi,Cortar
+Deafult audio output - patching to this will send your audio to the void,Deafult audio output - patching to this will send your audio to the void,Deafult audio output - patching to this will send your audio to the void,Deafult audio output - patching to this will send your audio to the void
 Declick ramp,Declick ramp,Declick ramp,Declick ramp
 Decode / present,Decode / present,Decode / present,Decode / present
 "Default audio output for new audio components.
@@ -201,6 +215,7 @@ Default fade-out duration (0 = immediate / session stop fade).,Default fade-out 
 Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).,Default fade-out duration for new audio components (0 = immediate / session stop fade).
 Default font colour.,Default font colour.,Default font colour.,Default font colour.
 Default font size in pixels.,Default font size in pixels.,Default font size in pixels.,Default font size in pixels.
+"Default for new cues. When on, GO hard-stops any existing instance of that cue before starting another. When off (default), multiple concurrent instances are allowed.","Default for new cues. When on, GO hard-stops any existing instance of that cue before starting another. When off (default), multiple concurrent instances are allowed.","Default for new cues. When on, GO hard-stops any existing instance of that cue before starting another. When off (default), multiple concurrent instances are allowed.","Default for new cues. When on, GO hard-stops any existing instance of that cue before starting another. When off (default), multiple concurrent instances are allowed."
 Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).,Default hold duration (0 or 'Until stopped' = stay until stop).
 "Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components.","Default layout, opacity, loop, embedded audio, image duration, and fades for new video components."
 Default number of plays when loop is off.,Default number of plays when loop is off.,Default number of plays when loop is off.,Default number of plays when loop is off.
@@ -243,12 +258,14 @@ Delete all selected cues (and any child cues).,Delete all selected cues (and any
 Delete Cue,Delete Cue,Muku tohu,Eliminar cue
 Delete Cue Light,Delete Cue Light,Delete Cue Light,Delete Cue Light
 Delete Layer,Delete Layer,Delete Layer,Delete Layer
+Delete Patch,Delete Patch,Delete Patch,Delete Patch
 Delete Screen,Delete Screen,Delete Screen,Delete Screen
 Delete the selected entry or folder.,Delete the selected entry or folder.,Delete the selected entry or folder.,Delete the selected entry or folder.
 Delete this cue (and any child cues).,Delete this cue (and any child cues).,Muku tēnei tohu (me ngā tohu tamaiti).,Eliminar esta cue (y cualquier cue hija).
 Destination,Destination,Destination,Destination
 Device,Device,Device,Device
 Devices,Devices,Pūrere,Dispositivos
+DHCP,DHCP,DHCP,DHCP
 Disable output,Disable output,Disable output,Disable output
 "Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences.","Disable/blackout, background colour, and machine video performance preferences."
 Display Offset,Display Offset,Display Offset,Display Offset
@@ -269,8 +286,14 @@ Empty Component,Empty Component,Empty Component,Empty Component
 Enable MIDI,Enable MIDI,Enable MIDI,Enable MIDI
 Enable OSC Listener,Enable OSC Listener,Enable OSC Listener,Enable OSC Listener
 Enabled,Enabled,Enabled,Enabled
+"Enabled
+Disable/Enable - When disabled it maintains connection to the unit but does not send any cues. ","Enabled
+Disable/Enable - When disabled it maintains connection to the unit but does not send any cues. ","Enabled
+Disable/Enable - When disabled it maintains connection to the unit but does not send any cues. ","Enabled
+Disable/Enable - When disabled it maintains connection to the unit but does not send any cues. "
 End Time:,End Time:,End Time:,End Time:
 Enter overlay text…,Enter overlay text…,Enter overlay text…,Enter overlay text…
+Ethernet,Ethernet,Ethernet,Ethernet
 Every day,Every day,Every day,Every day
 Exit Cue2,Exit Cue2,Puta i a Cue2,Salir de Cue2
 Expand,Expand,Expand,Expand
@@ -339,6 +362,7 @@ Frame pacing on output windows. Prefer VSync reduces tearing; Off / Low latency 
 Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.,Free-form notes for this cue. Not used during playback.
 Fullscreen,Fullscreen,Mata katoa,Pantalla completa
 Fullscreen/Windowed,Fullscreen/Windowed,Mata katoa/Matapihi,Pantalla completa/Ventana
+Gateway,Gateway,Gateway,Gateway
 General,General,Whānui,General
 "General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings.","General preferences, these are persistant independant of show file settings."
 General Settings,General Settings,General Settings,General Settings
@@ -385,6 +409,8 @@ Insert:,Insert:,Whakauru:,Insertar:
 Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.,Inspector video previewer only — never affects house outputs. Saved with the showfile.
 Interface,Interface,Interface,Interface
 "Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.).","Interpret content as BBCode (bold, colour tags, etc.)."
+IP,IP,IP,IP
+Ip Address,Ip Address,Ip Address,Ip Address
 Keep Aspect,Keep Aspect,Keep Aspect,Keep Aspect
 Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.,Keeps display windows open but covers all layers with black. Useful for scene changes without stopping cues.
 "Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show","Keyboard shortcuts — saved with Cue2 Preferences, not the show"
@@ -451,6 +477,7 @@ Multi-edit cues,Multi-edit cues,Multi-edit cues,Multi-edit cues
 Mute All Audio,Mute All Audio,Whakamū katoa te oro,Silenciar todo el audio
 Mute all outputs,Mute all outputs,Mute all outputs,Mute all outputs
 Name,Name,Ingoa,Nombre
+Name of the patch,Name of the patch,Name of the patch,Name of the patch
 Name:,Name:,Ingoa:,Nombre:
 Named OSC send destinations and send monitor,Named OSC send destinations and send monitor,Named OSC send destinations and send monitor,Named OSC send destinations and send monitor
 New Cuelight,New Cuelight,New Cuelight,New Cuelight
@@ -469,6 +496,7 @@ No text component on this cue.,No text component on this cue.,No text component 
 No valid fadable properties,No valid fadable properties,No valid fadable properties,No valid fadable properties
 No:,No:,No:,No:
 None,None,Kore,Ninguno
+Not Connected,Not Connected,Not Connected,Not Connected
 Note length (s):,Note length (s):,Note length (s):,Note length (s):
 "Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127).","Note number, CC number, or program (0–127)."
 Notes,Notes,Tuhipoka,Notas
@@ -476,6 +504,7 @@ Notes for the standby cue.,Notes for the standby cue.,Notes for the standby cue.
 Number,Number,Tau,Número
 Number:,Number:,Tau:,Número:
 Offset -,Offset -,Offset -,Offset -
+Only one active instance,Only one active instance,Only one active instance,Only one active instance
 Op%,Op%,Op%,Op%
 Opacity %,Opacity %,Opacity %,Opacity %
 Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.,Opacity from 0% (invisible) to 100% (fully solid). Press Enter to apply. Also updates playing cues.
@@ -512,6 +541,7 @@ Pan,Pan,Pan,Pan
 Pan:,Pan:,Pan:,Pan:
 "Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100","Pan: C, L/R, L50, R25, or −100…100"
 Panic,Panic,Panic,Panic
+Pass,Pass,Pass,Pass
 Paste,Paste,Whakapiri,Pegar
 Pause,Pause,Pause,Pause
 Pause All,Pause All,Tārewa katoa,Pausar todo
@@ -524,6 +554,9 @@ Playback,Playback,Purei,Reproducción
 Playcount:,Playcount:,Playcount:,Playcount:
 "Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s","Playhead time — click the ruler or empty track area to set. ←/→ nudge 0.1s, Shift+←/→ 1s"
 Port,Port,Port,Port
+Pos X,Pos X,Pos X,Pos X
+Pos Y,Pos Y,Pos Y,Pos Y
+Pos:,Pos:,Pos:,Pos:
 Position:,Position:,Position:,Position:
 Post-Wait,Post-Wait,Tārewa-muri,Post-espera
 Post-wait,Post-wait,Post-wait,Post-wait
@@ -541,6 +574,7 @@ Push /reply/playhead to the last remote that sent OSC (when selection changes).,
 Push playhead,Push playhead,Push playhead,Push playhead
 Quit Cue2,Quit Cue2,Waiho Cue2,Salir de Cue2
 "Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off.","Raised-cosine fade-in after start, seek, and resume to suppress silence-to-sample clicks. 0 = off."
+Recheck network connection,Recheck network connection,Recheck network connection,Recheck network connection
 Redo,Redo,Mahi anō,Rehacer
 Refresh,Refresh,Tāmata anō,Actualizar
 "Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)","Refresh all screens and outputs (restore closed windows, re-check displays)"
@@ -560,7 +594,9 @@ Reset to default,Reset to default,Tautuhi anō ki te taunoa,Restablecer predeter
 Reset to default (no clock),Reset to default (no clock),Reset to default (no clock),Reset to default (no clock)
 Reset to default (no hotkey),Reset to default (no hotkey),Reset to default (no hotkey),Reset to default (no hotkey)
 Reset to default (no MIDI trigger),Reset to default (no MIDI trigger),Reset to default (no MIDI trigger),Reset to default (no MIDI trigger)
+Reset to default (no MIDI),Reset to default (no MIDI),Reset to default (no MIDI),Reset to default (no MIDI)
 Reset to default (no OSC trigger),Reset to default (no OSC trigger),Reset to default (no OSC trigger),Reset to default (no OSC trigger)
+Reset to factory default OSC path,Reset to factory default OSC path,Reset to factory default OSC path,Reset to factory default OSC path
 Reset User Data,Reset User Data,Tautuhi anō raraunga kaiwhakamahi,Restablecer datos de usuario
 RESET_TO_DEFAULT,Reset to default,Tautuhi anō ki te taunoa,Restablecer predeterminado
 Resume,Resume,Resume,Resume
@@ -645,6 +681,7 @@ Ka tiakina ki te kōnae whakaaturanga.","El modo show bloquea la edición de cue
 Off = Modo edición (predeterminado): edición completa.
 On = Modo show: inspectores ocultos, shell y estructura bloqueados.
 Se guarda con el show."
+Show units configuration.,Show units configuration.,Show units configuration.,Show units configuration.
 Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.,Show waveforms on Timeline Inspector cue bars.
 Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.,Show-scoped playback performance for standalone audio and video embedded audio. Routing lives under Audio Output Patch; new-cue defaults under Cue Defaults.
 Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user),Showfile-independent preferences (stored per user)
@@ -652,12 +689,15 @@ Showing 0/0 Logs,Showing 0/0 Logs,Showing 0/0 Logs,Showing 0/0 Logs
 Showing {0}/{1} Logs,Showing {0}/{1} Logs,E whakaatu ana {0}/{1} rātaka,Mostrando {0}/{1} registros
 Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.,Silences all cue audio immediately without changing master volume. Runtime only — not saved with the showfile.
 Size,Size,Size,Size
+Size X,Size X,Size X,Size X
+Size Y,Size Y,Size Y,Size Y
 Size:,Size:,Size:,Size:
 Skip if disarmed,Skip if disarmed,Tīpoka mēnā kāore i mau,Omitir si desarmado
 Skip if disarmed:,Skip if disarmed:,Tīpoka mēnā kāore i mau:,Omitir si desarmado:
 "Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile.","Soft knobs over prefetch ring size, drop-lateness threshold, and max frames presented per tick. Saved with the showfile."
 "Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load.","Soft knobs over queue depth, refill threshold, and seek/GO prefetch. Prefer low latency reduces buffer delay; Prefer stability reduces underruns under multi-cue load."
 Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.,Solid colour behind all layers on every output window. Saved with the showfile.
+SSID,SSID,SSID,SSID
 Standby,Standby,Standby,Standby
 Standby Cue,Standby Cue,Tohu tātari,Cue en espera
 Standby in Pre-Wait:,Standby in Pre-Wait:,Standby in Pre-Wait:,Standby in Pre-Wait:
@@ -680,6 +720,8 @@ Stop All,Stop All,Katia katoa,Detener todo
 Stop Fade Out,Stop Fade Out,Stop Fade Out,Stop Fade Out
 Stretch,Stretch,Stretch,Stretch
 Stretch:,Stretch:,Stretch:,Stretch:
+Submit Config,Submit Config,Submit Config,Submit Config
+Subnet,Subnet,Subnet,Subnet
 System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.,System font family name (e.g. Arial). Empty = project/theme default.
 System font family. Default uses the project theme font.,System font family. Default uses the project theme font.,System font family. Default uses the project theme font.,System font family. Default uses the project theme font.
 Target Layer,Target Layer,Target Layer,Target Layer
@@ -691,12 +733,15 @@ TCP listen port (can match UDP).,TCP listen port (can match UDP).,TCP listen por
 Test,Test,Test,Test
 Test all Cue Lights:,Test all Cue Lights:,Test all Cue Lights:,Test all Cue Lights:
 Test Pattern,Test Pattern,Test Pattern,Test Pattern
+Test Pattern:,Test Pattern:,Test Pattern:,Test Pattern:
 Test Send,Test Send,Test Send,Test Send
 Test send,Test send,Test send,Test send
 Text Defaults,Text Defaults,Taunoa kuputuhi,Predeterminados de texto
 Text Overlay,Text Overlay,Text Overlay,Text Overlay
 Text overlay content and typography.,Text overlay content and typography.,Text overlay content and typography.,Text overlay content and typography.
 The number of times the audio loops then stops.,The number of times the audio loops then stops.,The number of times the audio loops then stops.,The number of times the audio loops then stops.
+The output from your cue arrives. Routing this will send your  audio output to the device you connect it to.,The output from your cue arrives. Routing this will send your  audio output to the device you connect it to.,The output from your cue arrives. Routing this will send your  audio output to the device you connect it to.,The output from your cue arrives. Routing this will send your  audio output to the device you connect it to.
+The Void,The Void,The Void,The Void
 Theme default,Theme default,Theme default,Theme default
 Time,Time,Wā,Tiempo
 Time Remaining,Time Remaining,Wā toe,Tiempo restante
@@ -706,9 +751,12 @@ Timing & appearance,Timing & appearance,Timing & appearance,Timing & appearance
 Total cues in the show,Total cues in the show,Total cues in the show,Total cues in the show
 Track list,Track list,Track list,Track list
 Translate Layer,Translate Layer,Translate Layer,Translate Layer
+Transparency may not work if defined size is the same as output display resolution. ,Transparency may not work if defined size is the same as output display resolution. ,Transparency may not work if defined size is the same as output display resolution. ,Transparency may not work if defined size is the same as output display resolution. 
 Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.,Transparency may not work if defined size matches the display resolution.
 Transparent,Transparent,Transparent,Transparent
+Transparent:,Transparent:,Transparent:,Transparent:
 Triggers,Triggers,Pūtahi,Disparadores
+Type an OSC address path for this action (e.g. /Go). Leave empty for no OSC binding. Enter or focus out to apply.,Type an OSC address path for this action (e.g. /Go). Leave empty for no OSC binding. Enter or focus out to apply.,Type an OSC address path for this action (e.g. /Go). Leave empty for no OSC binding. Enter or focus out to apply.,Type an OSC address path for this action (e.g. /Go). Leave empty for no OSC binding. Enter or focus out to apply.
 "Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching).","Type an OSC path per action (e.g. /Go). Empty = none. If OSC session name is set, remotes must send /{SessionName}/Go (prefix is stripped before matching)."
 Typography,Typography,Typography,Typography
 UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).,UDP (datagram) or TCP (binary framed OSC).
@@ -716,6 +764,7 @@ UDP port,UDP port,UDP port,UDP port
 UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).,UDP port to receive OSC (1–65535).
 UDP receive port and live receive monitor,UDP receive port and live receive monitor,UDP receive port and live receive monitor,UDP receive port and live receive monitor
 UI Scaling,UI Scaling,Whakatauira UI,Escala de UI
+Unbound,Unbound,Unbound,Unbound
 Undo,Undo,Wetekina,Deshacer
 Undo Depth,Undo Depth,Hōhonu wetekina,Profundidad de deshacer
 Until stopped,Until stopped,Until stopped,Until stopped
@@ -723,6 +772,7 @@ URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can d
 Use Audio,Use Audio,Use Audio,Use Audio
 Use audio,Use audio,Use audio,Use audio
 Use BBCode,Use BBCode,Use BBCode,Use BBCode
+Use:,Use:,Use:,Use:
 V alignment,V alignment,V alignment,V alignment
 Val,Val,Val,Val
 Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.,Velocity or CC value (0–127). Only used when Val is checked.
@@ -792,6 +842,7 @@ What to do on launch if no file is specified via command line,What to do on laun
 "When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows).","When loading, copy packaged media into the current show folder (if media backup allows)."
 "When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer","When locked, Translate Layer control cues cannot move or resize this layer"
 "When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead.","When off (disarmed), GO does not play the cue and advances instead."
+"When on, a new GO hard-stops any existing instance of this cue before starting another. When off (default), multiple concurrent instances are allowed.","When on, a new GO hard-stops any existing instance of this cue before starting another. When off (default), multiple concurrent instances are allowed.","When on, a new GO hard-stops any existing instance of this cue before starting another. When off (default), multiple concurrent instances are allowed.","When on, a new GO hard-stops any existing instance of this cue before starting another. When off (default), multiple concurrent instances are allowed."
 "When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count).","When on, new audio components loop indefinitely (overrides play count)."
 "When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text.","When on, new text components draw a solid panel behind the text."
 "When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode.","When on, new text components interpret content as BBCode."
@@ -801,6 +852,8 @@ What to do on launch if no file is specified via command line,What to do on laun
 "When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead.","When unchecked (disarmed), GO does not play this cue and advances to the next cue instead."
 Where,Where,Kei hea,Dónde
 Which single property this fade controls.,Which single property this fade controls.,Which single property this fade controls.,Which single property this fade controls.
+Wi-fi,Wi-fi,Wi-fi,Wi-fi
+Wi-fi ands ethernet config,Wi-fi ands ethernet config,Wi-fi ands ethernet config,Wi-fi ands ethernet config
 Width,Width,Width,Width
 Width:,Width:,Width:,Width:
 Working set: {0} MB,Working set: {0} MB,Huinga mahi: {0} MB,Conjunto de trabajo: {0} MB
@@ -814,3 +867,4 @@ Zoom out,Zoom out,Zoom out,Zoom out
 {0} total cues,{0} total cues,{0} tohu katoa,{0} cues en total
 {0} total cues in the show,{0} total cues in the show,{0} tohu katoa i te whakaaturanga,{0} cues en total en el show
 {0}% of total system capacity,{0}% of total system capacity,{0}% o te kaha pūnaha katoa,{0}% de la capacidad total del sistema
+"Canvas ({0}×{1})","Canvas ({0}×{1})","Canvas ({0}×{1})","Canvas ({0}×{1})"

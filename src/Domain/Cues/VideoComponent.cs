@@ -556,6 +556,24 @@ public class VideoComponent : ICueComponent
     }
 
     /// <summary>
+    /// Clamps a proposed start time into the valid range for this component's media.
+    /// Never negative; never greater than the file duration when metadata is known.
+    /// Images ignore start time and return 0.
+    /// </summary>
+    /// <param name="proposedSeconds">Requested start time in seconds.</param>
+    /// <returns>Clamped start time in seconds.</returns>
+    public double ClampStartTime(double proposedSeconds)
+    {
+        if (IsImage)
+            return 0.0;
+        double result = Math.Max(0.0, proposedSeconds);
+        double fileDuration = Metadata?.Duration ?? 0.0;
+        if (fileDuration > 0.0 && result > fileDuration)
+            result = fileDuration;
+        return result;
+    }
+
+    /// <summary>
     /// Recomputes <see cref="Duration"/> / <see cref="TotalDuration"/> from in/out points (video)
     /// or from the user-set hold duration (image).
     /// </summary>
@@ -583,6 +601,9 @@ public class VideoComponent : ICueComponent
 
         double fileDuration = Metadata.Duration;
         if (fileDuration < 0) fileDuration = 0;
+
+        // Keep start within file bounds so duration/playback cannot go invalid.
+        StartTime = ClampStartTime(StartTime);
 
         Duration = EndTime < 0
             ? Math.Max(0, fileDuration - StartTime)

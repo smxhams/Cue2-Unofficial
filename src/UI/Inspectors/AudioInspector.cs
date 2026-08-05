@@ -305,7 +305,7 @@ public partial class AudioInspector : Control
     /// <summary>
     /// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
     /// Blank or -1 input sets time to undefined (EndTime=-1, StartTime=0).
-    /// End times at or beyond file duration are clamped to full duration (EndTime=-1).
+    /// Start times are clamped to [0, file duration]. End times at or beyond file duration become full (EndTime=-1).
     /// </summary>
     /// <param name="text">The submitted text.</param>
     /// <param name="textField">The LineEdit field.</param>

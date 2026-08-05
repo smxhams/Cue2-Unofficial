@@ -41,6 +41,8 @@ public partial class LibraryInspector : Control
     private Label _pathLabel;
 
     // Panes
+    private ScrollContainer _contentScroll;
+    private VBoxContainer _contentVBox;
     private HSplitContainer _mainSplit;
     /// <summary>
     /// Must be <see cref="Godot.Tree"/> — a project demo type also named <c>Tree</c>
@@ -50,6 +52,7 @@ public partial class LibraryInspector : Control
     private ItemList _entryList;
     private Label _detailLabel;
     private Label _emptyLabel;
+    private bool _scrollFitWired;
 
     private const int DefaultSplitOffset = 200;
 
@@ -103,7 +106,9 @@ public partial class LibraryInspector : Control
         {
             _globalSignals.ShellFocused -= OnShellFocused;
             _globalSignals.LocaleChanged -= OnLocaleChanged;
+            _globalSignals.UiScaleChanged -= OnSaveDialogUiScaleChanged;
         }
+        UnwireScrollFit();
         UnwireToolbarSignals();
         UnwireTreeSignals();
     }
@@ -170,14 +175,15 @@ public partial class LibraryInspector : Control
             _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
 
         if (_globalSignals == null || !GodotObject.IsInstanceValid(_globalSignals))
-        {
             _globalSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
-            if (_globalSignals != null)
-            {
-                // Avoid double-subscribe if retried
-                _globalSignals.ShellFocused -= OnShellFocused;
-                _globalSignals.ShellFocused += OnShellFocused;
-            }
+
+        if (_globalSignals != null)
+        {
+            // Avoid double-subscribe if retried
+            _globalSignals.ShellFocused -= OnShellFocused;
+            _globalSignals.ShellFocused += OnShellFocused;
+            _globalSignals.UiScaleChanged -= OnSaveDialogUiScaleChanged;
+            _globalSignals.UiScaleChanged += OnSaveDialogUiScaleChanged;
         }
 
         if (_library == null || !GodotObject.IsInstanceValid(_library))
@@ -225,20 +231,25 @@ public partial class LibraryInspector : Control
         _openFolderButton ??= GetNodeOrNull<Button>("%OpenFolderButton");
         _searchEdit ??= GetNodeOrNull<LineEdit>("%SearchEdit");
         _pathLabel ??= GetNodeOrNull<Label>("%PathLabel");
+        _contentScroll ??= GetNodeOrNull<ScrollContainer>("%ContentScroll")
+                           ?? GetNodeOrNull<ScrollContainer>("RootMargin/ContentScroll");
+        _contentVBox ??= GetNodeOrNull<VBoxContainer>("%VBox")
+                         ?? GetNodeOrNull<VBoxContainer>("RootMargin/ContentScroll/VBox");
         _mainSplit ??= GetNodeOrNull<HSplitContainer>("%MainSplit")
-                       ?? GetNodeOrNull<HSplitContainer>("RootMargin/VBox/MainSplit");
+                       ?? GetNodeOrNull<HSplitContainer>("RootMargin/ContentScroll/VBox/MainSplit");
         _entryList ??= GetNodeOrNull<ItemList>("%EntryList")
-                       ?? GetNodeOrNull<ItemList>("RootMargin/VBox/MainSplit/RightPane/EntryList");
+                       ?? GetNodeOrNull<ItemList>("RootMargin/ContentScroll/VBox/MainSplit/RightPane/EntryList");
         _detailLabel ??= GetNodeOrNull<Label>("%DetailLabel");
         _emptyLabel ??= GetNodeOrNull<Label>("%EmptyLabel");
         _insertModeOption ??= GetNodeOrNull<OptionButton>("%InsertModeOption");
         _copyMediaCheck ??= GetNodeOrNull<CheckBox>("%CopyMediaCheck");
 
+        WireScrollFit();
+
         if (_folderTree == null || !GodotObject.IsInstanceValid(_folderTree))
         {
             _folderTree = GetNodeOrNull<Tree>("%FolderTree")
-                          ?? GetNodeOrNull<Tree>("RootMargin/VBox/MainSplit/LeftPanel/FolderTree")
-                          ?? GetNodeOrNull<Tree>("RootMargin/VBox/MainSplit/FolderTree")
+                          ?? GetNodeOrNull<Tree>("RootMargin/ContentScroll/VBox/MainSplit/LeftPanel/FolderTree")
                           ?? FindChild("FolderTree", recursive: true, owned: false) as Tree;
         }
 
@@ -407,6 +418,36 @@ public partial class LibraryInspector : Control
         AddChild(_confirmDialog);
     }
 
+    /// <summary>
+    /// Applies content scale to the Save to Library dialog only (it is a separate Window
+    /// and does not inherit the main window scale). Call immediately before showing it.
+    /// </summary>
+    private void ApplySaveDialogUiScale()
+    {
+        if (_saveDialog == null || !GodotObject.IsInstanceValid(_saveDialog))
+            return;
+        if (_globalData?.Settings == null)
+            return;
+
+        // Match FileDropPopup / SettingsCue2Prefs scaling path.
+        _saveDialog.WrapControls = true;
+        UiUtilities.RescaleUi(
+            _saveDialog,
+            _globalData.Settings.UiScale,
+            _globalData.BaseDisplayScale);
+    }
+
+    /// <summary>
+    /// Live UI-scale updates only while the Save to Library dialog is open.
+    /// </summary>
+    /// <param name="value">New user UI scale (ignored; read from Settings).</param>
+    private void OnSaveDialogUiScaleChanged(float value)
+    {
+        if (_saveDialog == null || !GodotObject.IsInstanceValid(_saveDialog) || !_saveDialog.Visible)
+            return;
+        ApplySaveDialogUiScale();
+    }
+
     private void OnVisibilityChanged()
     {
         if (!Visible)
@@ -414,6 +455,8 @@ public partial class LibraryInspector : Control
 
         // Tab starts hidden; resolve deps + rebuild after layout has a real width.
         CallDeferred(nameof(TryInitializeAndRefresh));
+        // Height fit after TabContainer has assigned the final rect (next frames).
+        CallDeferred(nameof(ScheduleLibraryScrollFit));
     }
 
     /// <summary>
@@ -423,7 +466,7 @@ public partial class LibraryInspector : Control
     {
         if (_mainSplit == null || !GodotObject.IsInstanceValid(_mainSplit))
             _mainSplit = GetNodeOrNull<HSplitContainer>("%MainSplit")
-                         ?? GetNodeOrNull<HSplitContainer>("RootMargin/VBox/MainSplit");
+                         ?? GetNodeOrNull<HSplitContainer>("RootMargin/ContentScroll/VBox/MainSplit");
 
         if (_mainSplit == null)
             return;
@@ -431,6 +474,110 @@ public partial class LibraryInspector : Control
         // Godot 4.6 SplitContainer uses SplitOffset; a zero/negative value collapses the tree pane.
         if (_mainSplit.SplitOffset < 120)
             _mainSplit.SplitOffset = DefaultSplitOffset;
+
+        FitLibraryScrollContent();
+    }
+
+    /// <summary>
+    /// Wires scroll-area resize so content expands when tall and scrolls when short.
+    /// </summary>
+    private void WireScrollFit()
+    {
+        if (_scrollFitWired)
+            return;
+        if (_contentScroll == null || !GodotObject.IsInstanceValid(_contentScroll))
+            return;
+
+        _contentScroll.Resized += OnContentScrollResized;
+        Resized += OnLibraryHostResized;
+        _scrollFitWired = true;
+        CallDeferred(nameof(ScheduleLibraryScrollFit));
+    }
+
+    /// <summary>
+    /// Disconnects scroll resize handling.
+    /// </summary>
+    private void UnwireScrollFit()
+    {
+        if (!_scrollFitWired)
+            return;
+        if (_contentScroll != null && GodotObject.IsInstanceValid(_contentScroll))
+            _contentScroll.Resized -= OnContentScrollResized;
+        Resized -= OnLibraryHostResized;
+        _scrollFitWired = false;
+    }
+
+    private void OnContentScrollResized() => FitLibraryScrollContent();
+
+    private void OnLibraryHostResized() => FitLibraryScrollContent();
+
+    /// <summary>
+    /// Re-fits after one process frame so first-show layout has a stable host size.
+    /// </summary>
+    private void ScheduleLibraryScrollFit()
+    {
+        TaskUtil.Run(FitLibraryScrollContentAfterLayoutAsync, "LibraryInspector.FitScroll");
+    }
+
+    /// <summary>
+    /// Waits for layout to settle, then applies scroll content height (twice: post-sort + post-scrollbars).
+    /// </summary>
+    private async System.Threading.Tasks.Task FitLibraryScrollContentAfterLayoutAsync()
+    {
+        // First open often reports unconstrained sizes before TabContainer clamps the tab page.
+        if (GetTree() != null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (!GodotObject.IsInstanceValid(this) || !IsInsideTree() || !Visible)
+            return;
+        FitLibraryScrollContent();
+
+        if (GetTree() != null)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (!GodotObject.IsInstanceValid(this) || !IsInsideTree() || !Visible)
+            return;
+        FitLibraryScrollContent();
+    }
+
+    /// <summary>
+    /// Makes the scroll content fill the viewport when there is spare height, otherwise leaves
+    /// natural minimums so the outer scroll container can scroll. Guards against first-open
+    /// layout races where <see cref="ScrollContainer"/> temporarily reports a huge height.
+    /// </summary>
+    private void FitLibraryScrollContent()
+    {
+        if (!GodotObject.IsInstanceValid(this) || !IsInsideTree() || !Visible)
+            return;
+        if (_contentScroll == null || !GodotObject.IsInstanceValid(_contentScroll))
+            return;
+        if (_contentVBox == null || !GodotObject.IsInstanceValid(_contentVBox))
+            return;
+
+        // Host tab rect is the authority — scroll Size can be unconstrained on first show.
+        float hostH = Size.Y;
+        float viewH = _contentScroll.Size.Y;
+        if (hostH < 32f || viewH < 1f)
+            return;
+
+        // Clamp runaway first-layout sizes to the actual inspector allocation.
+        if (viewH > hostH)
+            viewH = hostH;
+
+        // Account for RootMargin padding so we do not force content taller than the scroll viewport.
+        if (_contentScroll.GetParent() is Control margin && margin.Size.Y >= 32f)
+            viewH = Math.Min(viewH, margin.Size.Y);
+
+        // Measure natural min height without a forced vertical min.
+        float widthMin = _contentVBox.CustomMinimumSize.X;
+        if (_contentVBox.CustomMinimumSize.Y > 0f)
+            _contentVBox.CustomMinimumSize = new Vector2(widthMin, 0f);
+
+        float naturalH = _contentVBox.GetCombinedMinimumSize().Y;
+
+        // Expand only when the viewport is taller than natural content; otherwise leave Y min at 0
+        // so combined minimums drive scrolling (avoids locking in a stale oversized height).
+        float targetH = naturalH + 0.5f < viewH ? viewH : 0f;
+        if (Math.Abs(_contentVBox.CustomMinimumSize.Y - targetH) > 0.5f)
+            _contentVBox.CustomMinimumSize = new Vector2(widthMin, targetH);
     }
 
     private void OnShellFocused(int _)
@@ -466,6 +613,7 @@ public partial class LibraryInspector : Control
             RefreshEntryList();
             UpdateActionButtons();
             EnsureSplitLayout();
+            CallDeferred(nameof(FitLibraryScrollContent));
         }
         finally
         {
@@ -791,16 +939,73 @@ public partial class LibraryInspector : Control
         }
 
         _saveNameEdit.Text = string.IsNullOrWhiteSpace(cue.Name) ? $"Cue {cue.Id}" : cue.Name;
-        _saveIncludeChildren.ButtonPressed = cue.ChildCues != null && cue.ChildCues.Count > 0;
-        _saveIncludeChildren.Disabled = cue.ChildCues == null || cue.ChildCues.Count == 0;
-        _saveIncludeMedia.ButtonPressed = true;
+        bool hasChildren = cue.ChildCues != null && cue.ChildCues.Count > 0;
+        _saveIncludeChildren.ButtonPressed = hasChildren;
+        _saveIncludeChildren.Disabled = !hasChildren;
+
+        // Same idea as nested children: no media paths to package → disable copy option.
+        // Walk descendants so including children with media can still package files.
+        bool hasMedia = CueTreeHasMedia(cue);
+        _saveIncludeMedia.ButtonPressed = hasMedia;
+        _saveIncludeMedia.Disabled = !hasMedia;
+
         _saveFolderLabel.Text = string.IsNullOrEmpty(_selectedFolder)
             ? "Folder: / (library root)"
             : $"Folder: /{_selectedFolder}";
 
-        _saveDialog.PopupCentered(new Vector2I(420, 260));
+        ApplySaveDialogUiScale();
+        _saveDialog.PopupCentered(new Vector2I(560, 260));
         _saveNameEdit.GrabFocus();
         _saveNameEdit.SelectAll();
+    }
+
+    /// <summary>
+    /// True when <paramref name="root"/> or any nested child references an audio/video file path.
+    /// </summary>
+    private static bool CueTreeHasMedia(Cue root)
+    {
+        if (root == null)
+            return false;
+
+        var stack = new Stack<Cue>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var cue = stack.Pop();
+            if (CueHasMediaFileReference(cue))
+                return true;
+
+            if (cue.ChildCues == null || cue.ChildCues.Count == 0)
+                continue;
+
+            foreach (int childId in cue.ChildCues)
+            {
+                var child = CueList.FetchCueFromId(childId);
+                if (child != null)
+                    stack.Push(child);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when the cue has an audio or video component with a non-empty file path.
+    /// </summary>
+    private static bool CueHasMediaFileReference(Cue cue)
+    {
+        if (cue == null)
+            return false;
+
+        var audio = cue.GetAudioComponent();
+        if (audio != null && !string.IsNullOrWhiteSpace(audio.AudioFile))
+            return true;
+
+        var video = cue.GetVideoComponent();
+        if (video != null && !string.IsNullOrWhiteSpace(video.VideoFile))
+            return true;
+
+        return false;
     }
 
     private void OnSaveDialogConfirmed()

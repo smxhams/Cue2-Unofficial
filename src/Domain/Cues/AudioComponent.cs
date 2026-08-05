@@ -105,6 +105,21 @@ public class AudioComponent : ICueComponent
         return data;
     }
 
+    /// <summary>
+    /// Clamps a proposed start time into the valid range for this component's media.
+    /// Never negative; never greater than the file duration when metadata is known.
+    /// </summary>
+    /// <param name="proposedSeconds">Requested start time in seconds.</param>
+    /// <returns>Clamped start time in seconds.</returns>
+    public double ClampStartTime(double proposedSeconds)
+    {
+        double result = Math.Max(0.0, proposedSeconds);
+        double fileDuration = Metadata?.Duration ?? 0.0;
+        if (fileDuration > 0.0 && result > fileDuration)
+            result = fileDuration;
+        return result;
+    }
+
     public double RecalculateDuration()
     {
         // Metadata is filled asynchronously after file drop — do not NRE before it arrives
@@ -117,6 +132,9 @@ public class AudioComponent : ICueComponent
 
         double fileDuration = Metadata.Duration;
         if (fileDuration < 0) fileDuration = 0;
+
+        // Keep start within file bounds so duration/playback cannot go invalid.
+        StartTime = ClampStartTime(StartTime);
 
         Duration = EndTime < 0
             ? Math.Max(0, fileDuration - StartTime)

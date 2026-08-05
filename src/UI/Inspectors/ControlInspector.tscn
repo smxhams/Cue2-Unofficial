@@ -52,13 +52,14 @@ theme_override_constants/margin_bottom = 10
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="HeaderBar" type="HBoxContainer" parent="ContentRoot/VBox" unique_id=591315758]
+[node name="HeaderBar" type="FlowContainer" parent="ContentRoot/VBox" unique_id=591315758]
 layout_mode = 2
-theme_override_constants/separation = 6
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
 
 [node name="HeaderLabel" type="Label" parent="ContentRoot/VBox/HeaderBar" unique_id=1217881685]
 layout_mode = 2
-size_flags_horizontal = 3
 text = "Add control:"
 
 [node name="AddGoButton" type="Button" parent="ContentRoot/VBox/HeaderBar" unique_id=2097489613]

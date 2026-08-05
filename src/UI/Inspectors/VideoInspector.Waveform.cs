@@ -170,9 +170,10 @@ public partial class VideoInspector
 				float localEndN = comp.EndTime < 0 ? 1f : (float)(comp.EndTime / d);
 				float localNorm = Mathf.Min(norm, localEndN - 0.001f);
 				localNorm = Mathf.Max(0f, localNorm);
-				comp.StartTime = localNorm * d;
+				comp.StartTime = comp.ClampStartTime(localNorm * d);
 			}
-			_startTimeInput.Text = UiUtilities.FormatTime(startSecs);
+			_startTimeInput.Text = UiUtilities.FormatTime(
+				_focusedVideoComponent != null ? _focusedVideoComponent.StartTime : startSecs);
 			_ = DrawWaveform();
 		}
 	}

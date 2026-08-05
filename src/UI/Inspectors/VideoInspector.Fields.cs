@@ -446,8 +446,8 @@ public partial class VideoInspector
 	
 	/// <summary>
 	/// Handles submission of time fields (start/end). Parses input, updates component, and recalculates duration.
-	/// Blank or -1 input sets end time to undefined.
-	/// End times at or beyond file duration are clamped to full duration (EndTime=-1).
+	/// Blank or -1 input sets end time to undefined (and start time to 0).
+	/// Start times are clamped to [0, file duration]. End times at or beyond file duration become full (EndTime=-1).
 	/// Applies to all multi-edit video targets (images use OnImageDurationSubmitted).
 	/// </summary>
 	/// <param name="text">The submitted text.</param>
@@ -509,15 +509,43 @@ public partial class VideoInspector
 
 			if (textField == _startTimeInput)
 			{
-				if (targets.All(t => Math.Abs(t.Component.StartTime - timeSecs) < 1e-9))
+				// Clamp start to [0, fileDuration] per target so start cannot exceed media length.
+				bool anyChange = false;
+				foreach (var (_, comp) in targets)
 				{
-					textField.Text = time;
-					textField.TooltipText = labeledTime;
+					double clamped = comp.ClampStartTime(timeSecs);
+					if (Math.Abs(comp.StartTime - clamped) >= 1e-9)
+						anyChange = true;
+				}
+
+				if (!anyChange)
+				{
+					double displaySecs = _focusedVideoComponent != null
+						? _focusedVideoComponent.ClampStartTime(timeSecs)
+						: Math.Max(0.0, timeSecs);
+					string displayTime = UiUtilities.FormatTime(displaySecs);
+					textField.Text = displayTime;
+					UiUtilities.ParseAndFormatTime(displayTime, out _, out string displayLabeled, out _);
+					textField.TooltipText = displayLabeled;
 					return;
 				}
+
 				RecordVideoHistory("Edit video start time");
 				foreach (var (_, comp) in targets)
-					comp.StartTime = timeSecs;
+					comp.StartTime = comp.ClampStartTime(timeSecs);
+
+				// Show primary's applied (possibly clamped) value.
+				double primaryStart = _focusedVideoComponent?.StartTime ?? timeSecs;
+				string primaryFormatted = UiUtilities.FormatTime(primaryStart);
+				textField.Text = primaryFormatted;
+				UiUtilities.ParseAndFormatTime(primaryFormatted, out _, out string primaryLabeled, out _);
+				textField.TooltipText = primaryLabeled;
+
+				SyncDuration();
+				if (textField.HasFocus())
+					textField.ReleaseFocus();
+				_ = DrawWaveform();
+				return;
 			}
 			else if (textField == _endTimeInput)
 			{

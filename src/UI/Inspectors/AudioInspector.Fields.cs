@@ -94,15 +94,43 @@ public partial class AudioInspector
 
             if (textField == _startTimeInput)
             {
-                if (targets.All(t => Math.Abs(t.Component.StartTime - timeSecs) < 1e-9))
+                // Clamp start to [0, fileDuration] per target so start cannot exceed media length.
+                bool anyChange = false;
+                foreach (var (_, comp) in targets)
                 {
-                    textField.Text = time;
-                    textField.TooltipText = labeledTime;
+                    double clamped = comp.ClampStartTime(timeSecs);
+                    if (Math.Abs(comp.StartTime - clamped) >= 1e-9)
+                        anyChange = true;
+                }
+
+                if (!anyChange)
+                {
+                    double displaySecs = _focusedAudioComponent != null
+                        ? _focusedAudioComponent.ClampStartTime(timeSecs)
+                        : Math.Max(0.0, timeSecs);
+                    string displayTime = UiUtilities.FormatTime(displaySecs);
+                    textField.Text = displayTime;
+                    UiUtilities.ParseAndFormatTime(displayTime, out _, out string displayLabeled, out _);
+                    textField.TooltipText = displayLabeled;
                     return;
                 }
+
                 RecordAudioHistory("Edit audio start time");
                 foreach (var (_, comp) in targets)
-                    comp.StartTime = timeSecs;
+                    comp.StartTime = comp.ClampStartTime(timeSecs);
+
+                // Show primary's applied (possibly clamped) value.
+                double primaryStart = _focusedAudioComponent?.StartTime ?? timeSecs;
+                string primaryFormatted = UiUtilities.FormatTime(primaryStart);
+                textField.Text = primaryFormatted;
+                UiUtilities.ParseAndFormatTime(primaryFormatted, out _, out string primaryLabeled, out _);
+                textField.TooltipText = primaryLabeled;
+
+                SyncDuration();
+                if (textField.HasFocus())
+                    textField.ReleaseFocus();
+                DrawWaveform();
+                return;
             }
             else if (textField == _endTimeInput)
             {
