@@ -84,13 +84,13 @@ public partial class SettingsAudioDefaults : ScrollContainer
         _fadeOutInput = GetNode<LineEdit>("%FadeOutInput");
         _fadeOutResetButton = GetNode<Button>("%FadeOutResetButton");
 
-        SetupResetButton(_outputResetButton, OnOutputResetPressed);
-        SetupResetButton(_volumeResetButton, OnVolumeResetPressed);
-        SetupResetButton(_panResetButton, OnPanResetPressed);
-        SetupResetButton(_loopResetButton, OnLoopResetPressed);
-        SetupResetButton(_playCountResetButton, OnPlayCountResetPressed);
-        SetupResetButton(_fadeInResetButton, OnFadeInResetPressed);
-        SetupResetButton(_fadeOutResetButton, OnFadeOutResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _outputResetButton, OnOutputResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _volumeResetButton, OnVolumeResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _panResetButton, OnPanResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _loopResetButton, OnLoopResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _playCountResetButton, OnPlayCountResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeInResetButton, OnFadeInResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeOutResetButton, OnFadeOutResetPressed);
 
         if (_outputOption != null)
             _outputOption.ItemSelected += OnOutputSelected;
@@ -115,11 +115,18 @@ public partial class SettingsAudioDefaults : ScrollContainer
             _globalSignals.NewSession += OnNewSession;
 
         SyncSettings();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
@@ -127,19 +134,6 @@ public partial class SettingsAudioDefaults : ScrollContainer
         base._ExitTree();
     }
 
-    private void SetupResetButton(Button button, Action pressed)
-    {
-        if (button == null) return;
-        try
-        {
-            button.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        }
-        catch
-        {
-            // Icon optional
-        }
-        button.Pressed += pressed;
-    }
 
     private void OnHistoryRestored(int scope)
     {
@@ -215,9 +209,9 @@ public partial class SettingsAudioDefaults : ScrollContainer
         UpdateFadeOutResetButton();
     }
 
-    private void RecordHistory(string description)
+    private void RecordHistory(string description, string coalesceKey = null)
     {
-        _historyManager?.RecordSettingsChange(description, null, "AudioDefaults");
+        ComponentDefaultsUi.RecordDefaultsChange(_historyManager, description, "AudioDefaults", coalesceKey);
     }
 
     // ── Output ─────────────────────────────────────────────────────────────
@@ -266,13 +260,12 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void UpdateOutputResetButton()
     {
-        if (_outputResetButton == null || _globalData?.Settings == null) return;
+        if (_globalData?.Settings == null) return;
         var s = _globalData.Settings;
         bool atDefault = ComponentDefaultsUi.IsAudioOutputAtSystem(
             s.AudioDefaultOutputMode, s.AudioDefaultPatchId, s.AudioDefaultDirectOutput);
-        _outputResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _outputResetButton.TooltipText = "Reset to default: Preferred (Default Patch)";
+        ComponentDefaultsUi.UpdateResetButton(
+            _outputResetButton, atDefault, "Reset to default: Preferred (Default Patch)");
     }
 
     // ── Volume ─────────────────────────────────────────────────────────────
@@ -287,8 +280,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void CommitVolume(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         try
         {
@@ -340,28 +332,27 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void UpdateVolumeResetButton()
     {
-        if (_volumeResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Math.Abs(_globalData.Settings.AudioDefaultVolume
-                                  - AppSettings.SystemDefaultAudioVolume) < 1e-6;
-        _volumeResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _volumeResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.LinearToDb((float)AppSettings.SystemDefaultAudioVolume)}dB";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            (float)_globalData.Settings.AudioDefaultVolume,
+            (float)AppSettings.SystemDefaultAudioVolume);
+        ComponentDefaultsUi.UpdateResetButton(
+            _volumeResetButton,
+            atDefault,
+            $"Reset to default: {UiUtilities.LinearToDb((float)AppSettings.SystemDefaultAudioVolume)}dB");
     }
 
     // ── Pan ────────────────────────────────────────────────────────────────
 
     private void OnPanSliderChanged(double value)
     {
-        if (_isSyncingUi || _isUpdatingPanUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_isUpdatingPanUi || _globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
         if (Math.Abs(_globalData.Settings.AudioDefaultPan - pan) < 1e-6f)
             return;
 
-        _historyManager?.RecordSettingsChange(
-            "Change default audio pan", "settings:audio-defaults:pan", "AudioDefaults");
+        RecordHistory("Change default audio pan", "settings:audio-defaults:pan");
         _globalData.Settings.AudioDefaultPan = pan;
 
         _isUpdatingPanUi = true;
@@ -381,7 +372,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
     private void OnPanDragEnded(bool valueChanged)
     {
         if (!valueChanged) return;
-        _historyManager?.EndCoalesceSession("settings:audio-defaults:pan");
+        ComponentDefaultsUi.EndDefaultsCoalesce(_historyManager, "settings:audio-defaults:pan");
     }
 
     private void OnPanSubmitted(string text) => CommitPan(text);
@@ -394,8 +385,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void CommitPan(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (!UiUtilities.TryParsePan(text, out float pan))
         {
@@ -444,21 +434,19 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void UpdatePanResetButton()
     {
-        if (_panResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Math.Abs(_globalData.Settings.AudioDefaultPan
-                                  - AppSettings.SystemDefaultAudioPan) < 1e-6f;
-        _panResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _panResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatPan(AppSettings.SystemDefaultAudioPan)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.AudioDefaultPan, AppSettings.SystemDefaultAudioPan);
+        ComponentDefaultsUi.UpdateResetButton(
+            _panResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatPan(AppSettings.SystemDefaultAudioPan)}");
     }
 
     // ── Loop ───────────────────────────────────────────────────────────────
 
     private void OnLoopToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (_globalData.Settings.AudioDefaultLoop == pressed)
         {
@@ -487,12 +475,11 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void UpdateLoopResetButton()
     {
-        if (_loopResetButton == null || _globalData?.Settings == null) return;
+        if (_globalData?.Settings == null) return;
         bool atDefault = _globalData.Settings.AudioDefaultLoop == AppSettings.SystemDefaultAudioLoop;
-        _loopResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _loopResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultAudioLoop ? "On" : "Off")}";
+        ComponentDefaultsUi.UpdateResetButton(
+            _loopResetButton, atDefault,
+            $"Reset to default: {(AppSettings.SystemDefaultAudioLoop ? "On" : "Off")}");
     }
 
     // ── Play count ─────────────────────────────────────────────────────────
@@ -507,8 +494,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void CommitPlayCount(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (!int.TryParse(text.Trim(), out int count) || count < 1)
         {
@@ -546,13 +532,12 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void UpdatePlayCountResetButton()
     {
-        if (_playCountResetButton == null || _globalData?.Settings == null) return;
+        if (_globalData?.Settings == null) return;
         bool atDefault = _globalData.Settings.AudioDefaultPlayCount
                          == AppSettings.SystemDefaultAudioPlayCount;
-        _playCountResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _playCountResetButton.TooltipText =
-                $"Reset to default: {AppSettings.SystemDefaultAudioPlayCount}";
+        ComponentDefaultsUi.UpdateResetButton(
+            _playCountResetButton, atDefault,
+            $"Reset to default: {AppSettings.SystemDefaultAudioPlayCount}");
     }
 
     // ── Fade in / out ──────────────────────────────────────────────────────
@@ -575,30 +560,15 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void CommitFade(string text, bool isIn)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager))
+            return;
 
         var field = isIn ? _fadeInInput : _fadeOutInput;
-        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
-        if (string.IsNullOrEmpty(formatted))
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                $"Invalid default fade time: {text}", 1);
-            double current = isIn
-                ? _globalData.Settings.AudioDefaultFadeIn
-                : _globalData.Settings.AudioDefaultFadeOut;
-            field.Text = UiUtilities.FormatTime(current);
-            return;
-        }
-
-        field.Text = formatted;
-        field.TooltipText = labeled;
-        seconds = Math.Max(0.0, seconds);
-
         double existing = isIn
             ? _globalData.Settings.AudioDefaultFadeIn
             : _globalData.Settings.AudioDefaultFadeOut;
-        if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+        if (!ComponentDefaultsUi.TryParseTimeDefault(
+                field, text, existing, _globalSignals, $"Invalid default fade time: {text}", out double seconds))
         {
             if (isIn) UpdateFadeInResetButton();
             else UpdateFadeOutResetButton();
@@ -617,53 +587,53 @@ public partial class SettingsAudioDefaults : ScrollContainer
 
     private void OnFadeInResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.AudioDefaultFadeIn,
-                (float)AppSettings.SystemDefaultAudioFadeIn))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default audio fade-in");
-        _globalData.Settings.AudioDefaultFadeIn = AppSettings.SystemDefaultAudioFadeIn;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "AudioDefaults", "Reset default audio fade-in",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.AudioDefaultFadeIn, AppSettings.SystemDefaultAudioFadeIn),
+            () => _globalData.Settings.AudioDefaultFadeIn = AppSettings.SystemDefaultAudioFadeIn,
+            SyncSettings);
     }
 
     private void OnFadeOutResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.AudioDefaultFadeOut,
-                (float)AppSettings.SystemDefaultAudioFadeOut))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default audio fade-out");
-        _globalData.Settings.AudioDefaultFadeOut = AppSettings.SystemDefaultAudioFadeOut;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "AudioDefaults", "Reset default audio fade-out",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.AudioDefaultFadeOut, AppSettings.SystemDefaultAudioFadeOut),
+            () => _globalData.Settings.AudioDefaultFadeOut = AppSettings.SystemDefaultAudioFadeOut,
+            SyncSettings);
     }
 
     private void UpdateFadeInResetButton()
     {
-        if (_fadeInResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.AudioDefaultFadeIn,
-            (float)AppSettings.SystemDefaultAudioFadeIn);
-        _fadeInResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeInResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeIn)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.AudioDefaultFadeIn, AppSettings.SystemDefaultAudioFadeIn);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeInResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeIn)}");
     }
 
     private void UpdateFadeOutResetButton()
     {
-        if (_fadeOutResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.AudioDefaultFadeOut,
-            (float)AppSettings.SystemDefaultAudioFadeOut);
-        _fadeOutResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeOutResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeOut)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.AudioDefaultFadeOut, AppSettings.SystemDefaultAudioFadeOut);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeOutResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeOut)}");
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

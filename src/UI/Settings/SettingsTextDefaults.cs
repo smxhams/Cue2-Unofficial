@@ -128,23 +128,23 @@ public partial class SettingsTextDefaults : ScrollContainer
         _fadeOutInput = GetNode<LineEdit>("%FadeOutInput");
         _fadeOutResetButton = GetNode<Button>("%FadeOutResetButton");
 
-        SetupResetButton(_targetLayerResetButton, OnTargetLayerResetPressed);
-        SetupResetButton(_durationResetButton, OnDurationResetPressed);
-        SetupResetButton(_opacityResetButton, OnOpacityResetPressed);
-        SetupResetButton(_bbcodeResetButton, OnBbcodeResetPressed);
-        SetupResetButton(_fontNameResetButton, OnFontNameResetPressed);
-        SetupResetButton(_fontSizeResetButton, OnFontSizeResetPressed);
-        SetupResetButton(_fontColorResetButton, OnFontColorResetPressed);
-        SetupResetButton(_hAlignResetButton, OnHAlignResetPressed);
-        SetupResetButton(_vAlignResetButton, OnVAlignResetPressed);
-        SetupResetButton(_autowrapResetButton, OnAutowrapResetPressed);
-        SetupResetButton(_marginsResetButton, OnMarginsResetPressed);
-        SetupResetButton(_outlineSizeResetButton, OnOutlineSizeResetPressed);
-        SetupResetButton(_outlineColorResetButton, OnOutlineColorResetPressed);
-        SetupResetButton(_backgroundResetButton, OnBackgroundResetPressed);
-        SetupResetButton(_backgroundColorResetButton, OnBackgroundColorResetPressed);
-        SetupResetButton(_fadeInResetButton, OnFadeInResetPressed);
-        SetupResetButton(_fadeOutResetButton, OnFadeOutResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _targetLayerResetButton, OnTargetLayerResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _durationResetButton, OnDurationResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _opacityResetButton, OnOpacityResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _bbcodeResetButton, OnBbcodeResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fontNameResetButton, OnFontNameResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fontSizeResetButton, OnFontSizeResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fontColorResetButton, OnFontColorResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _hAlignResetButton, OnHAlignResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _vAlignResetButton, OnVAlignResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _autowrapResetButton, OnAutowrapResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _marginsResetButton, OnMarginsResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _outlineSizeResetButton, OnOutlineSizeResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _outlineColorResetButton, OnOutlineColorResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _backgroundResetButton, OnBackgroundResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _backgroundColorResetButton, OnBackgroundColorResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeInResetButton, OnFadeInResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeOutResetButton, OnFadeOutResetPressed);
 
         EnsureAlignOptions();
 
@@ -188,11 +188,18 @@ public partial class SettingsTextDefaults : ScrollContainer
         }
 
         SyncSettings();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
@@ -210,19 +217,6 @@ public partial class SettingsTextDefaults : ScrollContainer
         SyncSettings();
     }
 
-    private void SetupResetButton(Button button, Action pressed)
-    {
-        if (button == null) return;
-        try
-        {
-            button.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        }
-        catch
-        {
-            // Icon optional
-        }
-        button.Pressed += pressed;
-    }
 
     private void OnHistoryRestored(int scope)
     {
@@ -244,44 +238,21 @@ public partial class SettingsTextDefaults : ScrollContainer
     {
         if (_hAlignOption != null && _hAlignOption.ItemCount == 0)
         {
-            AddAlign(_hAlignOption, "Left", (int)HorizontalAlignment.Left);
-            AddAlign(_hAlignOption, "Center", (int)HorizontalAlignment.Center);
-            AddAlign(_hAlignOption, "Right", (int)HorizontalAlignment.Right);
-            AddAlign(_hAlignOption, "Fill", (int)HorizontalAlignment.Fill);
+            ComponentDefaultsUi.AddOptionItem(_hAlignOption, "Left", (int)HorizontalAlignment.Left);
+            ComponentDefaultsUi.AddOptionItem(_hAlignOption, "Center", (int)HorizontalAlignment.Center);
+            ComponentDefaultsUi.AddOptionItem(_hAlignOption, "Right", (int)HorizontalAlignment.Right);
+            ComponentDefaultsUi.AddOptionItem(_hAlignOption, "Fill", (int)HorizontalAlignment.Fill);
         }
 
         if (_vAlignOption != null && _vAlignOption.ItemCount == 0)
         {
-            AddAlign(_vAlignOption, "Top", (int)VerticalAlignment.Top);
-            AddAlign(_vAlignOption, "Center", (int)VerticalAlignment.Center);
-            AddAlign(_vAlignOption, "Bottom", (int)VerticalAlignment.Bottom);
-            AddAlign(_vAlignOption, "Fill", (int)VerticalAlignment.Fill);
+            ComponentDefaultsUi.AddOptionItem(_vAlignOption, "Top", (int)VerticalAlignment.Top);
+            ComponentDefaultsUi.AddOptionItem(_vAlignOption, "Center", (int)VerticalAlignment.Center);
+            ComponentDefaultsUi.AddOptionItem(_vAlignOption, "Bottom", (int)VerticalAlignment.Bottom);
+            ComponentDefaultsUi.AddOptionItem(_vAlignOption, "Fill", (int)VerticalAlignment.Fill);
         }
     }
 
-    private static void AddAlign(OptionButton button, string label, int value)
-    {
-        int index = button.ItemCount;
-        button.AddItem(label);
-        button.SetItemMetadata(index, value);
-    }
-
-    private static void SelectByMetadata(OptionButton button, int metadata)
-    {
-        if (button == null) return;
-        button.SetBlockSignals(true);
-        for (int i = 0; i < button.ItemCount; i++)
-        {
-            if (button.GetItemMetadata(i).AsInt32() == metadata)
-            {
-                button.Selected = i;
-                button.SetBlockSignals(false);
-                return;
-            }
-        }
-        button.Selected = 0;
-        button.SetBlockSignals(false);
-    }
 
     private void SyncSettings()
     {
@@ -317,8 +288,8 @@ public partial class SettingsTextDefaults : ScrollContainer
             if (_fontColorPicker != null)
                 _fontColorPicker.Color = s.TextDefaultFontColor;
 
-            SelectByMetadata(_hAlignOption, (int)s.TextDefaultHAlign);
-            SelectByMetadata(_vAlignOption, (int)s.TextDefaultVAlign);
+            ComponentDefaultsUi.SelectOptionByMetadata(_hAlignOption, (int)s.TextDefaultHAlign);
+            ComponentDefaultsUi.SelectOptionByMetadata(_vAlignOption, (int)s.TextDefaultVAlign);
 
             _autowrapCheckBox?.SetPressedNoSignal(s.TextDefaultAutowrap);
 
@@ -370,9 +341,9 @@ public partial class SettingsTextDefaults : ScrollContainer
         UpdateFadeOutResetButton();
     }
 
-    private void RecordHistory(string description)
+    private void RecordHistory(string description, string coalesceKey = null)
     {
-        _historyManager?.RecordSettingsChange(description, null, "TextDefaults");
+        ComponentDefaultsUi.RecordDefaultsChange(_historyManager, description, "TextDefaults", coalesceKey);
     }
 
     // ── Target layer ───────────────────────────────────────────────────────
@@ -437,8 +408,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void CommitDuration(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         string trimmed = (text ?? string.Empty).Trim();
         double seconds;
@@ -511,8 +481,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnOpacityChanged(double value)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         float opacity = Mathf.Clamp((float)value / 100f, 0f, 1f);
         if (Math.Abs(_globalData.Settings.TextDefaultOpacity - opacity) < 1e-4f)
@@ -555,8 +524,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnBbcodeToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
         if (_globalData.Settings.TextDefaultUseBbcode == pressed)
         {
             UpdateBbcodeResetButton();
@@ -605,8 +573,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void CommitFontName(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         string name = (text ?? string.Empty).Trim();
         _fontNameInput.Text = name;
@@ -649,8 +616,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnFontSizeChanged(double value)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int size = Math.Max(1, (int)Math.Round(value));
         if (_globalData.Settings.TextDefaultFontSize == size)
@@ -733,8 +699,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnHAlignSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         var align = (HorizontalAlignment)_hAlignOption.GetItemMetadata((int)index).AsInt32();
         if (_globalData.Settings.TextDefaultHAlign == align)
@@ -773,8 +738,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnVAlignSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         var align = (VerticalAlignment)_vAlignOption.GetItemMetadata((int)index).AsInt32();
         if (_globalData.Settings.TextDefaultVAlign == align)
@@ -815,8 +779,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnAutowrapToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
         if (_globalData.Settings.TextDefaultAutowrap == pressed)
         {
             UpdateAutowrapResetButton();
@@ -855,8 +818,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnMarginsChanged(double value)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int margins = Math.Max(0, (int)Math.Round(value));
         if (_globalData.Settings.TextDefaultMargins == margins)
@@ -899,8 +861,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnOutlineSizeChanged(double value)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int size = Math.Max(0, (int)Math.Round(value));
         if (_globalData.Settings.TextDefaultOutlineSize == size)
@@ -984,8 +945,7 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnBackgroundToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
         if (_globalData.Settings.TextDefaultBackgroundEnabled == pressed)
         {
             UpdateBackgroundResetButton();
@@ -1070,30 +1030,15 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void CommitFade(string text, bool isIn)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager))
+            return;
 
         var field = isIn ? _fadeInInput : _fadeOutInput;
-        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
-        if (string.IsNullOrEmpty(formatted))
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                $"Invalid default fade time: {text}", 1);
-            double current = isIn
-                ? _globalData.Settings.TextDefaultFadeIn
-                : _globalData.Settings.TextDefaultFadeOut;
-            field.Text = UiUtilities.FormatTime(current);
-            return;
-        }
-
-        field.Text = formatted;
-        field.TooltipText = labeled;
-        seconds = Math.Max(0.0, seconds);
-
         double existing = isIn
             ? _globalData.Settings.TextDefaultFadeIn
             : _globalData.Settings.TextDefaultFadeOut;
-        if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+        if (!ComponentDefaultsUi.TryParseTimeDefault(
+                field, text, existing, _globalSignals, $"Invalid default fade time: {text}", out double seconds))
         {
             if (isIn) UpdateFadeInResetButton();
             else UpdateFadeOutResetButton();
@@ -1112,53 +1057,53 @@ public partial class SettingsTextDefaults : ScrollContainer
 
     private void OnFadeInResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.TextDefaultFadeIn,
-                (float)AppSettings.SystemDefaultTextFadeIn))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default text fade-in");
-        _globalData.Settings.TextDefaultFadeIn = AppSettings.SystemDefaultTextFadeIn;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "TextDefaults", "Reset default text fade-in",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.TextDefaultFadeIn, AppSettings.SystemDefaultTextFadeIn),
+            () => _globalData.Settings.TextDefaultFadeIn = AppSettings.SystemDefaultTextFadeIn,
+            SyncSettings);
     }
 
     private void OnFadeOutResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.TextDefaultFadeOut,
-                (float)AppSettings.SystemDefaultTextFadeOut))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default text fade-out");
-        _globalData.Settings.TextDefaultFadeOut = AppSettings.SystemDefaultTextFadeOut;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "TextDefaults", "Reset default text fade-out",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.TextDefaultFadeOut, AppSettings.SystemDefaultTextFadeOut),
+            () => _globalData.Settings.TextDefaultFadeOut = AppSettings.SystemDefaultTextFadeOut,
+            SyncSettings);
     }
 
     private void UpdateFadeInResetButton()
     {
-        if (_fadeInResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.TextDefaultFadeIn,
-            (float)AppSettings.SystemDefaultTextFadeIn);
-        _fadeInResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeInResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeIn)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.TextDefaultFadeIn, AppSettings.SystemDefaultTextFadeIn);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeInResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeIn)}");
     }
 
     private void UpdateFadeOutResetButton()
     {
-        if (_fadeOutResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.TextDefaultFadeOut,
-            (float)AppSettings.SystemDefaultTextFadeOut);
-        _fadeOutResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeOutResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeOut)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.TextDefaultFadeOut, AppSettings.SystemDefaultTextFadeOut);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeOutResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeOut)}");
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

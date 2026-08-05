@@ -182,7 +182,7 @@ public partial class InputActionsListener : Node
             if (CueList.CueIndex == null || CueList.CueIndex.Count == 0)
                 return;
 
-            var executor = _globalData?.CueCommandExectutor;
+            var executor = _globalData?.CueCommandExecutor;
             if (executor == null)
                 return;
 
@@ -227,7 +227,7 @@ public partial class InputActionsListener : Node
 
         if (CueList.CueIndex == null || CueList.CueIndex.Count == 0) return;
 
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return;
 
         bool any = false;

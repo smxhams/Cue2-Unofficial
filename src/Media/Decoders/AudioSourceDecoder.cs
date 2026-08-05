@@ -20,6 +20,10 @@ namespace Cue2.Media.Decoders;
 /// store so seek and loop are sample-accurate. Streaming codecs with reliable sample
 /// timestamps (PCM, FLAC, …) use a bounded ring buffer and demuxer seek.
 /// </para>
+/// <para>
+/// All public access is serialized on <c>_lock</c>. The streaming
+/// <see cref="PcmRingBuffer"/> is only touched under that lock (no nested ring lock).
+/// </para>
 /// </summary>
 public sealed class AudioSourceDecoder : IDisposable
 {

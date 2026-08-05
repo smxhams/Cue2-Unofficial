@@ -88,7 +88,12 @@ public partial class VideoPreviewer : Control
         OpenAsync(resolved);
     }
 
-    private async void OpenAsync(string file)
+    private void OpenAsync(string file)
+    {
+    	TaskUtil.Run(() => OpenWorkAsync(file), "VideoPreviewer.OpenAsync");
+    }
+
+    private async Task OpenWorkAsync(string file)
     {
         try
         {

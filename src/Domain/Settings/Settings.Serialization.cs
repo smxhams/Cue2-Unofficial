@@ -95,15 +95,22 @@ public partial class Settings
     {
         GD.Print($"Settings:LoadSettings - Loading Settings");
 
+        // Names from the showfile open-device list (may include devices opened for direct-output
+        // that are not currently in a patch). Unioned with patch keys before reconcile.
+        var showfileDeviceNames = new System.Collections.Generic.List<string>();
+        bool loadedAudioDevicesOrPatches = false;
+
         if (settingsData.TryGetValue("AudioDevices", out var devices))
         {
             GD.Print($"Settings:LoadSettings - Loading AudioDevices");
+            loadedAudioDevicesOrPatches = true;
             // Soft convert — hard cast (Array<string>) throws when JSON yields Array or Variant mix.
             var deviceArray = devices.AsGodotArray();
             foreach (var device in deviceArray)
             {
                 string deviceName = device.AsString();
                 if (string.IsNullOrEmpty(deviceName)) continue;
+                showfileDeviceNames.Add(deviceName);
                 _audioDevices.OpenAudioDevice(deviceName, out var _);
             }
         }
@@ -111,6 +118,7 @@ public partial class Settings
         if (settingsData.TryGetValue("AudioPatch", out var patchs))
         {
             GD.Print($"Settings:LoadSettings - Loading AudioPatches");
+            loadedAudioDevicesOrPatches = true;
             // Replace any session-seeded Default Patch from ResetSettings so open/load is authoritative.
             foreach (var existing in _audioOutputPatches.Values.ToList())
             {
@@ -140,6 +148,11 @@ public partial class Settings
             // Older showfiles with an empty patch table still get a usable Default Patch.
             EnsureDefaultAudioPatch();
         }
+
+        // After open + patch apply: close SDL devices left over from the previous session that
+        // are not in the showfile open list and not referenced by any loaded patch.
+        if (loadedAudioDevicesOrPatches)
+            ReconcileOpenAudioDevices(showfileDeviceNames);
         
         if (settingsData.TryGetValue("Displays", out var displays))
         {

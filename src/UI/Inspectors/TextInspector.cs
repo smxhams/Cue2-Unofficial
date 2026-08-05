@@ -119,11 +119,18 @@ public partial class TextInspector : Control
         }
 
         ShowNoSelection();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_globalSignals != null)
         {
             _globalSignals.ShellFocused -= OnShellFocused;
@@ -971,7 +978,7 @@ public partial class TextInspector : Control
             UseMultiHistory(),
             targets[^1].Cue,
             description,
-            "Multi-edit " + description,
+            multiDescription: null,
             coalesceKey);
     }
 
@@ -979,7 +986,7 @@ public partial class TextInspector : Control
     {
         if (string.IsNullOrEmpty(key))
             return;
-        _history?.EndCoalesceSession(key);
+        InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
     }
 
     private string CoalesceKey(string field)
@@ -992,7 +999,7 @@ public partial class TextInspector : Control
     private void NotifyLiveVisuals()
     {
         foreach (var (_, text) in GetTextTargets())
-            _globalData?.CueCommandExectutor?.RefreshPlayingTextVisuals(text);
+            _globalData?.CueCommandExecutor?.RefreshPlayingTextVisuals(text);
         RefreshPreview(fullLayout: false);
     }
 
@@ -1484,4 +1491,16 @@ public partial class TextInspector : Control
     }
 
     private void EndBackgroundColorCoalesce() => EndCoalesce(CoalesceKey("bgcolor"));
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

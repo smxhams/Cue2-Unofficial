@@ -7,6 +7,7 @@ using System.Text;
 using Cue2.Domain.Connections;
 using Cue2.Services;
 using Godot;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings;
 
@@ -124,10 +125,17 @@ public partial class SettingsOscListen : Control
 
         DisplayIpAddresses();
         SyncFromModel();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         VisibilityChanged -= OnVisibilityChanged;
 
         if (_historyManager != null)
@@ -706,4 +714,16 @@ public partial class SettingsOscListen : Control
             ? string.Join("  ·  ", ipAddresses)
             : "(none found)";
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

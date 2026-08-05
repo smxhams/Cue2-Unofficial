@@ -38,7 +38,7 @@ public partial class GlobalData : Node
 	
 	public CueList Cuelist;
 	public ShellSelection ShellSelection;
-	public CueCommandExectutor CueCommandExectutor;
+	public CueCommandExecutor CueCommandExecutor;
 	public Settings Settings;
 	public Devices Devices;
 	public CueLightManager CueLightManager;
@@ -235,8 +235,8 @@ public partial class GlobalData : Node
 		ShellSelection = new ShellSelection();
 		AddChild(ShellSelection);
 		
-		CueCommandExectutor = new CueCommandExectutor();
-		AddChild(CueCommandExectutor);
+		CueCommandExecutor = new CueCommandExecutor();
+		AddChild(CueCommandExecutor);
 		
 		Settings = new Settings();
 		AddChild(Settings);

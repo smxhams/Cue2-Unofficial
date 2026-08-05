@@ -243,8 +243,8 @@ public partial class VideoInspector
 		if (_focusedVideoComponent == null)
 			return;
 
-		// CueCommandExectutor is owned by GlobalData (class name is historically misspelled).
-		_globalData?.CueCommandExectutor?.RefreshPlayingVideoVisuals(_focusedVideoComponent);
+		// CueCommandExecutor is owned by GlobalData.
+		_globalData?.CueCommandExecutor?.RefreshPlayingVideoVisuals(_focusedVideoComponent);
 	}
 
 	
@@ -317,155 +317,77 @@ public partial class VideoInspector
 	/// <summary>
 	/// Builds the routing matrix for audio channels.
 	/// </summary>
-	private async void BuildRoutingMatrix()
+	private void BuildRoutingMatrix()
+	{
+		TaskUtil.Run(BuildRoutingMatrixAsync, "VideoInspector.BuildRoutingMatrix");
+	}
+
+	private async Task BuildRoutingMatrixAsync()
 	{
 		if (_routingMatrixGrid == null)
 			return;
 
-		int gen = _shellSelectGeneration;
-		_routingInputLabels.Clear();
-		foreach (var child in _routingMatrixGrid.GetChildren())
-		{
-			child.QueueFree();
-		}
+		int shellGen = _shellSelectGeneration;
+		int buildGen = ++_routingMatrixBuildGeneration;
 
 		if (_focusedVideoComponent == null || !_focusedVideoComponent.HasAudio || !_focusedVideoComponent.UseAudio)
 		{
-			GD.Print($"VideoInspector:BuildRoutingMatrix - No focused video component, no audio, or audio not enabled");
+			ClearVideoRoutingMatrixUi();
 			if (_routingContainer != null)
 				_routingContainer.Visible = false;
 			return;
 		}
 
-		await ToSignal(GetTree(), "process_frame"); // Wait a frame for existing children to fully clear.
-
-		if (gen != _shellSelectGeneration || _focusedVideoComponent == null)
-			return;
 		if (_focusedVideoComponent.Metadata == null)
 		{
-			GD.Print("VideoInspector:BuildRoutingMatrix - Metadata not ready; skipping matrix.");
+			ClearVideoRoutingMatrixUi();
 			if (_routingContainer != null)
 				_routingContainer.Visible = false;
 			return;
 		}
 
-		GD.Print($"BUILDING ROUTING MATRIX");
-		
-		// Get ins and outs data
-		var inputChannels = _focusedVideoComponent.Metadata.AudioChannels;
-		var inputLabels = GetChannelLabels(inputChannels, isInput: true);
+		if (!TryResolveVideoRoutingIo(out int inputChannels, out var inputLabels,
+			    out int outputChannels, out var outputLabels))
+			return;
 
-		int outputChannels;
-		List<string> outputLabels = new List<string>();
+		EnsureVideoRoutingPatchShape(inputChannels, inputLabels, outputChannels, outputLabels);
 
-		// Prefer live Patch reference, then PatchId (default patch on create sets both).
-		if (_focusedVideoComponent.Patch != null && GodotObject.IsInstanceValid(_focusedVideoComponent.Patch)
-		    && _focusedVideoComponent.PatchId != _focusedVideoComponent.Patch.Id)
+		string structureKey =
+			$"{_focusedVideoComponent.PatchId}|{_focusedVideoComponent.DirectOutput ?? ""}|{inputChannels}x{outputChannels}|{string.Join(',', inputLabels)}|{string.Join(',', outputLabels)}";
+
+		if (structureKey == _routingMatrixStructureKey
+		    && _routingVolumeEdits.Count == inputChannels * outputChannels
+		    && _routingMatrixGrid.GetChildCount() > 0)
 		{
-			_focusedVideoComponent.PatchId = _focusedVideoComponent.Patch.Id;
-		}
-
-        // Audio Output Patch
-        if (_focusedVideoComponent.PatchId != -1 || _focusedVideoComponent.Patch != null)
-        {
-            AudioOutputPatch patch = _focusedVideoComponent.Patch;
-            if (patch == null || !GodotObject.IsInstanceValid(patch))
-            {
-	            _globalData.Settings.GetAudioOutputPatches()
-		            .TryGetValue(_focusedVideoComponent.PatchId, out patch);
-            }
-
-            // Check if selected patch exists, if not clean the video component of it.
-            if (patch == null || !GodotObject.IsInstanceValid(patch))
-            {
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
-                _focusedVideoComponent.Patch = null;
-                _focusedVideoComponent.PatchId = -1;
-                _focusedVideoComponent.Routing = null;
-                PopulateOutputOptions(); // Refresh UI to reflect missing patch
-                _routingContainer.Visible = false;
-                return;
-            }
-
-            _focusedVideoComponent.Patch = patch;
-            _focusedVideoComponent.PatchId = patch.Id;
-            outputChannels = patch.Channels.Count;
-            outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
-        }
-
-		// Direct output
-		else if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
-		{
-			var device = _audioDevices.OpenAudioDevice(_focusedVideoComponent.DirectOutput, out var _);
-			if (device == null)
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"VideoInspector:BuildRoutingMatrix - Direct output device not found: {_focusedVideoComponent.DirectOutput}", 2);
-				_focusedVideoComponent.DirectOutput = null;
-				PopulateOutputOptions(); // Refresh UI to reflect missing output
-				_routingContainer.Visible = false;
-				return;
-			}
-			outputChannels = device.Channels;
-			for (int i = 0; i < outputChannels; i++)
-			{
-				outputLabels.Add($"Channel {i}");
-			}
-		}
-		else
-		{
-			GD.Print($"VideoInspector:BuildRoutingMatrix - No output selected");
-			_routingContainer.Visible = false;
+			RefreshVideoRoutingMatrixValues(inputChannels, outputChannels, inputLabels);
+			if (_routingContainer != null)
+				_routingContainer.Visible = true;
 			return;
 		}
 
-		_routingContainer.Visible = true;
+		_routingInputLabels.Clear();
+		_routingVolumeEdits.Clear();
+		foreach (var child in _routingMatrixGrid.GetChildren())
+			child.QueueFree();
 
-		// Validate routing (CuePatch) matches what is expected
-		var routing = _focusedVideoComponent.Routing;
-		bool needsUpdate = routing == null ||
-		                   routing.OutputChannels != outputChannels ||
-		                   !routing.OutputLabels.SequenceEqual(outputLabels) ||
-		                   routing.InputChannels != inputChannels ||
-		                   !routing.InputLabels.SequenceEqual(inputLabels);
+		await ToSignal(GetTree(), "process_frame");
+		if (shellGen != _shellSelectGeneration
+		    || buildGen != _routingMatrixBuildGeneration
+		    || _focusedVideoComponent == null
+		    || !IsInstanceValid(this))
+			return;
 
-		if (needsUpdate)
-		{
-			// Preserve old volumes if possible
-			var oldRouting = routing;
+		if (!TryResolveVideoRoutingIo(out inputChannels, out inputLabels, out outputChannels, out outputLabels))
+			return;
+		EnsureVideoRoutingPatchShape(inputChannels, inputLabels, outputChannels, outputLabels);
+		structureKey =
+			$"{_focusedVideoComponent.PatchId}|{_focusedVideoComponent.DirectOutput ?? ""}|{inputChannels}x{outputChannels}|{string.Join(',', inputLabels)}|{string.Join(',', outputLabels)}";
 
-            // Create new CuePatch with current dimensions
-            routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
-            _focusedVideoComponent.Routing = routing;
-
-			if (oldRouting != null)
-			{
-				// Copy over existing volumes for overlapping channels
-				int copyInputs = Math.Min(oldRouting.InputChannels, inputChannels);
-				int copyOutputs = Math.Min(oldRouting.OutputChannels, outputChannels);
-
-				for (int i = 0; i < copyInputs; i++)
-				{
-					for (int j = 0; j < copyOutputs; j++)
-					{
-						routing.SetVolume(i, j, oldRouting.GetVolume(i, j));
-					}
-				}
-			}
-
-			GD.Print($"VideoInspector:BuildRoutingMatrix - Resized/created CuePatch to inputs: {inputChannels}, outputs: {outputChannels}"); //!!!
-		}
-
-		// Create grid
-		_routingMatrixGrid.Columns = outputChannels + 1; // +1 for input labels
-
-		// Header row
-		_routingMatrixGrid.AddChild(new Label { Text = "" }); // Empty corner
+		_routingMatrixGrid.Columns = outputChannels + 1;
+		_routingMatrixGrid.AddChild(new Label { Text = "" });
 		foreach (var label in outputLabels)
-		{
 			_routingMatrixGrid.AddChild(new Label { Text = label, HorizontalAlignment = HorizontalAlignment.Center });
-		}
 
-		// Add rows: input label (+ pan status for stereo) + volume fields
 		string panStatus = inputChannels == 2
 			? UiUtilities.FormatPan(_focusedVideoComponent.Pan)
 			: null;
@@ -481,21 +403,166 @@ public partial class VideoInspector
 			for (int col = 0; col < outputChannels; col++)
 			{
 				var volumeEdit = new LineEdit();
-				var routingForGet = _focusedVideoComponent.Routing;
-				var linearVol = routingForGet.GetVolume(row, col);
+				float linearVol = _focusedVideoComponent.Routing.GetVolume(row, col);
 				if (linearVol > 0.0f)
-				{
-					var dbVol = UiUtilities.LinearToDb(linearVol);
-					volumeEdit.Text = $"{dbVol}dB";
-				}
-
-				var row1 = row;
-				var col1 = col;
-				volumeEdit.TextSubmitted += (string newText) => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
+					volumeEdit.Text = $"{UiUtilities.LinearToDb(linearVol)}dB";
+				int row1 = row;
+				int col1 = col;
+				volumeEdit.TextSubmitted += newText => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
 				volumeEdit.FocusExited += () => OnMatrixVolumeSubmitted(volumeEdit.Text, volumeEdit, row1, col1);
 				LineEditDbDragSlider.EnableVolume(volumeEdit);
 				_routingMatrixGrid.AddChild(volumeEdit);
+				_routingVolumeEdits.Add(volumeEdit);
 			}
+		}
+
+		_routingMatrixStructureKey = structureKey;
+		if (_routingContainer != null)
+			_routingContainer.Visible = true;
+	}
+
+	private void ClearVideoRoutingMatrixUi()
+	{
+		_routingInputLabels.Clear();
+		_routingVolumeEdits.Clear();
+		_routingMatrixStructureKey = null;
+		if (_routingMatrixGrid == null) return;
+		foreach (var child in _routingMatrixGrid.GetChildren())
+			child.QueueFree();
+	}
+
+	private void RefreshVideoRoutingMatrixValues(int inputChannels, int outputChannels, List<string> inputLabels)
+	{
+		string panStatus = inputChannels == 2
+			? UiUtilities.FormatPan(_focusedVideoComponent.Pan)
+			: null;
+		for (int row = 0; row < inputChannels && row < _routingInputLabels.Count; row++)
+		{
+			string labelText = inputLabels[row];
+			if (panStatus != null && row < 2)
+				labelText = $"{labelText} ({panStatus})";
+			_routingInputLabels[row].Text = labelText;
+		}
+
+		int idx = 0;
+		for (int row = 0; row < inputChannels; row++)
+		{
+			for (int col = 0; col < outputChannels; col++, idx++)
+			{
+				if (idx >= _routingVolumeEdits.Count) return;
+				var edit = _routingVolumeEdits[idx];
+				if (edit == null || !IsInstanceValid(edit) || edit.HasFocus())
+					continue;
+				float linearVol = _focusedVideoComponent.Routing.GetVolume(row, col);
+				edit.Text = linearVol > 0.0f ? $"{UiUtilities.LinearToDb(linearVol)}dB" : string.Empty;
+			}
+		}
+	}
+
+	private bool TryResolveVideoRoutingIo(
+		out int inputChannels,
+		out List<string> inputLabels,
+		out int outputChannels,
+		out List<string> outputLabels)
+	{
+		inputChannels = 0;
+		inputLabels = null;
+		outputChannels = 0;
+		outputLabels = new List<string>();
+		if (_focusedVideoComponent?.Metadata == null)
+			return false;
+
+		inputChannels = _focusedVideoComponent.Metadata.AudioChannels;
+		inputLabels = GetChannelLabels(inputChannels, isInput: true);
+
+		if (_focusedVideoComponent.Patch != null && GodotObject.IsInstanceValid(_focusedVideoComponent.Patch)
+		    && _focusedVideoComponent.PatchId != _focusedVideoComponent.Patch.Id)
+		{
+			_focusedVideoComponent.PatchId = _focusedVideoComponent.Patch.Id;
+		}
+
+		if (_focusedVideoComponent.PatchId != -1 || _focusedVideoComponent.Patch != null)
+		{
+			AudioOutputPatch patch = _focusedVideoComponent.Patch;
+			if (patch == null || !GodotObject.IsInstanceValid(patch))
+			{
+				_globalData.Settings.GetAudioOutputPatches()
+					.TryGetValue(_focusedVideoComponent.PatchId, out patch);
+			}
+
+			if (patch == null || !GodotObject.IsInstanceValid(patch))
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"VideoInspector:BuildRoutingMatrix - Patch ID {_focusedVideoComponent.PatchId} not found, resetting output", 2);
+				_focusedVideoComponent.Patch = null;
+				_focusedVideoComponent.PatchId = -1;
+				_focusedVideoComponent.Routing = null;
+				PopulateOutputOptions();
+				if (_routingContainer != null)
+					_routingContainer.Visible = false;
+				ClearVideoRoutingMatrixUi();
+				return false;
+			}
+
+			_focusedVideoComponent.Patch = patch;
+			_focusedVideoComponent.PatchId = patch.Id;
+			outputChannels = patch.Channels.Count;
+			outputLabels = patch.Channels.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+			return true;
+		}
+
+		if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
+		{
+			var device = _audioDevices.OpenAudioDevice(_focusedVideoComponent.DirectOutput, out var _);
+			if (device == null)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"VideoInspector:BuildRoutingMatrix - Direct output device not found: {_focusedVideoComponent.DirectOutput}", 2);
+				_focusedVideoComponent.DirectOutput = null;
+				PopulateOutputOptions();
+				if (_routingContainer != null)
+					_routingContainer.Visible = false;
+				ClearVideoRoutingMatrixUi();
+				return false;
+			}
+			outputChannels = device.Channels;
+			for (int i = 0; i < outputChannels; i++)
+				outputLabels.Add($"Channel {i}");
+			return true;
+		}
+
+		if (_routingContainer != null)
+			_routingContainer.Visible = false;
+		ClearVideoRoutingMatrixUi();
+		return false;
+	}
+
+	private void EnsureVideoRoutingPatchShape(
+		int inputChannels,
+		List<string> inputLabels,
+		int outputChannels,
+		List<string> outputLabels)
+	{
+		var routing = _focusedVideoComponent.Routing;
+		bool needsUpdate = routing == null ||
+		                   routing.OutputChannels != outputChannels ||
+		                   !routing.OutputLabels.SequenceEqual(outputLabels) ||
+		                   routing.InputChannels != inputChannels ||
+		                   !routing.InputLabels.SequenceEqual(inputLabels);
+		if (!needsUpdate)
+			return;
+
+		var oldRouting = routing;
+		routing = new CuePatch(inputChannels, inputLabels, outputChannels, outputLabels);
+		_focusedVideoComponent.Routing = routing;
+		if (oldRouting == null)
+			return;
+		int copyInputs = Math.Min(oldRouting.InputChannels, inputChannels);
+		int copyOutputs = Math.Min(oldRouting.OutputChannels, outputChannels);
+		for (int i = 0; i < copyInputs; i++)
+		{
+			for (int j = 0; j < copyOutputs; j++)
+				routing.SetVolume(i, j, oldRouting.GetVolume(i, j));
 		}
 	}
 
@@ -541,7 +608,7 @@ public partial class VideoInspector
 			}
 
 			// Discrete cell commit — each matrix cell change is its own undo step.
-			_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit video routing volume");
+			RecordVideoHistory("Edit video routing volume");
 			routingForSet.SetVolume(inputCh, outputCh, linear);
 			if (linear > 0.0f)
 			{

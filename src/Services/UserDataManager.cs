@@ -448,14 +448,29 @@ public partial class UserDataManager : Node
 
 	/// <summary>
 	/// Removes the specified path from the recent files list if present.
-	/// Persists the change.
+	/// Persists the change when any entry was removed.
 	/// </summary>
-	/// <param name="path">The path to remove.</param>
+	/// <param name="path">
+	/// Path to remove. Matched via <see cref="NormalizeForRecent"/> (same as
+	/// <see cref="AddRecentShowFile"/>) so case, separators, and relative/absolute
+	/// forms that resolve to the same file all match.
+	/// </param>
 	public void RemoveRecentShowFile(string path)
 	{
-		if (_recentShowFiles.Remove(path))
+		if (string.IsNullOrWhiteSpace(path))
+			return;
+
+		string norm = NormalizeForRecent(path);
+		if (string.IsNullOrEmpty(norm))
+			return;
+
+		// Same match rules as AddRecentShowFile — exact List.Remove fails when the
+		// stored form differs by case (Windows), slash style, or GetFullPath form.
+		int removed = _recentShowFiles.RemoveAll(p => NormalizeForRecent(p) == norm);
+		if (removed > 0)
 		{
-			GD.Print($"UserDataManager:RemoveRecentShowFile - Removed: {path}");
+			GD.Print(
+				$"UserDataManager:RemoveRecentShowFile - Removed {removed} entr(y/ies) for: {path}");
 			SaveUserData();
 		}
 	}

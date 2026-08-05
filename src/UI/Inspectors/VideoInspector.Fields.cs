@@ -109,7 +109,7 @@ public partial class VideoInspector
 	{
 		var key = VideoCoalesceKey("pan");
 		if (!string.IsNullOrEmpty(key))
-			_globalData?.HistoryManager?.EndCoalesceSession(key);
+			InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
 	}
 
 	/// <summary>
@@ -272,7 +272,8 @@ public partial class VideoInspector
 		string historyDesc = willAddText
 			? "Enable closed captions (add text)"
 			: "Edit video closed captions";
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, historyDesc);
+		InspectorMultiEditSupport.RecordBeforeEdit(
+			_globalData, multiHistory: false, _focusedCue, historyDesc);
 
 		_focusedVideoComponent.UseSubtitles = pressed;
 
@@ -312,7 +313,8 @@ public partial class VideoInspector
 		if (_focusedVideoComponent.SubtitleStreamIndex == streamIndex)
 			return;
 
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Edit subtitle track");
+		InspectorMultiEditSupport.RecordBeforeEdit(
+			_globalData, multiHistory: false, _focusedCue, "Edit subtitle track");
 		_focusedVideoComponent.SubtitleStreamIndex = streamIndex;
 	}
 
@@ -323,7 +325,8 @@ public partial class VideoInspector
 		if (_globalData?.HistoryManager?.IsRestoring == true)
 			return;
 
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Add text for closed captions");
+		InspectorMultiEditSupport.RecordBeforeEdit(
+			_globalData, multiHistory: false, _focusedCue, "Add text for closed captions");
 		var text = _focusedCue.AddTextComponent();
 		text.Duration = 0;
 		text.RecalculateDuration();
@@ -639,7 +642,12 @@ public partial class VideoInspector
 	/// <summary>
 	/// Re-binds the video component from the live cue and refreshes fields (undo/redo, external edits).
 	/// </summary>
-	private async void OnSyncFromHistory()
+	private void OnSyncFromHistory()
+	{
+		TaskUtil.Run(OnSyncFromHistoryAsync, "VideoInspector.OnSyncFromHistory");
+	}
+
+	private async Task OnSyncFromHistoryAsync()
 	{
 		if (!IsInsideTree()) return;
 		if (_focusedCue != null || InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData))

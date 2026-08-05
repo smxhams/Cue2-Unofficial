@@ -24,7 +24,7 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void LogAlertEventHandler();
 	[Signal]  public delegate void FileSelectedEventHandler(string path);
 	[Signal]  public delegate void FileDroppedEventHandler(string[] files, string targetControlName);
-	[Signal]  public delegate void CueGoEventHandler(int playbackId, int cueId);
+	// CueGo removed (P2-05): live active cues are owned by CueCommandExecutor, not a parallel CueGo path.
 	[Signal]  public delegate void UpdateShellBarEventHandler(int cue);
 	[Signal]  public delegate void OpenSelectedSessionEventHandler(string path);
 	[Signal]  public delegate void SaveFileEventHandler(string url, string showName);
@@ -184,8 +184,6 @@ public partial class GlobalSignals : Node
 	/// </summary>
 	[Signal] public delegate void CueMediaHealthChangedEventHandler(int cueId, bool hasIssue, string message);
 
-	public static event Action<string, int> Logger;
-
 	/// <summary>Text fields wired for focus-gate + Esc/submit unfocus.</summary>
 	private readonly HashSet<Node> _connectedTextFields = new();
 
@@ -207,12 +205,6 @@ public partial class GlobalSignals : Node
 		// Listen for new nodes added dynamically (inspectors, settings cards, SpinBox embeds, etc.)
 		GetTree().NodeAdded += OnNodeAdded;
 		GetTree().NodeRemoved += OnNodeRemoved;
-	}
-
-	public static void StaticLog(string s, int i)
-	{
-		// TODO: This can be made static in the future, will require changing all calls everywhere though!
-		Logger?.Invoke("hi", 1);
 	}
 
 	private void ScanForTextFields(Node node)

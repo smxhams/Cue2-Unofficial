@@ -334,7 +334,10 @@ public partial class TimelineInspector
                 else
                 {
                     if (_draggedCue != null && _preWaitDragHistoryRecorded)
-                        _globalData?.HistoryManager?.EndCoalesceSession($"cue:{_draggedCue.Id}:timeline-prewait");
+                    {
+                        string key = $"cue:{_draggedCue.Id}:timeline-prewait";
+                        InspectorMultiEditSupport.EndCoalesce(_globalData, multiHistory: false, key, key);
+                    }
                     _dragging = false;
                     _draggedCue = null;
                     _preWaitDragHistoryRecorded = false;
@@ -367,11 +370,14 @@ public partial class TimelineInspector
             }
 
             // First real change in this drag: capture pre-change memento (coalesced for the drag).
-            if (!_preWaitDragHistoryRecorded
-                && _globalData?.HistoryManager?.IsRestoring != true)
+            if (!_preWaitDragHistoryRecorded)
             {
-                _globalData?.HistoryManager?.RecordCueChange(
-                    cue.Id, "Edit pre-wait (timeline)", $"cue:{cue.Id}:timeline-prewait");
+                InspectorMultiEditSupport.RecordBeforeEditById(
+                    _globalData,
+                    multiHistory: false,
+                    cue.Id,
+                    "Edit pre-wait (timeline)",
+                    coalesceKey: $"cue:{cue.Id}:timeline-prewait");
                 _preWaitDragHistoryRecorded = true;
             }
 

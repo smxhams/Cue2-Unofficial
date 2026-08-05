@@ -215,7 +215,7 @@ public partial class AudioInspector
                 _isDraggingStart = false;
                 var key = AudioCoalesceKey("start-drag");
                 if (!string.IsNullOrEmpty(key))
-                    _globalData?.HistoryManager?.EndCoalesceSession(key);
+                    InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
             }
         }
         else if (@event is InputEventMouseMotion && _isDraggingStart)
@@ -261,7 +261,7 @@ public partial class AudioInspector
                 _isDraggingEnd = false;
                 var key = AudioCoalesceKey("end-drag");
                 if (!string.IsNullOrEmpty(key))
-                    _globalData?.HistoryManager?.EndCoalesceSession(key);
+                    InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
             }
         }
         else if (@event is InputEventMouseMotion && _isDraggingEnd)
@@ -373,7 +373,12 @@ public partial class AudioInspector
     /// </summary>
     /// <param name="filePath">The audio file path.</param>
     /// <param name="resetInOutPoints">If true, start/end are reset to full file; otherwise clamp to new duration.</param>
-    private async void SetAudioFile(string filePath, bool resetInOutPoints)
+    private void SetAudioFile(string filePath, bool resetInOutPoints)
+    {
+    	TaskUtil.Run(() => SetAudioFileAsync(filePath, resetInOutPoints), "AudioInspector.SetAudioFile");
+    }
+
+    private async Task SetAudioFileAsync(string filePath, bool resetInOutPoints)
     {
         bool multi = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
         var multiCues = multi ? InspectorMultiEditSupport.GetSelectedCues() : null;
@@ -476,8 +481,13 @@ public partial class AudioInspector
         var existingAudio = _focusedCue.Components.OfType<AudioComponent>().FirstOrDefault();
         bool isNewComponent = existingAudio == null;
         if (_focusedCue != null)
-            _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
+        {
+            InspectorMultiEditSupport.RecordBeforeEdit(
+                _globalData,
+                multiHistory: false,
+                _focusedCue,
                 isNewComponent ? "Add audio component" : "Change audio file");
+        }
         if (existingAudio != null)
         {
             _focusedAudioComponent = existingAudio;
@@ -634,7 +644,12 @@ public partial class AudioInspector
     /// </summary>
     /// <param name="accordian">The VBoxContainer to toggle.</param>
     /// <param name="button">The Button controlling the toggle.</param>
-    private async void ToggleAccordian(VBoxContainer accordian, Button button)
+    private void ToggleAccordian(VBoxContainer accordian, Button button)
+    {
+    	TaskUtil.Run(() => ToggleAccordianAsync(accordian, button), "AudioInspector.ToggleAccordian");
+    }
+
+    private async Task ToggleAccordianAsync(VBoxContainer accordian, Button button)
     {
         accordian.Visible = !accordian.Visible;
         button.Icon = GetThemeIcon(accordian.Visible ? "Down" : "Right", "AtlasIcons");

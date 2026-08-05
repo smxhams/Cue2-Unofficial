@@ -78,12 +78,44 @@ public static class InspectorMultiEditSupport
     /// Records history before a mutation: cuelist scope when <paramref name="multiHistory"/>,
     /// otherwise single-cue scope for <paramref name="primaryCue"/>.
     /// </summary>
+    /// <param name="globalData">App global data (history owner).</param>
+    /// <param name="multiHistory">True when the edit should undo as one cuelist snapshot.</param>
+    /// <param name="primaryCue">Focused / primary cue for single-cue history.</param>
+    /// <param name="singleDescription">Undo label for a single-cue edit.</param>
+    /// <param name="multiDescription">Undo label for multi-edit; when null, uses <c>Multi-edit {singleDescription}</c>.</param>
+    /// <param name="coalesceKey">Optional coalesce key for continuous edits.</param>
     public static void RecordBeforeEdit(
         GlobalData globalData,
         bool multiHistory,
         Cue primaryCue,
         string singleDescription,
-        string multiDescription,
+        string multiDescription = null,
+        string coalesceKey = null)
+    {
+        RecordBeforeEditById(
+            globalData,
+            multiHistory,
+            primaryCue?.Id ?? -1,
+            singleDescription,
+            multiDescription,
+            coalesceKey);
+    }
+
+    /// <summary>
+    /// Records history before a mutation using a cue id (for cards that do not hold a <see cref="Cue"/> ref).
+    /// </summary>
+    /// <param name="globalData">App global data (history owner).</param>
+    /// <param name="multiHistory">True when the edit should undo as one cuelist snapshot.</param>
+    /// <param name="primaryCueId">Focused / primary cue id for single-cue history; ignored when multi.</param>
+    /// <param name="singleDescription">Undo label for a single-cue edit.</param>
+    /// <param name="multiDescription">Undo label for multi-edit; when null, uses <c>Multi-edit {singleDescription}</c>.</param>
+    /// <param name="coalesceKey">Optional coalesce key for continuous edits.</param>
+    public static void RecordBeforeEditById(
+        GlobalData globalData,
+        bool multiHistory,
+        int primaryCueId,
+        string singleDescription,
+        string multiDescription = null,
         string coalesceKey = null)
     {
         var history = globalData?.HistoryManager;
@@ -91,9 +123,17 @@ public static class InspectorMultiEditSupport
             return;
 
         if (multiHistory)
-            history.RecordCuelistChange(multiDescription ?? singleDescription, coalesceKey);
-        else if (primaryCue != null)
-            history.RecordCueChange(primaryCue.Id, singleDescription, coalesceKey);
+        {
+            string multi = multiDescription
+                ?? (string.IsNullOrEmpty(singleDescription)
+                    ? "Multi-edit"
+                    : "Multi-edit " + singleDescription);
+            history.RecordCuelistChange(multi, coalesceKey);
+        }
+        else if (primaryCueId >= 0)
+        {
+            history.RecordCueChange(primaryCueId, singleDescription, coalesceKey);
+        }
     }
 
     /// <summary>
@@ -103,6 +143,18 @@ public static class InspectorMultiEditSupport
         GlobalData globalData,
         bool multiHistory,
         Cue primaryCue,
+        string multiKey,
+        string singleKey)
+    {
+        EndCoalesce(globalData, multiHistory, multiKey, singleKey);
+    }
+
+    /// <summary>
+    /// Ends a coalesce session without requiring a <see cref="Cue"/> reference.
+    /// </summary>
+    public static void EndCoalesce(
+        GlobalData globalData,
+        bool multiHistory,
         string multiKey,
         string singleKey)
     {

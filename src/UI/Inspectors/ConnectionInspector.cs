@@ -67,10 +67,17 @@ public partial class ConnectionInspector : Control
         _availableConnectionsButton.ItemSelected += OnConnectionSelected;
         
         LoadConnections();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_globalSignals != null)
             _globalSignals.ShellFocused -= ShellSelected;
         if (_historyManager != null)
@@ -104,11 +111,13 @@ public partial class ConnectionInspector : Control
     /// </summary>
     private void RecordCueHistory(string description)
     {
-        if (_isSyncingUi || _historyManager == null || _historyManager.IsRestoring)
+        if (_isSyncingUi)
             return;
-        if (_focusedCue == null)
-            return;
-        _historyManager.RecordCueChange(_focusedCue.Id, description);
+        InspectorMultiEditSupport.RecordBeforeEdit(
+            _globalData,
+            multiHistory: false,
+            _focusedCue,
+            description);
     }
 
     /// <summary>
@@ -433,5 +442,17 @@ public partial class ConnectionInspector : Control
         
     }
     
+
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
 
 }

@@ -30,8 +30,11 @@ public partial class ActiveCue
     {
         if (_isPlaying || _contentStarted) return;
         GD.Print($"ActiveCue:StartAsync - Starting: {_cue.Name} (chain={_chainMember != null}, incoming={_incomingMode})");
+
+        // Leaving standby-load mode for real playback.
+        _standbyPreload = false;
         
-        // UI may already be prepared (chain order); otherwise build now.
+        // UI may already be prepared (chain order / OSC Load); otherwise build now.
         if (!_uiPrepared)
             PrepareUiInOrder();
 
@@ -43,8 +46,60 @@ public partial class ActiveCue
             return;
         }
 
-        // Nested child under a parent: classic path.
+        // Nested child under a parent, or solo / preloaded head: classic path.
         await StartPlaybackCoreAsync(includePreWait: true);
+    }
+
+    /// <summary>
+    /// Prepares UI and opens media components without starting pre-wait or content (OSC Load).
+    /// Safe to call repeatedly; shared with follow-chain pending preload.
+    /// </summary>
+    /// <returns>Task that completes when component setup finishes (or aborts if cleaned).</returns>
+    public async Task RequestPreloadAsync()
+    {
+        if (_isCleaned || _contentStarted)
+            return;
+
+        if (!_uiPrepared)
+            PrepareUiInOrder();
+
+        // Mark standby so GO can reuse this instance instead of spawning a second bar.
+        _standbyPreload = true;
+
+        if (_cue != null && !_cue.Armed)
+        {
+            GD.Print($"ActiveCue:RequestPreloadAsync - {_cue.Name}: disarmed, skipping media open");
+            return;
+        }
+
+        try
+        {
+            await EnsureComponentsSetupAsync();
+            if (!_isCleaned && !_contentStarted)
+            {
+                GD.Print($"ActiveCue:RequestPreloadAsync - {_cue?.Name}: components ready (standby)");
+            }
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"ActiveCue:RequestPreloadAsync - {_cue?.Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Attaches chain membership for a standby-preloaded instance that is about to GO as sequence head or peer.
+    /// </summary>
+    /// <param name="member">Chain planner member, or null for a solo activation.</param>
+    public void AttachChainMember(CueChainMember member)
+    {
+        if (_isCleaned || _contentStarted)
+            return;
+
+        _chainMember = member;
+        _incomingMode = member?.IncomingMode ?? FollowType.None;
+        _incomingWaitDuration = member?.IncomingPostWait ?? 0.0;
+        // Reset chain-run gate so BeginChainMemberRunAsync can run after a pure preload.
+        _chainRunStarted = false;
     }
 
     /// <summary>
@@ -465,7 +520,9 @@ public partial class ActiveCue
 
             // Control GO fade-in override wins when set; otherwise component FadeInDuration.
             double fadeIn = _controlFadeInDuration ?? audioComp.FadeInDuration;
-            playback.Play(fadeIn);
+            await playback.PlayAsync(fadeIn);
+            if (_isCleaned || !IsInstanceValid(this))
+                return;
             // Honour cue-level pause (e.g. global pause while this component was still setting up).
             if (_isPaused)
                 playback.Pause();
@@ -524,6 +581,8 @@ public partial class ActiveCue
             else
                 await playback.PlayAsync();
 
+            if (_isCleaned || !IsInstanceValid(this))
+                return;
             if (_isPaused)
                 playback.Pause();
             SyncPauseTransportUi();
@@ -613,7 +672,7 @@ public partial class ActiveCue
                 gd = st.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
 
             float sessionStopFade = gd?.Settings?.StopFadeDuration ?? 0f;
-            await comp.ExecuteAsync(gd?.CueCommandExectutor, _cue?.Id ?? -1, sessionStopFade);
+            await comp.ExecuteAsync(gd?.CueCommandExecutor, _cue?.Id ?? -1, sessionStopFade);
         }
         catch (Exception ex)
         {

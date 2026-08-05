@@ -124,7 +124,11 @@ public partial class SettingsCueLights : ScrollContainer
         _newCueLightButton.Pressed += NewCueLightButton;
         
         RebuildCueLightList();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     private void OnNewSession()
     {
@@ -416,6 +420,9 @@ public partial class SettingsCueLights : ScrollContainer
     public override void _ExitTree()
     {
         if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
+        if (_globalSignals != null)
             _globalSignals.NewSession -= OnNewSession;
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
@@ -432,4 +439,16 @@ public partial class SettingsCueLights : ScrollContainer
         }
         _cueLightHandlers.Clear();
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

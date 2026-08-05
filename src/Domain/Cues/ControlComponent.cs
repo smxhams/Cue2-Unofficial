@@ -551,7 +551,7 @@ public class ControlComponent : ICueComponent
     /// <param name="sessionStopFadeDuration">Session default stop fade (seconds) for Stop actions.</param>
     /// <returns>A task that completes when this control action has finished applying.</returns>
     public async Task ExecuteAsync(
-        CueCommandExectutor executor,
+        CueCommandExecutor executor,
         int sourceCueId = -1,
         float sessionStopFadeDuration = 0f)
     {

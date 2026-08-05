@@ -39,7 +39,12 @@ namespace Cue2.UI.Inspectors;
 /// </summary>
 public partial class AudioInspector
 {
-    private async void ShellSelected(int cueId)
+    private void ShellSelected(int cueId)
+    {
+    	TaskUtil.Run(() => ShellSelectedAsync(cueId), "AudioInspector.ShellSelected");
+    }
+
+    private async Task ShellSelectedAsync(int cueId)
     {
         int gen = ++_shellSelectGeneration;
 

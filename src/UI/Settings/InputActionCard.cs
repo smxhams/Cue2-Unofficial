@@ -180,9 +180,8 @@ public partial class InputActionCard : PanelContainer
     private void OnClearButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
-        RecordInputMapHistory("Clear input binding");
+        // Keyboard Input Map is app preference only (user://) — not document undo (P2-14).
         InputMap.ActionEraseEvents(Action);
         _globalData?.UserDataManager?.PersistLiveInputMap();
         GD.Print($"InputActionCard:OnClearButtonPressed - Cleared events for action '{Action}'");
@@ -192,7 +191,6 @@ public partial class InputActionCard : PanelContainer
     private void OnResetButtonPressed()
     {
         if (string.IsNullOrEmpty(Action) || _globalData == null) return;
-        if (_globalData.HistoryManager?.IsRestoring == true) return;
 
         // Block reset if any default event collides with another action's current binding.
         var defaults = _globalData.GetDefaultInputEvents(Action);
@@ -209,21 +207,11 @@ public partial class InputActionCard : PanelContainer
             }
         }
 
-        RecordInputMapHistory("Reset input binding");
+        // Keyboard Input Map is app preference only (user://) — not document undo (P2-14).
         _globalData.ResetInputActionToDefault(Action);
         _globalData.UserDataManager?.PersistLiveInputMap();
         GD.Print($"InputActionCard:OnResetButtonPressed - Reset '{Action}' to default via refresh button.");
         RefreshDisplay();
-    }
-
-    /// <summary>
-    /// Snapshots the full live InputMap before a user mutation (session undo; prefs-backed).
-    /// </summary>
-    private void RecordInputMapHistory(string description)
-    {
-        if (_globalData?.HistoryManager == null) return;
-        if (_globalData.HistoryManager.IsRestoring) return;
-        _globalData.HistoryManager.RecordSettingsChange(description, null, "InputMap");
     }
 
     private void StartListening()
@@ -300,12 +288,10 @@ public partial class InputActionCard : PanelContainer
     private void ApplyNewBinding(InputEventKey source)
     {
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action)) return;
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
-
-        // Snapshot before mutate so Ctrl+Z restores the previous binding set.
-        RecordInputMapHistory("Rebind input action");
 
         // For v1: replace all existing bindings with this single key event.
+        // Keyboard shortcuts are Cue2 Preferences (user://user_data.json), not showfile
+        // and not document undo — persist immediately (P2-14).
         InputMap.ActionEraseEvents(Action);
 
         var newEvent = new InputEventKey
@@ -319,7 +305,6 @@ public partial class InputActionCard : PanelContainer
         };
 
         InputMap.ActionAddEvent(Action, newEvent);
-        // User preference — persist immediately (not showfile).
         _globalData?.UserDataManager?.PersistLiveInputMap();
     }
 

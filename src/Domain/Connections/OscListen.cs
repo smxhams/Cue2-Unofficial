@@ -456,7 +456,7 @@ public partial class OscListen : Node
     private bool TryFireCueOscTriggers(OscInputMessage msg)
     {
         if (CueList.CueIndex == null || CueList.CueIndex.Count == 0) return false;
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return false;
 
         bool any = false;

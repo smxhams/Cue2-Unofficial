@@ -77,40 +77,122 @@ public partial class SettingsCanvasEditor
 
     private void RebuildScreensTree()
     {
-        _screensTree.Clear();
-        var root = _screensTree.CreateItem();
+        // Diff-update by OutputId so selection/scroll survive rename and geometry-only changes (P2-08).
+        if (_screensTree == null)
+            return;
+
+        var root = _screensTree.GetRoot() ?? _screensTree.CreateItem();
         root.SetText(0, "Screens");
 
-        foreach (var screen in DisplaysManager.Screens)
+        var screens = DisplaysManager.Screens;
+        var wantIds = new HashSet<int>();
+        foreach (var screen in screens)
+            wantIds.Add(screen.OutputId);
+
+        // Map existing children by metadata id
+        var existing = new Dictionary<int, TreeItem>();
+        var orphan = new List<TreeItem>();
+        for (var child = root.GetFirstChild(); child != null; child = child.GetNext())
         {
-            var item = _screensTree.CreateItem(root);
+            int id = child.GetMetadata(0).AsInt32();
+            if (wantIds.Contains(id) && !existing.ContainsKey(id))
+                existing[id] = child;
+            else
+                orphan.Add(child);
+        }
+
+        foreach (var item in orphan)
+            item.Free();
+
+        // Update / create in screen order (reparent by recreating order via MoveBelow)
+        TreeItem prev = null;
+        foreach (var screen in screens)
+        {
+            if (!existing.TryGetValue(screen.OutputId, out var item))
+            {
+                item = _screensTree.CreateItem(root);
+                item.SetMetadata(0, screen.OutputId);
+                existing[screen.OutputId] = item;
+            }
+
             string dest = GetScreenDestinationShortLabel(screen);
             item.SetText(0, $"{screen.OutputName}  [{dest}]");
-            item.SetMetadata(0, screen.OutputId);
             item.SetTooltipText(0,
                 $"{screen.OutputName}\n{screen.OutputSize.X}×{screen.OutputSize.Y} @ {screen.CanvasPosition}\nOutput: {dest}");
             item.SetCustomColor(0, GetScreenTreeColor(screen));
+
+            // Keep visual order matching DisplaysManager.Screens
+            if (prev == null)
+            {
+                var first = root.GetFirstChild();
+                if (first != null && first != item)
+                    item.MoveBefore(first);
+            }
+            else if (prev.GetNext() != item)
+            {
+                item.MoveAfter(prev);
+            }
+            prev = item;
         }
     }
 
     private void RebuildLayersTree()
     {
-        _layersTree.Clear();
-        var root = _layersTree.CreateItem();
+        // Diff-update by LayerId (P2-08).
+        if (_layersTree == null)
+            return;
+
+        var root = _layersTree.GetRoot() ?? _layersTree.CreateItem();
         root.SetText(0, "Layers");
 
-        // List is top-first: first entry is drawn on top of later ones.
-        int count = DisplaysManager.Layers.Count;
+        var layers = DisplaysManager.Layers;
+        var wantIds = new HashSet<int>();
+        foreach (var layer in layers)
+            wantIds.Add(layer.LayerId);
+
+        var existing = new Dictionary<int, TreeItem>();
+        var orphan = new List<TreeItem>();
+        for (var child = root.GetFirstChild(); child != null; child = child.GetNext())
+        {
+            int id = child.GetMetadata(0).AsInt32();
+            if (wantIds.Contains(id) && !existing.ContainsKey(id))
+                existing[id] = child;
+            else
+                orphan.Add(child);
+        }
+
+        foreach (var item in orphan)
+            item.Free();
+
+        int count = layers.Count;
+        TreeItem prev = null;
         for (int i = 0; i < count; i++)
         {
-            var layer = DisplaysManager.Layers[i];
-            var item = _layersTree.CreateItem(root);
+            var layer = layers[i];
+            if (!existing.TryGetValue(layer.LayerId, out var item))
+            {
+                item = _layersTree.CreateItem(root);
+                item.SetMetadata(0, layer.LayerId);
+                existing[layer.LayerId] = item;
+            }
+
             string stackLabel = i == 0 ? "top" : (i == count - 1 ? "bottom" : $"#{i + 1}");
             item.SetText(0, $"{layer.LayerName}  [{stackLabel}]");
-            item.SetMetadata(0, layer.LayerId);
             item.SetTooltipText(0,
                 $"{layer.LayerName}\nStack: {stackLabel} (first = on top)\n{layer.Size.X}×{layer.Size.Y} @ {layer.CanvasPosition}");
             item.SetCustomColor(0, new Color(0.55f, 0.75f, 1f));
+
+            if (prev == null)
+            {
+                var first = root.GetFirstChild();
+                if (first != null && first != item)
+                    item.MoveBefore(first);
+            }
+            else if (prev.GetNext() != item)
+            {
+                item.MoveAfter(prev);
+            }
+            prev = item;
         }
 
         UpdateLayerOrderButtons();

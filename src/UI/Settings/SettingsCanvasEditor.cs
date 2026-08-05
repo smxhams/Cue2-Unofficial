@@ -16,6 +16,7 @@ using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
 using Cue2.UI.Popups;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings;
 
@@ -309,7 +310,7 @@ public partial class SettingsCanvasEditor : Control
         BindNodes();
         ConnectSignals();
 
-        _canvasSelectButton.Text = $"Canvas ({_canvas.CanvasSize.X}×{_canvas.CanvasSize.Y})";
+        RefreshCanvasSelectButtonText();
 
         // Never Always — that keeps rendering while the panel is hidden and competes with playback.
         _viewport.RenderTargetUpdateMode = SubViewport.UpdateMode.Disabled;
@@ -335,7 +336,11 @@ public partial class SettingsCanvasEditor : Control
             CallDeferred(nameof(EnsureStageInitialized));
 
         GD.Print("SettingsCanvasEditor:_Ready - Light init (stage deferred until shown)");
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <summary>
     /// One-time heavy stage setup (background shader, trees, gizmos). Deferred until visible.
@@ -560,7 +565,15 @@ public partial class SettingsCanvasEditor : Control
         }
     }
 
-    private void BindNodes()
+    
+    public override void _ExitTree()
+    {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+        base._ExitTree();
+    }
+
+private void BindNodes()
     {
         _screensTree = GetNode<Godot.Tree>("%ScreensTree");
         _refreshScreensButton = GetNode<Button>("%RefreshScreensButton");
@@ -751,6 +764,30 @@ public partial class SettingsCanvasEditor : Control
         _layerTransparentResetButton.Pressed += OnLayerTransparentResetPressed;
         _layerTestPatternResetButton.Pressed += OnLayerTestPatternResetPressed;
         _layerLockResetButton.Pressed += OnLayerLockResetPressed;
+    }
+
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+        RefreshCanvasSelectButtonText();
+    }
+
+    /// <summary>
+    /// Updates the canvas select button with localized size label.
+    /// </summary>
+    private void RefreshCanvasSelectButtonText()
+    {
+        if (_canvasSelectButton == null || !IsInstanceValid(_canvasSelectButton) || _canvas == null)
+            return;
+        var size = _canvas.CanvasSize;
+        _canvasSelectButton.Text = UiLocalizer.Tf("Canvas ({0}×{1})", size.X, size.Y);
     }
 
 }

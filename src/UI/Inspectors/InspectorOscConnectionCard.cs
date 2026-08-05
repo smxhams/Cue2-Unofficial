@@ -170,11 +170,10 @@ public partial class InspectorOscConnectionCard : PanelContainer
     private void RecordCueHistory(string description)
     {
         var gd = GetNodeOrNull<GlobalData>("/root/GlobalData");
-        if (gd?.HistoryManager == null || gd.HistoryManager.IsRestoring)
+        if (gd == null)
             return;
-        int cueId = gd.FocusedCue;
-        if (cueId >= 0)
-            gd.HistoryManager.RecordCueChange(cueId, description);
+        InspectorMultiEditSupport.RecordBeforeEditById(
+            gd, multiHistory: false, gd.FocusedCue, description);
     }
 
     private void RemoveComponent()

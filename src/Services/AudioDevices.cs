@@ -134,8 +134,12 @@ public partial class AudioDevices : Node
 	/// then closes the SDL device.
 	/// </summary>
 	/// <param name="deviceId">The ID of the audio device to close (key in _openDevices).</param>
+	/// <param name="emitChanged">
+	/// When true (default), emits <see cref="GlobalSignals.AudioDevicesChanged"/> after a successful close.
+	/// Batch callers (e.g. <see cref="SyncOpenDevices"/>) pass false and emit once.
+	/// </param>
 	/// <returns>True if successfully closed and removed; false on error.</returns>
-    private bool CloseAudioDevice(int deviceId)
+    private bool CloseAudioDevice(int deviceId, bool emitChanged = true)
     {
 	    if (!_openDevices.TryGetValue(deviceId, out var device))
 		    return false;
@@ -184,6 +188,8 @@ public partial class AudioDevices : Node
 		    GD.Print(
 			    $"AudioDevices:CloseAudioDevice - Closed device ID {deviceId} ('{deviceName}'); " +
 			    $"detached {affected.Count} playback(s).");
+		    if (emitChanged)
+			    _globalSignals?.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
 		    return true;
 	    }
 	    catch (Exception ex)
@@ -194,9 +200,100 @@ public partial class AudioDevices : Node
 		    _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 			    $"Error closing device '{deviceName}' (ID: {deviceId}): {ex.Message}", 2);
 		    GD.PrintErr("AudioDevices:CloseAudioDevice - Error closing device ID " + deviceId + ": " + ex.Message);
+		    if (emitChanged)
+			    _globalSignals?.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
 		    return false;
 	    }
     }
+
+	/// <summary>
+	/// Closes an open playback device by display name (no-op if not open).
+	/// </summary>
+	/// <param name="name">Exact device name as returned by SDL enumeration / <see cref="GetOpenAudioDevicesNames"/>.</param>
+	/// <returns>True if a device was found and closed; false if not open or close failed.</returns>
+	public bool CloseAudioDeviceByName(string name)
+	{
+		if (string.IsNullOrEmpty(name))
+			return false;
+
+		foreach (var kv in _openDevices)
+		{
+			if (kv.Value != null && string.Equals(kv.Value.Name, name, StringComparison.Ordinal))
+				return CloseAudioDevice(kv.Key);
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// Reconciles the open SDL playback set with a required name list.
+	/// </summary>
+	/// <param name="requiredNames">
+	/// Device names that must be open after this call (showfile <c>AudioDevices</c> list and/or
+	/// names referenced by audio output patches). Null or empty means close all open devices.
+	/// </param>
+	/// <param name="closeOthers">
+	/// When true (default), closes any currently open device whose name is not in
+	/// <paramref name="requiredNames"/>. When false, only opens missing required devices
+	/// (keep-alive — not used for show load/reset).
+	/// </param>
+	/// <remarks>
+	/// <para>
+	/// <b>Contract (show load / New Session / settings history for AudioDevices+AudioPatch):</b>
+	/// after opening listed devices and applying the patch table, call this with the union of
+	/// the showfile open-device list and every device key in every patch. Devices left over from
+	/// a previous show that are not required are closed (SDL handles released, playbacks detached
+	/// via <see cref="IAudioPlayback.OnOutputDeviceLost"/>).
+	/// </para>
+	/// <para>
+	/// Interactive matrix open and GO-time direct-output open still use
+	/// <see cref="OpenAudioDevice"/> alone and do not force-close siblings.
+	/// </para>
+	/// </remarks>
+	public void SyncOpenDevices(IEnumerable<string> requiredNames, bool closeOthers = true)
+	{
+		var required = new HashSet<string>(StringComparer.Ordinal);
+		if (requiredNames != null)
+		{
+			foreach (var name in requiredNames)
+			{
+				if (!string.IsNullOrEmpty(name))
+					required.Add(name);
+			}
+		}
+
+		// Open missing required devices first so a failed close cannot leave the set empty
+		// when the show still needs output.
+		foreach (var name in required)
+		{
+			if (GetAudioDeviceIdFromName(name) != null)
+				continue;
+			OpenAudioDevice(name, out var error);
+			if (!string.IsNullOrEmpty(error))
+			{
+				GD.PrintErr($"AudioDevices:SyncOpenDevices - open '{name}': {error}");
+			}
+		}
+
+		if (!closeOthers)
+			return;
+
+		bool anyClosed = false;
+		foreach (var device in _openDevices.Values.ToList())
+		{
+			if (device == null || string.IsNullOrEmpty(device.Name))
+				continue;
+			if (required.Contains(device.Name))
+				continue;
+
+			GD.Print($"AudioDevices:SyncOpenDevices - Closing leftover device '{device.Name}'");
+			if (CloseAudioDevice(device.DeviceId, emitChanged: false))
+				anyClosed = true;
+		}
+
+		if (anyClosed)
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+	}
 
     /// <summary>
     /// Opens an audio device by name if not already open, registers it, and retrieves its specs.

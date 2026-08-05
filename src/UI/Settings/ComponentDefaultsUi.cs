@@ -12,21 +12,214 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 using AppSettings = Cue2.Domain.ShowSettings.Settings;
 
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// Shared OptionButton population for component-default audio output and target layer controls.
+/// Shared helpers for show-scoped component-default settings panels
+/// (Audio / Video / Text / Cue Defaults).
 /// </summary>
 /// <remarks>
-/// Metadata tokens:
+/// OptionButton metadata tokens:
 /// audio — <c>preferred</c>, <c>none</c>, <c>patch:{id}</c>, <c>direct:{name}</c>;
 /// layer — <c>first</c>, <c>none</c>, <c>layer:{id}</c>.
+/// Field pattern: edit → <see cref="RecordDefaultsChange"/> → model write →
+/// <see cref="UpdateResetButton"/>; reset button calls system default + full Sync.
 /// </remarks>
 public static class ComponentDefaultsUi
 {
+    /// <summary>
+    /// Styles a per-field reset button (refresh icon) and wires its pressed handler.
+    /// </summary>
+    /// <param name="iconHost">Control that can resolve theme icons (the panel).</param>
+    /// <param name="button">Reset button node (may be null).</param>
+    /// <param name="onPressed">Handler when the user clicks reset.</param>
+    public static void SetupResetButton(Control iconHost, Button button, Action onPressed)
+    {
+        if (button == null || onPressed == null)
+            return;
+
+        if (iconHost != null)
+        {
+            try
+            {
+                button.Icon = iconHost.GetThemeIcon("Refresh", "AtlasIcons");
+            }
+            catch
+            {
+                // Icon optional
+            }
+        }
+
+        button.Pressed += onPressed;
+    }
+
+    /// <summary>
+    /// Shows the reset button when the field is not at system default; sets tooltip text.
+    /// </summary>
+    /// <param name="button">Reset button (may be null).</param>
+    /// <param name="atSystemDefault">True when current value matches factory default.</param>
+    /// <param name="resetTooltip">Tooltip when visible (e.g. "Reset to default: 0s").</param>
+    public static void UpdateResetButton(Button button, bool atSystemDefault, string resetTooltip)
+    {
+        if (button == null)
+            return;
+
+        button.Visible = !atSystemDefault;
+        if (!atSystemDefault && !string.IsNullOrEmpty(resetTooltip))
+            button.TooltipText = resetTooltip;
+    }
+
+    /// <summary>
+    /// True when UI sync or history restore should suppress edit handlers.
+    /// </summary>
+    public static bool ShouldSkipEdit(bool isSyncingUi, HistoryManager history)
+    {
+        return isSyncingUi || history?.IsRestoring == true;
+    }
+
+    /// <summary>
+    /// Records a settings-slice history step for a defaults panel key
+    /// (<c>AudioDefaults</c>, <c>VideoDefaults</c>, <c>TextDefaults</c>, <c>CueDefaults</c>).
+    /// </summary>
+    /// <param name="history">Show history manager.</param>
+    /// <param name="description">Undo label.</param>
+    /// <param name="settingsKey">Narrow history key for <see cref="HistoryManager.RecordSettingsChange"/>.</param>
+    /// <param name="coalesceKey">Optional coalesce key for continuous edits (pan, spin, colour).</param>
+    public static void RecordDefaultsChange(
+        HistoryManager history,
+        string description,
+        string settingsKey,
+        string coalesceKey = null)
+    {
+        if (history == null || history.IsRestoring || string.IsNullOrEmpty(settingsKey))
+            return;
+        history.RecordSettingsChange(description, coalesceKey, settingsKey);
+    }
+
+    /// <summary>
+    /// Ends a coalesce session for a continuous defaults edit.
+    /// </summary>
+    public static void EndDefaultsCoalesce(HistoryManager history, string coalesceKey)
+    {
+        if (history == null || string.IsNullOrEmpty(coalesceKey))
+            return;
+        history.EndCoalesceSession(coalesceKey);
+    }
+
+    /// <summary>
+    /// True when two doubles match within float epsilon (settings scalar compare).
+    /// </summary>
+    public static bool NearlyEqual(double a, double b) =>
+        Mathf.IsEqualApprox((float)a, (float)b);
+
+    /// <summary>
+    /// True when two floats match within a small absolute epsilon.
+    /// </summary>
+    public static bool NearlyEqual(float a, float b, float epsilon = 1e-6f) =>
+        Math.Abs(a - b) < epsilon;
+
+    /// <summary>
+    /// Adds an OptionButton item with integer metadata (expand/stretch/align enums).
+    /// </summary>
+    public static void AddOptionItem(OptionButton button, string label, int metadata)
+    {
+        if (button == null) return;
+        int index = button.ItemCount;
+        button.AddItem(label);
+        button.SetItemMetadata(index, metadata);
+    }
+
+    /// <summary>
+    /// Selects the OptionButton item whose integer metadata matches <paramref name="metadata"/>.
+    /// </summary>
+    public static void SelectOptionByMetadata(OptionButton button, int metadata)
+    {
+        if (button == null) return;
+        button.SetBlockSignals(true);
+        try
+        {
+            for (int i = 0; i < button.ItemCount; i++)
+            {
+                if (button.GetItemMetadata(i).AsInt32() == metadata)
+                {
+                    button.Selected = i;
+                    return;
+                }
+            }
+
+            button.Selected = 0;
+        }
+        finally
+        {
+            button.SetBlockSignals(false);
+        }
+    }
+
+    /// <summary>
+    /// Parses a time LineEdit for defaults (fade / duration). Updates the field text on success
+    /// or restores <paramref name="currentSeconds"/> on failure.
+    /// </summary>
+    /// <returns>True when a new distinct value should be applied.</returns>
+    public static bool TryParseTimeDefault(
+        LineEdit field,
+        string text,
+        double currentSeconds,
+        GlobalSignals logSignals,
+        string invalidLogMessage,
+        out double newSeconds)
+    {
+        newSeconds = currentSeconds;
+        if (field == null)
+            return false;
+
+        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
+        if (string.IsNullOrEmpty(formatted))
+        {
+            logSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                invalidLogMessage ?? $"Invalid default time: {text}", 1);
+            field.Text = UiUtilities.FormatTime(currentSeconds);
+            return false;
+        }
+
+        field.Text = formatted;
+        field.TooltipText = labeled;
+        newSeconds = Math.Max(0.0, seconds);
+        return !NearlyEqual(currentSeconds, newSeconds);
+    }
+
+    /// <summary>
+    /// Common reset path: no-op if already at system default (still re-syncs UI);
+    /// otherwise records history, applies system value, and re-syncs.
+    /// </summary>
+    /// <returns>True when a value was actually reset.</returns>
+    public static bool TryResetField(
+        bool isSyncingUi,
+        HistoryManager history,
+        string settingsKey,
+        string resetDescription,
+        bool atSystemDefault,
+        Action applySystemDefault,
+        Action syncSettings)
+    {
+        if (isSyncingUi || applySystemDefault == null || syncSettings == null)
+            return false;
+
+        if (atSystemDefault)
+        {
+            syncSettings();
+            return false;
+        }
+
+        RecordDefaultsChange(history, resetDescription, settingsKey);
+        applySystemDefault();
+        syncSettings();
+        return true;
+    }
+
     /// <summary>
     /// Rebuilds an audio-output OptionButton from live patches and devices, then selects the stored default.
     /// </summary>

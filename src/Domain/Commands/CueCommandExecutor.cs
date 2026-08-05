@@ -24,7 +24,7 @@ namespace Cue2.Domain.Commands;
 /// <summary>
 /// Executes GO and pre-spawns full continue/follow chains with event-driven arming.
 /// </summary>
-public partial class CueCommandExectutor : Node
+public partial class CueCommandExecutor : Node
 {
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
@@ -178,6 +178,65 @@ public partial class CueCommandExectutor : Node
     }
 
     /// <summary>
+    /// Prepares media for a cue without starting playback (OSC Load / standby preload).
+    /// Reuses an existing standby or playing instance when present; otherwise creates a standby
+    /// <see cref="ActiveCue"/> that GO can adopt.
+    /// </summary>
+    /// <param name="cue">Cue to preload.</param>
+    public void PreloadCue(Cue cue)
+    {
+        TaskUtil.FireAndForget(PreloadCueAsync(cue), "CueCommandExecutor.PreloadCue");
+    }
+
+    /// <summary>
+    /// Awaitable form of <see cref="PreloadCue"/>.
+    /// </summary>
+    /// <param name="cue">Cue to preload.</param>
+    public async Task PreloadCueAsync(Cue cue)
+    {
+        if (cue == null || _activeCueList == null)
+            return;
+
+        if (!cue.Armed)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Preload skipped disarmed \"{cue.Name}\" (id={cue.Id})", (int)LogType.Info);
+            return;
+        }
+
+        try
+        {
+            // Prefer an existing instance of this cue (standby or already active).
+            var existing = FindActiveCuesById(cue.Id)
+                .FirstOrDefault(a => a != null && GodotObject.IsInstanceValid(a));
+            if (existing != null)
+            {
+                await existing.RequestPreloadAsync();
+                return;
+            }
+
+            var active = new ActiveCue(
+                cue,
+                _activeCueList,
+                _mediaEngine,
+                _audioDevices,
+                _globalSignals,
+                chainMember: null);
+            _activeCues.Add(active);
+            active.Completed += () => _activeCues.Remove(active);
+            active.PrepareUiInOrder();
+            await active.RequestPreloadAsync();
+            GD.Print($"CueCommandExecutor:PreloadCueAsync - Standby ready for \"{cue.Name}\" (id={cue.Id})");
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"CueCommandExecutor:PreloadCueAsync - {cue?.Name}: {ex.Message}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Preload failed for \"{cue?.Name}\": {ex.Message}", (int)LogType.Error);
+        }
+    }
+
+    /// <summary>
     /// Pre-spawns the continue/follow chain from <paramref name="head"/> and starts the head,
     /// awaiting until the head has entered pre-wait or content (so control actions can chain).
     /// </summary>
@@ -198,8 +257,23 @@ public partial class CueCommandExectutor : Node
         // Optional per-cue gate: hard-stop existing instances of this cue before a new GO.
         // Default is off (multiple concurrent instances allowed). Chain peers are not
         // stopped unless they share the same cue id as the head.
+        // Standby-preloaded head is kept and reused below (not stopped).
         if (head.OnlyOneActiveInstance)
-            StopExistingRootInstancesOfCue(head.Id, hardStop: true);
+        {
+            foreach (var old in FindActiveCuesById(head.Id).ToList())
+            {
+                if (old == null || !GodotObject.IsInstanceValid(old)) continue;
+                if (old.IsStandbyPreloaded) continue;
+                try
+                {
+                    old.StopAll(propagateToChildren: true, fadeDurationOverride: 0);
+                }
+                catch (Exception ex)
+                {
+                    GD.PrintErr($"CueCommandExecutor:ActivateSequenceFromAsync - stop prior: {ex.Message}");
+                }
+            }
+        }
 
         var chain = CueSequencePlanner.BuildChain(head);
         if (chain.Count == 0)
@@ -219,20 +293,38 @@ public partial class CueCommandExectutor : Node
                  (startAtTimelineSeconds.HasValue ? $", startAt={startAtTimelineSeconds.Value:F3}s" : string.Empty));
 
         // Create all active rows, build UI in sequence order (so the list matches occurrence),
-        // then wire events and start playback.
+        // then wire events and start playback. Reuse OSC Load standby for the head when present.
         var actives = new List<ActiveCue>(chain.Count);
-        foreach (var member in chain)
+        for (int mi = 0; mi < chain.Count; mi++)
         {
-            var active = new ActiveCue(
-                member.Cue,
-                _activeCueList,
-                _mediaEngine,
-                _audioDevices,
-                _globalSignals,
-                member);
+            var member = chain[mi];
+            ActiveCue active = null;
+            if (mi == 0)
+            {
+                active = FindActiveCuesById(member.Cue.Id)
+                    .FirstOrDefault(a => a != null && GodotObject.IsInstanceValid(a) && a.IsStandbyPreloaded);
+                if (active != null)
+                {
+                    active.AttachChainMember(member);
+                    GD.Print(
+                        $"CueCommandExecutor:ActivateSequenceFromAsync - Reusing standby preload for \"{member.Cue.Name}\"");
+                }
+            }
+
+            if (active == null)
+            {
+                active = new ActiveCue(
+                    member.Cue,
+                    _activeCueList,
+                    _mediaEngine,
+                    _audioDevices,
+                    _globalSignals,
+                    member);
+                _activeCues.Add(active);
+                active.Completed += () => _activeCues.Remove(active);
+            }
+
             actives.Add(active);
-            _activeCues.Add(active);
-            active.Completed += () => _activeCues.Remove(active);
         }
 
         // Control GO fade-in applies to the head instance only (not continue/follow peers).
@@ -245,6 +337,7 @@ public partial class CueCommandExectutor : Node
             actives[0].QueueStartAtBodyTime(Math.Max(0.0, startAtTimelineSeconds.Value));
 
         // Synchronous UI insert in chain order (avoids async race reordering the VBox).
+        // Standby preload already prepared UI — PrepareUiInOrder is a no-op when done.
         foreach (var active in actives)
             active.PrepareUiInOrder();
 

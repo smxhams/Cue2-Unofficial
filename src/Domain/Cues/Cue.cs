@@ -604,12 +604,12 @@ public class Cue : ICue
                     continue;
                 }
                 string type = (string)compHash["Type"];
+                // "Network" stub removed (P2-05) — treat as unknown if present in old data.
                 ICueComponent comp = type switch
                 {
                     "Audio" => new AudioComponent(),
                     "Video" => new VideoComponent(),
                     "Text" => new TextComponent(),
-                    "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
                     "Control" => new ControlComponent(),
@@ -630,7 +630,7 @@ public class Cue : ICue
                 }
                 else
                 {
-                    GD.PrintErr($"Cue:Constructor - Unknown component type '{type}'.");
+                    GD.PrintErr($"Cue:Constructor - Unknown or unsupported component type '{type}' (skipped).");
                 }
             }
         }
@@ -759,12 +759,6 @@ public class Cue : ICue
             GD.PrintErr($"Cue:ResolveSettings - {ex.Message}");
             return null;
         }
-    }
-
-    public void AddNetworkComponent(/* params */)
-    {
-        var netComp = new NetworkComponent { /* init */ };
-        Components.Add(netComp);
     }
 
     /// <summary>
@@ -1622,19 +1616,23 @@ public class Cue : ICue
                     continue;
                 }
                 string type = (string)compHash["Type"];
+                // "Network" stub removed (P2-05) — skip unknown types quietly after log.
                 ICueComponent comp = type switch
                 {
                     "Audio" => new AudioComponent(),
                     "Video" => new VideoComponent(),
                     "Text" => new TextComponent(),
-                    "Network" => new NetworkComponent(),
                     "CueLight" => new CueLightComponent(),
                     "OscComponent" => new OscComponent(),
                     "Control" => new ControlComponent(),
                     "MidiOutput" => new MidiOutputComponent(),
                     _ => null
                 };
-                if (comp == null) continue;
+                if (comp == null)
+                {
+                    GD.PrintErr($"Cue:ApplyFromData - Unknown or unsupported component type '{type}' (skipped).");
+                    continue;
+                }
                 try
                 {
                     comp.LoadFromData(compHash);

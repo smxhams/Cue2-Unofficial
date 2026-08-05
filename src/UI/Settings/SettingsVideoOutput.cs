@@ -13,6 +13,7 @@ using Cue2.Domain.Commands;
 using Cue2.Services;
 using Godot;
 using AppSettings = Cue2.Domain.ShowSettings.Settings;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings;
 
@@ -91,10 +92,17 @@ public partial class SettingsVideoOutput : ScrollContainer
         }
 
         SyncSettings();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
@@ -407,4 +415,16 @@ public partial class SettingsVideoOutput : ScrollContainer
         if (!atDefault)
             _vsyncResetButton.TooltipText = "Reset to default: Prefer VSync";
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

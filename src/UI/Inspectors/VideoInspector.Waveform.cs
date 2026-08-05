@@ -145,7 +145,7 @@ public partial class VideoInspector
 				_isDraggingStart = false;
 				var key = VideoCoalesceKey("start-drag");
 				if (!string.IsNullOrEmpty(key))
-					_globalData?.HistoryManager?.EndCoalesceSession(key);
+					InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
 			}
 		}
 		else if (@event is InputEventMouseMotion && _isDraggingStart)
@@ -192,7 +192,7 @@ public partial class VideoInspector
 				_isDraggingEnd = false;
 				var key = VideoCoalesceKey("end-drag");
 				if (!string.IsNullOrEmpty(key))
-					_globalData?.HistoryManager?.EndCoalesceSession(key);
+					InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
 			}
 		}
 		else if (@event is InputEventMouseMotion && _isDraggingEnd)
@@ -226,7 +226,12 @@ public partial class VideoInspector
 	/// </summary>
 	/// <param name="accordian">The container to toggle.</param>
 	/// <param name="button">The button controlling the accordion.</param>
-	private async void ToggleAccordian(Control accordian, Button button)
+	private void ToggleAccordian(Control accordian, Button button)
+	{
+		TaskUtil.Run(() => ToggleAccordianAsync(accordian, button), "VideoInspector.ToggleAccordian");
+	}
+
+	private async Task ToggleAccordianAsync(Control accordian, Button button)
 	{
 		accordian.Visible = !accordian.Visible;
 		button.Icon = GetThemeIcon(accordian.Visible ? "Down" : "Right", "AtlasIcons");

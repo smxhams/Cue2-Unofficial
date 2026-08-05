@@ -108,7 +108,7 @@ public partial class VideoInspector
 			UseMultiHistory(),
 			targets[^1].Cue,
 			singleDescription,
-			"Multi-edit " + singleDescription,
+			multiDescription: null,
 			coalesceKey);
 	}
 
@@ -120,7 +120,12 @@ public partial class VideoInspector
 	/// <summary>
 	/// Loads the focused cue (or multi-selection) into the video inspector.
 	/// </summary>
-	private async void ShellSelected(int cueId)
+	private void ShellSelected(int cueId)
+	{
+		TaskUtil.Run(() => ShellSelectedAsync(cueId), "VideoInspector.ShellSelected");
+	}
+
+	private async Task ShellSelectedAsync(int cueId)
 	{
 		int gen = ++_shellSelectGeneration;
 
@@ -428,7 +433,12 @@ public partial class VideoInspector
 	/// </summary>
 	/// <param name="filePath">The video file path.</param>
 	/// <param name="resetInOutPoints">If true, start/end are reset to full file; otherwise clamp to new duration.</param>
-	private async void SetVideoFile(string filePath, bool resetInOutPoints)
+	private void SetVideoFile(string filePath, bool resetInOutPoints)
+	{
+		TaskUtil.Run(() => SetVideoFileAsync(filePath, resetInOutPoints), "VideoInspector.SetVideoFile");
+	}
+
+	private async Task SetVideoFileAsync(string filePath, bool resetInOutPoints)
 	{
 		bool multi = InspectorMultiEditSupport.ShouldUseMultiEdit(_globalData);
 		var multiCues = multi ? InspectorMultiEditSupport.GetSelectedCues() : null;
@@ -532,7 +542,10 @@ public partial class VideoInspector
 		// Single-cue path
 		var existingVideo = _focusedCue.Components.OfType<VideoComponent>().FirstOrDefault();
 		bool isNewComponent = existingVideo == null;
-		_globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id,
+		InspectorMultiEditSupport.RecordBeforeEdit(
+			_globalData,
+			multiHistory: false,
+			_focusedCue,
 			isNewComponent
 				? (isImage ? "Add image component" : "Add video component")
 				: (isImage ? "Change image file" : "Change video file"));

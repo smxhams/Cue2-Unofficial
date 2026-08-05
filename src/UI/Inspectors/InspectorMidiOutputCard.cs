@@ -209,10 +209,9 @@ public partial class InspectorMidiOutputCard : PanelContainer
     private void RecordHistory(string description)
     {
         var gd = GetNodeOrNull<GlobalData>("/root/GlobalData");
-        if (gd?.HistoryManager == null || gd.HistoryManager.IsRestoring) return;
-        int cueId = gd.FocusedCue;
-        if (cueId >= 0)
-            gd.HistoryManager.RecordCueChange(cueId, description);
+        if (gd == null) return;
+        InspectorMultiEditSupport.RecordBeforeEditById(
+            gd, multiHistory: false, gd.FocusedCue, description);
     }
 
     private void OnDeviceSelected(long index)

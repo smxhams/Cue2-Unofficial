@@ -236,11 +236,10 @@ public partial class LibraryInspector : Control
 
         if (_folderTree == null || !GodotObject.IsInstanceValid(_folderTree))
         {
-            // Explicit Godot.Tree — bare "Tree" binds to the global demo class in src/UI/Shell/Tree.cs.
-            _folderTree = GetNodeOrNull<Godot.Tree>("%FolderTree")
-                          ?? GetNodeOrNull<Godot.Tree>("RootMargin/VBox/MainSplit/LeftPanel/FolderTree")
-                          ?? GetNodeOrNull<Godot.Tree>("RootMargin/VBox/MainSplit/FolderTree")
-                          ?? FindChild("FolderTree", recursive: true, owned: false) as Godot.Tree;
+            _folderTree = GetNodeOrNull<Tree>("%FolderTree")
+                          ?? GetNodeOrNull<Tree>("RootMargin/VBox/MainSplit/LeftPanel/FolderTree")
+                          ?? GetNodeOrNull<Tree>("RootMargin/VBox/MainSplit/FolderTree")
+                          ?? FindChild("FolderTree", recursive: true, owned: false) as Tree;
         }
 
         if (_folderTree != null && GodotObject.IsInstanceValid(_folderTree))

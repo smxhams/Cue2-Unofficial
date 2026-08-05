@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Threading.Tasks;
 using System.Linq;
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
@@ -111,7 +112,12 @@ public partial class HeaderUI : Control
 		_goButton.TooltipText = Tf("Hotkey: {0}", GlobalData.ParseHotkey("Go"));
 	}
 
-	private async void GoButtonFeedback()
+	private void GoButtonFeedback()
+	{
+		TaskUtil.Run(GoButtonFeedbackAsync, "HeaderUI.GoButtonFeedback");
+	}
+
+	private async Task GoButtonFeedbackAsync()
 	{
 		var pressed = _goButton.GetThemeStylebox("pressed");
 		var normal = _goButton.GetThemeStylebox("normal");

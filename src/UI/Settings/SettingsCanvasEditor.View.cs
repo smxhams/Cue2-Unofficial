@@ -59,7 +59,7 @@ public partial class SettingsCanvasEditor
             _canvasSizeXLineEdit.ReleaseFocus();
             _canvasSizeYLineEdit.ReleaseFocus();
 
-            _canvasSelectButton.Text = $"Canvas ({x}×{y})";
+            RefreshCanvasSelectButtonText();
             UpdateCanvasGizmos();
 
             _globalSignals.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), _canvas.CanvasSize);
@@ -345,7 +345,7 @@ public partial class SettingsCanvasEditor
         if (_canvasOutlinePanel != null && IsInstanceValid(_canvasOutlinePanel))
             _canvasOutlinePanel.CustomMinimumSize = new Vector2(size.X, size.Y);
         if (_canvasSelectButton != null && IsInstanceValid(_canvasSelectButton))
-            _canvasSelectButton.Text = $"Canvas ({size.X}×{size.Y})";
+            RefreshCanvasSelectButtonText();
 
         _isUpdatingProps = true;
         try
@@ -431,7 +431,7 @@ public partial class SettingsCanvasEditor
         if (_canvasSizeYLineEdit != null)
             _canvasSizeYLineEdit.Text = newSize.Y.ToString();
         if (_canvasSelectButton != null)
-            _canvasSelectButton.Text = $"Canvas ({newSize.X}×{newSize.Y})";
+            RefreshCanvasSelectButtonText();
     }
 
     #endregion

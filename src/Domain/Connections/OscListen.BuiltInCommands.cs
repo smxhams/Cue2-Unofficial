@@ -72,6 +72,9 @@ public partial class OscListen
         new() { Category = "Arm", Pattern = "/DisarmID|Num|Name|Selected", Description = "Disarm." },
         new() { Category = "Arm", Pattern = "/ToggleArmID|Selected", Description = "Toggle arm." },
 
+        new() { Category = "Load", Pattern = "/LoadID|Num|Name|Selected", Description = "Preload media without GO (standby)." },
+        new() { Category = "Load", Pattern = "/cue/…/load", Description = "Alias: preload target cue." },
+
         new() { Category = "Layer", Pattern = "/Layer/{id}/pos {x} {y}", Description = "Layer position." },
         new() { Category = "Layer", Pattern = "/Layer/{id}/size {w} {h}", Description = "Layer size." },
 
@@ -170,6 +173,11 @@ public partial class OscListen
                 "DisarmSelected" => ExecArm(parts, msg, CueLookup.Selected, armed: false, toggle: false),
                 "ToggleArmID" => ExecArm(parts, msg, CueLookup.Id, armed: false, toggle: true),
                 "ToggleArmSelected" => ExecArm(parts, msg, CueLookup.Selected, armed: false, toggle: true),
+
+                "LoadID" => ExecLoad(parts, msg, CueLookup.Id),
+                "LoadNum" => ExecLoad(parts, msg, CueLookup.Num),
+                "LoadName" => ExecLoad(parts, msg, CueLookup.Name),
+                "LoadSelected" => ExecLoad(parts, msg, CueLookup.Selected),
 
                 "Layer" => ExecLayer(parts, msg),
 
@@ -398,7 +406,7 @@ public partial class OscListen
             LogBuiltIn($"{via}: skipped disarmed \"{cue.Name}\" (id={cue.Id})", LogType.Info);
             return;
         }
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) { LogBuiltIn($"{via}: executor missing", LogType.Error); return; }
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"OSC {via}: GO \"{cue.Name}\" (#{cue.CueNum}, id={cue.Id})", (int)LogType.Info);
@@ -407,14 +415,30 @@ public partial class OscListen
 
     private bool ExecLoad(string[] parts, OscInputMessage msg, CueLookup lookup)
     {
-        // Best-effort: GO with no special preload API — log and select + optional future hook
         var cues = ResolveCues(parts, msg, lookup);
-        if (cues.Count == 0) { LogBuiltIn($"Load{LookupLabel(lookup)}: no matching cue", LogType.Warning); return true; }
+        if (cues.Count == 0)
+        {
+            LogBuiltIn($"Load{LookupLabel(lookup)}: no matching cue", LogType.Warning);
+            return true;
+        }
+
+        var executor = _globalData?.CueCommandExecutor;
+        if (executor == null)
+        {
+            LogBuiltIn($"Load{LookupLabel(lookup)}: executor missing", LogType.Error);
+            return true;
+        }
+
         foreach (var cue in cues)
         {
-            // Preload is not fully exposed; arm selection for operator awareness
-            LogBuiltIn($"Load{LookupLabel(lookup)}: \"{cue.Name}\" (preload not implemented — use GO)", LogType.Info);
+            if (cue == null) continue;
+            LogBuiltIn(
+                $"Load{LookupLabel(lookup)}: preloading \"{cue.Name}\" (#{cue.CueNum}, id={cue.Id})",
+                LogType.Info);
+            // Fire-and-forget: open decoders / build component UI without starting pre-wait or content.
+            executor.PreloadCue(cue);
         }
+
         return true;
     }
 
@@ -422,7 +446,7 @@ public partial class OscListen
     {
         var cues = ResolveCues(parts, msg, lookup);
         if (cues.Count == 0) { LogBuiltIn($"{action}{LookupLabel(lookup)}: no matching cue", LogType.Warning); return true; }
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) { LogBuiltIn($"{action}: executor missing", LogType.Error); return true; }
 
         double? stopFade = hard ? 0.0 : null;
@@ -450,7 +474,7 @@ public partial class OscListen
 
     private bool ExecStopAllHard()
     {
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) { LogBuiltIn("StopAllHard: executor missing", LogType.Error); return true; }
         int count = 0;
         foreach (var active in executor.ActiveCues.ToList())
@@ -465,7 +489,7 @@ public partial class OscListen
 
     private bool ExecActiveControl(ControlAction action)
     {
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return true;
         var seen = new HashSet<int>();
         foreach (var root in executor.ActiveCues.ToList())
@@ -487,7 +511,7 @@ public partial class OscListen
     {
         var cues = ResolveCues(null, default, CueLookup.Selected);
         if (cues.Count == 0) { LogBuiltIn("TogglePauseSelected: none selected", LogType.Warning); return true; }
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return true;
 
         // Inspect live transport: paused instances must Resume, not re-Pause.
@@ -548,7 +572,7 @@ public partial class OscListen
             return true;
         }
 
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return true;
         foreach (var cue in cues)
         {
@@ -597,7 +621,7 @@ public partial class OscListen
             fade = Math.Max(0, a2);
 
         level = Math.Clamp(level, 0.0, 1.0);
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null) return true;
 
         foreach (var cue in cues)
@@ -757,7 +781,7 @@ public partial class OscListen
 
     private bool ExecQueryActive(OscInputMessage msg)
     {
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         var ids = new List<int>();
         if (executor != null)
         {
@@ -796,7 +820,7 @@ public partial class OscListen
         }
 
         bool playing = false;
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor != null)
         {
             foreach (var root in executor.ActiveCues)

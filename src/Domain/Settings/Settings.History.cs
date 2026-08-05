@@ -24,15 +24,20 @@ public partial class Settings
         GD.Print($"Settings:ApplyPartialFromHistory - Applying {settingsData.Count} key(s)");
 
         // Open devices first so patch UI / playback can resolve hardware after restore.
-        // We intentionally do not close devices absent from the snapshot — another patch or
-        // direct-output cue may still need them, and closing mid-session is disruptive.
+        // After patches are applied we reconcile: close leftovers not in the snapshot union
+        // patch table (same contract as show load — see AudioDevices.SyncOpenDevices).
+        var historyDeviceNames = new System.Collections.Generic.List<string>();
+        bool reconcileAudioDevices = false;
+
         if (TryGetSettingsValue(settingsData, "AudioDevices", out var devices))
         {
+            reconcileAudioDevices = true;
             var deviceArray = devices.AsGodotArray();
             foreach (var device in deviceArray)
             {
                 string deviceName = device.AsString();
                 if (string.IsNullOrEmpty(deviceName)) continue;
+                historyDeviceNames.Add(deviceName);
                 _audioDevices.OpenAudioDevice(deviceName, out var _);
             }
         }
@@ -43,6 +48,7 @@ public partial class Settings
         if (TryGetSettingsValue(settingsData, "AudioPatch", out var patchs)
             && patchs.VariantType == Variant.Type.Dictionary)
         {
+            reconcileAudioDevices = true;
             foreach (var patch in _audioOutputPatches.Values.ToList())
             {
                 if (patch != null && GodotObject.IsInstanceValid(patch))
@@ -64,6 +70,9 @@ public partial class Settings
             GD.Print($"Settings:ApplyPartialFromHistory - Restored {_audioOutputPatches.Count} audio output patch(es)");
             GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
         }
+
+        if (reconcileAudioDevices)
+            ReconcileOpenAudioDevices(historyDeviceNames);
 
         if (TryGetSettingsValue(settingsData, "Displays", out var displays)
             && displays.VariantType == Variant.Type.Dictionary)
@@ -201,38 +210,84 @@ public partial class Settings
                 ?.LoadInputMapBindingsData(midiInputMapSlice.AsGodotDictionary());
         }
 
-        // InputMap is stored in user prefs (not the showfile) but still participates in
-        // session undo/redo via HistoryManager with the "InputMap" slice key.
-        if (TryGetSettingsValue(settingsData, "InputMap", out var inputMapData) && _globalData != null)
+        // Keyboard InputMap is Cue2 Preferences only (user:// via UserDataManager) — not
+        // document history (P2-14). Ignore legacy slices if an old undo entry still has the key.
+        if (TryGetSettingsValue(settingsData, "InputMap", out _))
         {
-            _globalData.ApplyInputBindings(inputMapData.AsGodotDictionary());
-            // Keep user:// bindings aligned with the restored live map.
-            _globalData.UserDataManager?.PersistLiveInputMap();
+            GD.Print(
+                "Settings:ApplyPartialFromHistory - Ignoring InputMap slice " +
+                "(keyboard shortcuts are user preferences, not undo-tracked).");
         }
     }
 
     /// <summary>
+    /// Explicit full-settings history key for <see cref="CaptureHistorySlice"/>.
+    /// Empty/null keys no longer capture everything (P2-10) — pass this sentinel instead.
+    /// </summary>
+    public const string HistoryFullSnapshotKey = "*";
+
+    /// <summary>
     /// Captures a settings subset for undo/redo. Scalar general-settings keys are read directly
     /// (no full GetData) so history does not depend on displays/OSC/etc. serialization.
-    /// When <paramref name="keys"/> is null or empty, returns a full <see cref="GetData"/> snapshot.
     /// </summary>
-    /// <param name="keys">Optional key filter (e.g. "StopFadeDuration", "InputMap", "AudioPatch").</param>
+    /// <param name="keys">
+    /// One or more settings keys (e.g. <c>StopFadeDuration</c>, <c>AudioPatch</c>, <c>OscInputMap</c>).
+    /// Keyboard <c>InputMap</c> is user preferences only and is refused (P2-14).
+    /// Pass <see cref="HistoryFullSnapshotKey"/> (<c>"*"</c>) alone (or among keys) for a full
+    /// <see cref="GetData"/> snapshot. Null/empty keys return an empty dictionary and log an error.
+    /// </param>
     /// <returns>Dictionary suitable for history storage (caller should deep-clone if needed).</returns>
     public Dictionary CaptureHistorySlice(params string[] keys)
     {
         if (keys == null || keys.Length == 0)
-            return GetData();
+        {
+            System.Diagnostics.Debug.Assert(false,
+                "Settings.CaptureHistorySlice: keys must not be null/empty. Use HistoryFullSnapshotKey (\"*\") for a full snapshot.");
+            GD.PrintErr(
+                "Settings:CaptureHistorySlice - Refused empty keys (would have been full GetData). " +
+                "Pass explicit keys or HistoryFullSnapshotKey (\"*\").");
+            return new Dictionary();
+        }
 
-        var slice = new Dictionary();
+        // Explicit full snapshot only — never implicit via missing args (P2-10).
+        bool wantFull = false;
+        var filtered = new System.Collections.Generic.List<string>(keys.Length);
         foreach (var key in keys)
         {
-            if (string.IsNullOrEmpty(key)) continue;
+            if (string.IsNullOrEmpty(key))
+                continue;
+            if (key == HistoryFullSnapshotKey)
+            {
+                wantFull = true;
+                break;
+            }
+            filtered.Add(key);
+        }
+
+        if (wantFull)
+            return GetData();
+
+        if (filtered.Count == 0)
+        {
+            System.Diagnostics.Debug.Assert(false,
+                "Settings.CaptureHistorySlice: no non-empty keys after filter.");
+            GD.PrintErr(
+                "Settings:CaptureHistorySlice - Refused: no non-empty keys (would have been full GetData).");
+            return new Dictionary();
+        }
+
+        var slice = new Dictionary();
+        foreach (var key in filtered)
+        {
             if (TryCaptureScalarHistoryKey(key, out var value))
                 slice[key] = value;
-            else if (key == "InputMap" && _globalData != null)
+            else if (key == "InputMap")
             {
-                // Live InputMap snapshot for undo (persisted to user prefs, not the showfile).
-                slice[key] = _globalData.GetCustomInputBindings();
+                // Keyboard InputMap is user preferences only — not captured for document undo (P2-14).
+                // OSC/MIDI Input Map use OscInputMap / MidiInputMap keys (show-scoped).
+                GD.PrintErr(
+                    "Settings:CaptureHistorySlice - Refused InputMap key " +
+                    "(keyboard shortcuts are user preferences; use OscInputMap/MidiInputMap for show maps).");
             }
             else if (key == "AudioPatch")
             {
@@ -297,10 +352,12 @@ public partial class Settings
             }
             else
             {
-                // Fallback for other complex keys (CueLights, …)
+                // Fallback for other complex keys (CueLights, …) — single-key extract, not silent full capture.
                 var full = GetData();
                 if (full.ContainsKey(key))
                     slice[key] = full[key];
+                else
+                    GD.PrintErr($"Settings:CaptureHistorySlice - Unknown settings key '{key}' (not in GetData).");
             }
         }
         return slice;

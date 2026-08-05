@@ -71,14 +71,14 @@ public partial class SettingsCueDefaults : ScrollContainer
         _onlyOneActiveCheckBox = GetNodeOrNull<CheckBox>("%OnlyOneActiveCheckBox");
         _onlyOneActiveResetButton = GetNodeOrNull<Button>("%OnlyOneActiveResetButton");
 
-        SetupResetButton(_preWaitResetButton, OnPreWaitResetPressed);
-        SetupResetButton(_postWaitResetButton, OnPostWaitResetPressed);
-        SetupResetButton(_followResetButton, OnFollowResetPressed);
-        SetupResetButton(_colorResetButton, OnColorResetPressed);
-        SetupResetButton(_armedResetButton, OnArmedResetPressed);
-        SetupResetButton(_skipIfDisarmedResetButton, OnSkipIfDisarmedResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _preWaitResetButton, OnPreWaitResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _postWaitResetButton, OnPostWaitResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _followResetButton, OnFollowResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _colorResetButton, OnColorResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _armedResetButton, OnArmedResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _skipIfDisarmedResetButton, OnSkipIfDisarmedResetPressed);
         if (_onlyOneActiveResetButton != null)
-            SetupResetButton(_onlyOneActiveResetButton, OnOnlyOneActiveResetPressed);
+            ComponentDefaultsUi.SetupResetButton(this, _onlyOneActiveResetButton, OnOnlyOneActiveResetPressed);
 
         EnsureFollowOptions();
 
@@ -99,10 +99,17 @@ public partial class SettingsCueDefaults : ScrollContainer
             _globalSignals.NewSession += OnNewSession;
 
         SyncSettings();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
@@ -110,19 +117,6 @@ public partial class SettingsCueDefaults : ScrollContainer
         base._ExitTree();
     }
 
-    private void SetupResetButton(Button button, System.Action pressed)
-    {
-        if (button == null) return;
-        try
-        {
-            button.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        }
-        catch
-        {
-            // Icon optional
-        }
-        button.Pressed += pressed;
-    }
 
     private void OnHistoryRestored(int scope)
     {
@@ -185,9 +179,9 @@ public partial class SettingsCueDefaults : ScrollContainer
         UpdateOnlyOneActiveResetButton();
     }
 
-    private void RecordCueDefaultsHistory(string description)
+    private void RecordCueDefaultsHistory(string description, string coalesceKey = null)
     {
-        _historyManager?.RecordSettingsChange(description, null, "CueDefaults");
+        ComponentDefaultsUi.RecordDefaultsChange(_historyManager, description, "CueDefaults", coalesceKey);
     }
 
     // ── Follow option helpers ──────────────────────────────────────────────
@@ -250,8 +244,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void CommitPreWait(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
         if (string.IsNullOrEmpty(formatted))
@@ -314,8 +307,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void CommitPostWait(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
         if (string.IsNullOrEmpty(formatted))
@@ -370,8 +362,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void OnFollowItemSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int selectedValue = _followOption.GetItemMetadata((int)index).AsInt32();
         var follow = (FollowType)selectedValue;
@@ -455,8 +446,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void OnArmedToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (_globalData.Settings.CueDefaultArmed == pressed)
         {
@@ -499,8 +489,7 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void OnSkipIfDisarmedToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (_globalData.Settings.CueDefaultSkipIfDisarmed == pressed)
         {
@@ -588,4 +577,16 @@ public partial class SettingsCueDefaults : ScrollContainer
             _skipIfDisarmedResetButton.TooltipText = $"Reset to default: {text}";
         }
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

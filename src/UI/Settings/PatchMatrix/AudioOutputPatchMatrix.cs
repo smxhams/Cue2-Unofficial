@@ -3,6 +3,7 @@
 
 using Godot;
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using Cue2.Domain.Cuelist;
@@ -49,6 +50,10 @@ public partial class AudioOutputPatchMatrix : Control
     private bool _isRebuilding;
     private bool _isDisposed;
     private ResourceInUseDeleteDialog _activeDeleteDialog;
+    /// <summary>Bumped on each patch-matrix rebuild so stale async completions abort (P2-08).</summary>
+    private int _patchMatrixBuildGeneration;
+    /// <summary>Structure fingerprint of last successful checkbox grid build.</summary>
+    private string _patchMatrixStructureKey;
     
     /// <summary>
     /// Initializes the node, loads required scenes, sets up UI elements, and connects signals.
@@ -218,7 +223,12 @@ public partial class AudioOutputPatchMatrix : Control
     /// <summary>
     /// Synchronizes the displayed audio devices and channels with the current data, rebuilding the UI as needed.
     /// </summary>
-    private async void SyncAudioDeviceDisplays()
+    private void SyncAudioDeviceDisplays()
+    {
+    	TaskUtil.Run(SyncAudioDeviceDisplaysAsync, "AudioOutputPatchMatrix.SyncAudioDeviceDisplays");
+    }
+
+    private async Task SyncAudioDeviceDisplaysAsync()
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
@@ -539,34 +549,84 @@ public partial class AudioOutputPatchMatrix : Control
     /// <summary>
     /// Builds the matrix of checkboxes for routing channels to device outputs.
     /// </summary>
-    private async void BuildPatchMatrix()
+    private void BuildPatchMatrix()
+    {
+    	TaskUtil.Run(BuildPatchMatrixAsync, "AudioOutputPatchMatrix.BuildPatchMatrix");
+    }
+
+    private async Task BuildPatchMatrixAsync()
     {
         if (_isDisposed || !GodotObject.IsInstanceValid(this) || Patch == null || !GodotObject.IsInstanceValid(Patch))
             return;
         if (_globalData?.HistoryManager?.IsRestoring == true)
             return;
 
-        // For now remove everything and start over on each build - eventually should build once and update
-        var children = _patchMatrix.GetChildren();
-        foreach (var child in children)
+        int buildGen = ++_patchMatrixBuildGeneration;
+        var deviceHeaders = _deviceContainer.GetChildren();
+        int columnCount = deviceHeaders.Count;
+        var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
+
+        // Structure: channel ids + device/output columns (P2-08 skip full free/rebuild).
+        var structureSb = new System.Text.StringBuilder();
+        structureSb.Append(columnCount).Append('|');
+        foreach (var ch in sortedChannels)
+            structureSb.Append(ch.Key).Append(',');
+        structureSb.Append('|');
+        for (int col = 0; col < columnCount; col++)
         {
-            child.QueueFree();
+            var header = deviceHeaders[col];
+            var parentDeviceVar = header.Get("ParentDevice");
+            if (parentDeviceVar.VariantType != Variant.Type.Nil)
+                structureSb.Append(parentDeviceVar).Append(':').Append(header.Get("OutputIndex").AsInt32()).Append(';');
+            else
+                structureSb.Append("empty;");
         }
+        string structureKey = structureSb.ToString();
+
+        if (structureKey == _patchMatrixStructureKey
+            && _patchMatrix.GetChildCount() == sortedChannels.Count * Math.Max(1, columnCount))
+        {
+            // Refresh checkbox pressed state only.
+            int childIdx = 0;
+            foreach (var channel in sortedChannels)
+            {
+                int channelId = channel.Key;
+                for (int col = 0; col < columnCount; col++, childIdx++)
+                {
+                    if (childIdx >= _patchMatrix.GetChildCount()) return;
+                    var child = _patchMatrix.GetChild(childIdx);
+                    if (child is not CheckBox checkBox)
+                        continue;
+                    var header = deviceHeaders[col];
+                    var parentDeviceVar = header.Get("ParentDevice");
+                    if (parentDeviceVar.VariantType == Variant.Type.Nil)
+                        continue;
+                    string deviceName = parentDeviceVar.ToString();
+                    int outputIndex = header.Get("OutputIndex").AsInt32();
+                    bool routed = Patch.IsChannelRouted(deviceName, outputIndex, channelId);
+                    if (checkBox.ButtonPressed != routed)
+                        checkBox.SetPressedNoSignal(routed);
+                }
+            }
+            return;
+        }
+
+        foreach (var child in _patchMatrix.GetChildren())
+            child.QueueFree();
 
         await ToSignal(GetTree(), "process_frame");
 
         if (_isDisposed || !GodotObject.IsInstanceValid(this)
             || Patch == null || !GodotObject.IsInstanceValid(Patch)
-            || _globalData?.HistoryManager?.IsRestoring == true)
+            || _globalData?.HistoryManager?.IsRestoring == true
+            || buildGen != _patchMatrixBuildGeneration)
             return;
 
-        var deviceHeaders = _deviceContainer.GetChildren();
-
-        // Calculate column count
-        var columnCount = deviceHeaders.Count;
+        // Headers may have been rebuilt while we waited.
+        deviceHeaders = _deviceContainer.GetChildren();
+        columnCount = deviceHeaders.Count;
+        sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
         _patchMatrix.Columns = columnCount;
-
-        var sortedChannels = Patch.Channels.OrderBy(kv => kv.Key).ToList();
 
         foreach (var channel in sortedChannels)
         {
@@ -575,18 +635,13 @@ public partial class AudioOutputPatchMatrix : Control
             for (int col = 0; col < columnCount; col++)
             {
                 var header = deviceHeaders[col];
-
-                // Determine if this is an output header (has "ParentDevice" property set)
                 var parentDeviceVar = header.Get("ParentDevice");
                 if (parentDeviceVar.VariantType != Variant.Type.Nil)
                 {
                     string deviceName = parentDeviceVar.ToString();
-                    var outputIndexVar = header.Get("OutputIndex");
-                    int outputIndex = outputIndexVar.AsInt32();
+                    int outputIndex = header.Get("OutputIndex").AsInt32();
 
                     CheckBox checkBox = _checkBoxScene.Instantiate<CheckBox>();
-
-                    // Use helper for initial state
                     checkBox.ButtonPressed = Patch.IsChannelRouted(deviceName, outputIndex, channelId);
 
                     checkBox.Toggled += pressed =>
@@ -597,12 +652,10 @@ public partial class AudioOutputPatchMatrix : Control
                             return;
                         try
                         {
-                            // Discrete route toggle — each click is its own undo step (routing is not coalesced).
                             RecordPatchHistory(pressed
                                 ? "Route patch channel"
                                 : "Unroute patch channel");
                             Patch.SetRouting(deviceName, outputIndex, channelId, pressed);
-                            GD.Print($"AudioOutputPatchMatrix:BuildPatchMatrix - {(pressed ? "Routed" : "Unrouted")} channel {channelId} to {deviceName}:index {outputIndex}");
                         }
                         catch (Exception ex)
                         {
@@ -621,6 +674,8 @@ public partial class AudioOutputPatchMatrix : Control
                 }
             }
         }
+
+        _patchMatrixStructureKey = structureKey;
     }
         
     

@@ -898,23 +898,19 @@ public partial class ShellInspector : Control
 	/// </summary>
 	private void RecordHistoryBeforeEdit(string singleDescription, string multiDescription, string coalesceKey = null)
 	{
-		var history = _globalData?.HistoryManager;
-		if (history == null || history.IsRestoring) return;
-
-		if (_isMultiEdit)
-			history.RecordCuelistChange(multiDescription, coalesceKey);
-		else if (_focusedCue != null)
-			history.RecordCueChange(_focusedCue.Id, singleDescription, coalesceKey);
+		InspectorMultiEditSupport.RecordBeforeEdit(
+			_globalData,
+			_isMultiEdit,
+			_focusedCue,
+			singleDescription,
+			multiDescription,
+			coalesceKey);
 	}
 
 	private void EndCoalesceForCurrentEdit(string singleKeySuffix, string multiKey)
 	{
-		var history = _globalData?.HistoryManager;
-		if (history == null) return;
-		if (_isMultiEdit)
-			history.EndCoalesceSession(multiKey);
-		else if (_focusedCueId >= 0)
-			history.EndCoalesceSession($"cue:{_focusedCueId}:{singleKeySuffix}");
+		string singleKey = _focusedCueId >= 0 ? $"cue:{_focusedCueId}:{singleKeySuffix}" : null;
+		InspectorMultiEditSupport.EndCoalesce(_globalData, _isMultiEdit, multiKey, singleKey);
 	}
 
 	private void OnCueNumFocusExited() => EndCoalesceForCurrentEdit("num", MultiNumCoalesceKey);

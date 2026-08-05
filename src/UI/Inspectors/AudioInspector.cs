@@ -96,6 +96,11 @@ public partial class AudioInspector : Control
     private VBoxContainer _routingContainer;
     /// <summary>Left-column input labels in the routing matrix (updated when pan changes).</summary>
     private readonly List<Label> _routingInputLabels = new List<Label>();
+    /// <summary>Volume LineEdits in row-major order for in-place refresh (P2-08).</summary>
+    private readonly List<LineEdit> _routingVolumeEdits = new List<LineEdit>();
+    /// <summary>Last built matrix structure (inputs/outputs/labels); skip full rebuild when equal.</summary>
+    private string _routingMatrixStructureKey;
+    private int _routingMatrixBuildGeneration;
     
     // Waveform
     private PanelContainer _waveformPanel;
@@ -265,11 +270,18 @@ public partial class AudioInspector : Control
         _waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
         _buttonSelectFile.Pressed += OpenFileDialog;
         
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         // Invalidate in-flight ShellSelected / waveform work so callbacks no-op after free.
         _shellSelectGeneration++;
         CancelWaveformWork();
@@ -297,4 +309,16 @@ public partial class AudioInspector : Control
     /// </summary>
     /// <param name="text">The submitted text.</param>
     /// <param name="textField">The LineEdit field.</param>
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

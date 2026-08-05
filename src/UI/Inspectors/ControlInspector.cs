@@ -13,6 +13,7 @@ using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
 using Godot;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Inspectors;
 
@@ -89,11 +90,18 @@ public partial class ControlInspector : Control
         // Start empty until a shell is selected.
         _contentRoot.Visible = false;
         _infoLabel.Visible = true;
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_globalSignals != null)
         {
             _globalSignals.ShellFocused -= ShellSelected;
@@ -180,7 +188,8 @@ public partial class ControlInspector : Control
         if (_focusedCue == null || component == null) return;
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
-        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Remove control component");
+        InspectorMultiEditSupport.RecordBeforeEdit(
+            _globalData, multiHistory: false, _focusedCue, "Remove control component");
         _focusedCue.RemoveICueComponent(component);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"Removed control component from cue {_focusedCue.Id}", (int)LogType.Info);
@@ -213,7 +222,8 @@ public partial class ControlInspector : Control
         int listB = _focusedCue.Components.IndexOf(controls[swapIdx]);
         if (listA < 0 || listB < 0) return;
 
-        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, "Reorder control components");
+        InspectorMultiEditSupport.RecordBeforeEdit(
+            _globalData, multiHistory: false, _focusedCue, "Reorder control components");
         (_focusedCue.Components[listA], _focusedCue.Components[listB]) =
             (_focusedCue.Components[listB], _focusedCue.Components[listA]);
 
@@ -231,7 +241,8 @@ public partial class ControlInspector : Control
 
         if (_globalData?.HistoryManager?.IsRestoring == true) return;
 
-        _globalData?.HistoryManager?.RecordCueChange(_focusedCue.Id, $"Add control {action}");
+        InspectorMultiEditSupport.RecordBeforeEdit(
+            _globalData, multiHistory: false, _focusedCue, $"Add control {action}");
         var component = new ControlComponent { Action = action };
         // Append — runs after existing controls in list order.
         _focusedCue.AddICueComponent(component);
@@ -269,4 +280,16 @@ public partial class ControlInspector : Control
             child.QueueFree();
         }
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

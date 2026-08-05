@@ -30,8 +30,9 @@ public partial class ActiveCue : GodotObject
 
     /// <summary>
     /// Chain membership from GO (null for nested child activations under a parent group).
+    /// Mutable so OSC Load standby instances can be attached to a chain on subsequent GO.
     /// </summary>
-    private readonly CueChainMember _chainMember;
+    private CueChainMember _chainMember;
 
     private PanelContainer _activeCueBar;
     private Timer _fadeTimer; // For fade-in/out
@@ -509,8 +510,20 @@ public partial class ActiveCue : GodotObject
     /// </summary>
     private bool _componentsSetup;
 
+    /// <summary>
+    /// True when this instance was created/prepared by OSC Load (or equivalent) and has not
+    /// entered content yet. GO reuses standby instances so preload work is not discarded.
+    /// </summary>
+    private bool _standbyPreload;
+
     /// <summary>Preload task for pending chain members (follow/continue) so arm can trigger immediately.</summary>
     private Task _pendingPreloadTask;
+
+    /// <summary>
+    /// True when media components are set up but content has not started (safe to reuse for GO).
+    /// </summary>
+    public bool IsStandbyPreloaded =>
+        _standbyPreload && !_contentStarted && !_isCleaned && _uiPrepared;
 
     /// <summary>True while the user is scrubbing the head progress bar.</summary>
     private bool _headIsSeeking;

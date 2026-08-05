@@ -322,37 +322,57 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
 
     /// <summary>
     /// Starts the demand-driven fill loop (optionally with fade-in).
+    /// Fire-and-forget entry; prefer <see cref="PlayAsync"/> when the caller can await.
     /// </summary>
     /// <param name="fadeInDuration">
     /// Fade-in seconds for this start. When null, uses <see cref="AudioComponent.FadeInDuration"/>.
     /// When 0, starts at full volume (declick ramp only).
     /// </param>
-    public async void Play(double? fadeInDuration = null)
+    public void Play(double? fadeInDuration = null)
     {
-        lock (_lock)
-        {
-            if (_hasStarted || IsStopped) return;
-            _hasStarted = true;
-        }
+        TaskUtil.FireAndForget(PlayAsync(fadeInDuration), "ActiveAudioPlayback.Play");
+    }
 
-        // Main thread: snapshot settings before fill loop / prefill use _audioTuning.
-        RefreshAudioTuning();
+    /// <summary>
+    /// Starts the demand-driven fill loop (optionally with fade-in). Awaitable form of <see cref="Play"/>.
+    /// </summary>
+    /// <param name="fadeInDuration">
+    /// Fade-in seconds for this start. When null, uses <see cref="AudioComponent.FadeInDuration"/>.
+    /// When 0, starts at full volume (declick ramp only).
+    /// </param>
+    public async Task PlayAsync(double? fadeInDuration = null)
+    {
+        try
+        {
+            lock (_lock)
+            {
+                if (_hasStarted || IsStopped) return;
+                _hasStarted = true;
+            }
 
-        double fadeIn = fadeInDuration ?? _audioComponent.FadeInDuration;
-        if (fadeIn > 1e-9)
-        {
-            // Zero master level before any PCM is pushed (FadeInAsync also sets this; do it here
-            // so a slow await cannot race a prefill path later).
-            SetVolume(0f);
-            await FadeInAsync(fadeIn);
+            // Main thread: snapshot settings before fill loop / prefill use _audioTuning.
+            RefreshAudioTuning();
+
+            double fadeIn = fadeInDuration ?? _audioComponent.FadeInDuration;
+            if (fadeIn > 1e-9)
+            {
+                // Zero master level before any PCM is pushed (FadeInAsync also sets this; do it here
+                // so a slow await cannot race a prefill path later).
+                SetVolume(0f);
+                await FadeInAsync(fadeIn);
+            }
+            else
+            {
+                SetVolume(1f);
+                ArmDeclickRamp();
+                PrefillStreams();
+                StartFillLoop();
+                GD.Print("ActiveAudioPlayback:PlayAsync - Fill loop started");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            SetVolume(1f);
-            ArmDeclickRamp();
-            PrefillStreams();
-            StartFillLoop();
-            GD.Print("ActiveAudioPlayback:Play - Fill loop started");
+            GD.PrintErr($"ActiveAudioPlayback:PlayAsync - {ex.Message}");
         }
     }
 

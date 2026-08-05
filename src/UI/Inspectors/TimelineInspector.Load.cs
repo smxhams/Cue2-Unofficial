@@ -32,20 +32,69 @@ namespace Cue2.UI.Inspectors;
 /// </summary>
 public partial class TimelineInspector
 {
+    /// <summary>
+    /// Coalesces rapid LoadTimeline requests (focus + history + visibility) into one rebuild per frame.
+    /// </summary>
     private void LoadTimeline()
+    {
+        if (_timelineLoadQueued)
+            return;
+        _timelineLoadQueued = true;
+        Callable.From(LoadTimelineDeferred).CallDeferred();
+    }
+
+    private void LoadTimelineDeferred()
+    {
+        _timelineLoadQueued = false;
+        LoadTimelineNow();
+    }
+
+    /// <summary>
+    /// Rebuilds timeline visuals, or only refreshes geometry when the cue tree structure is unchanged (P2-08).
+    /// </summary>
+    private void LoadTimelineNow()
     {
         if (!Visible || _timeLineContainer == null || !_timeLineContainer.Visible) return;
 
-        GD.Print("TimelineInspector:LoadTimeline - Loading timeline");
+        if (_focusedCue == null)
+        {
+            ClearTimelineVisuals();
+            _timelineStructureKey = null;
+            return;
+        }
+
+        var nextItems = new List<TimelineItem>();
+        int row = 0;
+        CollectCues(_focusedCue, nextItems, ref row);
+        bool showWaveforms = _globalData?.Settings?.ShowTimelineWaveforms ?? true;
+        string structureKey = BuildTimelineStructureKey(nextItems, showWaveforms);
+
+        // Same hierarchy / collapse / waveform mode — avoid QueueFree + recreate (P2-08).
+        if (structureKey == _timelineStructureKey
+            && _cueToBar.Count > 0
+            && _visibleItems.Count == nextItems.Count)
+        {
+            _visibleItems.Clear();
+            _visibleItems.AddRange(nextItems);
+            // Refresh row map for geometry (CollectCues may reorder rows after expand).
+            _cueToRow.Clear();
+            foreach (var item in _visibleItems)
+                _cueToRow[item.Cue] = item.Row;
+
+            UpdateAllPositionsAndSizes();
+            UpdatePlayheadLineGeometry();
+            UpdateDurationSummary();
+            return;
+        }
+
+        GD.Print("TimelineInspector:LoadTimeline - Full rebuild");
         int gen = ++_timelineLoadGeneration;
+        _timelineStructureKey = structureKey;
 
         ClearTimelineVisuals();
 
-        if (_focusedCue == null) return;
-
         _visibleItems.Clear();
-        int row = 0;
-        CollectCues(_focusedCue, _visibleItems, ref row);
+        _visibleItems.AddRange(nextItems);
 
         // Zebra row backgrounds in timeline content
         int maxRow = row;
@@ -73,8 +122,6 @@ public partial class TimelineInspector
             _timeGrid.Position = Vector2.Zero;
         }
 
-        bool showWaveforms = _globalData?.Settings?.ShowTimelineWaveforms ?? true;
-
         foreach (var item in _visibleItems)
         {
             CreateSidebarRow(item);
@@ -93,6 +140,26 @@ public partial class TimelineInspector
 
         if (showWaveforms && _mediaEngine != null)
             _ = EnsureWaveformsForItemsAsync(_visibleItems.ToList(), gen);
+    }
+
+    /// <summary>
+    /// Fingerprint of visible hierarchy used to skip full rebuilds when only times/geometry change.
+    /// </summary>
+    private string BuildTimelineStructureKey(List<TimelineItem> items, bool showWaveforms)
+    {
+        // focused root + ordered (id,depth,hasChildren,collapsed) + waveform flag
+        var sb = new System.Text.StringBuilder(64 + items.Count * 16);
+        sb.Append(_focusedCue?.Id ?? -1).Append('|').Append(showWaveforms ? 'W' : 'n').Append('|');
+        foreach (var item in items)
+        {
+            if (item.Cue == null) continue;
+            sb.Append(item.Cue.Id).Append(':')
+                .Append(item.Depth).Append(':')
+                .Append(item.HasChildren ? '1' : '0').Append(':')
+                .Append(_collapsedCueIds.Contains(item.Cue.Id) ? 'c' : 'o')
+                .Append(';');
+        }
+        return sb.ToString();
     }
 
     private void ClearTimelineVisuals()
@@ -162,6 +229,7 @@ public partial class TimelineInspector
 
         // Keep time grid; just detach references that will be recreated
         _visibleItems.Clear();
+        _timelineStructureKey = null;
     }
 
     private void CreateSidebarRow(TimelineItem item)

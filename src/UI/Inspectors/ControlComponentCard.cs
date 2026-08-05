@@ -1600,7 +1600,8 @@ public partial class ControlComponentCard : PanelContainer
         if (cueId >= 0)
         {
             string key = $"cue:{cueId}:control-fade-pan";
-            _globalData?.HistoryManager?.RecordCueChange(cueId, "Edit control fade pan", key);
+            InspectorMultiEditSupport.RecordBeforeEditById(
+                _globalData, multiHistory: false, cueId, "Edit control fade pan", coalesceKey: key);
         }
 
         _component.FadePan = pan;
@@ -1636,7 +1637,10 @@ public partial class ControlComponentCard : PanelContainer
         if (_component == null) return;
         int cueId = GetOwnerCueId();
         if (cueId >= 0)
-            _globalData?.HistoryManager?.EndCoalesceSession($"cue:{cueId}:control-fade-pan");
+        {
+            string key = $"cue:{cueId}:control-fade-pan";
+            InspectorMultiEditSupport.EndCoalesce(_globalData, multiHistory: false, key, key);
+        }
         if (valueChanged)
             SyncPanFadeUiFromComponent();
     }
@@ -2442,7 +2446,7 @@ public partial class ControlComponentCard : PanelContainer
     {
         int cueId = GetOwnerCueId();
         if (cueId < 0) return;
-        if (_globalData?.HistoryManager?.IsRestoring == true) return;
-        _globalData?.HistoryManager?.RecordCueChange(cueId, description);
+        InspectorMultiEditSupport.RecordBeforeEditById(
+            _globalData, multiHistory: false, cueId, description);
     }
 }

@@ -197,29 +197,43 @@ public partial class HistoryManager : Node
 
 	/// <summary>
 	/// Records a settings checkpoint. Pass <paramref name="keys"/> to capture only those keys
-	/// (e.g. "StopFadeDuration") so restore will not reload displays or unrelated systems.
-	/// When <paramref name="keys"/> is empty, captures the full settings dictionary.
+	/// (e.g. <c>StopFadeDuration</c>) so restore will not reload displays or unrelated systems.
 	/// </summary>
 	/// <param name="description">Human-readable description.</param>
 	/// <param name="coalesceKey">Optional continuous-session key (e.g. spinning a value).</param>
-	/// <param name="keys">Optional subset of settings keys to store.</param>
+	/// <param name="keys">
+	/// Required settings key(s). Empty/null is refused (P2-10). For a rare full settings
+	/// memento use <see cref="Settings.HistoryFullSnapshotKey"/> (<c>"*"</c>).
+	/// </param>
 	public void RecordSettingsChange(string description, string coalesceKey = null, params string[] keys)
 	{
 		if (_isRestoring) return;
 		if (_globalData?.Settings == null) return;
 		if (ShouldCoalesce(coalesceKey)) return;
 
+		if (keys == null || keys.Length == 0 || !HasAnyNonEmptyKey(keys))
+		{
+			System.Diagnostics.Debug.Assert(false,
+				"HistoryManager.RecordSettingsChange: keys required. Use Settings.HistoryFullSnapshotKey (\"*\") for full snapshot.");
+			GD.PrintErr(
+				$"HistoryManager:RecordSettingsChange - Refused empty keys for '{description}' " +
+				"(would capture full settings). Pass explicit keys or \"*\".");
+			return;
+		}
+
 		try
 		{
 			var slice = _globalData.Settings.CaptureHistorySlice(keys);
 			// Scalar general-settings slices are cloned without JSON (avoids empty/corrupt snapshots).
-			var stored = IsScalarSettingsSlice(keys)
+			// Full snapshot ("*") is never treated as a scalar slice.
+			bool fullSnapshot = ContainsFullSnapshotKey(keys);
+			var stored = !fullSnapshot && IsScalarSettingsSlice(keys)
 				? CloneScalarSettingsSlice(slice)
 				: DeepCloneDictionary(slice);
 
 			if (stored == null || stored.Count == 0)
 			{
-				GD.PrintErr($"HistoryManager:RecordSettingsChange - Empty settings slice for '{description}'; keys={string.Join(",", keys ?? System.Array.Empty<string>())}");
+				GD.PrintErr($"HistoryManager:RecordSettingsChange - Empty settings slice for '{description}'; keys={string.Join(",", keys)}");
 				return;
 			}
 
@@ -241,6 +255,28 @@ public partial class HistoryManager : Node
 		{
 			LogRecordFailure(ex);
 		}
+	}
+
+	private static bool HasAnyNonEmptyKey(string[] keys)
+	{
+		if (keys == null) return false;
+		foreach (var k in keys)
+		{
+			if (!string.IsNullOrEmpty(k))
+				return true;
+		}
+		return false;
+	}
+
+	private static bool ContainsFullSnapshotKey(string[] keys)
+	{
+		if (keys == null) return false;
+		foreach (var k in keys)
+		{
+			if (k == Settings.HistoryFullSnapshotKey)
+				return true;
+		}
+		return false;
 	}
 
 	/// <summary>
@@ -566,10 +602,10 @@ public partial class HistoryManager : Node
 		if (cue == null)
 			throw new InvalidOperationException($"Cannot capture history for missing cue {cueId}");
 
-		var data = DeepCloneDictionary(cue.GetData());
-		// Waveform peak caches are large and regenerate on demand; omit from history snapshots
-		// so JSON cloning stays reliable and memory stays bounded.
+		// Strip large regenerable payloads BEFORE clone (P2-09) — never JSON-copy waveform peaks.
+		var data = cue.GetData();
 		StripWaveformPayloads(data);
+		data = DeepCloneDictionary(data);
 
 		var (selectedIds, focusedId) = CaptureSelectionState();
 		return new HistoryEntry(
@@ -586,8 +622,9 @@ public partial class HistoryManager : Node
 
 	private HistoryEntry CaptureCuelistEntry(string description)
 	{
-		var cues = DeepCloneDictionary(_globalData.Cuelist.GetData());
-		if (cues.TryGetValue("Cues", out var cuesVariant) && cuesVariant.VariantType == Variant.Type.Dictionary)
+		// Build live snapshot, strip waveforms on each cue, then structural-clone (P2-09).
+		var live = _globalData.Cuelist.GetData();
+		if (live.TryGetValue("Cues", out var cuesVariant) && cuesVariant.VariantType == Variant.Type.Dictionary)
 		{
 			foreach (var kv in (Dictionary)cuesVariant)
 			{
@@ -595,6 +632,8 @@ public partial class HistoryManager : Node
 					StripWaveformPayloads(kv.Value.AsGodotDictionary());
 			}
 		}
+
+		var cues = DeepCloneDictionary(live);
 
 		var (selectedIds, focusedId) = CaptureSelectionState();
 		return new HistoryEntry(
@@ -706,7 +745,13 @@ public partial class HistoryManager : Node
 
 	/// <summary>
 	/// Clears embedded WaveformData from a cue snapshot dictionary (in place).
+	/// Waveform peaks regenerate on demand after restore — keep them out of history mementos.
 	/// </summary>
+	/// <remarks>
+	/// Call <b>before</b> <see cref="DeepCloneDictionary"/> so large buffers are never copied (P2-09).
+	/// Mutates only the snapshot dictionary from <see cref="Cue.GetData"/>, not live component fields
+	/// (GetData boxes a new dictionary; replacing the entry does not clear the component's array).
+	/// </remarks>
 	private static void StripWaveformPayloads(Dictionary cueData)
 	{
 		if (cueData == null || !cueData.ContainsKey("Components")) return;
@@ -824,7 +869,7 @@ public partial class HistoryManager : Node
 					break;
 
 				case HistoryScope.Settings:
-					// Scalar slices are already plain dictionaries; deep-clone nested snapshots (InputMap, patches…).
+					// Scalar slices are already plain dictionaries; deep-clone nested snapshots (patches, OSC/MIDI maps…).
 					var settingsData = entry.SettingsData;
 					if (settingsData != null && NeedsDeepSettingsClone(settingsData))
 						settingsData = DeepCloneDictionary(settingsData);
@@ -863,19 +908,62 @@ public partial class HistoryManager : Node
 	}
 
 	/// <summary>
-	/// Deep-clones a Godot dictionary via JSON round-trip so history never aliases live models.
+	/// Deep-clones a Godot dictionary so history never aliases live models.
 	/// </summary>
+	/// <remarks>
+	/// Uses a structural walk (not JSON stringify/parse) for speed on large cuelist snapshots (P2-09).
+	/// Nested dictionaries/arrays are copied; packed byte arrays are block-copied; scalars and
+	/// strings are stored as new Variants (value semantics). Prefer stripping regenerable blobs
+	/// (waveforms) before calling this.
+	/// </remarks>
 	private static Dictionary DeepCloneDictionary(Dictionary source)
 	{
 		if (source == null) return new Dictionary();
 
-		string json = Json.Stringify(source);
-		using var parser = new Json();
-		var err = parser.Parse(json);
-		if (err != Error.Ok)
-			throw new InvalidOperationException($"History deep-clone JSON parse failed: {err}");
+		var result = new Dictionary();
+		foreach (var kv in source)
+			result[kv.Key] = DeepCloneVariant(kv.Value);
+		return result;
+	}
 
-		return parser.Data.AsGodotDictionary();
+	/// <summary>
+	/// Recursively clones a Godot <see cref="Variant"/> for history mementos.
+	/// </summary>
+	private static Variant DeepCloneVariant(Variant value)
+	{
+		switch (value.VariantType)
+		{
+			case Variant.Type.Nil:
+				return default;
+
+			case Variant.Type.Dictionary:
+				return DeepCloneDictionary(value.AsGodotDictionary());
+
+			case Variant.Type.Array:
+			{
+				var src = value.AsGodotArray();
+				var dst = new Godot.Collections.Array();
+				int n = src.Count;
+				dst.Resize(n);
+				for (int i = 0; i < n; i++)
+					dst[i] = DeepCloneVariant(src[i]);
+				return dst;
+			}
+
+			case Variant.Type.PackedByteArray:
+			{
+				byte[] bytes = value.AsByteArray();
+				if (bytes == null || bytes.Length == 0)
+					return System.Array.Empty<byte>();
+				var copy = new byte[bytes.Length];
+				Buffer.BlockCopy(bytes, 0, copy, 0, bytes.Length);
+				return copy;
+			}
+
+			default:
+				// Numbers, bool, string, Color, Vector2, etc. — safe to share by Variant value.
+				return value;
+		}
 	}
 
 	/// <summary>

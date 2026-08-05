@@ -4,13 +4,26 @@
 using System.Collections.Generic;
 using System.Linq;
 using Cue2.Domain.Devices;
-using Cue2.Services;
 using Godot;
 
 #nullable enable
 
 namespace Cue2.Services;
 
+/// <summary>
+/// Legacy placeholder registry for audio devices (pre-SDL <see cref="AudioDevices"/> era).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Live SDL open/close lifecycle is owned exclusively by the <c>/root/AudioDevices</c> autoload.
+/// Session load, New Session, and audio-patch history reconcile open devices via
+/// <see cref="AudioDevices.SyncOpenDevices"/> (see <c>Settings.ReconcileOpenAudioDevices</c>).
+/// </para>
+/// <para>
+/// <see cref="ResetAudioDevices"/> remains for call-site compatibility but only clears this
+/// unused in-memory map — it does <b>not</b> close SDL devices.
+/// </para>
+/// </remarks>
 public partial class Devices : Node
 {
     #pragma warning disable CS8618 // Fields are initialized in _Ready
@@ -20,21 +33,24 @@ public partial class Devices : Node
 
     private int Index = 0;
     
+    /// <summary>Unused legacy map — not the SDL open set.</summary>
     private static readonly Dictionary<int, AudioDevice> AudioDevices = new Dictionary<int, AudioDevice>();
     
     public override void _Ready()
     {
         _globalData = GetNode<GlobalData>("/root/GlobalData");
+        _audioDevices = GetNodeOrNull<AudioDevices>("/root/AudioDevices");
     }
 
     private AudioDevice? CreateAudioDevice(string deviceName, int deviceId = -1)
     {
         string? device = null;
 
-        var vlcDevices = _audioDevices!.GetAvailableAudioDeviceNames(); // Get devices availible to VLC
-        
-        // Match vlc device to name
-        foreach (var i in vlcDevices)
+        var available = _audioDevices?.GetAvailableAudioDeviceNames();
+        if (available == null)
+            return null;
+
+        foreach (var i in available)
         {
             if (i == deviceName)
             {
@@ -45,13 +61,8 @@ public partial class Devices : Node
 
         if (device != null)
         {
-            // Gets system audio output device
-            //AudioDevice newDevice = AudioDeviceHelper.GetAudioDevice(deviceName, device.Value.DeviceIdentifier, deviceId);
-            //if (newDevice != null) {AudioDevices.Add(newDevice.DeviceId, newDevice);}
-
-            //GD.Print(newDevice.ToString());
-            return null; //newDevice;
-
+            // Legacy VLC path removed — real open is AudioDevices.OpenAudioDevice.
+            return null;
         }
 
         GD.Print("Device null return");
@@ -88,9 +99,18 @@ public partial class Devices : Node
         GD.Print("Audio device: " + deviceName + " from list of enabled audio devices");
     }
 
+    /// <summary>
+    /// Clears the legacy in-memory map only. Does not close SDL devices.
+    /// </summary>
+    /// <remarks>
+    /// Real reconcile happens in <c>Settings.ResetSettings</c> /
+    /// <c>Settings.LoadSettings</c> via <see cref="AudioDevices.SyncOpenDevices"/>.
+    /// </remarks>
     public void ResetAudioDevices()
     {
         AudioDevices.Clear();
+        GD.Print("Devices:ResetAudioDevices - Cleared legacy map (SDL open set unchanged; " +
+                 "Settings.ReconcileOpenAudioDevices owns load/reset close).");
     }
     
     public void AddAudioDeviceWithId(int deviceId, string deviceName)

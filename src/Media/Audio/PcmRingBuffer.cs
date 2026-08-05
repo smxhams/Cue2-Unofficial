@@ -7,13 +7,17 @@ namespace Cue2.Media.Audio;
 
 /// <summary>
 /// Fixed-capacity interleaved float PCM ring buffer.
-/// Thread-safe for a single producer and single consumer via a lock.
 /// Capacity is measured in float samples (channels are the caller's concern).
 /// </summary>
+/// <remarks>
+/// <b>Not thread-safe on its own.</b> All access must be serialized by the owner
+/// (e.g. <see cref="Cue2.Media.Decoders.AudioSourceDecoder"/> holds its decoder lock
+/// around every read/write/clear). A nested lock here was removed (P2-06) because it
+/// only added latency under the outer decoder lock with no extra concurrency benefit.
+/// </remarks>
 public sealed class PcmRingBuffer
 {
     private readonly float[] _buffer;
-    private readonly object _lock = new object();
     private int _readIndex;
     private int _writeIndex;
     private int _count;
@@ -40,24 +44,12 @@ public sealed class PcmRingBuffer
     /// <summary>
     /// Number of float samples currently available to read.
     /// </summary>
-    public int Available
-    {
-        get
-        {
-            lock (_lock) return _count;
-        }
-    }
+    public int Available => _count;
 
     /// <summary>
     /// Free space in float samples available to write.
     /// </summary>
-    public int Free
-    {
-        get
-        {
-            lock (_lock) return Capacity - _count;
-        }
-    }
+    public int Free => Capacity - _count;
 
     /// <summary>
     /// Writes as many samples as fit from <paramref name="src"/>. Returns samples written.
@@ -66,23 +58,20 @@ public sealed class PcmRingBuffer
     {
         if (src.IsEmpty) return 0;
 
-        lock (_lock)
+        int toWrite = Math.Min(src.Length, Capacity - _count);
+        if (toWrite == 0) return 0;
+
+        int first = Math.Min(toWrite, Capacity - _writeIndex);
+        src.Slice(0, first).CopyTo(_buffer.AsSpan(_writeIndex, first));
+        int remaining = toWrite - first;
+        if (remaining > 0)
         {
-            int toWrite = Math.Min(src.Length, Capacity - _count);
-            if (toWrite == 0) return 0;
-
-            int first = Math.Min(toWrite, Capacity - _writeIndex);
-            src.Slice(0, first).CopyTo(_buffer.AsSpan(_writeIndex, first));
-            int remaining = toWrite - first;
-            if (remaining > 0)
-            {
-                src.Slice(first, remaining).CopyTo(_buffer.AsSpan(0, remaining));
-            }
-
-            _writeIndex = (_writeIndex + toWrite) % Capacity;
-            _count += toWrite;
-            return toWrite;
+            src.Slice(first, remaining).CopyTo(_buffer.AsSpan(0, remaining));
         }
+
+        _writeIndex = (_writeIndex + toWrite) % Capacity;
+        _count += toWrite;
+        return toWrite;
     }
 
     /// <summary>
@@ -92,23 +81,20 @@ public sealed class PcmRingBuffer
     {
         if (dst.IsEmpty) return 0;
 
-        lock (_lock)
+        int toRead = Math.Min(dst.Length, _count);
+        if (toRead == 0) return 0;
+
+        int first = Math.Min(toRead, Capacity - _readIndex);
+        _buffer.AsSpan(_readIndex, first).CopyTo(dst.Slice(0, first));
+        int remaining = toRead - first;
+        if (remaining > 0)
         {
-            int toRead = Math.Min(dst.Length, _count);
-            if (toRead == 0) return 0;
-
-            int first = Math.Min(toRead, Capacity - _readIndex);
-            _buffer.AsSpan(_readIndex, first).CopyTo(dst.Slice(0, first));
-            int remaining = toRead - first;
-            if (remaining > 0)
-            {
-                _buffer.AsSpan(0, remaining).CopyTo(dst.Slice(first, remaining));
-            }
-
-            _readIndex = (_readIndex + toRead) % Capacity;
-            _count -= toRead;
-            return toRead;
+            _buffer.AsSpan(0, remaining).CopyTo(dst.Slice(first, remaining));
         }
+
+        _readIndex = (_readIndex + toRead) % Capacity;
+        _count -= toRead;
+        return toRead;
     }
 
     /// <summary>
@@ -116,11 +102,8 @@ public sealed class PcmRingBuffer
     /// </summary>
     public void Clear()
     {
-        lock (_lock)
-        {
-            _readIndex = 0;
-            _writeIndex = 0;
-            _count = 0;
-        }
+        _readIndex = 0;
+        _writeIndex = 0;
+        _count = 0;
     }
 }

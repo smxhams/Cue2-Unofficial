@@ -5,6 +5,7 @@ using System;
 using System.Text;
 using Cue2.Services;
 using Godot;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings;
 
@@ -88,10 +89,17 @@ public partial class SettingsMidi : Control
         VisibilityChanged += OnVisibilityChanged;
 
         SyncFromModel();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         VisibilityChanged -= OnVisibilityChanged;
 
         if (_historyManager != null)
@@ -651,4 +659,16 @@ public partial class SettingsMidi : Control
         if (stickToBottom && _monitorLog.GetLineCount() > 0)
             _monitorLog.SetCaretLine(_monitorLog.GetLineCount());
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

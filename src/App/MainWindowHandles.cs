@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 // SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 // SPDX-License-Identifier: MIT
 
@@ -200,7 +201,12 @@ public partial class MainWindowHandles : Control
 		return true;
 	}
 
-	private async void OnAlertReceived()
+	private void OnAlertReceived()
+	{
+		TaskUtil.Run(OnAlertReceivedAsync, "MainWindowHandles.OnAlertReceived");
+	}
+
+	private async Task OnAlertReceivedAsync()
 	{
 		if (_borderStylebox == null)
 			return;

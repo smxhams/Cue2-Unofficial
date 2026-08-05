@@ -144,91 +144,122 @@ public partial class ActiveCue
     /// Optional fade seconds for this stop (e.g. from a control component).
     /// When null, uses the session stop-fade setting. When 0, stops immediately.
     /// </param>
-    public async void StopAll(bool propagateToChildren = true, double? fadeDurationOverride = null)
+    /// <remarks>
+    /// Fire-and-forget entry for signals / void call sites. Prefer
+    /// <see cref="StopAllAsync"/> when the caller can await.
+    /// </remarks>
+    public void StopAll(bool propagateToChildren = true, double? fadeDurationOverride = null)
     {
-        bool hardStop;
-        lock (_lock)
+        TaskUtil.FireAndForget(
+            StopAllAsync(propagateToChildren, fadeDurationOverride),
+            "ActiveCue.StopAll");
+    }
+
+    /// <summary>
+    /// Awaitable stop path — see <see cref="StopAll"/>.
+    /// </summary>
+    public async Task StopAllAsync(bool propagateToChildren = true, double? fadeDurationOverride = null)
+    {
+        try
         {
-            if (_isCleaned) return;
-
-            // User/panic stop — do not arm continue/follow; cancel unstarted chain peers.
-            _suppressContentCompleted = true;
-            NextInChain?.CancelPendingFromPredecessor();
-
-            // Waiting / paused / not yet playing content — tear down immediately.
-            // Still stop nested children first so they do not outlive the parent bar.
-            if (!_contentStarted || _inIncomingWait || _inPreWait || _isPaused)
+            bool hardStop;
+            lock (_lock)
             {
-                if (propagateToChildren)
-                    StopChildCuesImmediate(fadeDurationOverride ?? 0.0);
-                Cleanup();
+                if (_isCleaned) return;
+
+                // User/panic stop — do not arm continue/follow; cancel unstarted chain peers.
+                _suppressContentCompleted = true;
+                NextInChain?.CancelPendingFromPredecessor();
+
+                // Waiting / paused / not yet playing content — tear down immediately.
+                // Still stop nested children first so they do not outlive the parent bar.
+                if (!_contentStarted || _inIncomingWait || _inPreWait || _isPaused)
+                {
+                    if (propagateToChildren)
+                        StopChildCuesImmediate(fadeDurationOverride ?? 0.0);
+                    Cleanup();
+                    return;
+                }
+
+                // Second Stop while a fade is in progress → hard stop.
+                hardStop = _isStopFading;
+                _isStopFading = true;
+            }
+
+            // Stop child cues if propagating (same fade override).
+            // Nested bars live under this cue's UI — do not free parent until children finish.
+            if (propagateToChildren)
+            {
+                foreach (var child in _childActiveCues.ToList())
+                {
+                    if (child == null || !IsInstanceValid(child)) continue;
+                    // Fire-and-forget children; parent waits on own media then TryCleanupAfterStop.
+                    child.StopAll(true, fadeDurationOverride);
+                }
+            }
+
+            // Override or session fade; second press or zero duration forces immediate stop.
+            double baseFade = fadeDurationOverride ?? _settings.StopFadeDuration;
+            double fadeDuration = hardStop ? 0.0 : Math.Max(0.0, baseFade);
+
+            var tasks = new List<Task>();
+            foreach (var audioComp in _activeAudioComponents.Values.ToList())
+            {
+                tasks.Add(audioComp.Stop(fadeDuration));
+            }
+            foreach (var videoComp in _activeVideoComponents.Values.ToList())
+            {
+                tasks.Add(videoComp.Stop(fadeDuration));
+            }
+            foreach (var textComp in _activeTextComponents.Values.ToList())
+            {
+                tasks.Add(textComp.Stop(fadeDuration));
+            }
+
+            // Instant components (OSC / MIDI / cue light / control) have no async stop — clear them now.
+            foreach (var panel in _activeOscComponents.Keys.ToList())
+            {
+                HandleOscComponentCompleted(panel);
+            }
+            foreach (var panel in _activeMidiOutputComponents.Keys.ToList())
+            {
+                HandleMidiOutputComponentCompleted(panel);
+            }
+            foreach (var panel in _activeCueLightComponents.Keys.ToList())
+            {
+                HandleCueLightComponentCompleted(panel);
+            }
+            foreach (var panel in _activeControlComponents.Keys.ToList())
+            {
+                HandleControlComponentCompleted(panel);
+            }
+
+            // Group with no own media (or only instant comps): keep parent bar until children finish fade.
+            if (tasks.Count == 0)
+            {
+                TryCleanupAfterStop();
                 return;
             }
 
-            // Second Stop while a fade is in progress → hard stop.
-            hardStop = _isStopFading;
-            _isStopFading = true;
-        }
+            await Task.WhenAll(tasks);
+            if (_isCleaned || !IsInstanceValid(this))
+                return;
 
-        // Stop child cues if propagating (same fade override).
-        // Nested bars live under this cue's UI — do not free parent until children finish.
-        if (propagateToChildren)
+            _isPlaying = false;
+
+            // Own media finished stop-fade; still wait for nested children before freeing UI.
+            TryCleanupAfterStop();
+        }
+        catch (Exception ex)
         {
-            foreach (var child in _childActiveCues.ToList())
+            GD.PrintErr($"ActiveCue:StopAllAsync - {_cue?.Name}: {ex.Message}");
+            try
             {
-                child.StopAll(true, fadeDurationOverride);
+                if (!_isCleaned && IsInstanceValid(this))
+                    TryCleanupAfterStop();
             }
+            catch { /* best-effort */ }
         }
-
-        // Override or session fade; second press or zero duration forces immediate stop.
-        double baseFade = fadeDurationOverride ?? _settings.StopFadeDuration;
-        double fadeDuration = hardStop ? 0.0 : Math.Max(0.0, baseFade);
-
-        var tasks = new List<Task>();
-        foreach (var audioComp in _activeAudioComponents.Values.ToList())
-        {
-            tasks.Add(audioComp.Stop(fadeDuration));
-        }
-        foreach (var videoComp in _activeVideoComponents.Values.ToList())
-        {
-            tasks.Add(videoComp.Stop(fadeDuration));
-        }
-        foreach (var textComp in _activeTextComponents.Values.ToList())
-        {
-            tasks.Add(textComp.Stop(fadeDuration));
-        }
-
-        // Instant components (OSC / MIDI / cue light / control) have no async stop — clear them now.
-        foreach (var panel in _activeOscComponents.Keys.ToList())
-        {
-            HandleOscComponentCompleted(panel);
-        }
-        foreach (var panel in _activeMidiOutputComponents.Keys.ToList())
-        {
-            HandleMidiOutputComponentCompleted(panel);
-        }
-        foreach (var panel in _activeCueLightComponents.Keys.ToList())
-        {
-            HandleCueLightComponentCompleted(panel);
-        }
-        foreach (var panel in _activeControlComponents.Keys.ToList())
-        {
-            HandleControlComponentCompleted(panel);
-        }
-
-        // Group with no own media (or only instant comps): keep parent bar until children finish fade.
-        if (tasks.Count == 0)
-        {
-            TryCleanupAfterStop();
-            return;
-        }
-
-        await Task.WhenAll(tasks);
-        _isPlaying = false;
-
-        // Own media finished stop-fade; still wait for nested children before freeing UI.
-        if (!_isCleaned)
-            TryCleanupAfterStop();
     }
 
     /// <summary>

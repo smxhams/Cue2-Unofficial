@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 // SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 // SPDX-License-Identifier: MIT
 
@@ -5,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Cue2.Services;
 using Godot;
+using Cue2.UI.Utilities;
 
 namespace Cue2.UI.Settings;
 
@@ -41,10 +43,19 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 		var signals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
 		if (signals != null)
 			signals.NewSession += OnNewSession;
-	}
+	
+		UiLocalizer.LocalizeTree(this);
+		var localeSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+		if (localeSignals != null)
+			localeSignals.LocaleChanged += OnLocaleChanged;
+}
 
 	public override void _ExitTree()
 	{
+		var localeSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
+		if (localeSignals != null)
+			localeSignals.LocaleChanged -= OnLocaleChanged;
+
 		VisibilityChanged -= OnVisibilityChanged;
 		if (_historyManager != null)
 			_historyManager.HistoryRestored -= OnHistoryRestored;
@@ -119,7 +130,12 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 	/// <summary>
 	/// Tears down and recreates every patch matrix from current Settings state.
 	/// </summary>
-	private async void RebuildAllPatchMatrices()
+	private void RebuildAllPatchMatrices()
+	{
+		TaskUtil.Run(RebuildAllPatchMatricesAsync, "SettingsAudioOutputPatch.RebuildAllPatchMatrices");
+	}
+
+	private async Task RebuildAllPatchMatricesAsync()
 	{
 		int generation = ++_rebuildGeneration;
 		ClearAllPatchMatrices();
@@ -171,4 +187,16 @@ public partial class SettingsAudioOutputPatch : ScrollContainer
 			patchMatrixContainer.AddChild(instance);
 		}
 	}
+
+	/// <summary>
+	/// Re-localizes panel chrome when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
+	}
+
 }

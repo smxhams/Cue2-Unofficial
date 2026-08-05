@@ -91,14 +91,30 @@ public partial class SaveManager : Node
 	/// <summary>
 	/// Opens the showfile selected by startup preference (open last from user data), after one process frame.
 	/// </summary>
-	private async void LoadStartupSession()
+	private void LoadStartupSession()
 	{
-		await ToSignal(GetTree(), "process_frame");
-		string path = _globalData.StartupOpenPath;
-		GD.Print($"SaveManager:LoadStartupSession - Opening startup showfile: {path}");
-		if (!string.IsNullOrEmpty(path))
-			OpenSelectedSession(path);
-		ConfigureAutosave();
+		TaskUtil.Run(LoadStartupSessionAsync, "SaveManager.LoadStartupSession");
+	}
+
+	private async Task LoadStartupSessionAsync()
+	{
+		try
+		{
+			if (!GodotObject.IsInstanceValid(this))
+				return;
+			await ToSignal(GetTree(), "process_frame");
+			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
+				return;
+			string path = _globalData.StartupOpenPath;
+			GD.Print($"SaveManager:LoadStartupSession - Opening startup showfile: {path}");
+			if (!string.IsNullOrEmpty(path))
+				OpenSelectedSession(path);
+			ConfigureAutosave();
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:LoadStartupSessionAsync - {ex.Message}");
+		}
 	}
 
 	/// <summary>
@@ -863,6 +879,8 @@ public partial class SaveManager : Node
 
 		// Document model
 		_globalData.Cuelist?.ResetCuelist();
+		// Legacy Devices map only (no SDL). Real open-device reconcile runs inside ResetSettings
+		// via Settings.ReconcileOpenAudioDevices → AudioDevices.SyncOpenDevices.
 		_globalData.Devices?.ResetAudioDevices();
 		_globalData.Settings?.ResetSettings();
 
@@ -931,52 +949,43 @@ public partial class SaveManager : Node
 	}
 	
 	/// <summary>
-	/// Creates a directory if it does not exist, logging the attempt and result.
-	/// </summary>
-	/// <param name="folderPath">The path of the folder to create.</param>
-	/// <returns>True if created, false if it already exists or creation failed.</returns>
-	private bool FolderCreator(string folderPath)
-	{
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Attempting to create folder: {folderPath}", 0);
-		if (!Directory.Exists(folderPath))
-		{
-			try
-			{
-				Directory.CreateDirectory(folderPath);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory created: {folderPath}", 0);
-				return true;
-			}
-			catch (Exception ex)
-			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Directory existing: {folderPath}, error: {ex.Message}", 0);
-				return false;
-			}
-		}
-
-		GD.Print("SaveManager:FolderCreator - Folder already exists: " + folderPath);
-		return false;
-	} 
-
-	/// <summary>
 	/// Performs an autosave by saving the current session data as a backup.
 	/// Also ensures the main file is up to date.
 	/// </summary>
-	private async void PerformAutosave()
+	private void PerformAutosave()
 	{
-		if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
+		TaskUtil.Run(PerformAutosaveAsync, "SaveManager.PerformAutosave");
+	}
+
+	private async Task PerformAutosaveAsync()
+	{
+		try
 		{
-			_autosaveTimer?.Stop();
-			return;
+			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
+				return;
+			if (string.IsNullOrEmpty(_globalData.SessionPath) || string.IsNullOrEmpty(_globalData.SessionName))
+			{
+				_autosaveTimer?.Stop();
+				return;
+			}
+
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Performing autosave...", 0);
+			GD.Print("SaveManager:PerformAutosave - Autosave triggered.");
+
+			// First, update the main file (off-main stringify/write)
+			await SaveSessionAsync(_globalData.SessionPath);
+			if (!GodotObject.IsInstanceValid(this))
+				return;
+
+			// Then create a timestamped backup in the session's Backups folder.
+			await CreateAutosaveBackupAsync();
 		}
-
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Performing autosave...", 0);
-		GD.Print("SaveManager:PerformAutosave - Autosave triggered.");
-
-		// First, update the main file (off-main stringify/write)
-		await SaveSessionAsync(_globalData.SessionPath);
-
-		// Then create a timestamped backup in the session's Backups folder.
-		await CreateAutosaveBackupAsync();
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:PerformAutosaveAsync - {ex.Message}");
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Autosave failed: {ex.Message}", 2);
+		}
 	}
 
 	/// <summary>

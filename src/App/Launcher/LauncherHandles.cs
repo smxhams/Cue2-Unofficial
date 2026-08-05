@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 // SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 // SPDX-License-Identifier: MIT
 
@@ -49,7 +50,12 @@ public partial class LauncherHandles : Control
 		_highlightColor = new Color(1,0,0,1);//GlobalStyles.Danger;
 	}
 
-	private async void _alertReceived()
+	private void _alertReceived()
+	{
+		TaskUtil.Run(AlertReceivedAsync, "LauncherHandles._alertReceived");
+	}
+
+	private async Task AlertReceivedAsync()
 	{
 		if (_boarderStylebox == null) return;
 		

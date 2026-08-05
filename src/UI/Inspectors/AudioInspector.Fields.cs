@@ -225,7 +225,12 @@ public partial class AudioInspector
     /// <summary>
     /// Re-binds the audio component from the live cue and refreshes fields (undo/redo, external edits).
     /// </summary>
-    private async void OnSyncFromHistory()
+    private void OnSyncFromHistory()
+    {
+    	TaskUtil.Run(OnSyncFromHistoryAsync, "AudioInspector.OnSyncFromHistory");
+    }
+
+    private async Task OnSyncFromHistoryAsync()
     {
         // SyncShellInspector is global (shell pre-wait edits, etc.). Skip if this inspector
         // is not in the live tree (tab not built / freed) to avoid get_node absolute-path errors.
@@ -434,7 +439,7 @@ public partial class AudioInspector
     {
         var key = AudioCoalesceKey("pan");
         if (!string.IsNullOrEmpty(key))
-            _globalData?.HistoryManager?.EndCoalesceSession(key);
+            InspectorMultiEditSupport.EndCoalesce(_globalData, UseMultiHistory(), key, key);
     }
 
     /// <summary>

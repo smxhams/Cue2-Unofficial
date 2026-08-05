@@ -23,9 +23,8 @@ using FFmpeg.AutoGen;
 namespace Cue2.Services;
 
 /// <summary>
-/// Singleton manager for all LibVLCSharp operations. Handles a single LibVLC instance
-/// and provides methods for creating MediaPlayers, preloading media, and cleanup.
-/// Ensures thread safety and minimal latency for cue triggering.
+/// Singleton media service for FFmpeg-backed decode, waveform generation, and metadata.
+/// Coordinates preloading and cleanup for audio/video cue playback with minimal GO latency.
 /// </summary>
 public partial class MediaEngine : Node
 {

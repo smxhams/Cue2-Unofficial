@@ -758,6 +758,58 @@ public partial class Settings : Node
         // single interactive deletes recheck in DeletePatch.
     }
 
+    /// <summary>
+    /// Builds the set of audio device names that must stay open for the current patch table
+    /// (plus any extra names, e.g. the showfile <c>AudioDevices</c> list).
+    /// </summary>
+    /// <param name="extraNames">Optional additional required names (null-safe).</param>
+    /// <returns>Case-sensitive name set (SDL device names are ordinal-matched elsewhere).</returns>
+    /// <remarks>
+    /// Used by load/reset/history to call <see cref="AudioDevices.SyncOpenDevices"/> so leftover
+    /// SDL devices from a previous show are closed after the new required set is opened.
+    /// </remarks>
+    internal System.Collections.Generic.HashSet<string> CollectRequiredAudioDeviceNames(
+        System.Collections.Generic.IEnumerable<string> extraNames = null)
+    {
+        var required = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+        if (extraNames != null)
+        {
+            foreach (var name in extraNames)
+            {
+                if (!string.IsNullOrEmpty(name))
+                    required.Add(name);
+            }
+        }
+
+        foreach (var patch in _audioOutputPatches.Values)
+        {
+            if (patch?.OutputDevices == null)
+                continue;
+            foreach (var deviceName in patch.OutputDevices.Keys)
+            {
+                if (!string.IsNullOrEmpty(deviceName))
+                    required.Add(deviceName);
+            }
+        }
+
+        return required;
+    }
+
+    /// <summary>
+    /// Opens any missing required devices and closes open SDL devices not needed by the current
+    /// patch table (and optional extra names). See <see cref="AudioDevices.SyncOpenDevices"/>.
+    /// </summary>
+    /// <param name="extraNames">Showfile open-device list or history snapshot names.</param>
+    public void ReconcileOpenAudioDevices(System.Collections.Generic.IEnumerable<string> extraNames = null)
+    {
+        if (_audioDevices == null)
+            return;
+
+        var required = CollectRequiredAudioDeviceNames(extraNames);
+        _audioDevices.SyncOpenDevices(required, closeOthers: true);
+        GD.Print($"Settings:ReconcileOpenAudioDevices - Required {required.Count} device(s)");
+    }
+
     private void PrintPatches()
     {
         foreach (var patch in _audioOutputPatches)
@@ -794,6 +846,9 @@ public partial class Settings : Node
 
         // Seed a Default Patch (system playback device when available) so new cues can play out.
         CreateDefaultAudioPatch();
+
+        // Close leftover SDL devices from the previous show; keep only what the new Default Patch needs.
+        ReconcileOpenAudioDevices();
 
         // General show scalars
         UiScale = DefaultUiScale;

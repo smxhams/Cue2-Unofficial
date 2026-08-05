@@ -95,8 +95,14 @@ public partial class TimelineInspector : Control
     /// <summary>Cue IDs whose children are hidden in the timeline (local UI state).</summary>
     private readonly HashSet<int> _collapsedCueIds = new();
 
-    /// <summary>Bumped on each <see cref="LoadTimeline"/> so async waveform work abandons stale runs.</summary>
+    /// <summary>Bumped on each full <see cref="LoadTimeline"/> so async waveform work abandons stale runs.</summary>
     private int _timelineLoadGeneration;
+
+    /// <summary>Structure fingerprint of the last full rebuild (skip clear/create when unchanged).</summary>
+    private string _timelineStructureKey;
+
+    /// <summary>True when a deferred LoadTimeline is already scheduled this frame.</summary>
+    private bool _timelineLoadQueued;
 
     /// <summary>Playhead time in display/body-aligned seconds (see <see cref="DisplayTimeToBodyTime"/>).</summary>
     private double _playheadSeconds;
@@ -147,13 +153,20 @@ public partial class TimelineInspector : Control
         WireBody();
 
         LoadTimeline();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <summary>
     /// Disconnects signals and cleans up when leaving the tree.
     /// </summary>
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         try { _waveformCts?.Cancel(); } catch { /* ignore */ }
         try { _waveformCts?.Dispose(); } catch { /* ignore */ }
         _waveformCts = null;
@@ -921,10 +934,10 @@ public partial class TimelineInspector : Control
 
     private ActiveCue FindPlayingFocusedActiveCue()
     {
-        if (_focusedCue == null || _globalData?.CueCommandExectutor == null)
+        if (_focusedCue == null || _globalData?.CueCommandExecutor == null)
             return null;
 
-        foreach (var root in _globalData.CueCommandExectutor.ActiveCues)
+        foreach (var root in _globalData.CueCommandExecutor.ActiveCues)
         {
             if (root == null || !IsInstanceValid(root)) continue;
             try
@@ -963,7 +976,7 @@ public partial class TimelineInspector : Control
             return;
         }
 
-        var executor = _globalData?.CueCommandExectutor;
+        var executor = _globalData?.CueCommandExecutor;
         if (executor == null)
         {
             GD.PrintErr("TimelineInspector:OnPlayFromPlayheadPressed - CueCommandExecutor missing");
@@ -1009,4 +1022,16 @@ public partial class TimelineInspector : Control
     /// Loads and renders the timeline for the focused cue.
     /// Clears existing UI elements and rebuilds based on the cue hierarchy.
     /// </summary>
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }

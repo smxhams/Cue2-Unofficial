@@ -118,6 +118,11 @@ public partial class VideoInspector : Control
 	private VBoxContainer _routingContainer;
 	/// <summary>Left-column input labels in the routing matrix (updated when pan changes).</summary>
 	private readonly List<Label> _routingInputLabels = new List<Label>();
+	/// <summary>Volume LineEdits in row-major order for in-place refresh (P2-08).</summary>
+	private readonly List<LineEdit> _routingVolumeEdits = new List<LineEdit>();
+	/// <summary>Last built matrix structure (inputs/outputs/labels); skip full rebuild when equal.</summary>
+	private string _routingMatrixStructureKey;
+	private int _routingMatrixBuildGeneration;
     
 	// Waveform
 	private Button _waveformCollapseButton;
@@ -248,11 +253,18 @@ public partial class VideoInspector : Control
 		_routingCollapseButton.Pressed += () => ToggleAccordian(_routingAccordian, _routingCollapseButton);
 		_waveformCollapseButton.Pressed += () => ToggleAccordian(_waveformAccordian, _waveformCollapseButton);
 		_previewCollapseButton.Pressed += PreviewToggled;
-	}
+	
+		UiLocalizer.LocalizeTree(this);
+		if (_globalSignals != null)
+			_globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
 	/// <inheritdoc />
 	public override void _ExitTree()
 	{
+		if (_globalSignals != null)
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
+
 		// Invalidate in-flight ShellSelected / waveform work so callbacks no-op after free.
 		_shellSelectGeneration++;
 		CancelWaveformWork();
@@ -559,4 +571,16 @@ public partial class VideoInspector : Control
 	/// <summary>
 	/// Refreshes the file URL field when media paths are rewritten (e.g. after show-local backup).
 	/// </summary>
+
+	/// <summary>
+	/// Re-localizes panel chrome when the UI language changes.
+	/// </summary>
+	/// <param name="localeCode">New locale code.</param>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		UiLocalizer.LocalizeTree(this);
+	}
+
 }

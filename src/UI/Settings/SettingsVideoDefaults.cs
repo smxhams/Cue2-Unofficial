@@ -114,19 +114,19 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _fadeOutInput = GetNode<LineEdit>("%FadeOutInput");
         _fadeOutResetButton = GetNode<Button>("%FadeOutResetButton");
 
-        SetupResetButton(_targetLayerResetButton, OnTargetLayerResetPressed);
-        SetupResetButton(_audioOutputResetButton, OnAudioOutputResetPressed);
-        SetupResetButton(_expandResetButton, OnExpandResetPressed);
-        SetupResetButton(_stretchResetButton, OnStretchResetPressed);
-        SetupResetButton(_opacityResetButton, OnOpacityResetPressed);
-        SetupResetButton(_loopResetButton, OnLoopResetPressed);
-        SetupResetButton(_playCountResetButton, OnPlayCountResetPressed);
-        SetupResetButton(_useAudioResetButton, OnUseAudioResetPressed);
-        SetupResetButton(_audioVolumeResetButton, OnAudioVolumeResetPressed);
-        SetupResetButton(_panResetButton, OnPanResetPressed);
-        SetupResetButton(_imageDurationResetButton, OnImageDurationResetPressed);
-        SetupResetButton(_fadeInResetButton, OnFadeInResetPressed);
-        SetupResetButton(_fadeOutResetButton, OnFadeOutResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _targetLayerResetButton, OnTargetLayerResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _audioOutputResetButton, OnAudioOutputResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _expandResetButton, OnExpandResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _stretchResetButton, OnStretchResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _opacityResetButton, OnOpacityResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _loopResetButton, OnLoopResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _playCountResetButton, OnPlayCountResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _useAudioResetButton, OnUseAudioResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _audioVolumeResetButton, OnAudioVolumeResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _panResetButton, OnPanResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _imageDurationResetButton, OnImageDurationResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeInResetButton, OnFadeInResetPressed);
+        ComponentDefaultsUi.SetupResetButton(this, _fadeOutResetButton, OnFadeOutResetPressed);
 
         EnsureTextureOptions();
 
@@ -173,11 +173,18 @@ public partial class SettingsVideoDefaults : ScrollContainer
         }
 
         SyncSettings();
-    }
+    
+        UiLocalizer.LocalizeTree(this);
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
+}
 
     /// <inheritdoc />
     public override void _ExitTree()
     {
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
+
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_globalSignals != null)
@@ -196,19 +203,6 @@ public partial class SettingsVideoDefaults : ScrollContainer
         SyncSettings();
     }
 
-    private void SetupResetButton(Button button, Action pressed)
-    {
-        if (button == null) return;
-        try
-        {
-            button.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        }
-        catch
-        {
-            // Icon optional
-        }
-        button.Pressed += pressed;
-    }
 
     private void OnHistoryRestored(int scope)
     {
@@ -230,51 +224,28 @@ public partial class SettingsVideoDefaults : ScrollContainer
     {
         if (_expandOption != null && _expandOption.ItemCount == 0)
         {
-            AddOption(_expandOption, "Keep Size", (int)TextureRect.ExpandModeEnum.KeepSize);
-            AddOption(_expandOption, "Ignore Size", (int)TextureRect.ExpandModeEnum.IgnoreSize);
-            AddOption(_expandOption, "Fit Width Proportional",
+            ComponentDefaultsUi.AddOptionItem(_expandOption, "Keep Size", (int)TextureRect.ExpandModeEnum.KeepSize);
+            ComponentDefaultsUi.AddOptionItem(_expandOption, "Ignore Size", (int)TextureRect.ExpandModeEnum.IgnoreSize);
+            ComponentDefaultsUi.AddOptionItem(_expandOption, "Fit Width Proportional",
                 (int)TextureRect.ExpandModeEnum.FitWidthProportional);
-            AddOption(_expandOption, "Fit Height Proportional",
+            ComponentDefaultsUi.AddOptionItem(_expandOption, "Fit Height Proportional",
                 (int)TextureRect.ExpandModeEnum.FitHeightProportional);
         }
 
         if (_stretchOption != null && _stretchOption.ItemCount == 0)
         {
-            AddOption(_stretchOption, "Scale", (int)TextureRect.StretchModeEnum.Scale);
-            AddOption(_stretchOption, "Tile", (int)TextureRect.StretchModeEnum.Tile);
-            AddOption(_stretchOption, "Keep", (int)TextureRect.StretchModeEnum.Keep);
-            AddOption(_stretchOption, "Keep Centered", (int)TextureRect.StretchModeEnum.KeepCentered);
-            AddOption(_stretchOption, "Keep Aspect", (int)TextureRect.StretchModeEnum.KeepAspect);
-            AddOption(_stretchOption, "Keep Aspect Centered",
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Scale", (int)TextureRect.StretchModeEnum.Scale);
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Tile", (int)TextureRect.StretchModeEnum.Tile);
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Keep", (int)TextureRect.StretchModeEnum.Keep);
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Keep Centered", (int)TextureRect.StretchModeEnum.KeepCentered);
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Keep Aspect", (int)TextureRect.StretchModeEnum.KeepAspect);
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Keep Aspect Centered",
                 (int)TextureRect.StretchModeEnum.KeepAspectCentered);
-            AddOption(_stretchOption, "Keep Aspect Covered",
+            ComponentDefaultsUi.AddOptionItem(_stretchOption, "Keep Aspect Covered",
                 (int)TextureRect.StretchModeEnum.KeepAspectCovered);
         }
     }
 
-    private static void AddOption(OptionButton button, string label, int id)
-    {
-        int index = button.ItemCount;
-        button.AddItem(label);
-        button.SetItemMetadata(index, id);
-    }
-
-    private static void SelectByMetadata(OptionButton button, int metadata)
-    {
-        if (button == null) return;
-        button.SetBlockSignals(true);
-        for (int i = 0; i < button.ItemCount; i++)
-        {
-            if (button.GetItemMetadata(i).AsInt32() == metadata)
-            {
-                button.Selected = i;
-                button.SetBlockSignals(false);
-                return;
-            }
-        }
-        button.Selected = 0;
-        button.SetBlockSignals(false);
-    }
 
     private void SyncSettings()
     {
@@ -291,8 +262,8 @@ public partial class SettingsVideoDefaults : ScrollContainer
                 s.VideoDefaultOutputMode, s.VideoDefaultPatchId, s.VideoDefaultDirectOutput);
 
             EnsureTextureOptions();
-            SelectByMetadata(_expandOption, (int)s.VideoDefaultExpandMode);
-            SelectByMetadata(_stretchOption, (int)s.VideoDefaultStretchMode);
+            ComponentDefaultsUi.SelectOptionByMetadata(_expandOption, (int)s.VideoDefaultExpandMode);
+            ComponentDefaultsUi.SelectOptionByMetadata(_stretchOption, (int)s.VideoDefaultStretchMode);
 
             if (_opacityInput != null)
             {
@@ -359,9 +330,9 @@ public partial class SettingsVideoDefaults : ScrollContainer
         UpdateFadeOutResetButton();
     }
 
-    private void RecordHistory(string description)
+    private void RecordHistory(string description, string coalesceKey = null)
     {
-        _historyManager?.RecordSettingsChange(description, null, "VideoDefaults");
+        ComponentDefaultsUi.RecordDefaultsChange(_historyManager, description, "VideoDefaults", coalesceKey);
     }
 
     // ── Target layer / audio output ────────────────────────────────────────
@@ -471,8 +442,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnExpandSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int mode = _expandOption.GetItemMetadata((int)index).AsInt32();
         var expand = (TextureRect.ExpandModeEnum)mode;
@@ -513,8 +483,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnStretchSelected(long index)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         int mode = _stretchOption.GetItemMetadata((int)index).AsInt32();
         var stretch = (TextureRect.StretchModeEnum)mode;
@@ -565,8 +534,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitOpacity(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         string cleaned = (text ?? string.Empty).Replace("%", "").Trim();
         if (!float.TryParse(cleaned, out float pct))
@@ -622,8 +590,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnLoopToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
         if (_globalData.Settings.VideoDefaultLoop == pressed)
         {
             UpdateLoopResetButton();
@@ -669,8 +636,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitPlayCount(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (!int.TryParse(text.Trim(), out int count) || count < 1)
         {
@@ -721,8 +687,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnUseAudioToggled(bool pressed)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
         if (_globalData.Settings.VideoDefaultUseAudio == pressed)
         {
             UpdateUseAudioResetButton();
@@ -769,8 +734,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitAudioVolume(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         try
         {
@@ -834,15 +798,13 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnPanSliderChanged(double value)
     {
-        if (_isSyncingUi || _isUpdatingPanUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_isUpdatingPanUi || _globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         float pan = Mathf.Clamp((float)value / 100f, -1f, 1f);
         if (Math.Abs(_globalData.Settings.VideoDefaultPan - pan) < 1e-6f)
             return;
 
-        _historyManager?.RecordSettingsChange(
-            "Change default video pan", "settings:video-defaults:pan", "VideoDefaults");
+        RecordHistory("Change default video pan", "settings:video-defaults:pan");
         _globalData.Settings.VideoDefaultPan = pan;
 
         _isUpdatingPanUi = true;
@@ -862,7 +824,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
     private void OnPanDragEnded(bool valueChanged)
     {
         if (!valueChanged) return;
-        _historyManager?.EndCoalesceSession("settings:video-defaults:pan");
+        ComponentDefaultsUi.EndDefaultsCoalesce(_historyManager, "settings:video-defaults:pan");
     }
 
     private void OnPanSubmitted(string text) => CommitPan(text);
@@ -875,8 +837,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitPan(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         if (!UiUtilities.TryParsePan(text, out float pan))
         {
@@ -946,8 +907,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitImageDuration(string text)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager)) return;
 
         string trimmed = (text ?? string.Empty).Trim();
         double seconds;
@@ -1023,30 +983,15 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void CommitFade(string text, bool isIn)
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
+        if (_globalData?.Settings == null || ComponentDefaultsUi.ShouldSkipEdit(_isSyncingUi, _historyManager))
+            return;
 
         var field = isIn ? _fadeInInput : _fadeOutInput;
-        var formatted = UiUtilities.ParseAndFormatTime(text, out var seconds, out string labeled);
-        if (string.IsNullOrEmpty(formatted))
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                $"Invalid default fade time: {text}", 1);
-            double current = isIn
-                ? _globalData.Settings.VideoDefaultFadeIn
-                : _globalData.Settings.VideoDefaultFadeOut;
-            field.Text = UiUtilities.FormatTime(current);
-            return;
-        }
-
-        field.Text = formatted;
-        field.TooltipText = labeled;
-        seconds = Math.Max(0.0, seconds);
-
         double existing = isIn
             ? _globalData.Settings.VideoDefaultFadeIn
             : _globalData.Settings.VideoDefaultFadeOut;
-        if (Mathf.IsEqualApprox((float)existing, (float)seconds))
+        if (!ComponentDefaultsUi.TryParseTimeDefault(
+                field, text, existing, _globalSignals, $"Invalid default fade time: {text}", out double seconds))
         {
             if (isIn) UpdateFadeInResetButton();
             else UpdateFadeOutResetButton();
@@ -1065,53 +1010,53 @@ public partial class SettingsVideoDefaults : ScrollContainer
 
     private void OnFadeInResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.VideoDefaultFadeIn,
-                (float)AppSettings.SystemDefaultVideoFadeIn))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default video fade-in");
-        _globalData.Settings.VideoDefaultFadeIn = AppSettings.SystemDefaultVideoFadeIn;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "VideoDefaults", "Reset default video fade-in",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.VideoDefaultFadeIn, AppSettings.SystemDefaultVideoFadeIn),
+            () => _globalData.Settings.VideoDefaultFadeIn = AppSettings.SystemDefaultVideoFadeIn,
+            SyncSettings);
     }
 
     private void OnFadeOutResetPressed()
     {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox((float)_globalData.Settings.VideoDefaultFadeOut,
-                (float)AppSettings.SystemDefaultVideoFadeOut))
-        {
-            SyncSettings();
-            return;
-        }
-
-        RecordHistory("Reset default video fade-out");
-        _globalData.Settings.VideoDefaultFadeOut = AppSettings.SystemDefaultVideoFadeOut;
-        SyncSettings();
+        if (_globalData?.Settings == null) return;
+        ComponentDefaultsUi.TryResetField(
+            _isSyncingUi, _historyManager, "VideoDefaults", "Reset default video fade-out",
+            ComponentDefaultsUi.NearlyEqual(_globalData.Settings.VideoDefaultFadeOut, AppSettings.SystemDefaultVideoFadeOut),
+            () => _globalData.Settings.VideoDefaultFadeOut = AppSettings.SystemDefaultVideoFadeOut,
+            SyncSettings);
     }
 
     private void UpdateFadeInResetButton()
     {
-        if (_fadeInResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.VideoDefaultFadeIn,
-            (float)AppSettings.SystemDefaultVideoFadeIn);
-        _fadeInResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeInResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeIn)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.VideoDefaultFadeIn, AppSettings.SystemDefaultVideoFadeIn);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeInResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeIn)}");
     }
 
     private void UpdateFadeOutResetButton()
     {
-        if (_fadeOutResetButton == null || _globalData?.Settings == null) return;
-        bool atDefault = Mathf.IsEqualApprox((float)_globalData.Settings.VideoDefaultFadeOut,
-            (float)AppSettings.SystemDefaultVideoFadeOut);
-        _fadeOutResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _fadeOutResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeOut)}";
+        if (_globalData?.Settings == null) return;
+        bool atDefault = ComponentDefaultsUi.NearlyEqual(
+            _globalData.Settings.VideoDefaultFadeOut, AppSettings.SystemDefaultVideoFadeOut);
+        ComponentDefaultsUi.UpdateResetButton(
+            _fadeOutResetButton, atDefault,
+            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeOut)}");
     }
+
+    /// <summary>
+    /// Re-localizes panel chrome when the UI language changes.
+    /// </summary>
+    /// <param name="localeCode">New locale code.</param>
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+    }
+
 }
