@@ -76,7 +76,7 @@ public partial class FileDropPopup : Window
 	/// </summary>
 	/// <param name="files">The dropped file paths (already filtered to valid media).</param>
 	/// <param name="targetType">Where the files landed.</param>
-	/// <param name="targetDisplayName">Human readable target (cue name or "Cue List").</param>
+	/// <param name="targetDisplayName">Readable target (cue name or "Cue List").</param>
 	/// <param name="targetCueId">Cue ID if dropped on a specific shell, otherwise -1.</param>
 	public void ConfigureForDrop(string[] files, FileDropTargetType targetType, string targetDisplayName, int targetCueId)
 	{

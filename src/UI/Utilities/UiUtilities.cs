@@ -94,7 +94,7 @@ public partial class UiUtilities : Node
     /// <list type="bullet">
     /// <item>Colon form: m:s.ms, h:m:s.ms (partial segments allowed).</item>
     /// <item>Plain number: total seconds (e.g. "122" → 2:02.000).</item>
-    /// <item>QLab-style ticks: minutes with <c>'</c>, seconds with <c>"</c> (e.g. "4'", "1'30", "30\"").</item>
+    /// <item>Ticks: minutes with <c>'</c>, seconds with <c>"</c> (e.g. "4'", "1'30", "30\"").</item>
     /// </list>
     /// Unknown letters/symbols are stripped when using colon/plain form so fields can always re-sanitize.
     /// </remarks>
@@ -122,7 +122,7 @@ public partial class UiUtilities : Node
                 .Replace('”', '"')
                 .Replace('“', '"');
 
-            // QLab-style minute/second ticks take priority when present.
+            // Minute/second ticks take priority when present.
             if (raw.Contains('\'') || raw.Contains('"'))
             {
                 if (!TryParseTickTime(raw, out seconds))
@@ -223,7 +223,7 @@ public partial class UiUtilities : Node
     }
 
     /// <summary>
-    /// Parses QLab-style tick times: minutes with <c>'</c>, seconds with <c>"</c>.
+    /// Parses tick times: minutes with <c>'</c>, seconds with <c>"</c>.
     /// Examples: <c>4'</c> → 240s, <c>1'30</c> / <c>1'30"</c> → 90s, <c>30"</c> → 30s.
     /// </summary>
     private static bool TryParseTickTime(string raw, out double seconds)
@@ -544,7 +544,7 @@ public partial class UiUtilities : Node
     /// Formats a stereo pan value (−1…1) for UI display: "C", "L50", "R100", etc.
     /// </summary>
     /// <param name="pan">Pan in [−1, 1] (negative = left, positive = right, 0 = center).</param>
-    /// <returns>Human-readable pan status string.</returns>
+    /// <returns>Readable pan status string.</returns>
     public static string FormatPan(float pan)
     {
         pan = Mathf.Clamp(pan, -1f, 1f);

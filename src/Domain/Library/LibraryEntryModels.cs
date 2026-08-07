@@ -104,7 +104,7 @@ public sealed class LibraryResult
     /// <summary>True when the operation completed successfully.</summary>
     public bool Success { get; init; }
 
-    /// <summary>Human-readable error or info message.</summary>
+    /// <summary>Readable error or info message.</summary>
     public string Message { get; init; } = string.Empty;
 
     /// <summary>Relative path of the written/affected entry (when applicable).</summary>

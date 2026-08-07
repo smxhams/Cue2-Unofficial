@@ -509,7 +509,7 @@ public partial class FileDropper : Control
     }
 
     /// <summary>
-    /// Returns a human friendly description of the media type for a file.
+    /// Returns a description of the media type for a file.
     /// </summary>
     private string GetMediaTypeForFile(string path)
     {

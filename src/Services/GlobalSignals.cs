@@ -30,10 +30,6 @@ public partial class GlobalSignals : Node
 	[Signal]  public delegate void SaveFileEventHandler(string url, string showName);
 	[Signal] public delegate void SyncShellInspectorEventHandler();
 	
-	// Sub-window events
-	//[Signal]  public delegate void CloseSettingsWindowEventHandler();
-	//[Signal] public delegate void AboutWindowClosedEventHandler();
-	
 	// Signals Associated with InputActions
 	[Signal] public delegate void NewSessionEventHandler();
 	[Signal] public delegate void SaveEventHandler();
@@ -341,8 +337,7 @@ public partial class GlobalSignals : Node
 	{
 		if (lineEdit == null || !GodotObject.IsInstanceValid(lineEdit))
 			return;
-
-		// Godot 4.4+: leave "editing" state explicitly (caret/IME), then clear focus.
+		
 		if (lineEdit.HasMethod("unedit") && lineEdit.IsEditing())
 			lineEdit.Unedit();
 

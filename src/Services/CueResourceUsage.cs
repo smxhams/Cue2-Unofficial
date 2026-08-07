@@ -31,7 +31,7 @@ public static class CueResourceUsage
 		/// <summary>Cues that reference the resource (unique by id).</summary>
 		public List<Cue> Cues { get; init; } = new();
 
-		/// <summary>Human-readable cue numbers for tooltips (e.g. "1", "1.2", "3").</summary>
+		/// <summary>Readable cue numbers for tooltips (e.g. "1", "1.2", "3").</summary>
 		public IReadOnlyList<string> CueNumbers =>
 			Cues.Select(FormatCueNumber).Where(n => !string.IsNullOrEmpty(n)).ToList();
 

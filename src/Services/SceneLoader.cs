@@ -8,7 +8,7 @@ namespace Cue2.Services;
 
 
 /// <summary>
-/// Provides utility methods for loading and instantiating Godot scenes in a cross-platform compatible manner.
+/// Provides utility methods for loading and instantiating Godot scenes.
 /// This class handles scene loading with caching support, error handling, and logging via GlobalSignals.
 /// </summary>
 public static class SceneLoader

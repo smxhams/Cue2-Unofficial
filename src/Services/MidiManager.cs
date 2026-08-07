@@ -91,6 +91,15 @@ public partial class MidiManager : Node
     private bool _isCapturing;
     private bool _watcherHooked;
 
+    /// <summary>Cached absolute path of the DryWetMidi native library (empty until first resolve).</summary>
+    private static string _cachedNativeLibraryPath = string.Empty;
+
+    /// <summary>Handle from the first successful <see cref="NativeLibrary"/> load; shared by the DllImport resolver.</summary>
+    private static IntPtr _nativeLibraryHandle = IntPtr.Zero;
+
+    /// <summary>Serializes path resolve + load so concurrent P/Invoke resolvers do not race.</summary>
+    private static readonly object NativeLibraryLock = new();
+
     /// <summary>Main-thread work queued from DryWetMidi background callbacks.</summary>
     private readonly ConcurrentQueue<Action> _mainThreadActions = new();
 
@@ -556,26 +565,44 @@ public partial class MidiManager : Node
     /// Loads <c>Melanchall_DryWetMidi_Native*</c> via <see cref="NativeLibPaths"/> and
     /// registers a DllImport resolver so DryWetMidi P/Invoke finds it under Godot.
     /// </summary>
+    /// <remarks>
+    /// Path and handle are cached process-wide. Without that, every DryWetMidi P/Invoke
+    /// (device enum, DevicesWatcher, open ports) re-ran directory search and logged "Found".
+    /// </remarks>
     private bool EnsureNativeLibraryLoaded()
     {
         try
         {
             RegisterDllImportResolver();
 
-            string path = ResolveNativeLibraryPath(out string platformLabel);
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            lock (NativeLibraryLock)
             {
-                GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - Native library missing for {platformLabel}. " +
-                            "Expected Melanchall_DryWetMidi_Native* beside the app or under res://bin/ " +
-                            "(see docs/export-packaging.md).");
-                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                    $"MIDI: native library not found for {platformLabel}", (int)LogType.Error);
-                return false;
-            }
+                if (_nativeLibraryHandle != IntPtr.Zero)
+                    return true;
 
-            nint handle = NativeLibrary.Load(path);
-            GD.Print($"MidiManager:EnsureNativeLibraryLoaded - Loaded {path} (handle={handle}) [{platformLabel}]");
-            return true;
+                string path = ResolveNativeLibraryPathUnlocked(out string platformLabel);
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - Native library missing for {platformLabel}. " +
+                                "Expected Melanchall_DryWetMidi_Native* beside the app or under res://bin/ " +
+                                "(see docs/export-packaging.md).");
+                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                        $"MIDI: native library not found for {platformLabel}", (int)LogType.Error);
+                    return false;
+                }
+
+                if (!NativeLibrary.TryLoad(path, out IntPtr handle) || handle == IntPtr.Zero)
+                {
+                    GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - NativeLibrary.TryLoad failed for {path}");
+                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                        $"MIDI: failed to load native library at {path}", (int)LogType.Error);
+                    return false;
+                }
+
+                _nativeLibraryHandle = handle;
+                GD.Print($"MidiManager:EnsureNativeLibraryLoaded - Loaded {path} (handle={handle}) [{platformLabel}]");
+                return true;
+            }
         }
         catch (Exception ex)
         {
@@ -586,6 +613,10 @@ public partial class MidiManager : Node
         }
     }
 
+    /// <summary>
+    /// Registers a one-time DllImport resolver on the DryWetMidi assembly so P/Invoke
+    /// uses our cached native handle under Godot.
+    /// </summary>
     private static void RegisterDllImportResolver()
     {
         if (_resolverRegistered) return;
@@ -601,6 +632,10 @@ public partial class MidiManager : Node
         }
     }
 
+    /// <summary>
+    /// DllImport resolver for Melanchall native libs. Returns the already-loaded handle
+    /// when possible so Hot path P/Invoke does not re-search the filesystem.
+    /// </summary>
     private static IntPtr ResolveDryWetMidiNative(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         if (string.IsNullOrEmpty(libraryName) ||
@@ -611,11 +646,20 @@ public partial class MidiManager : Node
 
         try
         {
-            string path = ResolveNativeLibraryPath(out _);
-            if (!string.IsNullOrEmpty(path) && File.Exists(path) &&
-                NativeLibrary.TryLoad(path, out IntPtr handle))
+            lock (NativeLibraryLock)
             {
-                return handle;
+                if (_nativeLibraryHandle != IntPtr.Zero)
+                    return _nativeLibraryHandle;
+
+                string path = ResolveNativeLibraryPathUnlocked(out _);
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                    return IntPtr.Zero;
+
+                if (NativeLibrary.TryLoad(path, out IntPtr handle) && handle != IntPtr.Zero)
+                {
+                    _nativeLibraryHandle = handle;
+                    return handle;
+                }
             }
         }
         catch (Exception ex)
@@ -626,8 +670,21 @@ public partial class MidiManager : Node
         return IntPtr.Zero;
     }
 
-    private static string ResolveNativeLibraryPath(out string platformLabel)
+    /// <summary>
+    /// Resolves the DryWetMidi native library path once and caches it.
+    /// Callers that need thread safety must hold <see cref="NativeLibraryLock"/>.
+    /// </summary>
+    /// <param name="platformLabel">Readable OS/arch label for logs.</param>
+    /// <returns>Absolute path, or empty if not found / unsupported.</returns>
+    private static string ResolveNativeLibraryPathUnlocked(out string platformLabel)
     {
+        if (!string.IsNullOrEmpty(_cachedNativeLibraryPath))
+        {
+            // Platform label still useful for error paths even when cached.
+            NativeLibPaths.GetDryWetMidiNativeFileName(out platformLabel);
+            return _cachedNativeLibraryPath;
+        }
+
         string fileName = NativeLibPaths.GetDryWetMidiNativeFileName(out platformLabel);
         if (string.IsNullOrEmpty(fileName))
             return string.Empty;
@@ -639,12 +696,11 @@ public partial class MidiManager : Node
             GD.PrintErr(
                 $"MidiManager:ResolveNativeLibraryPath - {fileName} not found. " +
                 $"Tried: {NativeLibPaths.FormatTriedDirectories(tried)}");
-        }
-        else
-        {
-            GD.Print($"MidiManager:ResolveNativeLibraryPath - Found {fileName} in {foundDir}");
+            return string.Empty;
         }
 
+        _cachedNativeLibraryPath = path;
+        GD.Print($"MidiManager:ResolveNativeLibraryPath - Found {fileName} in {foundDir}");
         return path;
     }
 

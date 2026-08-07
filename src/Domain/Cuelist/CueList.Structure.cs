@@ -1269,7 +1269,7 @@ public partial class CueList
 	/// <summary>
 	/// Records a cuelist-scoped history checkpoint (used by structural ops and <see cref="CueReorder"/>).
 	/// </summary>
-	/// <param name="description">Human-readable undo description.</param>
+	/// <param name="description">Readable undo description.</param>
 	/// <param name="coalesceKey">Optional coalesce key for continuous edits.</param>
 	internal void RecordHistory(string description, string coalesceKey = null)
 	{

@@ -997,7 +997,7 @@ public class Cue : ICue
     }
 
     /// <summary>
-    /// Human-readable hotkey string (e.g. "Ctrl+G"), or empty when unbound.
+    /// Readable hotkey string (e.g. "Ctrl+G"), or empty when unbound.
     /// </summary>
     public string GetHotkeyDisplay()
     {
@@ -1160,7 +1160,7 @@ public class Cue : ICue
     }
 
     /// <summary>
-    /// Human-readable 24h clock string (e.g. "14:30:00"), or empty when unset.
+    /// Readable 24h clock string (e.g. "14:30:00"), or empty when unset.
     /// </summary>
     public string GetClockDisplay()
     {
@@ -1348,7 +1348,7 @@ public class Cue : ICue
     }
 
     /// <summary>
-    /// Human-readable summary (e.g. "NoteOn ch1 n60" or "CC ch* cc7=64").
+    /// Readable summary (e.g. "NoteOn ch1 n60" or "CC ch* cc7=64").
     /// </summary>
     public string GetMidiTriggerDisplay()
     {

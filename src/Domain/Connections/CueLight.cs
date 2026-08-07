@@ -195,18 +195,19 @@ public partial class CueLight : GodotObject, IDisposable
     }
     
     /// <summary>
-    /// Sets IP address
+    /// Sets the cue light IP address.
     /// </summary>
-    public async void SetIpAddressAsync(string newIp)
+    /// <param name="newIp">IPv4 address string.</param>
+    public void SetIpAddress(string newIp)
     {
         if (IpAddress == newIp) return;
         IpAddress = newIp;
     }
     
     /// <summary>
-    /// Disposes of resources.
+    /// Disposes UDP resources for this cue light.
     /// </summary>
-    public async Task DisposeAsync()
+    public new void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
@@ -217,17 +218,12 @@ public partial class CueLight : GodotObject, IDisposable
             _udpClient?.Dispose();
             _udpClient = null;
             CueLightIsConnected = false;
-            GD.Print($"CueLight:DisposeAsync - Disposed CueLight {Id} ({Name})");
+            GD.Print($"CueLight:Dispose - Disposed CueLight {Id} ({Name})");
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"CueLight:DisposeAsync - Error disposing CueLight {Id} ({Name}): {ex.Message}");
+            GD.PrintErr($"CueLight:Dispose - Error disposing CueLight {Id} ({Name}): {ex.Message}");
         }
-    }
-
-    public new void Dispose()
-    {
-        DisposeAsync().GetAwaiter().GetResult();
     }
     
 

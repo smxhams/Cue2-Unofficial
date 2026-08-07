@@ -76,7 +76,7 @@ public partial class AudioInspector
                 SyncDuration();
                 if (textField.HasFocus())
                     textField.ReleaseFocus();
-                DrawWaveform();
+                _ = DrawWaveform();
                 return;
             }
 
@@ -129,7 +129,7 @@ public partial class AudioInspector
                 SyncDuration();
                 if (textField.HasFocus())
                     textField.ReleaseFocus();
-                DrawWaveform();
+                _ = DrawWaveform();
                 return;
             }
             else if (textField == _endTimeInput)
@@ -182,7 +182,7 @@ public partial class AudioInspector
                 SyncDuration();
                 if (textField.HasFocus())
                     textField.ReleaseFocus();
-                DrawWaveform();
+                _ = DrawWaveform();
                 return;
             }
 
@@ -192,7 +192,7 @@ public partial class AudioInspector
             SyncDuration();
             if (textField.HasFocus())
                 textField.ReleaseFocus();
-            DrawWaveform();
+            _ = DrawWaveform();
         }
         catch (Exception ex)
         {

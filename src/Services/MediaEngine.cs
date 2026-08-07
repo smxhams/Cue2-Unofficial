@@ -1022,7 +1022,7 @@ public partial class MediaEngine : Node
     }
 
     /// <summary>
-    /// Retrieves a human-readable error message from an FFmpeg return code.
+    /// Retrieves a readable error message from an FFmpeg return code.
     /// </summary>
     /// <param name="ret">The FFmpeg error code (negative value).</param>
     /// <returns>Error string, or "Unknown error" if unavailable.</returns>

@@ -298,7 +298,7 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Human-readable destination label for logs and UI.
+    /// Readable destination label for logs and UI.
     /// </summary>
     public static string GetOutputDestinationLabel(VideoOutputDevice output)
     {
@@ -637,6 +637,10 @@ public partial class DisplaysManager : Node
     /// <param name="name">Name of the layer.</param>
     /// <param name="zIndex">Z-index for ordering.</param>
     /// <returns>The created VideoTargetLayer.</returns>
+    /// <remarks>
+    /// Emits <see cref="GlobalSignals.DisplaysChanged"/> so open inspectors (text/video target layer
+    /// OptionButtons) and video defaults refresh their layer lists.
+    /// </remarks>
     public VideoTargetLayer AddLayer(string name, int zIndex)
     {
         var layer = new VideoTargetLayer(name, zIndex);
@@ -646,7 +650,8 @@ public partial class DisplaysManager : Node
         Layers.Insert(0, layer);
         NormalizeLayerOrder();
         ApplyLayerDrawOrderToOutputs();
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added layer '{name}' to canvas.", 0);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"Added layer '{name}' to canvas.", 0);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         return layer;
     }
 
@@ -718,6 +723,9 @@ public partial class DisplaysManager : Node
     /// Removes a layer from the canvas.
     /// </summary>
     /// <param name="layerId">The ID of the layer to remove.</param>
+    /// <remarks>
+    /// Emits <see cref="GlobalSignals.DisplaysChanged"/> so target-layer pickers drop the deleted layer.
+    /// </remarks>
     public void RemoveLayer(int layerId)
     {
         var layer = Layers.Find(l => l.LayerId == layerId);
@@ -731,7 +739,8 @@ public partial class DisplaysManager : Node
             Layers.Remove(layer);
             NormalizeLayerOrder();
             ApplyLayerDrawOrderToOutputs();
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Removed layer '{layer.LayerName}'.", 0);
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"Removed layer '{layer.LayerName}'.", 0);
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
     }
 
@@ -740,6 +749,9 @@ public partial class DisplaysManager : Node
     /// </summary>
     /// <param name="layerId">The layer ID.</param>
     /// <param name="newName">The new name.</param>
+    /// <remarks>
+    /// Emits <see cref="GlobalSignals.DisplaysChanged"/> so OptionButton labels stay in sync.
+    /// </remarks>
     public void UpdateLayerName(int layerId, string newName)
     {
         var layer = Layers.Find(l => l.LayerId == layerId);
@@ -748,7 +760,8 @@ public partial class DisplaysManager : Node
             layer.LayerName = newName;
             if (layer.TestPatternEnabled)
                 UpdateLayerTestPatterns(layerId);
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer name to '{newName}'.", 0);
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log), $"Updated layer name to '{newName}'.", 0);
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
         }
     }
 

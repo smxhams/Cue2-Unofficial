@@ -29,7 +29,7 @@ public static class ShowfileMigrator
 		/// <summary>Format version after migration (or best-effort on failure).</summary>
 		public int ResultFormatVersion { get; init; }
 
-		/// <summary>Human-readable log of steps applied or skipped.</summary>
+		/// <summary>Readable log of steps applied or skipped.</summary>
 		public string Log { get; init; } = string.Empty;
 
 		/// <summary>Error message when <see cref="Success"/> is false.</summary>

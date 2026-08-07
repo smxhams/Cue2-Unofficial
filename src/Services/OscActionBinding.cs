@@ -74,7 +74,7 @@ public sealed class OscActionBinding
     }
 
     /// <summary>
-    /// Human-readable summary (e.g. "/Go" or "/level 0.5").
+    /// Readable summary (e.g. "/Go" or "/level 0.5").
     /// </summary>
     public string GetDisplay()
     {

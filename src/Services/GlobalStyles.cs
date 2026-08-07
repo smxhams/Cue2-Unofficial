@@ -19,51 +19,82 @@ public partial class GlobalStyles : Node
 	public StyleBoxFlat DefaultStyle = new StyleBoxFlat();
 	
 	private static StyleBoxFlat _dangerStyle = new StyleBoxFlat();
-	
-	public static Color HighColor1 = new Color("#EB6F02");
-	public static Color HighColor2 = new Color("#BA5E0B");
-	public static Color HighColor3 = new Color("#974B08");
-	public static Color HighColor4 = new Color("#693200");
-	public static Color HighColor5 = new Color("#3E1D00");
-	public static Color LowColor1 = new Color("#03838F");
-	public static Color LowColor2 = new Color("#086871");
-	public static Color LowColor3 = new Color("#06545C");
-	public static Color LowColor4 = new Color("#013B40");
-	public static Color LowColor5 = new Color("#002326");
-	
-	public static Color Danger = new Color("#ff806f"); 
+
+
+	/// <summary>
+	/// Peak warm (high) accent — brightest step of the high cascade (level 1).
+	/// Change this single colour to re-theme all <see cref="HighColor1"/>–<see cref="HighColor5"/>.
+	/// </summary>
+	public static Color HighColor = new Color("#EB6F02");
+
+	/// <summary>
+	/// Peak cool (low) accent — brightest step of the low cascade (level 1).
+	/// Change this single colour to re-theme all <see cref="LowColor1"/>–<see cref="LowColor5"/>.
+	/// </summary>
+	public static Color LowColor = new Color("#03838F");
+
+	/// <summary>
+	/// Darken amounts for cascade levels 1–5 (index 0 = peak / brightest, index 4 = deepest).
+	/// Tuned to approximate the previous hand-picked high/low ramps.
+	/// </summary>
+	private static readonly float[] CascadeDarkenFactors = { 0f, 0.22f, 0.40f, 0.58f, 0.76f };
+
+	public static Color HighColor1 => CascadeBrightness(HighColor, 1);
+	public static Color HighColor2 => CascadeBrightness(HighColor, 2);
+	public static Color HighColor3 => CascadeBrightness(HighColor, 3);
+	public static Color HighColor4 => CascadeBrightness(HighColor, 4);
+	public static Color HighColor5 => CascadeBrightness(HighColor, 5);
+
+	public static Color LowColor1 => CascadeBrightness(LowColor, 1);
+	public static Color LowColor2 => CascadeBrightness(LowColor, 2);
+	public static Color LowColor3 => CascadeBrightness(LowColor, 3);
+	public static Color LowColor4 => CascadeBrightness(LowColor, 4);
+	public static Color LowColor5 => CascadeBrightness(LowColor, 5);
+
+	/// <summary>
+	/// Builds a cascade step from a peak colour.
+	/// </summary>
+	/// <param name="peak">Level-1 (brightest) colour.</param>
+	/// <param name="level">Step in 1–5 (1 = peak, 5 = darkest).</param>
+	/// <returns>Darkened colour for that step; alpha preserved from <paramref name="peak"/>.</returns>
+	public static Color CascadeBrightness(Color peak, int level)
+	{
+		int index = Mathf.Clamp(level, 1, 5) - 1;
+		float amount = CascadeDarkenFactors[index];
+		if (amount <= 0f)
+			return peak;
+
+		// Darken RGB toward black; keep peak alpha.
+		Color darkened = peak.Darkened(amount);
+		darkened.A = peak.A;
+		return darkened;
+	}
+
+	/// <summary>High cascade colour for the given level (1–5).</summary>
+	/// <param name="level">1 = brightest, 5 = darkest.</param>
+	public static Color GetHighColor(int level) => CascadeBrightness(HighColor, level);
+
+	/// <summary>Low cascade colour for the given level (1–5).</summary>
+	/// <param name="level">1 = brightest, 5 = darkest.</param>
+	public static Color GetLowColor(int level) => CascadeBrightness(LowColor, level);
+
+	public static Color Danger = new Color("#ff806f");
 	public static Color Warning = new Color("#ffb45d");
 	public static Color Success = new Color("#9aff92");
 
 	// List zebra base colours (also used for blank space under the cuelist).
 	public static Color ZebraEven = new Color(0.145f, 0.155f, 0.165f, 1f);
 	public static Color ZebraOdd = new Color(0.105f, 0.112f, 0.120f, 1f);
-
-	/// <summary>Main title bar background (edit/show share the same bar; accent is the window border).</summary>
-	public static Color TitleBarEditMode = new Color(0.059f, 0.059f, 0.059f, 1f);
-
-	/// <summary>Legacy title-bar show tint (unused; show mode accents the window border).</summary>
-	public static Color TitleBarShowMode = new Color(HighColor5.R, HighColor5.G, HighColor5.B, 1f);
-
-	/// <summary>Title label colour (unchanged between edit and show mode).</summary>
-	public static Color TitleBarLabelEditMode = new Color(0.75f, 0.78f, 0.80f, 1f);
-
-	/// <summary>Legacy title label show accent (unused; show mode accents the window border).</summary>
-	public static Color TitleBarLabelShowMode = HighColor1;
+	
+	/// <summary>
+	/// Main window border in Edit Mode — cool low cascade (deep teal).
+	/// </summary>
+	public static Color WindowBorderEditMode => LowColor4;
 
 	/// <summary>
-	/// Main window border in Edit Mode (matches Cue2Base.tscn Border StyleBox default).
+	/// Main window border in Show Mode — warm high cascade (deepest) for live-performance visibility.
 	/// </summary>
-	public static Color WindowBorderEditMode = new Color(0.00392157f, 0.231373f, 0.25098f, 1f);
-
-	/// <summary>
-	/// Main window border in Show Mode — warm HighColor5 accent for live-performance visibility.
-	/// </summary>
-	public static Color WindowBorderShowMode = HighColor5;
-
-	// List zebra styles (legacy StyleBox accessors)
-	private static StyleBoxFlat _evenRowStyle;
-	private static StyleBoxFlat _oddRowStyle;
+	public static Color WindowBorderShowMode => HighColor5;
 	
 	// Fonts and text colors
 	public static Color SoftFontColor = new Color("#45606b"); 
@@ -84,10 +115,6 @@ public partial class GlobalStyles : Node
 		
 		SetProcess(false); // This class is only for statics - disable process
 		
-		// Shell rows: ALL states share identical border/margin metrics so hover/select
-		// never resizes the row (avoids cuelist jitter). Only colors change.
-		// Vertical margins stay 0 so adjacent ColorPanels meet with no gap.
-		// Base styles kept for non-shell callers; ShellBar builds per-row mixed colours.
 		ConfigureShellRowStyle(
 			_shellRowStyle,
 			borderColor: new Color(0, 0, 0, 0),
@@ -100,8 +127,8 @@ public partial class GlobalStyles : Node
 
 		ConfigureShellRowStyle(
 			NextStyle,
-			borderColor: new Color("#06545C"),
-			bgColor: new Color(0.024f, 0.329f, 0.361f, 0.25f));
+			borderColor: LowColor3,
+			bgColor: new Color(LowColor2.R, LowColor2.G, LowColor2.B, 0.25f));
 
 		// Strong selection outline (still 1px L/R so layout does not jump).
 		ConfigureShellRowStyle(
@@ -111,21 +138,13 @@ public partial class GlobalStyles : Node
 
 		ConfigureShellRowStyle(
 			ActiveStyle,
-			borderColor: new Color("#974B08"),
-			bgColor: new Color(0.592f, 0.294f, 0.031f, 0.55f));
-		
+			borderColor: HighColor3,
+			bgColor: new Color(HighColor2.R, HighColor2.G, HighColor2.B, 0.55f));
+
 		ConfigureShellRowStyle(
 			_dangerStyle,
 			borderColor: HighColor2,
 			bgColor: new Color(HighColor5.R, HighColor5.G, HighColor5.B, 0.5f));
-		
-		
-		// Zebra rows
-		_evenRowStyle = new StyleBoxFlat();
-		_evenRowStyle.BgColor = ZebraEven;
-		
-		_oddRowStyle = new StyleBoxFlat();
-		_oddRowStyle.BgColor = ZebraOdd;
 	}
 
 
@@ -254,69 +273,4 @@ public partial class GlobalStyles : Node
 	{
 		return _dangerStyle;
 	}
-	
-	public static StyleBoxFlat EvenRowStyle()
-	{
-		return _evenRowStyle;
-	}
-	
-	public static StyleBoxFlat OddRowStyle()
-	{
-		return _oddRowStyle;
-	}
-	
-	
-	/*/// <summary>
-	/// Recursively scans the scene tree for Label nodes and applies the default font color override.
-	/// </summary>
-	/// <param name="node">The starting node to scan from.</param>
-	private void ScanForLabels(Node node)
-	{
-		if (node is Label label)
-		{
-			ApplyLabelColor(label);
-		}
-
-		foreach (Node child in node.GetChildren())
-		{
-			ScanForLabels(child);
-		}
-	}
-	
-	
-	/// <summary>
-	/// Handles newly added nodes. If it's a Label, applies the default font color override.
-	/// </summary>
-	/// <param name="node">The newly added node.</param>
-	private void OnNodeAdded(Node node)
-	{
-		if (node is Label label)
-		{
-			ApplyLabelColor(label);
-		}
-	}
-
-	/// <summary>
-	/// Applies the default font color override to a Label, with error handling.
-	/// </summary>
-	/// <param name="label">The Label to modify.</param>
-	private void ApplyLabelColor(Label label)
-	{
-		try
-		{
-			if (label == null)
-			{
-				return;
-			}
-
-			label.AddThemeColorOverride("font_color", SoftFontColor);
-			GD.Print($"GlobalStyles:ApplyLabelColor - Applied color {SoftFontColor} to Label '{label.Name}' in '{label.GetPath()}'.");  // Debug print with script/function prefix //!!!
-		}
-		catch (Exception ex)
-		{
-			return;
-		}
-	}*/
-	
-	
 }

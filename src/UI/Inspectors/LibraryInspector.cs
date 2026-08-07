@@ -471,9 +471,11 @@ public partial class LibraryInspector : Control
         if (_mainSplit == null)
             return;
 
-        // Godot 4.6 SplitContainer uses SplitOffset; a zero/negative value collapses the tree pane.
-        if (_mainSplit.SplitOffset < 120)
-            _mainSplit.SplitOffset = DefaultSplitOffset;
+        // Godot 4.6+ uses SplitOffsets; a zero/negative first offset collapses the tree pane.
+        int[] offsets = _mainSplit.SplitOffsets;
+        int current = offsets != null && offsets.Length > 0 ? offsets[0] : 0;
+        if (current < 120)
+            _mainSplit.SplitOffsets = new int[] { DefaultSplitOffset };
 
         FitLibraryScrollContent();
     }

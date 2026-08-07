@@ -209,7 +209,7 @@ public partial class SettingsCueLights : ScrollContainer
         _brightnessLineEdit.ReleaseFocus();
     }
 
-    private async void NewCueLightButton()
+    private void NewCueLightButton()
     {
         var cueLight = _cueLightManager.CreateCueLight();
         PanelContainer instance = _cueLightInstanceScene.Instantiate<PanelContainer>();
@@ -240,7 +240,7 @@ public partial class SettingsCueLights : ScrollContainer
             string cleanedIp =  UiUtilities.VerifyIpInput(text, _globalSignals);
             if (cleanedIp != null)
             {
-                cueLight.SetIpAddressAsync(cleanedIp);
+                cueLight.SetIpAddress(cleanedIp);
                 ipLineEdit.Text = cleanedIp;
             }
             ipLineEdit.Text = cueLight.IpAddress;
@@ -285,10 +285,7 @@ public partial class SettingsCueLights : ScrollContainer
         
         var deleteButton = instance.GetNode<Button>("%DeleteButton");
         deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
-        deleteButton.Pressed += async () =>
-        {
-            await DeleteCueLight(instance, cueLight);
-        };
+        deleteButton.Pressed += () => DeleteCueLight(instance, cueLight);
         
         var collapseButton = instance.GetNode<Button>("%CueLightCollapseButton");
         collapseButton.Icon = GetThemeIcon("Right", "AtlasIcons");
@@ -307,15 +304,15 @@ public partial class SettingsCueLights : ScrollContainer
 
     
 
-    private async Task DeleteCueLight(PanelContainer instance, CueLight cueLight)
+    private void DeleteCueLight(PanelContainer instance, CueLight cueLight)
     {
         try
         {
             // Disconnect the CueLight if connected
             if (cueLight.CueLightIsConnected)
             {
-                GD.Print($"SettingsCueLights:DeleteCueLightAsync - Disconnected CueLight {cueLight.Id} ({cueLight.Name})");
-                _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
+                GD.Print($"SettingsCueLights:DeleteCueLight - Disconnected CueLight {cueLight.Id} ({cueLight.Name})");
+                _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                     $"Disconnected CueLight {cueLight.Id} ({cueLight.Name})", 0);
             }
             // Remove UI instance
@@ -323,14 +320,13 @@ public partial class SettingsCueLights : ScrollContainer
 
             // Remove from CueLightManager
             _cueLightManager.DeleteCueLight(cueLight);
-            
-            
-            GD.Print($"SettingsCueLights:DeleteCueLightAsync - Deleted CueLight {cueLight.Id} ({cueLight.Name}) and its UI instance");
+
+            GD.Print($"SettingsCueLights:DeleteCueLight - Deleted CueLight {cueLight.Id} ({cueLight.Name}) and its UI instance");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Deleted CueLight {cueLight.Id} ({cueLight.Name}) and its UI instance", 0);
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"SettingsCueLights:DeleteCueLightAsync - Error deleting CueLight {cueLight.Id}: {ex.Message}");
+            GD.PrintErr($"SettingsCueLights:DeleteCueLight - Error deleting CueLight {cueLight.Id}: {ex.Message}");
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
                 $"Error deleting CueLight {cueLight.Id}: {ex.Message}", 2);
         }

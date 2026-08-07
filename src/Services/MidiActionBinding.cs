@@ -39,7 +39,7 @@ public sealed class MidiActionBinding
     public bool IsNonDefault => HasBinding;
 
     /// <summary>
-    /// Human-readable summary (e.g. "NoteOn ch1 n60").
+    /// Readable summary (e.g. "NoteOn ch1 n60").
     /// </summary>
     public string GetDisplay()
     {

@@ -83,7 +83,7 @@ public partial class OscListen
         new() { Category = "Query", Pattern = "/active", Description = "Reply active cue ids." },
         new() { Category = "Query", Pattern = "/cue/status [id]", Description = "Reply cue status." },
 
-        new() { Category = "Alias", Pattern = "/cue/by_id/{id}/start|stop|…", Description = "QLab-style alias." },
+        new() { Category = "Alias", Pattern = "/cue/by_id/{id}/start|stop|…", Description = "By id alias." },
         new() { Category = "Alias", Pattern = "/cue/by_num/{num}/start|stop|…", Description = "By number." },
         new() { Category = "Alias", Pattern = "/cue/selected/start|stop|…", Description = "Selected alias." },
         new() { Category = "Alias", Pattern = "/cue/active/pause|stop", Description = "All active." },

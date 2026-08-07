@@ -13,7 +13,7 @@ namespace Cue2.Services;
 /// <summary>
 /// Manages persistent intershow data stored in "user://" directory.
 /// This is a child node of GlobalData and is responsible for data that survives
-/// across sessions and application restarts (unlike per-show session data).
+/// across sessions and application restarts.
 /// </summary>
 public partial class UserDataManager : Node
 {
@@ -187,7 +187,7 @@ public partial class UserDataManager : Node
 
 	/// <summary>
 	/// Whether the first-time startup welcome window should be shown.
-	/// True for new installs until the user dismisses the welcome UI.
+	/// True for new installations until the user dismisses the welcome UI.
 	/// </summary>
 	/// <value>True if the welcome flow has not been completed yet.</value>
 	public bool IsFirstTimeStartup

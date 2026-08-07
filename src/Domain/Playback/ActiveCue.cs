@@ -651,7 +651,7 @@ public partial class ActiveCue : GodotObject
         style.BgColor = cueColor;
         colorBar.AddThemeStyleboxOverride("panel", style);
         
-        var borderStyle = _activeCueBar.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat; //!!!
+        var borderStyle = _activeCueBar.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
         borderStyle.BorderColor = cueColor;
         _activeCueBar.AddThemeStyleboxOverride("panel", borderStyle);
         

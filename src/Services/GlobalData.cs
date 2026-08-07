@@ -22,10 +22,22 @@ using SDL3;
 using Cue2.UI.Popups;
 
 namespace Cue2.Services;
-// This script manages global data it contains:
-// -Data management functions
-// -Manages saving and loading of shows
 
+/// <summary>
+/// Autoload service locator and shared session state for Cue2.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Owned as a Godot autoload under <c>/root/GlobalData</c>. At startup (<see cref="_Ready"/>) it
+/// initializes SDL, creates core child services (settings, devices, history, library, localization,
+/// shell selection, command execution), applies user preferences (locale, input map, open-last show),
+/// and exposes paths and counters used across UI and domain layers.
+/// </para>
+/// <para>
+/// Holds live document/session state such as the active <see cref="Cuelist"/>, focused cue,
+/// session media directories, and showfile path.
+/// </para>
+/// </remarks>
 public partial class GlobalData : Node
 {
 	private GlobalSignals _globalSignals;
@@ -35,50 +47,113 @@ public partial class GlobalData : Node
 	/// Captured at startup from the project.godot [input] definitions. Used to restore "factory" bindings on New Session.
 	/// </summary>
 	private System.Collections.Generic.Dictionary<string, Godot.Collections.Array<InputEvent>> _defaultInputBindings = new();
-	
+
+	/// <summary>
+	/// Live show cuelist (document model). Created/replaced by session load and cuelist rebuild paths.
+	/// </summary>
 	public CueList Cuelist;
+
+	/// <summary>
+	/// Selection and focus helpers for shell rows (multi-select, next/previous, GO target).
+	/// </summary>
 	public ShellSelection ShellSelection;
+
+	/// <summary>
+	/// Executes cue/control commands (GO, stop, pause, resume, and related command routing).
+	/// </summary>
 	public CueCommandExecutor CueCommandExecutor;
+	
+	/// <summary>
+	/// Showfile settings (general, audio/video defaults, patches, input maps, displays data).
+	/// </summary>
 	public Settings Settings;
+
+	/// <summary>
+	/// Open hardware/device managers (audio devices and related device lifecycle).
+	/// </summary>
 	public Devices Devices;
+
+	/// <summary>
+	/// Cue light connection registry and transport for physical cue-light devices.
+	/// </summary>
 	public CueLightManager CueLightManager;
-	public Canvas VideoCanvas;
+
+	/// <summary>
+	/// Autoload that owns video output windows, screens, and target layers.
+	/// </summary>
 	public DisplaysManager DisplaysManager;
 
+	/// <summary>
+	/// Handles OS file-drop events into the main UI (import / create cues from media).
+	/// </summary>
 	public FileDropper FileDropper;
+
+	/// <summary>
+	/// App-scoped preferences in <c>user://</c> (locale, keyboard Input Map, recents, startup behavior).
+	/// Not part of the showfile and not undo-tracked.
+	/// </summary>
 	public UserDataManager UserDataManager;
+
+	/// <summary>
+	/// Scoped momento undo/redo stacks for document edits (cue, cuelist, settings).
+	/// </summary>
 	public HistoryManager HistoryManager;
+
+	/// <summary>
+	/// Cue library filesystem I/O (save/load library entries outside the show cuelist).
+	/// </summary>
 	public CueLibraryManager CueLibraryManager;
 
 	/// <summary>
 	/// Application localization service (CSV catalogs + <see cref="TranslationServer"/>).
 	/// </summary>
 	public LocalizationService LocalizationService;
-	
+
 	/// <summary>
 	/// Id of the cue currently focused for inspectors (-1 if none).
 	/// Kept in sync via <see cref="GlobalSignals.ShellFocused"/>.
 	/// </summary>
 	public int FocusedCue = -1;
 
+	/// <summary>
+	/// Updates <see cref="FocusedCue"/> when shell focus changes.
+	/// </summary>
+	/// <param name="cueId">Focused cue id, or -1 when cleared.</param>
 	private void OnShellFocused(int cueId)
 	{
 		FocusedCue = cueId;
 	}
 
-	public System.Collections.Generic.Dictionary<int, Node> CueShellObj = new System.Collections.Generic.Dictionary<int, Node>();
-	public ArrayList CueIndex = new ArrayList(); // [CueID, Cue Object]
-	public int CueCount;
+	/// <summary>
+	/// Legacy cue counter; prefer <see cref="CueTotal"/> or <see cref="CueList.TotalCueCount"/> for UI totals.
+	/// </summary>
+	public int CueCount; // TODO: If possible delete this in favour of CueTotal
 
 	/// <summary>
 	/// Total number of cues in the show (including nested group children). Kept in sync by <see cref="CueList"/>.
 	/// </summary>
 	/// <value>Non-negative count of cues currently in the cuelist.</value>
 	public int CueTotal;
-	public int CueOrder;
+
+	/// <summary>
+	/// Legacy ordering counter; visual/list order is owned by <see cref="CueList"/>.
+	/// </summary>
+	public int CueOrder; // TODO: This may no longer be needed, if possible remove
+
+	/// <summary>
+	/// Cue id that is next to be manually GO'd, or -1 if none is armed as next.
+	/// </summary>
+	/// <value>Valid cue id, or -1 when no next cue is set.</value>
 	public int NextCue = -1;
-	
+
+	/// <summary>
+	/// Count of open video output windows (bookkeeping for multi-window presentation).
+	/// </summary>
 	public int VideoOutputWinNum;
+
+	/// <summary>
+	/// Count of open UI/utility windows (bookkeeping for non-output chrome windows).
+	/// </summary>
 	public int UiOutputWinNum;
 
 	/// <summary>
@@ -86,15 +161,23 @@ public partial class GlobalData : Node
 	/// Set only from <see cref="UserDataManager"/> startup prefs — not from CLI.
 	/// </summary>
 	public string StartupOpenPath;
-
-	// Prefer Settings.StopFadeDuration (session-persisted, editable in General settings).
 	
+	/// <summary>
+	/// OS display scale of the primary/current screen at startup (HiDPI factor).
+	/// Combined with show <see cref="Settings.UiScale"/> when rescaling windows.
+	/// </summary>
+	/// <value>Positive scale factor; defaults to 1.0 when the OS reports an invalid value.</value>
 	public float BaseDisplayScale { get; private set; } = 1.0f;
+	
 
-	// Settings
-	public bool SelectedIsNext = true; // Whether selecting a cue makes in next to be manualy go'd.
-	public string ActiveShowFile; // URL of current show file to save to
+	/// <summary>
+	/// Display name of the open session (typically the .c2 file name without extension).
+	/// </summary>
 	public string SessionName;
+
+	/// <summary>
+	/// Absolute path of the open showfile (<c>.c2</c>). Null when no session is saved yet.
+	/// </summary>
 	public string SessionPath;
 
 	/// <summary>
@@ -134,22 +217,37 @@ public partial class GlobalData : Node
 	/// The absolute filesystem path that Godot resolves "user://" to.
 	/// Useful for debugging or storing app-specific data in the user data directory.
 	/// </summary>
-	public string GodotUserDataPath { get; private set; } //!!!
+	public string GodotUserDataPath { get; private set; }
 	
-	// File filters for media files (FFmpeg compatible)
+	/// <summary>
+	/// Glob patterns for video containers accepted by file dialogs and drop import (FFmpeg-compatible).
+	/// </summary>
 	public static readonly List<string> VideoFileFilters = new List<string> {
 		"*.mp4", "*.avi", "*.mkv", "*.mov", "*.flv", "*.webm", "*.m4v", "*.3gp", "*.asf",
 		"*.wmv", "*.mpg", "*.mpeg", "*.ts", "*.mts", "*.vob", "*.ogv", "*.rm", "*.rmvb",
 		"*.divx", "*.xvid"
 	};
+
+	/// <summary>
+	/// Glob patterns for still-image formats accepted by file dialogs and drop import.
+	/// </summary>
 	public static readonly List<string> ImageFileFilters = new List<string> {
 		"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tiff", "*.tif", "*.gif", "*.webp", "*.tga",
 		"*.dds", "*.exr", "*.hdr", "*.svg"
 	};
+
+	/// <summary>
+	/// Glob patterns for audio formats accepted by file dialogs and drop import (FFmpeg-compatible).
+	/// </summary>
 	public static readonly List<string> AudioFileFilters = new List<string> {
 		"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.m4a", "*.wma", "*.aiff", "*.au", "*.ra",
 		"*.ape", "*.ac3", "*.dts", "*.pcm"
 	};
+
+	/// <summary>
+	/// Comma-joined union of <see cref="VideoFileFilters"/>, <see cref="ImageFileFilters"/>, and
+	/// <see cref="AudioFileFilters"/> for multi-type file dialog filters.
+	/// </summary>
 	public static readonly string AllSupportedFileFilters = string.Join(",", VideoFileFilters.Concat(ImageFileFilters).Concat(AudioFileFilters));
 
 	/// <summary>
@@ -201,11 +299,15 @@ public partial class GlobalData : Node
 	};
 
 
+	/// <summary>
+	/// Initializes SDL, child services, display scale, localization, startup open path, and factory input bindings.
+	/// </summary>
+	/// <remarks>
+	/// Order matters: library before SDL consumers; <see cref="UserDataManager"/> before localization;
+	/// default input capture before applying user rebinds.
+	/// </remarks>
 	public override void _Ready()
 	{
-		// Init MediaManager class so can be referenced everywhere
-		//if (autoloadOnStartup == true){loadShow("Last");}
-
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 
@@ -270,11 +372,8 @@ public partial class GlobalData : Node
 			BaseDisplayScale = 1.0f; // Fallback if invalid 
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to fetch display scale; using fallback 1.0", 1);
 		}
-		
-		//AudioDevices = new AudioDevices();
-		//AddChild(AudioDevices);
 
-		// Startup show: Cue2 Preferences → Open last showfile (recents), not CLI --file.
+		// Startup show: Cue2 Preferences → Open last showfile (recents).
 		if (UserDataManager != null)
 		{
 			if (UserDataManager.Startup == UserDataManager.StartupBehavior.OpenLastShowfile)
@@ -301,15 +400,22 @@ public partial class GlobalData : Node
 		UserDataManager?.ApplyInputMapFromUserData();
 	}
 
+	/// <summary>
+	/// Shuts down SDL if it was initialized during <see cref="_Ready"/>.
+	/// </summary>
 	public override void _ExitTree()
 	{
 		if (SDL.WasInit(SDL.InitFlags.Audio) != 0) SDL.Quit();
 		GD.Print("GlobalData:_ExitTree - Cleaned up SDL.");
 	}
 
+	/// <summary>
+	/// Returns a short Readable string for the first key binding of an InputMap action
+	/// (e.g. <c>Ctrl + G</c>), for tooltips and menu chrome.
+	/// </summary>
+	/// <param name="action">InputMap action name (e.g. <c>Go</c>, <c>ToggleSettings</c>).</param>
+	/// <returns>Formatted hotkey string, or empty if the action has no key events.</returns>
 	public static string ParseHotkey(string action)
-	// Parse Hotkey will return simple text representation of an input action.
-	// Currently used to display hotkeys in UI
 	{
 		// Check if the action exists in the Input Map
 		if (InputMap.HasAction(action))
@@ -347,6 +453,9 @@ public partial class GlobalData : Node
 	/// Captures the original input bindings as defined in project.godot for all mappable actions.
 	/// Must be called once early in startup before any user rebinding.
 	/// </summary>
+	/// <remarks>
+	/// Events are duplicated into <c>_defaultInputBindings</c> so later live map edits do not mutate the factory set.
+	/// </remarks>
 	private void CaptureDefaultInputBindings()
 	{
 		_defaultInputBindings.Clear();
@@ -371,6 +480,10 @@ public partial class GlobalData : Node
 	/// suitable for user-preference storage.
 	/// Empty lists are included so that "cleared" bindings are preserved.
 	/// </summary>
+	/// <returns>
+	/// Godot dictionary keyed by action name; each value is an array of key-event dictionaries
+	/// with type, keycode, physical_keycode, and modifier flags.
+	/// </returns>
 	public Dictionary GetCustomInputBindings()
 	{
 		var data = new Dictionary();
@@ -403,9 +516,12 @@ public partial class GlobalData : Node
 
 	/// <summary>
 	/// Applies a previously saved set of input bindings to the live InputMap.
-	/// Existing events for the action are erased first.
+	/// Existing events for each matched action are erased first.
 	/// </summary>
-	/// <param name="bindingsData">Dictionary from user data (under "InputMap" key).</param>
+	/// <param name="bindingsData">Dictionary from user data (under the <c>InputMap</c> key).</param>
+	/// <remarks>
+	/// Only actions listed in <see cref="MappableInputActions"/> are updated; unknown keys are ignored.
+	/// </remarks>
 	public void ApplyInputBindings(Dictionary bindingsData)
 	{
 		if (bindingsData == null || bindingsData.Count == 0) return;
@@ -450,6 +566,10 @@ public partial class GlobalData : Node
 	/// <summary>
 	/// Finds an action's event list in a bindings dictionary (tolerates StringName keys after JSON clone).
 	/// </summary>
+	/// <param name="bindingsData">Serialized InputMap dictionary from user data.</param>
+	/// <param name="action">Action name to look up.</param>
+	/// <param name="evList">On success, the array of event dictionaries for that action.</param>
+	/// <returns><c>true</c> if the action key was found and converted to an array.</returns>
 	private static bool TryGetBindingActionList(Dictionary bindingsData, string action, out Godot.Collections.Array evList)
 	{
 		evList = null;
@@ -472,6 +592,13 @@ public partial class GlobalData : Node
 		return false;
 	}
 
+	/// <summary>
+	/// Reads a dictionary value by string key, tolerating StringName keys after JSON round-trips.
+	/// </summary>
+	/// <param name="dict">Source dictionary.</param>
+	/// <param name="key">Logical string key.</param>
+	/// <param name="value">Matched value when found.</param>
+	/// <returns><c>true</c> if a matching key exists.</returns>
 	private static bool TryGetDictValue(Dictionary dict, string key, out Variant value)
 	{
 		value = default;
@@ -512,6 +639,8 @@ public partial class GlobalData : Node
 	/// <summary>
 	/// Returns a copy of the default events captured for the given action, or empty array if none.
 	/// </summary>
+	/// <param name="action">InputMap action name.</param>
+	/// <returns>Shallow-copied array of default <see cref="InputEvent"/> instances (never null).</returns>
 	public Godot.Collections.Array<InputEvent> GetDefaultInputEvents(string action)
 	{
 		if (string.IsNullOrEmpty(action) || !_defaultInputBindings.TryGetValue(action, out var events))
@@ -526,6 +655,10 @@ public partial class GlobalData : Node
 	/// <summary>
 	/// Returns true if the current binding for the action exactly matches the captured default.
 	/// </summary>
+	/// <param name="action">InputMap action name.</param>
+	/// <returns>
+	/// <c>true</c> if bindings match (or the action/defaults are missing); otherwise <c>false</c>.
+	/// </returns>
 	public bool IsInputActionAtDefault(string action)
 	{
 		if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action))
@@ -549,6 +682,10 @@ public partial class GlobalData : Node
 	/// <summary>
 	/// Restores only the specified action to its captured default binding.
 	/// </summary>
+	/// <param name="action">InputMap action name to reset.</param>
+	/// <remarks>
+	/// Does not persist to user data until <see cref="UserDataManager.PersistLiveInputMap"/> is called.
+	/// </remarks>
 	public void ResetInputActionToDefault(string action)
 	{
 		if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action))
@@ -566,8 +703,13 @@ public partial class GlobalData : Node
 	}
 
 	/// <summary>
-	/// Returns a human readable string for the default binding of an action (e.g. "Ctrl+G" or "Space").
+	/// Returns a readable string for the default binding of an action (e.g. "Ctrl+G" or "Space").
 	/// </summary>
+	/// <param name="action">InputMap action name.</param>
+	/// <returns>
+	/// Up to two formatted events joined by <c> / </c>, with an ellipsis if more exist;
+	/// <c>Unbound</c> when no defaults were captured.
+	/// </returns>
 	public string GetDefaultBindingDisplay(string action)
 	{
 		var defaults = GetDefaultInputEvents(action);
@@ -596,6 +738,8 @@ public partial class GlobalData : Node
 	/// Returns a user-friendly display name for a keycode.
 	/// Uses symbols for punctuation keys instead of "BracketLeft", "QuoteLeft", etc.
 	/// </summary>
+	/// <param name="keycode">Godot keycode to format.</param>
+	/// <returns>Short display label suitable for UI hotkey chrome.</returns>
 	public static string GetKeyDisplayName(Key keycode)
 	{
 		string name = OS.GetKeycodeString(keycode);
@@ -627,8 +771,10 @@ public partial class GlobalData : Node
 	}
 
 	/// <summary>
-	/// Formats a single input event for display (matches card formatting style).
+	/// Formats a single input event for display (matches Input Map card formatting style).
 	/// </summary>
+	/// <param name="ev">Event to format (key events get modifier + key name treatment).</param>
+	/// <returns>Compact display string, or <see cref="InputEvent.AsText"/> for non-key events.</returns>
 	public static string FormatInputEvent(InputEvent ev)
 	{
 		if (ev is InputEventKey key)
@@ -646,6 +792,12 @@ public partial class GlobalData : Node
 		return ev.AsText();
 	}
 
+	/// <summary>
+	/// Compares two input events for equality used by default-binding checks.
+	/// </summary>
+	/// <param name="a">First event.</param>
+	/// <param name="b">Second event.</param>
+	/// <returns><c>true</c> when both are matching keys or have identical <c>AsText()</c>.</returns>
 	private bool InputEventsEqual(InputEvent a, InputEvent b)
 	{
 		if (a is InputEventKey ka && b is InputEventKey kb)
@@ -657,6 +809,9 @@ public partial class GlobalData : Node
 	/// Returns true if two key events represent the same hotkey (key + modifiers).
 	/// Compares effective keycode (falls back to physical) and Ctrl/Shift/Alt/Meta.
 	/// </summary>
+	/// <param name="a">First key event.</param>
+	/// <param name="b">Second key event.</param>
+	/// <returns><c>true</c> when both are non-null and encode the same combo.</returns>
 	public static bool KeyEventsMatch(InputEventKey a, InputEventKey b)
 	{
 		if (a == null || b == null) return false;
@@ -712,6 +867,16 @@ public partial class GlobalData : Node
 		return null;
 	}
 
+	/// <summary>
+	/// Builds a map of live connection objects available for cue/control routing UI.
+	/// </summary>
+	/// <returns>
+	/// Dictionary keyed by connection instance (cue light or OSC connection),
+	/// with values of <c>"Cue Light"</c> or <c>"Osc Connection"</c> for type display.
+	/// </returns>
+	/// <remarks>
+	/// Used by <c>ConnectionInspector</c> when listing attachable destinations.
+	/// </remarks>
 	public Dictionary GetAvailableConnections()
 	{
 		var dict = new Dictionary();

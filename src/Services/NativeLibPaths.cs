@@ -29,7 +29,7 @@ public static class NativeLibPaths
     /// Platform folder name under <c>bin/</c> for the current OS and process architecture
     /// (e.g. <c>win64</c>, <c>macos</c>, <c>linux64</c>).
     /// </summary>
-    /// <param name="label">Human-readable platform label for logs.</param>
+    /// <param name="label">Readable platform label for logs.</param>
     /// <returns>Directory name under <c>bin/</c>.</returns>
     public static string GetPlatformDir(out string label)
     {
@@ -97,7 +97,7 @@ public static class NativeLibPaths
     /// <summary>
     /// File name of the Melanchall DryWetMidi native library for the current process, or empty if unsupported.
     /// </summary>
-    /// <param name="platformLabel">Human-readable platform label for logs.</param>
+    /// <param name="platformLabel">Readable platform label for logs.</param>
     /// <returns>Native library file name, or empty string when Linux/unsupported.</returns>
     public static string GetDryWetMidiNativeFileName(out string platformLabel)
     {

@@ -254,19 +254,16 @@ public partial class InputActionsListener : Node
 
     private void OnTextEditFocusExited()
     {
-        //GD.Print($"InputActionsListener:OnTextEditFocusExited - Starting timer to re-enable input listening");
         _focusExitTimer.Start();
     }
 
     private void OnFocusExitTimerTimeout()
     {
-        //GD.Print($"InputActionsListener:OnFocusExitTimerTimeout - Re-enabling input listening");
         SetListening(true);
     }
 
     private void SetListeningFalse()
-    {
-        //GD.Print($"InputActionsListener:SetListeningFalse");
+    { 
         _focusExitTimer.Stop(); // Stop the timer if focus entered again
         SetListening(false);
     }

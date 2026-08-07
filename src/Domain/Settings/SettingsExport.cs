@@ -212,7 +212,7 @@ public static class SettingsExport
     /// <param name="root">Parsed JSON root.</param>
     /// <param name="settings">On success, the nested settings dictionary.</param>
     /// <param name="categoriesInFile">Category ids recorded when the file was saved (may be empty for older/hand-edited files).</param>
-    /// <param name="error">Human-readable failure reason when false is returned.</param>
+    /// <param name="error">Readable failure reason when false is returned.</param>
     /// <returns>True when the document is a usable Cue2 settings export.</returns>
     public static bool TryParseDocument(Dictionary root, out Dictionary settings,
         out string[] categoriesInFile, out string error)

@@ -15,14 +15,14 @@ namespace Cue2.Services;
 
 /// <summary>
 /// Manages saving and loading of session data, including cues and settings.
-/// Handles file dialogs and serialization via Godot's Json (plain UTF-8 .c2 files).
+/// Handles file dialogs and serialization via Json (plain UTF-8 .c2 files).
 /// </summary>
 /// <remarks>
 /// Showfiles are versioned via <see cref="ShowfileFormat"/>. On open, version is checked
 /// <b>before</b> session reset; mismatches prompt <see cref="VersionMismatchDialog"/> and may
 /// run <see cref="ShowfileMigrator"/> before load.
 /// <para>
-/// Storage format is <b>plain UTF-8 JSON</b> (not encrypted). This is not a security boundary.
+/// Storage format is <b>plain UTF-8 JSON</b>.
 /// </para>
 /// </remarks>
 public partial class SaveManager : Node
@@ -32,9 +32,12 @@ public partial class SaveManager : Node
 	private AudioDevices _audioDevices;
 	private MediaBackupManager _mediaBackupManager;
 
-	private PackedScene _saveDialogScene;
-	private PackedScene _openDialogScene;
+	/// <summary>Save As dialog — created and wired once in <see cref="_Ready"/>.</summary>
 	private FileDialog _saveDialog;
+
+	/// <summary>
+	/// Open dialog on the main scene tree. Resolved after main scene load (autoload is ready first).
+	/// </summary>
 	private FileDialog _openDialog;
 
 	/// <summary>Prevents overlapping open/version-dialog flows for concurrent open requests.</summary>
@@ -49,7 +52,7 @@ public partial class SaveManager : Node
 	private bool _openedFromNewerFormat;
 
 	/// <summary>
-	/// Bumped on each save start; completions for older generations skip UI side-effects
+	/// Bumped on each save start; completions for older generations skip UI side effects
 	/// so a rapid Save + Save As does not apply stale success handlers.
 	/// </summary>
 	private int _saveGeneration;
@@ -62,16 +65,17 @@ public partial class SaveManager : Node
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
 		_mediaBackupManager = GetNodeOrNull<MediaBackupManager>("/root/MediaBackupManager");
-		
-		_saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _); 
+
+		CreateSaveDialog();
+		// Open dialog lives under Cue2Base; that scene is not present while autoloads run.
+		CallDeferred(nameof(ResolveOpenDialog));
 
 		_globalSignals.NewSession += OnNewSession;
 		_globalSignals.Save += Save;
 		_globalSignals.SaveAs += SaveAs;
 		_globalSignals.OpenSession += OpenSession;
 		_globalSignals.OpenSelectedSession += OpenSelectedSession;
-		
-		
+
 		// Setup autosave timer (disabled by default until interval set)
 		_autosaveTimer = new Godot.Timer { OneShot = false };
 		_autosaveTimer.Timeout += PerformAutosave;
@@ -85,7 +89,6 @@ public partial class SaveManager : Node
 		{
 			ConfigureAutosave();
 		}
-		
 	}
 	
 	/// <summary>
@@ -167,15 +170,14 @@ public partial class SaveManager : Node
 
 	/// <summary>
 	/// Opens the save file dialog to allow the user to choose a directory and name for the session.
-	/// Reuses a single dialog instance so repeated Save As does not leak FileDialog nodes.
+	/// Uses the single dialog instance created in <see cref="CreateSaveDialog"/>.
 	/// </summary>
 	private void SaveAs()
 	{
-		EnsureSaveDialog();
-		if (_saveDialog == null)
+		if (_saveDialog == null || !IsInstanceValid(_saveDialog))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-				"SaveManager:SaveAs - Could not create save dialog.", (int)LogType.Error);
+				"SaveManager:SaveAs - Save dialog is not available.", (int)LogType.Error);
 			return;
 		}
 
@@ -205,28 +207,46 @@ public partial class SaveManager : Node
 	}
 
 	/// <summary>
-	/// Lazily creates and wires the Save As <see cref="FileDialog"/> once.
+	/// Instantiates and wires the Save As <see cref="FileDialog"/> once at startup.
 	/// </summary>
-	private void EnsureSaveDialog()
+	private void CreateSaveDialog()
 	{
 		if (_saveDialog != null && IsInstanceValid(_saveDialog))
 			return;
 
-		if (_saveDialogScene == null)
+		PackedScene saveDialogScene = SceneLoader.LoadPackedScene("uid://0dv6dq3u20ku", out _);
+		if (saveDialogScene == null)
 		{
-			GD.PrintErr("SaveManager:EnsureSaveDialog - Save dialog scene is null.");
+			GD.PrintErr("SaveManager:CreateSaveDialog - Save dialog scene is null.");
 			return;
 		}
 
-		_saveDialog = _saveDialogScene.Instantiate<FileDialog>();
+		_saveDialog = saveDialogScene.Instantiate<FileDialog>();
+		_saveDialog.Name = "SaveDialog";
 		AddChild(_saveDialog);
 		_saveDialog.FileMode = FileDialog.FileModeEnum.SaveFile;
 		_saveDialog.Access = FileDialog.AccessEnum.Filesystem;
-		// Filters only once at create — re-adding on every SaveAs stacked filters on old path.
 		_saveDialog.ClearFilters();
 		_saveDialog.AddFilter("*.c2 ; Cue2 Session");
 		_saveDialog.FileSelected += OnSaveFileSelected;
 		_saveDialog.Canceled += OnSaveDialogCanceled;
+		_saveDialog.Hide();
+		GD.Print("SaveManager:CreateSaveDialog - Save As dialog ready.");
+	}
+
+	/// <summary>
+	/// Caches the main-scene open dialog after <c>Cue2Base</c> is in the tree.
+	/// Autoloads run before the main scene, so this is deferred from <see cref="_Ready"/>.
+	/// </summary>
+	private void ResolveOpenDialog()
+	{
+		if (_openDialog != null && IsInstanceValid(_openDialog))
+			return;
+
+		_openDialog = GetNodeOrNull<FileDialog>("/root/Cue2Base/OpenDialog");
+		if (_openDialog != null)
+			GD.Print("SaveManager:ResolveOpenDialog - Open dialog resolved.");
+		// If still null (launcher, or Cue2Base not loaded), OpenSession resolves on demand.
 	}
 
 	private void OnSaveFileSelected(string path)
@@ -273,7 +293,7 @@ public partial class SaveManager : Node
 
 	/// <summary>
 	/// Saves the current session data to the specified path and name.
-	/// Builds the save dictionary on the main thread (Godot node graph), then JSON-stringifies
+	/// Builds the save dictionary on the main thread, then JSON-stringifies
 	/// and encrypt-writes on a worker so large shows do not freeze the UI (P1-15).
 	/// </summary>
 	/// <param name="selectedPath">The full path where the session file will be saved.</param>
@@ -450,7 +470,18 @@ public partial class SaveManager : Node
 	/// </summary>
 	private void OpenSession()
 	{
-		GetNode<FileDialog>("/root/Cue2Base/OpenDialog").Visible = true;
+		if (_openDialog == null || !IsInstanceValid(_openDialog))
+			_openDialog = GetNodeOrNull<FileDialog>("/root/Cue2Base/OpenDialog");
+
+		if (_openDialog == null || !IsInstanceValid(_openDialog))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"SaveManager:OpenSession - Open dialog is not available.", (int)LogType.Error);
+			GD.PrintErr("SaveManager:OpenSession - /root/Cue2Base/OpenDialog not found.");
+			return;
+		}
+
+		_openDialog.PopupCentered();
 	}
 	
 	/// <summary>
@@ -491,7 +522,7 @@ public partial class SaveManager : Node
 			$"app: {Cue2.Version.SemanticVersionString} format {ShowfileFormat.CurrentFormatVersion}");
 
 		// Gate only on schema formatVersion — not appVersion. Patch releases keep the same
-		// format and must open without a blocking dialog (P1-13).
+		// format and must open without a blocking dialog.
 		if (!fileVersion.RequiresVersionConfirmation)
 		{
 			if (!fileVersion.MatchesCurrentApp && !string.IsNullOrEmpty(fileVersion.AppVersion))
@@ -695,7 +726,7 @@ public partial class SaveManager : Node
 	/// Lightweight pre-reset check so we do not wipe the live show for an obviously unusable file.
 	/// </summary>
 	/// <param name="saveData">Parsed showfile root.</param>
-	/// <param name="error">Human-readable failure reason.</param>
+	/// <param name="error">Readable failure reason.</param>
 	/// <returns>True when the payload is worth attempting a load after reset.</returns>
 	private static bool TryValidateOpenPayload(Dictionary saveData, out string error)
 	{
@@ -870,7 +901,6 @@ public partial class SaveManager : Node
 			_globalData.SessionVideoPath = null;
 			_globalData.SessionImagesPath = null;
 			_globalData.SessionWaveformsPath = null;
-			_globalData.ActiveShowFile = null;
 		}
 
 		_globalData.FocusedCue = -1;
@@ -905,10 +935,10 @@ public partial class SaveManager : Node
 	/// Loads session data from an already-parsed (and optionally migrated) dictionary.
 	/// </summary>
 	/// <param name="saveData">Root showfile dictionary with settings/cues keys.</param>
-	/// <param name="error">On failure, a human-readable reason (null on success).</param>
+	/// <param name="error">On failure, a reason (null on success).</param>
 	/// <returns>
 	/// True when settings and cues were applied without throwing. False on null payload or
-	/// any exception (caller must treat the live model as unusable / half-applied).
+	/// any exception (caller must treat the live model as unusable / half-applied). //TODO: This
 	/// </returns>
 	private bool LoadSessionFromData(Dictionary saveData, out string error)
 	{

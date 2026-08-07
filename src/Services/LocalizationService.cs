@@ -41,7 +41,6 @@ public partial class LocalizationService : Node
 	/// </summary>
 	/// <remarks>
 	/// Order: English (default), te reo Māori (pipeline / Aotearoa test), Spanish
-	/// (most likely second production language for international live-event software).
 	/// </remarks>
 	public static readonly IReadOnlyList<(string Code, string DisplayName)> SupportedLocales =
 		new List<(string, string)>

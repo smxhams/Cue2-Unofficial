@@ -414,7 +414,7 @@ public partial class AudioDevices : Node
     }
 
     /// <summary>
-    /// Returns the human-readable name of the current system default playback device, if known.
+    /// Returns the Readable name of the current system default playback device, if known.
     /// </summary>
     /// <returns>
     /// The physical device name as reported by SDL, or <c>null</c> when SDL cannot resolve a default
@@ -489,7 +489,7 @@ public partial class AudioDevices : Node
     }
 
     /// <summary>
-    /// Builds human-readable status lines for open devices (rate, sample depth, out channels, buffer).
+    /// Builds readable status lines for open devices (rate, sample depth, out channels, buffer).
     /// </summary>
     /// <returns>One line per open device (or a single placeholder when none are open).</returns>
     public List<string> GetOpenDeviceStatusLines()
@@ -754,7 +754,7 @@ public partial class AudioDevices : Node
 
     
     /// <summary>
-    /// Converts audio device specs into a human-readable list of strings.
+    /// Converts audio device specs into a readable list of strings.
     /// </summary>
     /// <param name="name">The name of the audio device.</param>
     /// <returns>A list of formatted spec strings (e.g., "Bit Depth: 16 (S16LE)").</returns>

@@ -57,7 +57,7 @@ public partial class CueLightManager : Node
     {
         var cueLight = new CueLight(_nextId++);
         cueLight.Name = $"CueLight_{ipAddress.Split('.')[3]}";
-        cueLight.SetIpAddressAsync(ipAddress);
+        cueLight.SetIpAddress(ipAddress);
         _cueLights[cueLight.Id] = cueLight;
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"CueLightManager:CreateCueLight - Created {_nextId - 1}: {cueLight.Name}", 0);
@@ -140,16 +140,14 @@ public partial class CueLightManager : Node
     
     
 
-    private async void Clean()
+    private void Clean()
     {
-        foreach (var cueLight in _cueLights.Values)
+        // Snapshot keys — disposing mutates the dictionary.
+        foreach (var cueLight in _cueLights.Values.ToList())
         {
             if (_cueLights.Remove(cueLight.Id))
-            {
                 cueLight.Dispose();
-            }
         }
-
     }
     
     /// <summary>
@@ -250,7 +248,11 @@ public partial class CueLightManager : Node
         GD.Print("CueLightManager:Reset - All cue lights cleared.");
     }
 
-    public async Task LoadData(Dictionary data)
+    /// <summary>
+    /// Replaces all cue lights from serialized show data (session load / history restore).
+    /// </summary>
+    /// <param name="data">Dictionary of cue-light records keyed arbitrarily.</param>
+    public void LoadData(Dictionary data)
     {
         // Replace, do not merge — required for session load and document undo/redo restore.
         _cueLights.Clear();

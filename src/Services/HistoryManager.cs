@@ -138,7 +138,7 @@ public partial class HistoryManager : Node
 	/// Records a single-cue checkpoint before a property or component mutation.
 	/// </summary>
 	/// <param name="cueId">Cue being edited.</param>
-	/// <param name="description">Human-readable description.</param>
+	/// <param name="description">Readable description.</param>
 	/// <param name="coalesceKey">
 	/// Optional key for a continuous edit session (typing, drag, spin). While the same session
 	/// is open, further records with this key do not push steps. Pass null for discrete commits
@@ -176,7 +176,7 @@ public partial class HistoryManager : Node
 	/// Records a full cuelist checkpoint before structural mutations (create/delete/reorder/group).
 	/// Does not capture or restore show settings / displays.
 	/// </summary>
-	/// <param name="description">Human-readable description.</param>
+	/// <param name="description">Readable description.</param>
 	/// <param name="coalesceKey">Optional continuous-session key; usually null for structural ops.</param>
 	public void RecordCuelistChange(string description, string coalesceKey = null)
 	{
@@ -199,10 +199,10 @@ public partial class HistoryManager : Node
 	/// Records a settings checkpoint. Pass <paramref name="keys"/> to capture only those keys
 	/// (e.g. <c>StopFadeDuration</c>) so restore will not reload displays or unrelated systems.
 	/// </summary>
-	/// <param name="description">Human-readable description.</param>
+	/// <param name="description">Readable description.</param>
 	/// <param name="coalesceKey">Optional continuous-session key (e.g. spinning a value).</param>
 	/// <param name="keys">
-	/// Required settings key(s). Empty/null is refused (P2-10). For a rare full settings
+	/// Required settings key(s). Empty/null is refused. For a rare full settings
 	/// memento use <see cref="Settings.HistoryFullSnapshotKey"/> (<c>"*"</c>).
 	/// </param>
 	public void RecordSettingsChange(string description, string coalesceKey = null, params string[] keys)
@@ -213,11 +213,11 @@ public partial class HistoryManager : Node
 
 		if (keys == null || keys.Length == 0 || !HasAnyNonEmptyKey(keys))
 		{
-			System.Diagnostics.Debug.Assert(false,
-				"HistoryManager.RecordSettingsChange: keys required. Use Settings.HistoryFullSnapshotKey (\"*\") for full snapshot.");
 			GD.PrintErr(
 				$"HistoryManager:RecordSettingsChange - Refused empty keys for '{description}' " +
 				"(would capture full settings). Pass explicit keys or \"*\".");
+			System.Diagnostics.Debug.Assert(false,
+				"HistoryManager.RecordSettingsChange: keys required. Use Settings.HistoryFullSnapshotKey (\"*\") for full snapshot.");
 			return;
 		}
 
@@ -321,7 +321,7 @@ public partial class HistoryManager : Node
 	/// Records a selection/focus checkpoint before a pure selection change (click, range, next/prev).
 	/// Does not capture cue data or settings. Call before mutating <see cref="ShellSelection"/>.
 	/// </summary>
-	/// <param name="description">Human-readable description (e.g. "Select cue").</param>
+	/// <param name="description">Readable description (e.g. "Select cue").</param>
 	/// <param name="coalesceKey">Optional continuous-session key; usually null for discrete clicks.</param>
 	public void RecordSelectionChange(string description, string coalesceKey = null)
 	{
@@ -336,16 +336,6 @@ public partial class HistoryManager : Node
 		{
 			LogRecordFailure(ex);
 		}
-	}
-
-	/// <summary>
-	/// Obsolete full-document capture. Prefer scoped APIs. Kept as cuelist+settings fallback.
-	/// </summary>
-	[Obsolete("Use RecordCueChange / RecordCuelistChange / RecordSettingsChange for scoped history.")]
-	public void RecordState(string description, string coalesceKey = null)
-	{
-		// Structural default: cuelist only (avoids display flicker). Callers should migrate.
-		RecordCuelistChange(description, coalesceKey);
 	}
 
 	/// <summary>
@@ -602,7 +592,7 @@ public partial class HistoryManager : Node
 		if (cue == null)
 			throw new InvalidOperationException($"Cannot capture history for missing cue {cueId}");
 
-		// Strip large regenerable payloads BEFORE clone (P2-09) — never JSON-copy waveform peaks.
+		// Strip large regenerable payloads BEFORE clone — never JSON-copy waveform peaks.
 		var data = cue.GetData();
 		StripWaveformPayloads(data);
 		data = DeepCloneDictionary(data);
@@ -748,7 +738,7 @@ public partial class HistoryManager : Node
 	/// Waveform peaks regenerate on demand after restore — keep them out of history mementos.
 	/// </summary>
 	/// <remarks>
-	/// Call <b>before</b> <see cref="DeepCloneDictionary"/> so large buffers are never copied (P2-09).
+	/// Call <b>before</b> <see cref="DeepCloneDictionary"/> so large buffers are never copied.
 	/// Mutates only the snapshot dictionary from <see cref="Cue.GetData"/>, not live component fields
 	/// (GetData boxes a new dictionary; replacing the entry does not clear the component's array).
 	/// </remarks>
@@ -911,7 +901,7 @@ public partial class HistoryManager : Node
 	/// Deep-clones a Godot dictionary so history never aliases live models.
 	/// </summary>
 	/// <remarks>
-	/// Uses a structural walk (not JSON stringify/parse) for speed on large cuelist snapshots (P2-09).
+	/// Uses a structural walk (not JSON stringify/parse) for speed on large cuelist snapshots.
 	/// Nested dictionaries/arrays are copied; packed byte arrays are block-copied; scalars and
 	/// strings are stored as new Variants (value semantics). Prefer stripping regenerable blobs
 	/// (waveforms) before calling this.

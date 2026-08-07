@@ -12,8 +12,26 @@ using Godot;
 namespace Cue2.Services;
 
 /// <summary>
+/// Severity levels for <see cref="GlobalSignals.Log"/> and <see cref="EventLogger"/>.
+/// Values are cast to <see cref="int"/> when emitted over Godot signals.
+/// </summary>
+/// <remarks>
+/// 0 = Information (white text, default),
+/// 1 = Warning (yellow text),
+/// 2 = System error (red text),
+/// 3 = Alert (red text; may flash window border) — for issues that may affect playback.
+/// </remarks>
+public enum LogType
+{
+	Info = 0,
+	Warning = 1,
+	Error = 2,
+	Alert = 3
+}
+
+/// <summary>
 /// Receives log signals, keeps an in-memory history for the current session only,
-/// and appends to a session-rotated log file on disk (Godot-style).
+/// and appends to a session-rotated log file on disk.
 /// </summary>
 /// <remarks>
 /// On startup the previous <c>cue2.log</c> (if any) is renamed with a timestamp
@@ -22,11 +40,7 @@ namespace Cue2.Services;
 /// total files (including the current session). The log window only shows the
 /// current session; historical files remain on disk for support until pruned.
 /// <para/>
-/// Log type meanings (see <see cref="LogType"/>):
-/// 0 = Information (white text, default),
-/// 1 = Warning (yellow text),
-/// 2 = System error (red text),
-/// 3 = Alert (red text; may flash window border) — for issues that may affect playback.
+/// See <see cref="LogType"/> for severity meanings used by the log UI and alert path.
 /// </remarks>
 public partial class EventLogger : Node
 {
@@ -126,7 +140,7 @@ public partial class EventLogger : Node
 	}
 
 	/// <summary>
-	/// Renames an existing current log to a timestamped session file (Godot-style).
+	/// Renames an existing current log to a timestamped session file.
 	/// </summary>
 	/// <param name="fullPath">Absolute path of <c>cue2.log</c>.</param>
 	/// <param name="logDir">Absolute log directory.</param>
@@ -202,7 +216,7 @@ public partial class EventLogger : Node
 	}
 
 	/// <summary>
-	/// Builds a Godot-style rotated log file name: cue2YYYY-MM-DDTHH.MM.SS.log
+	/// Builds a rotated log file name: cue2YYYY-MM-DDTHH.MM.SS.log
 	/// </summary>
 	/// <param name="stamp">Timestamp used in the file name.</param>
 	/// <returns>File name only (no directory).</returns>
@@ -232,7 +246,6 @@ public partial class EventLogger : Node
 	/// Values &lt;= 1 keep only the current <c>cue2.log</c> (no history).
 	/// </param>
 	/// <remarks>
-	/// Mirrors Godot's <c>file_logging/max_log_files</c> behaviour.
 	/// Safe to call when the depth preference changes mid-session.
 	/// </remarks>
 	public void PruneSessionLogs(int maxFiles)
