@@ -72,8 +72,7 @@ internal sealed class CueReorder(
             UpdateDropTarget(eventMouseMotion.GlobalPosition.Y);
         }
 
-        // Left release = commit. Do NOT SetInputAsHandled here: grabber start uses GuiInput
-        // press only; marking release handled was part of the stuck-button problem.
+        // Left release = commit.
         if (@event is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left && !mb.Pressed)
         {
             Commit();

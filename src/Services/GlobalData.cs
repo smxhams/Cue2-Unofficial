@@ -220,28 +220,79 @@ public partial class GlobalData : Node
 	public string GodotUserDataPath { get; private set; }
 	
 	/// <summary>
-	/// Glob patterns for video containers accepted by file dialogs and drop import (FFmpeg-compatible).
+	/// Glob patterns for video containers / elementary streams accepted by file dialogs and drop import.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Extension lists gate UI only (browse/drop). Decode depends on the FFmpeg shared libraries
+	/// loaded from <c>bin/{platform}/</c> (see <c>MediaEngine</c> / <c>docs/export-packaging.md</c>).
+	/// </para>
+	/// <para>
+	/// Current project natives are FFmpeg 8.x full builds (macOS often Homebrew-linked; Windows
+	/// shared libs with GPL features). Lists below are demuxer-backed for that class of build —
+	/// not a promise that every codec variant will open on every machine.
+	/// </para>
+	/// <para>
+	/// Keep disjoint from <see cref="AudioFileFilters"/> and <see cref="ImageFileFilters"/> so drop
+	/// classification stays unambiguous (audio is checked first in <c>FileDropper</c>).
+	/// </para>
+	/// </remarks>
 	public static readonly List<string> VideoFileFilters = new List<string> {
-		"*.mp4", "*.avi", "*.mkv", "*.mov", "*.flv", "*.webm", "*.m4v", "*.3gp", "*.asf",
-		"*.wmv", "*.mpg", "*.mpeg", "*.ts", "*.mts", "*.vob", "*.ogv", "*.rm", "*.rmvb",
-		"*.divx", "*.xvid"
+		// Common containers (mov/mp4 family, matroska/webm, avi, windows media, ogg video)
+		"*.mp4", "*.m4v", "*.mov", "*.qt", "*.avi", "*.mkv", "*.webm", "*.flv", "*.f4v",
+		"*.wmv", "*.asf", "*.ogv", "*.ogm", "*.rm", "*.rmvb", "*.divx", "*.xvid",
+		// Broadcast / tape / optical / interchange
+		"*.mpg", "*.mpeg", "*.mpe", "*.m1v", "*.m2v", "*.mp2v", "*.ts", "*.m2ts", "*.m2t",
+		"*.mts", "*.vob", "*.mxf", "*.gxf", "*.lxf", "*.dv", "*.dif",
+		// Mobile / DASH-ish / raw frame wrappers
+		"*.3gp", "*.3g2", "*.ismv", "*.y4m",
+		// Elementary / annex-B style streams (extension selects demuxer)
+		"*.h264", "*.264", "*.h265", "*.hevc", "*.265", "*.av1", "*.ivf",
+		// Legacy Windows TV recorder
+		"*.wtv",
 	};
 
 	/// <summary>
 	/// Glob patterns for still-image formats accepted by file dialogs and drop import.
 	/// </summary>
+	/// <remarks>
+	/// Still images use the video-component path with <c>IsImage</c> and are decoded via FFmpeg
+	/// (image2 / pipe demuxers + still decoders). Animated GIF/APNG are treated as still holds,
+	/// not motion video. HEIC/HEIF are omitted — this project's FFmpeg build has no heif demuxer.
+	/// </remarks>
 	public static readonly List<string> ImageFileFilters = new List<string> {
-		"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tiff", "*.tif", "*.gif", "*.webp", "*.tga",
-		"*.dds", "*.exr", "*.hdr", "*.svg"
+		// Widespread (verified open with project FFmpeg 8.x)
+		"*.png", "*.apng", "*.jpg", "*.jpeg", "*.jpe", "*.jfif", "*.bmp", "*.gif", "*.webp",
+		"*.tif", "*.tiff", "*.tga", "*.svg",
+		// HDR / film sequence stills
+		"*.exr", "*.hdr", "*.dpx", "*.dds",
+		// Modern still codecs present in full FFmpeg 8 builds (libjxl / jpeg2000 / av1 still)
+		"*.avif", "*.jxl", "*.jp2", "*.j2k", "*.jpf",
+		// Netpbm / misc stills demuxed by image2
+		"*.ico", "*.qoi", "*.pbm", "*.pgm", "*.ppm", "*.pnm", "*.pcx", "*.fits",
 	};
 
 	/// <summary>
-	/// Glob patterns for audio formats accepted by file dialogs and drop import (FFmpeg-compatible).
+	/// Glob patterns for audio formats accepted by file dialogs and drop import.
 	/// </summary>
+	/// <remarks>
+	/// Prefer audio-primary extensions only (e.g. <c>.m4a</c> / <c>.mka</c>, not <c>.mp4</c> / <c>.mkv</c>).
+	/// MIDI is not listed — it uses the separate MIDI subsystem. Raw extension-less PCM (e.g. bare
+	/// <c>.pcm</c>) is omitted because avformat cannot probe sample format without extra options.
+	/// Broadcast Wave / RF64 are normally <c>.wav</c> containers, not separate demuxers here.
+	/// </remarks>
 	public static readonly List<string> AudioFileFilters = new List<string> {
-		"*.mp3", "*.wav", "*.flac", "*.aac", "*.ogg", "*.m4a", "*.wma", "*.aiff", "*.au", "*.ra",
-		"*.ape", "*.ac3", "*.dts", "*.pcm"
+		// PCM / lossless containers
+		"*.wav", "*.wave", "*.w64", "*.aiff", "*.aif", "*.aifc",
+		"*.flac", "*.alac", "*.ape", "*.wv", "*.tta", "*.caf",
+		// Lossy / common delivery
+		"*.mp3", "*.mp2", "*.mpa", "*.aac", "*.m4a", "*.m4b", "*.ogg", "*.oga", "*.opus",
+		"*.wma", "*.spx",
+		// Broadcast / surround elementary
+		"*.ac3", "*.eac3", "*.ec3", "*.dts", "*.dtshd", "*.truehd", "*.thd", "*.mlp",
+		// Other containers / speech / DSD
+		"*.mka", "*.au", "*.snd", "*.ra",
+		"*.amr", "*.awb", "*.gsm", "*.3ga", "*.voc", "*.dsf",
 	};
 
 	/// <summary>

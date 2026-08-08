@@ -298,11 +298,4 @@ public partial class Settings
         // Sync show/edit mode UI after load (always notify so chrome matches the loaded value).
         NotifyShowModeChanged();
     }
-
-    /// <summary>
-    /// Applies a partial settings dictionary for scoped undo/redo without a full session reset.
-    /// Only keys present in <paramref name="settingsData"/> are touched (e.g. StopFadeDuration alone
-    /// will not rebuild displays).
-    /// </summary>
-    /// <param name="settingsData">Subset of <see cref="GetData"/> keys to restore.</param>
 }

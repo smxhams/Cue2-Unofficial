@@ -25,14 +25,6 @@ namespace Cue2.Domain.Cuelist;
 /// <summary>
 /// Manages the main cue list UI, including creation, removal, drag-and-drop reordering
 /// (with support for nesting/grouping), box multi-select, and save/load of cue hierarchy and order.
-/// </summary>
-/// <remarks>
-/// Follows project MVVM-like separation: UI shells in ShellBar, data in Cue objects,
-/// shared state via GlobalData/GlobalSignals. Reordering uses custom mouse tracking
-/// (not native Godot drag/drop) to support above/below/into-child zones for multi-selection.
-/// Box-select is handled by <see cref="CueBoxSelect"/> and never starts from the reorder grabber.
-/// </remarks>
-/// <summary>
 /// Partial: Create/group/import/delete/reorder shells, history apply hooks
 /// </summary>
 public partial class CueList
@@ -569,8 +561,6 @@ public partial class CueList
 				videoComp.ScaledWidth = meta.Width;
 				videoComp.ScaledHeight = meta.Height;
 				videoComp.RecalculateDuration();
-
-				// For video we don't auto-gen full waveform here (inspector does when opened)
 			}
 
 			cue.CalculateTotalDuration();
@@ -629,6 +619,7 @@ public partial class CueList
 		// Count/structure changes almost always affect visual order.
 		CallDeferred(nameof(RefreshShellZebra));
 	}
+	
 	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
 	{
@@ -1124,10 +1115,6 @@ public partial class CueList
 			_reorderController.SetMouseOver(shellbar);
 		}
 	}
-	
-	//==========================//
-	//--- Cuelist reordering ---//
-	//==========================//
 
 	/// <summary>
 	/// Begins a drag-reorder operation for the given shell (and its current multi-selection).
@@ -1156,7 +1143,7 @@ public partial class CueList
 	/// </summary>
 	/// <param name="originShell">Shell under the press, or null for empty list space.</param>
 	/// <param name="globalPos">Press position in global coordinates.</param>
-	/// <param name="additive">Ctrl/Cmd: union with existing selection on marquee commit.</param>
+	/// <param name="additive">Ctrl/Cmd: toggle click membership; marquee unions with existing selection.</param>
 	public void BeginPotentialBoxSelect(ShellBar originShell, Vector2 globalPos, bool additive = false)
 	{
 		if (IsReordering)
@@ -1464,8 +1451,6 @@ public partial class CueList
 		}
 		RefreshShellZebra();
 	}
-
-	//--- Save and load ---//
 	
 	public void ResetCuelist()
 	{

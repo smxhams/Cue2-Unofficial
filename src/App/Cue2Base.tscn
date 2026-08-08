@@ -152,7 +152,7 @@ visible = false
 layout_mode = 2
 metadata/_tab_index = 2
 
-[node name="Video" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1649765970 instance=ExtResource("9_ht2vi")]
+[node name="Visual" parent="MarginContainer/BoxContainer/VSplitContainer/HSplitContainer2/InspectorTabs" unique_id=1649765970 instance=ExtResource("9_ht2vi")]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("10_ht2vi")

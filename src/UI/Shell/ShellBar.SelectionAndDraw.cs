@@ -58,8 +58,8 @@ public partial class ShellBar
 		}
 
 		// Plain / Ctrl-Cmd left press: pending box-select. Click without drag still
-		// selects (or adds); drag past threshold draws a marquee. Drag grabber does
-		// not reach here (AcceptEvent + StartReorder on the grabber).
+		// selects (or Ctrl/Cmd-toggles membership); drag past threshold draws a marquee.
+		// Drag grabber does not reach here (AcceptEvent + StartReorder on the grabber).
 		bool additive = Input.IsKeyPressed(Key.Ctrl) || Input.IsKeyPressed(Key.Meta);
 		_globalData?.Cuelist?.BeginPotentialBoxSelect(this, mouseEvent.GlobalPosition, additive);
 	}
@@ -83,8 +83,9 @@ public partial class ShellBar
 		if (mouseEvent.ButtonIndex != MouseButton.Left)
 			return;
 
-		// Shift range-select stays immediate. Plain / Ctrl start box-select (click vs drag).
-		// Do not AcceptEvent — pre/post LineEdits must still receive focus for edit.
+		// Shift range-select stays immediate. Plain / Ctrl-Cmd start box-select (click vs drag;
+		// click with Ctrl/Cmd toggles membership). Do not AcceptEvent — pre/post LineEdits
+		// must still receive focus for edit.
 		if (Input.IsKeyPressed(Key.Shift))
 		{
 			_globalData?.ShellSelection?.SelectThrough(CueList.FetchCueFromId(CueId));

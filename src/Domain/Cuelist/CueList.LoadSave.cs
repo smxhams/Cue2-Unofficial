@@ -25,19 +25,10 @@ namespace Cue2.Domain.Cuelist;
 /// <summary>
 /// Manages the main cue list UI, including creation, removal, drag-and-drop reordering
 /// (with support for nesting/grouping), box multi-select, and save/load of cue hierarchy and order.
-/// </summary>
-/// <remarks>
-/// Follows project MVVM-like separation: UI shells in ShellBar, data in Cue objects,
-/// shared state via GlobalData/GlobalSignals. Reordering uses custom mouse tracking
-/// (not native Godot drag/drop) to support above/below/into-child zones for multi-selection.
-/// Box-select is handled by <see cref="CueBoxSelect"/> and never starts from the reorder grabber.
-/// </remarks>
-/// <summary>
 /// Partial: ResetCuelist, GetData, LoadData, StructureCuelist
 /// </summary>
 public partial class CueList
 {
-	
 	/// <summary>
 	/// Serializes the entire cuelist (cues + top-level order) for session save.
 	/// </summary>
@@ -223,10 +214,4 @@ public partial class CueList
 
 		RefreshShellZebra();
 	}
-
-	/// <summary>
-	/// Encapsulates the complex state machine and mouse-driven logic for reordering cues
-	/// (including support for inserting above/below or as child of a group).
-	/// This keeps the main CueList class focused and improves readability.
-	/// </summary>
 }

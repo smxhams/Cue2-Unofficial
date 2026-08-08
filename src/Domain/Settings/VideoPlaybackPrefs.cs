@@ -47,7 +47,7 @@ public enum OutputVSyncMode
     /// <summary>Disable vsync (lower latency, possible tearing).</summary>
     Off = 1,
 
-    /// <summary>Prefer mailbox / adaptive-style low-latency present when the backend supports it.</summary>
+    /// <summary>Prefer mailbox / adaptive-style low-latency present. Only partialy supported</summary>
     LowLatency = 2
 }
 

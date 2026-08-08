@@ -211,7 +211,7 @@ public partial class Settings
         }
 
         // Keyboard InputMap is Cue2 Preferences only (user:// via UserDataManager) — not
-        // document history (P2-14). Ignore legacy slices if an old undo entry still has the key.
+        // document history. Ignore legacy slices if an old undo entry still has the key.
         if (TryGetSettingsValue(settingsData, "InputMap", out _))
         {
             GD.Print(
@@ -222,7 +222,7 @@ public partial class Settings
 
     /// <summary>
     /// Explicit full-settings history key for <see cref="CaptureHistorySlice"/>.
-    /// Empty/null keys no longer capture everything (P2-10) — pass this sentinel instead.
+    /// Empty/null keys no longer capture everything — pass this sentinel instead.
     /// </summary>
     public const string HistoryFullSnapshotKey = "*";
 
@@ -232,7 +232,7 @@ public partial class Settings
     /// </summary>
     /// <param name="keys">
     /// One or more settings keys (e.g. <c>StopFadeDuration</c>, <c>AudioPatch</c>, <c>OscInputMap</c>).
-    /// Keyboard <c>InputMap</c> is user preferences only and is refused (P2-14).
+    /// Keyboard <c>InputMap</c> is user preferences only and is refused.
     /// Pass <see cref="HistoryFullSnapshotKey"/> (<c>"*"</c>) alone (or among keys) for a full
     /// <see cref="GetData"/> snapshot. Null/empty keys return an empty dictionary and log an error.
     /// </param>
@@ -241,11 +241,11 @@ public partial class Settings
     {
         if (keys == null || keys.Length == 0)
         {
-            System.Diagnostics.Debug.Assert(false,
-                "Settings.CaptureHistorySlice: keys must not be null/empty. Use HistoryFullSnapshotKey (\"*\") for a full snapshot.");
             GD.PrintErr(
                 "Settings:CaptureHistorySlice - Refused empty keys (would have been full GetData). " +
                 "Pass explicit keys or HistoryFullSnapshotKey (\"*\").");
+            System.Diagnostics.Debug.Assert(false,
+                "Settings.CaptureHistorySlice: keys must not be null/empty. Use HistoryFullSnapshotKey (\"*\") for a full snapshot.");
             return new Dictionary();
         }
 
@@ -269,10 +269,10 @@ public partial class Settings
 
         if (filtered.Count == 0)
         {
-            System.Diagnostics.Debug.Assert(false,
-                "Settings.CaptureHistorySlice: no non-empty keys after filter.");
             GD.PrintErr(
                 "Settings:CaptureHistorySlice - Refused: no non-empty keys (would have been full GetData).");
+            System.Diagnostics.Debug.Assert(false,
+                "Settings.CaptureHistorySlice: no non-empty keys after filter.");
             return new Dictionary();
         }
 
@@ -283,7 +283,7 @@ public partial class Settings
                 slice[key] = value;
             else if (key == "InputMap")
             {
-                // Keyboard InputMap is user preferences only — not captured for document undo (P2-14).
+                // Keyboard InputMap is user preferences only — not captured for document undo.
                 // OSC/MIDI Input Map use OscInputMap / MidiInputMap keys (show-scoped).
                 GD.PrintErr(
                     "Settings:CaptureHistorySlice - Refused InputMap key " +
@@ -440,8 +440,4 @@ public partial class Settings
             return fallback;
         return (TEnum)Enum.ToObject(typeof(TEnum), raw);
     }
-
-    /// <summary>
-    /// Resets all cue shell defaults to system factory values.
-    /// </summary>
 }

@@ -80,9 +80,5 @@ public class OscComponent : ICueComponent
         OscMessage = data.TryGetValue("Command", out var value) ? (string)value : OscMessage;
         ArgsText = data.TryGetValue("ArgsText", out value) ? (string)value : (ArgsText ?? string.Empty);
         OscConnectionId = data.TryGetValue("OscConnectionId", out value) ? (int)value : OscConnectionId;
-
-        // Legacy shows sent a forced int arg 1 with no ArgsText field — keep behaviour if
-        // an old save never had ArgsText and command was path-only: leave ArgsText empty
-        // (no forced 1). Operators who need the old arg can type "1" in Args.
     }
 }

@@ -165,7 +165,7 @@ public partial class ShellSelection : Node
     }
 
     /// <summary>
-    /// Adds a cue to the multi-selection (Ctrl/Cmd-click).
+    /// Adds a cue to the multi-selection (does nothing if already selected).
     /// </summary>
     /// <param name="cue">Cue to add.</param>
     /// <param name="recordHistory">When true, records a selection undo step first.</param>
@@ -179,6 +179,57 @@ public partial class ShellSelection : Node
             RecordSelectionHistory("Add cue to selection");
 
         ApplySelectCue(cue);
+    }
+
+    /// <summary>
+    /// Ctrl/Cmd-click: add when not selected, remove when already selected.
+    /// </summary>
+    /// <param name="cue">Cue under the click.</param>
+    /// <param name="recordHistory">When true, records a selection undo step first.</param>
+    public void ToggleSelection(Cue cue, bool recordHistory = true)
+    {
+        if (cue == null) return;
+
+        if (SelectedCues.Contains(cue))
+            RemoveSelection(cue, recordHistory);
+        else
+            AddSelection(cue, recordHistory);
+    }
+
+    /// <summary>
+    /// Removes a cue from the multi-selection (Ctrl/Cmd-click on an already selected shell).
+    /// </summary>
+    /// <param name="cue">Cue to deselect.</param>
+    /// <param name="recordHistory">When true, records a selection undo step first.</param>
+    public void RemoveSelection(Cue cue, bool recordHistory = true)
+    {
+        if (cue == null) return;
+        if (!SelectedCues.Contains(cue))
+            return;
+
+        if (recordHistory)
+            RecordSelectionHistory("Remove cue from selection");
+
+        int previousFocusId = _globalData?.FocusedCue ?? -1;
+        bool removedFocused = previousFocusId == cue.Id;
+
+        if (cue.ShellBar != null && IsInstanceValid(cue.ShellBar))
+            cue.ShellBar.Deselect();
+        SelectedCues.Remove(cue);
+
+        // Prefer keeping the existing focus when it remains selected; otherwise fall back
+        // to the last remaining selected cue (or clear when the selection is empty).
+        // Always emit so multi-edit inspectors re-read SelectedCues after a toggle-off.
+        int focusId = -1;
+        if (SelectedCues.Count > 0)
+        {
+            if (!removedFocused && SelectedCues.Any(c => c != null && c.Id == previousFocusId))
+                focusId = previousFocusId;
+            else
+                focusId = SelectedCues[^1]?.Id ?? -1;
+        }
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), focusId);
     }
 
     /// <summary>
@@ -257,18 +308,9 @@ public partial class ShellSelection : Node
         _globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
     }
 
-    public void RemoveSelection(int shellIndex)
-    {
-        //
-    }
-
-    /// <summary>
-    /// Returns a flat list of all *visible* cues in visual/document order.
-    /// Cues inside collapsed groups are excluded.
-    /// </summary>
     /// <summary>
     /// Returns the ordered list of currently visible cues for navigation/selection.
-    /// Respects group expansion state.
+    /// Respects group expansion state (cues inside collapsed groups are excluded).
     /// </summary>
     public List<Cue> GetAllCuesInOrder()
     {

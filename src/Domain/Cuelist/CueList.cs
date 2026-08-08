@@ -26,17 +26,10 @@ namespace Cue2.Domain.Cuelist;
 /// Manages the main cue list UI, including creation, removal, drag-and-drop reordering
 /// (with support for nesting/grouping), box multi-select, and save/load of cue hierarchy and order.
 /// </summary>
-/// <remarks>
-/// Follows project MVVM-like separation: UI shells in ShellBar, data in Cue objects,
-/// shared state via GlobalData/GlobalSignals. Reordering uses custom mouse tracking
-/// (not native Godot drag/drop) to support above/below/into-child zones for multi-selection.
-/// Box-select is handled by <see cref="CueBoxSelect"/> and never starts from the reorder grabber.
-/// </remarks>
 public partial class CueList : Control
 {
 	internal GlobalData _globalData;
 	internal GlobalSignals _globalSignals;
-	
 	
 	/// <summary>
 	/// Global lookup of all cues by ID. Populated on creation and used for fast access.
@@ -58,7 +51,6 @@ public partial class CueList : Control
 	// Reorder constants (avoid magic numbers; actual shell min size ~26 in ShellBar.tscn)
 	private const int ShellHeight = 26;
 	private const int ShellMarginDiv = 4;
-
 	
 	private PackedScene _shellBarPackedScene = SceneLoader.LoadPackedScene("uid://d207a67e3ebww", out _);
 
@@ -120,7 +112,7 @@ public partial class CueList : Control
 
 	/// <summary>
 	/// Nested suppress depth for <see cref="NotifyTotalCuesChanged"/> during bulk shell create/delete.
-	/// When &gt; 0, count/zebra updates are deferred until the outer bulk ends.
+	/// When >0, count/zebra updates are deferred until the outer bulk ends.
 	/// </summary>
 	private int _bulkNotifySuppressDepth;
 
@@ -613,10 +605,4 @@ public partial class CueList : Control
 			return;
 		udm.SetShellColumnWidths(ShellColumnLayout.NumberWidth, ShellColumnLayout.TimeWidth);
 	}
-	
-	/// <summary>
-	/// Creates a new cue from the provided data dictionary and adds it to the list.
-	/// </summary>
-	/// <param name="data">Dictionary of cue properties (from save or defaults).</param>
-	/// <returns>The newly created and added Cue.</returns>
 }

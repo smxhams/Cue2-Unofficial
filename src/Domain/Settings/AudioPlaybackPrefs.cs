@@ -52,11 +52,11 @@ public readonly struct AudioPresentTuning
 
     /// <summary>
     /// Streaming decoder ring capacity (ms) large enough for <see cref="PrefetchMs"/> and
-    /// SDL fill targets so prefetch does not overflow a 400 ms ring under PreferStability.
+    /// SDL fill targets so prefetch does not overflow a 400ms ring under PreferStability.
     /// </summary>
     /// <remarks>
-    /// Formula: <c>max(400, PrefetchMs * 2, TargetBufferMs * 3)</c>, capped at 10 s.
-    /// PreferStability (prefetch 1400 ms) → 2800 ms ring.
+    /// Formula: <c>max(400, PrefetchMs * 2, TargetBufferMs * 3)</c>, capped at 10s.
+    /// PreferStability (prefetch 1400ms) → 2800ms ring.
     /// </remarks>
     public int RecommendedRingMs
     {

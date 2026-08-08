@@ -16,7 +16,8 @@ namespace Cue2.Domain.Cuelist;
 /// <remarks>
 /// Does not start from the reorder grabber (that path calls <see cref="CueList.StartReorder"/>
 /// and accepts the event). Plain click without drag still selects a single cue / clears
-/// empty space; Ctrl/Cmd-drag unions with the selection at press time.
+/// empty space. Ctrl/Cmd-click toggles membership of that cue; Ctrl/Cmd-drag marquee still
+/// unions hits with the selection at press time.
 /// </remarks>
 internal sealed class CueBoxSelect
 {
@@ -92,7 +93,10 @@ internal sealed class CueBoxSelect
     /// </summary>
     /// <param name="originShell">Shell under the press, or null for empty space.</param>
     /// <param name="globalPos">Press position in global coordinates.</param>
-    /// <param name="additive">When true (Ctrl/Cmd), union hits with the pre-press selection.</param>
+    /// <param name="additive">
+    /// When true (Ctrl/Cmd): click toggles the origin cue; marquee unions hits with the
+    /// pre-press selection.
+    /// </param>
     public void BeginPending(ShellBar originShell, Vector2 globalPos, bool additive)
     {
         if (_active || _pending)
@@ -229,7 +233,7 @@ internal sealed class CueBoxSelect
                 if (cue != null)
                 {
                     if (_additive)
-                        selection.AddSelection(cue);
+                        selection.ToggleSelection(cue);
                     else
                         selection.SelectIndividualShell(cue);
                 }
