@@ -1678,36 +1678,37 @@ public class Cue : ICue
     /// <returns>The next sibling cue, or null if this is the last at its level.</returns>
     public Cue GetNextSiblingCue()
     {
-        if (ParentId >= 0)
-        {
-            var parent = CueList.FetchCueFromId(ParentId);
-            if (parent == null) return null;
-            int idx = parent.ChildCues.IndexOf(Id);
-            if (idx < 0 || idx + 1 >= parent.ChildCues.Count) return null;
-            return CueList.FetchCueFromId(parent.ChildCues[idx + 1]);
-        }
+        var siblings = ParentId >= 0
+            ? CueList.FetchCueFromId(ParentId)?.ChildCues
+            : CueList.Live?.RootOrder;
+        if (siblings == null)
+            return null;
 
-        // Root level: prefer shell container order (matches visual list).
-        if (ShellBar != null && GodotObject.IsInstanceValid(ShellBar))
+        int idx = siblings.IndexOf(Id);
+        if (idx < 0 || idx + 1 >= siblings.Count)
+            return null;
+        return CueList.FetchCueFromId(siblings[idx + 1]);
+    }
+
+    /// <summary>
+    /// Next cue after this one in document order: next sibling, or the next sibling of the
+    /// nearest ancestor that has one (leaves a group when this is the last child).
+    /// </summary>
+    /// <returns>The following cue in the cuelist, or null if this is the last cue in the show.</returns>
+    public Cue GetNextCueInList()
+    {
+        var current = this;
+        int guard = 0;
+        while (current != null && guard++ < 64)
         {
-            var parentNode = ShellBar.GetParent();
-            if (parentNode != null)
-            {
-                int i = ShellBar.GetIndex();
-                for (int j = i + 1; j < parentNode.GetChildCount(); j++)
-                {
-                    if (parentNode.GetChild(j) is ShellBar nextShell && nextShell.CueId >= 0)
-                    {
-                        var next = CueList.FetchCueFromId(nextShell.CueId);
-                        if (next != null) return next;
-                    }
-                }
+            var sibling = current.GetNextSiblingCue();
+            if (sibling != null)
+                return sibling;
+            if (current.ParentId < 0)
                 return null;
-            }
+            current = CueList.FetchCueFromId(current.ParentId);
         }
 
-        // Fallback without shells: first top-level cue after this id in CueIndex is unreliable;
-        // walk any root cues that share ParentId == -1 is order-undefined. Return null.
         return null;
     }
 
@@ -1731,11 +1732,12 @@ public class Cue : ICue
 
     /// <summary>
     /// Returns the first cue after this cue's continue/follow sequence (playhead target after GO),
-    /// or null if there is no cue after the sequence at this nesting level.
+    /// walking out of a group when the sequence ends on its last child.
     /// </summary>
+    /// <returns>The next cue in the cuelist, or null if the sequence ends the show.</returns>
     public Cue GetCueAfterSequence()
     {
-        return GetSequenceEndCue().GetNextSiblingCue();
+        return GetSequenceEndCue().GetNextCueInList();
     }
 
     /// <summary>
@@ -1749,7 +1751,7 @@ public class Cue : ICue
         var current = start;
         var guard = 0;
         while (current != null && current.ShouldSkipOnPlayhead && guard++ < 10000)
-            current = current.GetNextSiblingCue();
+            current = current.GetNextCueInList();
         return current;
     }
     

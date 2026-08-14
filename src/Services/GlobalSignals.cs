@@ -38,6 +38,16 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void OpenSessionEventHandler();
 
 	[Signal] public delegate void GoEventHandler();
+
+	/// <summary>
+	/// Fired when GO becomes blocked. <paramref name="reason"/> is a stable token
+	/// (e.g. <see cref="GoDisableReasonSessionLoad"/>). <paramref name="durationSeconds"/>
+	/// is 0 when the block is indefinite.
+	/// </summary>
+	[Signal] public delegate void GoDisabledEventHandler(string reason, float durationSeconds);
+
+	/// <summary>Fired when every GO disable reason has been cleared.</summary>
+	[Signal] public delegate void GoEnabledEventHandler();
 	
 	[Signal] public delegate void ResumeAllEventHandler();
 	[Signal] public delegate void PauseAllEventHandler();
@@ -97,6 +107,12 @@ public partial class GlobalSignals : Node
 	/// Toggle Show Mode / Edit Mode (Input Map / hotkey).
 	/// </summary>
 	[Signal] public delegate void ToggleShowModeEventHandler();
+
+	/// <summary>Enter Edit Mode (cue editing unlocked). No-op when already in Edit Mode.</summary>
+	[Signal] public delegate void EnterEditModeEventHandler();
+
+	/// <summary>Enter Show Mode (cue editing locked). No-op when already in Show Mode.</summary>
+	[Signal] public delegate void EnterShowModeEventHandler();
 	
 	// Text edit signal connector
 	[Signal]  public delegate void TextEditFocusEnteredEventHandler();

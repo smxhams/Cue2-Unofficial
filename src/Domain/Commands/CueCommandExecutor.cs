@@ -83,18 +83,35 @@ public partial class CueCommandExecutor : Node
     }
 
     /// <summary>
-    /// Logs and returns true when GO must wait for cue models to finish applying.
+    /// Logs and returns true when GO is blocked via <see cref="GlobalSignals.DisableGo"/>.
+    /// Session-load blocks are logged; double-GO protection stays silent.
     /// </summary>
     /// <param name="actionLabel">Short action name for logs.</param>
     /// <returns>True if the caller should abort.</returns>
-    private bool RejectIfSessionLoading(string actionLabel)
+    private bool RejectIfGoDisabled(string actionLabel)
     {
-        if (_globalData?.IsPlaybackReady != false)
+        if (_globalSignals == null || _globalSignals.IsGoEnabled)
             return false;
-        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-            $"Please wait — a showfile is still loading. Cannot {actionLabel}.", (int)LogType.Info);
-        GD.Print($"CueCommandExecutor:RejectIfSessionLoading - blocked {actionLabel}");
+
+        if (_globalSignals.IsGoDisabledBy(GlobalSignals.GoDisableReasonSessionLoad))
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"Please wait — a showfile is still loading. Cannot {actionLabel}.", (int)LogType.Info);
+            GD.Print($"CueCommandExecutor:RejectIfGoDisabled - blocked {actionLabel} (session_load)");
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Starts the show-scoped double-GO cooldown when the setting is above 0.
+    /// </summary>
+    private void ApplyDoubleGoProtection()
+    {
+        float seconds = _globalData?.Settings?.DoubleGoProtectionSeconds ?? 0f;
+        if (seconds <= 0.0001f || _globalSignals == null)
+            return;
+        _globalSignals.DisableGo(GlobalSignals.GoDisableReasonDoubleGo, seconds);
     }
 
     /// <summary>
@@ -104,8 +121,10 @@ public partial class CueCommandExecutor : Node
     /// </summary>
     public void GoCommand()
     {
-        if (RejectIfSessionLoading("GO"))
+        if (RejectIfGoDisabled("GO"))
             return;
+
+        ApplyDoubleGoProtection();
 
         if (!ShellSelection.SelectedCues.Any())
         {
@@ -158,7 +177,7 @@ public partial class CueCommandExecutor : Node
         else
         {
             // Disarmed GO: do not play; move to next eligible sibling.
-            target = Cue.ResolvePlayheadTarget(primary.GetNextSiblingCue());
+            target = Cue.ResolvePlayheadTarget(primary.GetNextCueInList());
             if (target == null)
                 return; // Nothing after — leave selection on the disarmed cue.
         }
@@ -266,9 +285,6 @@ public partial class CueCommandExecutor : Node
     /// </param>
     public async Task ActivateSequenceFromAsync(Cue head, double? controlGoFadeIn = null, double? startAtTimelineSeconds = null)
     {
-        if (RejectIfSessionLoading("GO"))
-            return;
-
         if (head == null)
         {
             GD.PrintErr("CueCommandExecutor:ActivateSequenceFromAsync - Cue is null");
@@ -485,6 +501,9 @@ public partial class CueCommandExecutor : Node
                     return;
                 }
 
+                if (RejectIfGoDisabled("GO"))
+                    return;
+                ApplyDoubleGoProtection();
                 await ActivateSequenceFromAsync(cue, goFadeIn);
                 break;
             }

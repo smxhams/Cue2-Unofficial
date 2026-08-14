@@ -74,6 +74,7 @@ public static class SettingsExport
         // Settings → General (plus related show scalars not currently on that panel)
         new("General", "General",
             "GoScale", "CueListScale", "WaveformResolution", "StopFadeDuration",
+            "DoubleGoProtection",
             "MediaBackupEnabled", "MultiEditEnabled", "SelectNewCues", "ShowTimelineWaveforms",
             "ShowMode"),
 

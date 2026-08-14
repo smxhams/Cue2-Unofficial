@@ -9,7 +9,7 @@ using AppSettings = Cue2.Domain.ShowSettings.Settings;
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// General settings panel: Go button scale, cuelist scale, stop fade-out, media backup,
+/// General settings panel: Go button scale, cuelist scale, stop fade-out, double-GO protection, media backup,
 /// multi-edit, select-new-cues, and timeline waveforms.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
 /// Values are stored with the showfile via <see cref="AppSettings"/>.
@@ -29,6 +29,9 @@ public partial class SettingsGeneral : ScrollContainer
 
     private SpinBox _stopFadeSpinBox;
     private Button _stopFadeResetButton;
+
+    private SpinBox _doubleGoSpinBox;
+    private Button _doubleGoResetButton;
 
     private CheckBox _mediaBackupCheckBox;
     private Button _mediaBackupResetButton;
@@ -100,6 +103,23 @@ public partial class SettingsGeneral : ScrollContainer
         var stopFadeEdit = _stopFadeSpinBox.GetLineEdit();
         if (stopFadeEdit != null)
             stopFadeEdit.FocusMode = FocusModeEnum.All;
+
+        _doubleGoSpinBox = GetNodeOrNull<SpinBox>("%DoubleGoProtectionSpinBox");
+        _doubleGoResetButton = GetNodeOrNull<Button>("%DoubleGoProtectionResetButton");
+        if (_doubleGoResetButton != null)
+        {
+            _doubleGoResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+            _doubleGoResetButton.Pressed += OnDoubleGoResetPressed;
+        }
+        if (_doubleGoSpinBox != null)
+        {
+            _doubleGoSpinBox.ValueChanged += OnDoubleGoChanged;
+            _doubleGoSpinBox.Editable = true;
+            _doubleGoSpinBox.FocusMode = FocusModeEnum.All;
+            var doubleGoEdit = _doubleGoSpinBox.GetLineEdit();
+            if (doubleGoEdit != null)
+                doubleGoEdit.FocusMode = FocusModeEnum.All;
+        }
 
         _mediaBackupCheckBox = GetNode<CheckBox>("%MediaBackupCheckBox");
         _mediaBackupCheckBox.Toggled += OnMediaBackupToggled;
@@ -219,6 +239,7 @@ public partial class SettingsGeneral : ScrollContainer
             }
 
             _stopFadeSpinBox?.SetValueNoSignal(_globalData.Settings.StopFadeDuration);
+            _doubleGoSpinBox?.SetValueNoSignal(_globalData.Settings.DoubleGoProtectionSeconds);
             _mediaBackupCheckBox?.SetPressedNoSignal(_globalData.Settings.MediaBackupEnabled);
             _multiEditCheckBox?.SetPressedNoSignal(_globalData.Settings.MultiEditEnabled);
             _selectNewCuesCheckBox?.SetPressedNoSignal(_globalData.Settings.SelectNewCues);
@@ -237,6 +258,7 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateGoScaleResetButton();
         UpdateCueListScaleResetButton();
         UpdateStopFadeResetButton();
+        UpdateDoubleGoResetButton();
         UpdateMediaBackupResetButton();
         UpdateMultiEditResetButton();
         UpdateSelectNewCuesResetButton();
@@ -439,6 +461,52 @@ public partial class SettingsGeneral : ScrollContainer
         _stopFadeResetButton.Visible = !atDefault;
         if (!atDefault)
             _stopFadeResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultStopFadeDuration:0.#}s";
+    }
+
+    // ── Double Go Protection ──────────────────────────────────────────────
+
+    private void OnDoubleGoChanged(double value)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+
+        float seconds = (float)Mathf.Clamp(value, 0.0, AppSettings.MaxDoubleGoProtectionSeconds);
+        if (Mathf.IsEqualApprox(_globalData.Settings.DoubleGoProtectionSeconds, seconds))
+        {
+            UpdateDoubleGoResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change double GO protection", null, "DoubleGoProtection");
+        _globalData.Settings.DoubleGoProtectionSeconds = seconds;
+        UpdateDoubleGoResetButton();
+    }
+
+    private void OnDoubleGoResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null) return;
+        if (Mathf.IsEqualApprox(_globalData.Settings.DoubleGoProtectionSeconds,
+                AppSettings.DefaultDoubleGoProtectionSeconds))
+        {
+            SyncSettings();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Reset double GO protection", null, "DoubleGoProtection");
+        _globalData.Settings.DoubleGoProtectionSeconds = AppSettings.DefaultDoubleGoProtectionSeconds;
+        SyncSettings();
+    }
+
+    private void UpdateDoubleGoResetButton()
+    {
+        if (_doubleGoResetButton == null || _globalData?.Settings == null) return;
+
+        bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.DoubleGoProtectionSeconds,
+            AppSettings.DefaultDoubleGoProtectionSeconds);
+        _doubleGoResetButton.Visible = !atDefault;
+        if (!atDefault)
+            _doubleGoResetButton.TooltipText =
+                $"Reset to default: {AppSettings.DefaultDoubleGoProtectionSeconds:0.#}s";
     }
 
     // ── Media Backup ──────────────────────────────────────────────────────

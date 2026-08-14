@@ -129,6 +129,8 @@ public partial class MainTitleBarUI : Control
         }
         _globalSignals.ShowModeChanged += OnShowModeChanged;
         _globalSignals.ToggleShowMode += OnToggleShowMode;
+        _globalSignals.EnterEditMode += OnEnterEditMode;
+        _globalSignals.EnterShowMode += OnEnterShowMode;
 
         _mainMenu = GetNode<Control>("%MainMenuContainer");
         _mainMenuButton = GetNode<Button>("%TitleMainMenu");
@@ -197,6 +199,8 @@ public partial class MainTitleBarUI : Control
         {
             _globalSignals.ShowModeChanged -= OnShowModeChanged;
             _globalSignals.ToggleShowMode -= OnToggleShowMode;
+            _globalSignals.EnterEditMode -= OnEnterEditMode;
+            _globalSignals.EnterShowMode -= OnEnterShowMode;
             _globalSignals.VideoOutputControlChanged -= OnVideoOutputControlChanged;
             _globalSignals.AudioMasterControlChanged -= OnAudioMasterControlChanged;
             _globalSignals.ToggleSettingsWindow -= ToggleSettingsWindow;
@@ -1379,6 +1383,16 @@ public partial class MainTitleBarUI : Control
         var settings = _globalData?.Settings;
         if (settings == null) return;
         settings.SetShowMode(!settings.ShowMode);
+    }
+
+    private void OnEnterEditMode()
+    {
+        _globalData?.Settings?.SetShowMode(false);
+    }
+
+    private void OnEnterShowMode()
+    {
+        _globalData?.Settings?.SetShowMode(true);
     }
 
     private void OnShowModeChanged(bool enabled)

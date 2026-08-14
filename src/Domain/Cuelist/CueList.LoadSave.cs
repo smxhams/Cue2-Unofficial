@@ -87,7 +87,7 @@ public partial class CueList
 		if (SessionLoadTimer.Current != null)
 			SessionLoadTimer.Current.CueCount = total;
 
-		SessionLoadTimer.Current?.Begin("cues");
+		SessionLoadTimer.Current?.Begin("cues.construct");
 
 		var visited = new HashSet<int>();
 		var stack = new Stack<(int Id, int ParentId)>();
@@ -117,7 +117,6 @@ public partial class CueList
 				CueIndex.Add(cue.Id, cue);
 			else
 				CueIndex[cue.Id] = cue;
-			RelinkCueComponents(cue);
 
 			for (int i = cue.ChildCues.Count - 1; i >= 0; i--)
 				stack.Push((cue.ChildCues[i], cue.Id));
@@ -135,11 +134,19 @@ public partial class CueList
 				CueIndex.Add(cue.Id, cue);
 			if (!RootOrder.Contains(cue.Id))
 				RootOrder.Add(cue.Id);
-			RelinkCueComponents(cue);
 			visited.Add(id);
 		}
 
-		SessionLoadTimer.Current?.Pause();
+		SessionLoadTimer.Current?.Begin("cues.relink");
+		if (CueIndex != null)
+		{
+			foreach (var cue in CueIndex.Values)
+				RelinkCueComponents(cue);
+		}
+
+		var timer = SessionLoadTimer.Current;
+		timer?.Pause();
+		timer?.AnnotateLast(timer.FormatLinkNote());
 	}
 
 	/// <summary>
@@ -159,8 +166,8 @@ public partial class CueList
 		try
 		{
 			SessionLoadTimer.Current?.Begin("finish");
-			RebuildVisibleRowIds();
-			SyncVirtualViewport();
+			// Rebuilds visible rows, binds shells, and notifies the footer cue count.
+			NotifyVirtualStructureChanged();
 		}
 		finally
 		{

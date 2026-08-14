@@ -39,6 +39,7 @@ public partial class Settings
         saveTable.Add("CueListScale", CueListScale);
         saveTable.Add("WaveformResolution", WaveformResolution);
         saveTable.Add("StopFadeDuration", StopFadeDuration);
+        saveTable.Add("DoubleGoProtection", DoubleGoProtectionSeconds);
         saveTable.Add("MediaBackupEnabled", MediaBackupEnabled);
         saveTable.Add("MultiEditEnabled", MultiEditEnabled);
         saveTable.Add("SelectNewCues", SelectNewCues);
@@ -244,6 +245,9 @@ public partial class Settings
         _globalSignals.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), CueListScale);
         WaveformResolution = settingsData.TryGetValue("WaveformResolution", out value) ? (int)value : WaveformResolution;
         StopFadeDuration = settingsData.TryGetValue("StopFadeDuration", out value) ? (float)value : StopFadeDuration;
+        DoubleGoProtectionSeconds = settingsData.TryGetValue("DoubleGoProtection", out value)
+            ? Mathf.Clamp((float)value, 0f, MaxDoubleGoProtectionSeconds)
+            : DefaultDoubleGoProtectionSeconds;
         // Default true for older shows that predate this setting
         MediaBackupEnabled = settingsData.TryGetValue("MediaBackupEnabled", out value)
             ? value.AsBool()

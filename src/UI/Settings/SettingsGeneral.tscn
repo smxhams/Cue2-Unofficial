@@ -160,6 +160,48 @@ theme_override_font_sizes/font_size = 11
 text = "0 = instant. Second Stop cuts immediately."
 vertical_alignment = 1
 
+[node name="DoubleGoRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="DoubleGoLabel" type="Label" parent="VBoxContainer/DoubleGoRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Double Go Protection"
+vertical_alignment = 1
+
+[node name="DoubleGoProtectionSpinBox" type="SpinBox" parent="VBoxContainer/DoubleGoRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+tooltip_text = "After each GO, block another GO for this many seconds.
+Prevents accidental double-taps. 0 = off."
+focus_mode = 2
+min_value = 0.0
+max_value = 30.0
+step = 0.1
+value = 0.0
+suffix = "s"
+alignment = 1
+editable = true
+
+[node name="DoubleGoProtectionResetButton" type="Button" parent="VBoxContainer/DoubleGoRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
+[node name="DoubleGoHint" type="Label" parent="VBoxContainer/DoubleGoRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "0 = off. Blocks a second GO after each GO."
+vertical_alignment = 1
+
 [node name="HSeparator3" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
 

@@ -103,6 +103,7 @@ public partial class SaveManager : Node
 
 		if (!string.IsNullOrEmpty(_globalData.StartupOpenPath))
 		{
+			SessionLoadTimer.Current?.Begin("boot.savemanager");
 			LoadStartupSession();
 		}
 		else
@@ -126,6 +127,7 @@ public partial class SaveManager : Node
 			if (!GodotObject.IsInstanceValid(this))
 				return;
 			// One frame so Cue2Base can paint the session-load overlay first.
+			SessionLoadTimer.Current?.Begin("boot.frame");
 			await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
 				return;
@@ -542,6 +544,7 @@ public partial class SaveManager : Node
 	{
 		IsSessionLoading = true;
 		IsPlaybackReady = false;
+		_globalSignals?.DisableGo(GlobalSignals.GoDisableReasonSessionLoad);
 		string showName = string.IsNullOrEmpty(sessionPath)
 			? string.Empty
 			: Path.GetFileNameWithoutExtension(sessionPath);
@@ -567,6 +570,7 @@ public partial class SaveManager : Node
 	private void MarkPlaybackReady()
 	{
 		IsPlaybackReady = true;
+		_globalSignals?.EnableGo(GlobalSignals.GoDisableReasonSessionLoad);
 		_loadTimer?.MarkApplyComplete();
 	}
 
@@ -579,6 +583,7 @@ public partial class SaveManager : Node
 			return;
 		IsSessionLoading = false;
 		IsPlaybackReady = true;
+		_globalSignals?.EnableGo(GlobalSignals.GoDisableReasonSessionLoad);
 		string applySummary = _loadTimer?.FormatApplySummary();
 		if (!string.IsNullOrEmpty(applySummary))
 		{

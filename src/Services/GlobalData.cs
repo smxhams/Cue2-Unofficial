@@ -336,6 +336,8 @@ public partial class GlobalData : Node
 		"ToggleSettings",
 		"ToggleLog",
 		"ToggleShowMode",
+		"EditMode",
+		"ShowMode",
 		"ExpandOneLayer",
 		"CollapseOneLayer",
 		"ToggleExpandAll",
@@ -358,7 +360,7 @@ public partial class GlobalData : Node
 		("Playback", new[] { "Go", "StopAll", "PauseAll", "ResumeAll" }),
 		("Cue Editing", new[] { "CreateCue", "GroupSelectedCues", "DeleteCue", "DuplicateSelectedCues", "CutSelectedCues", "CopySelectedCues", "PasteCues" }),
 		("Navigation", new[] { "SelectAll", "SelectNext", "SelectPrevious", "ExpandOneLayer", "CollapseOneLayer", "ToggleExpandAll" }),
-		("Windows", new[] { "ToggleSettings", "ToggleLog", "ToggleShowMode" }),
+		("Windows", new[] { "ToggleSettings", "ToggleLog", "ToggleShowMode", "EditMode", "ShowMode" }),
 		("History", new[] { "Undo", "Redo" }),
 	};
 
@@ -372,6 +374,9 @@ public partial class GlobalData : Node
 	/// </remarks>
 	public override void _Ready()
 	{
+		// Earliest C# we own — process clock for last-show "time to GO" including boot.
+		SessionLoadTimer.Touch();
+
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 
@@ -446,6 +451,9 @@ public partial class GlobalData : Node
 				if (recents.Count > 0)
 				{
 					StartupOpenPath = recents[0];
+					var bootTimer = SessionLoadTimer.Start(StartupOpenPath);
+					bootTimer.IncludesBoot = true;
+					bootTimer.Begin("boot.globaldata");
 					GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + StartupOpenPath);
 				}
 				else
@@ -462,6 +470,10 @@ public partial class GlobalData : Node
 		// Capture project.godot factory bindings first, then overlay user-customized shortcuts.
 		CaptureDefaultInputBindings();
 		UserDataManager?.ApplyInputMapFromUserData();
+
+		// Remaining autoloads (signals, styles, logger, displays) run before SaveManager.
+		if (!string.IsNullOrEmpty(StartupOpenPath))
+			SessionLoadTimer.Current?.Begin("boot.autoloads");
 	}
 
 	/// <summary>
@@ -525,6 +537,8 @@ public partial class GlobalData : Node
 		_defaultInputBindings.Clear();
 		foreach (var action in MappableInputActions)
 		{
+			if (!InputMap.HasAction(action))
+				InputMap.AddAction(action);
 			if (InputMap.HasAction(action))
 			{
 				var events = InputMap.ActionGetEvents(action);

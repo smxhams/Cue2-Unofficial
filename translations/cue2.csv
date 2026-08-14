@@ -669,6 +669,7 @@ Shell Colour,Shell Colour,Tae anga,Color del shell
 Show application menu,Show application menu,Whakaatu tahua taupānga,Mostrar menú de la aplicación
 Show Files,Show Files,Kōnae whakaaturanga,Archivos del show
 Show Mode,Show Mode,Aratau whakaaturanga,Modo show
+Edit Mode,Edit Mode,Aratau whakatika,Modo edición
 "Show Mode locks cue editing for live performance.
 Off = Edit Mode (default): full cue editing.
 On = Show Mode: inspectors hidden, shell edits and cue structure locked.
@@ -719,6 +720,16 @@ Stop All,Stop All,Katia katoa,Detener todo
 (Single click to fade and stop, double click to hard stop.)","Stop all cues
 (Single click to fade and stop, double click to hard stop.)"
 Stop Fade Out,Stop Fade Out,Stop Fade Out,Stop Fade Out
+Double Go Protection,Double Go Protection,Double Go Protection,Double Go Protection
+"After each GO, block another GO for this many seconds.
+Prevents accidental double-taps. 0 = off.","After each GO, block another GO for this many seconds.
+Prevents accidental double-taps. 0 = off.","After each GO, block another GO for this many seconds.
+Prevents accidental double-taps. 0 = off.","After each GO, block another GO for this many seconds.
+Prevents accidental double-taps. 0 = off."
+0 = off. Blocks a second GO after each GO.,0 = off. Blocks a second GO after each GO.,0 = off. Blocks a second GO after each GO.,0 = off. Blocks a second GO after each GO.
+GO disabled — showfile is still loading.,GO disabled — showfile is still loading.,GO disabled — showfile is still loading.,GO disabled — showfile is still loading.
+GO disabled — double-go protection ({0:0.#}s),GO disabled — double-go protection ({0:0.#}s),GO disabled — double-go protection ({0:0.#}s),GO disabled — double-go protection ({0:0.#}s)
+GO disabled,GO disabled,GO disabled,GO disabled
 Stretch,Stretch,Stretch,Stretch
 Stretch:,Stretch:,Stretch:,Stretch:
 Submit Config,Submit Config,Submit Config,Submit Config

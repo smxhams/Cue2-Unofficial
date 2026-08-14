@@ -1180,12 +1180,16 @@ public partial class CueList
 	{
 		if (cue == null) return;
 
+		var timer = SessionLoadTimer.Current;
+
 		var audio = cue.GetAudioComponent();
 		if (audio != null)
 		{
 			var patches = _globalData.Settings.GetAudioOutputPatches();
 			patches.TryGetValue(audio.PatchId, out var patch);
 			audio.Patch = patch;
+			if (timer != null)
+				timer.LinkAudio++;
 		}
 
 		var video = cue.GetVideoComponent();
@@ -1194,6 +1198,8 @@ public partial class CueList
 			var patches = _globalData.Settings.GetAudioOutputPatches();
 			patches.TryGetValue(video.PatchId, out var patch);
 			video.Patch = patch;
+			if (timer != null)
+				timer.LinkVideo++;
 		}
 
 		var cueLightComps = cue.GetCueLightComponents();
@@ -1203,6 +1209,8 @@ public partial class CueList
 			{
 				var cuelight = _globalData.CueLightManager.GetCueLight(cueLightComp.CueLightId);
 				cueLightComp.CueLight = cuelight;
+				if (timer != null)
+					timer.LinkCueLight++;
 			}
 		}
 
@@ -1213,6 +1221,8 @@ public partial class CueList
 			{
 				var oscConnection = OscConnections.GetCueOscConnection(oscComp.OscConnectionId);
 				oscComp.OscConnection = oscConnection;
+				if (timer != null)
+					timer.LinkOsc++;
 			}
 		}
 	}

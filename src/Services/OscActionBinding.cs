@@ -52,6 +52,8 @@ public sealed class OscActionBinding
             "SaveSession" => "/Save",
             "Undo" => "/Undo",
             "Redo" => "/Redo",
+            "EditMode" => "/EditMode",
+            "ShowMode" => "/ShowMode",
             _ => null
         };
         return path == null ? Unbound() : FromAddress(path);

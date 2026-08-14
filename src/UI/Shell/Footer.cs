@@ -101,6 +101,8 @@ public partial class Footer : Control
         _syncHotkeys();
         
         _totalCuesLabel = GetNodeOrNull<Label>("%TotalCuesLabel");
+        // Formatted at runtime ("{0} total cues") — do not let LocalizeTree capture "0 total cues".
+        _totalCuesLabel?.SetMeta(MetaSkip, true);
         _cpuUsageLabel = GetNode<Label>("%CpuUsageLabel");
         _memoryUsageLabel = GetNode<Label>("%MemoryUsageLabel");
 
@@ -137,14 +139,15 @@ public partial class Footer : Control
 
         UpdateDevicesFooterTooltip(); // initial status
         UpdateConnectionsFooterTooltip();
-        // Prefer live cuelist count if already available (session may load after footer ready)
-        int initialTotal = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
-        UpdateTotalCuesLabel(initialTotal);
         UpdateResourceUsage(); // initial CPU/MEM read
 
         LocalizeTree(this);
         if (_globalSignals != null)
             _globalSignals.LocaleChanged += OnLocaleChanged;
+
+        // After LocalizeTree so the formatted count is not overwritten by the scene placeholder.
+        int initialTotal = _globalData?.Cuelist?.TotalCueCount ?? _globalData?.CueTotal ?? 0;
+        UpdateTotalCuesLabel(initialTotal);
     }
 
     /// <summary>

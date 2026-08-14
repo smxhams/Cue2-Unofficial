@@ -82,6 +82,12 @@ public partial class Settings : Node
     /// <summary>System default stop fade-out duration in seconds.</summary>
     public const float DefaultStopFadeDuration = 2.5f;
 
+    /// <summary>System default double-GO protection (0 = off).</summary>
+    public const float DefaultDoubleGoProtectionSeconds = 0f;
+
+    /// <summary>Maximum double-GO protection duration in seconds.</summary>
+    public const float MaxDoubleGoProtectionSeconds = 30f;
+
     /// <summary>Default for copying used media into the show folder (Audio/Video/Images).</summary>
     public const bool DefaultMediaBackupEnabled = true;
 
@@ -310,6 +316,12 @@ public partial class Settings : Node
     /// 0 = immediate stop. Persisted with the session.
     /// </summary>
     public float StopFadeDuration = DefaultStopFadeDuration;
+
+    /// <summary>
+    /// Seconds to block a second GO after each GO (hotkey, button, control, OSC/MIDI).
+    /// 0 = off. Persisted with the showfile.
+    /// </summary>
+    public float DoubleGoProtectionSeconds = DefaultDoubleGoProtectionSeconds;
 
     /// <summary>
     /// When true, used media files are copied into the show folder (Audio/Video/Images)
@@ -887,6 +899,7 @@ public partial class Settings : Node
         CueListScale = DefaultCueListScale;
         WaveformResolution = DefaultWaveformResolution;
         StopFadeDuration = DefaultStopFadeDuration;
+        DoubleGoProtectionSeconds = DefaultDoubleGoProtectionSeconds;
         MediaBackupEnabled = DefaultMediaBackupEnabled;
         MultiEditEnabled = DefaultMultiEditEnabled;
         SelectNewCues = DefaultSelectNewCues;

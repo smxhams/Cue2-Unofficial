@@ -44,6 +44,7 @@ public partial class HeaderUI : Control
 	private Cue _trackedStandbyCue;
 
 	private double _baseGoSize;
+	private GoCooldownOverlay _goCooldownOverlay;
 
 	public override void _Ready()
 	{
@@ -58,11 +59,17 @@ public partial class HeaderUI : Control
 		if (_baseGoSize <= 0)
 			_baseGoSize = 50.0;
 
+		_goCooldownOverlay = new GoCooldownOverlay();
+		_goButton.AddChild(_goCooldownOverlay);
+		_goCooldownOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
 		_goButton.Pressed += () => _globalSignals.EmitSignal(nameof(GlobalSignals.Go));
 
 		SyncHotkeys();
 
 		_globalSignals.Go += GoButtonFeedback;
+		_globalSignals.GoDisabled += OnGoDisabled;
+		_globalSignals.GoEnabled += OnGoEnabled;
 		_globalSignals.GoScaleChanged += GoScaleChange;
 		_globalSignals.ShellFocused += OnShellFocused;
 		_globalSignals.UpdateShellBar += OnUpdateShellBar;
@@ -76,6 +83,8 @@ public partial class HeaderUI : Control
 		LocalizeTree(this);
 		if (_globalSignals != null)
 			_globalSignals.LocaleChanged += OnLocaleChanged;
+
+		ApplyGoGateVisual(_globalSignals != null && !_globalSignals.IsGoEnabled);
 	}
 
 	public override void _ExitTree()
@@ -85,6 +94,8 @@ public partial class HeaderUI : Control
 		if (_globalSignals != null)
 		{
 			_globalSignals.Go -= GoButtonFeedback;
+			_globalSignals.GoDisabled -= OnGoDisabled;
+			_globalSignals.GoEnabled -= OnGoEnabled;
 			_globalSignals.GoScaleChanged -= GoScaleChange;
 			_globalSignals.ShellFocused -= OnShellFocused;
 			_globalSignals.UpdateShellBar -= OnUpdateShellBar;
@@ -105,6 +116,7 @@ public partial class HeaderUI : Control
 			return;
 		LocalizeTree(this);
 		SyncHotkeys();
+		ApplyGoGateVisual(_globalSignals != null && !_globalSignals.IsGoEnabled);
 	}
 
 	private void SyncHotkeys()
@@ -112,8 +124,82 @@ public partial class HeaderUI : Control
 		_goButton.TooltipText = Tf("Hotkey: {0}", GlobalData.ParseHotkey("Go"));
 	}
 
+	private void OnGoDisabled(string reason, float durationSeconds)
+	{
+		ApplyGoGateVisual(disabled: true);
+		SetProcess(durationSeconds > 0.0001f);
+		if (_goCooldownOverlay != null)
+		{
+			_goCooldownOverlay.RemainingFraction = durationSeconds > 0.0001f ? 1f : 1f;
+			_goCooldownOverlay.QueueRedraw();
+		}
+	}
+
+	private void OnGoEnabled()
+	{
+		SetProcess(false);
+		ApplyGoGateVisual(disabled: false);
+	}
+
+	/// <summary>
+	/// Greys the GO button and shows a danger-coloured cooldown border while GO is gated.
+	/// </summary>
+	private void ApplyGoGateVisual(bool disabled)
+	{
+		if (_goButton == null || !IsInstanceValid(_goButton))
+			return;
+
+		_goButton.Disabled = disabled;
+		if (_goCooldownOverlay != null)
+		{
+			_goCooldownOverlay.Active = disabled;
+			_goCooldownOverlay.RemainingFraction = disabled ? 1f : 0f;
+			_goCooldownOverlay.QueueRedraw();
+		}
+
+		if (disabled)
+		{
+			if (_globalSignals != null &&
+			    _globalSignals.IsGoDisabledBy(GlobalSignals.GoDisableReasonSessionLoad))
+			{
+				_goButton.TooltipText = T("GO disabled — showfile is still loading.");
+			}
+			else
+			{
+				float sec = _globalSignals?.GoDisableDurationSeconds ?? 0f;
+				_goButton.TooltipText = sec > 0.0001f
+					? Tf("GO disabled — double-go protection ({0:0.#}s)", sec)
+					: T("GO disabled");
+			}
+		}
+		else
+		{
+			SyncHotkeys();
+		}
+	}
+
+	public override void _Process(double delta)
+	{
+		if (_goCooldownOverlay == null || !_goCooldownOverlay.Active || _globalSignals == null)
+			return;
+
+		float total = _globalSignals.GoDisableDurationSeconds;
+		if (total <= 0.0001f)
+		{
+			_goCooldownOverlay.RemainingFraction = 1f;
+			_goCooldownOverlay.QueueRedraw();
+			return;
+		}
+
+		_goCooldownOverlay.RemainingFraction = Mathf.Clamp(
+			_globalSignals.GoDisableRemainingSeconds / total, 0f, 1f);
+		_goCooldownOverlay.QueueRedraw();
+	}
+
 	private void GoButtonFeedback()
 	{
+		if (_globalSignals != null && !_globalSignals.IsGoEnabled)
+			return;
 		TaskUtil.Run(GoButtonFeedbackAsync, "HeaderUI.GoButtonFeedback");
 	}
 
@@ -311,5 +397,141 @@ public partial class HeaderUI : Control
 	{
 		if (_trackedStandbyCue != null)
 			ApplySingleCueStandby(_trackedStandbyCue);
+	}
+
+	/// <summary>
+	/// Danger-coloured border on the GO button that depletes like a cooldown ring.
+	/// Stroke matches the GO theme (a few pixels, rounded corners when the button has them).
+	/// </summary>
+	private partial class GoCooldownOverlay : Control
+	{
+		/// <summary>Stroke width in pixels — matches the GO theme border.</summary>
+		private const float BorderWidth = 2f;
+
+		/// <summary>1 = full border (just disabled), 0 = empty (about to re-enable).</summary>
+		public float RemainingFraction { get; set; } = 1f;
+
+		/// <summary>When false, nothing is drawn.</summary>
+		public bool Active { get; set; }
+
+		public override void _Ready()
+		{
+			MouseFilter = MouseFilterEnum.Ignore;
+			SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+		}
+
+		public override void _Draw()
+		{
+			if (!Active)
+				return;
+
+			Vector2 size = Size;
+			if (size.X < 4f || size.Y < 4f)
+				return;
+
+			Color danger = GlobalStyles.Danger;
+			float inset = BorderWidth * 0.5f;
+			var rect = new Rect2(inset, inset, size.X - BorderWidth, size.Y - BorderWidth);
+			float radius = ReadCornerRadius();
+			radius = Mathf.Min(radius, Mathf.Min(rect.Size.X, rect.Size.Y) * 0.5f);
+
+			var track = new Color(danger.R, danger.G, danger.B, 0.22f);
+			DrawRoundedPerimeter(rect, radius, track, 1f);
+
+			float fraction = Mathf.Clamp(RemainingFraction, 0f, 1f);
+			if (fraction <= 0.001f)
+				return;
+
+			DrawRoundedPerimeter(rect, radius, danger, fraction);
+		}
+
+		/// <summary>Reads the GO button StyleBox corner radius so the ring follows the theme.</summary>
+		private float ReadCornerRadius()
+		{
+			if (GetParent() is not Button button)
+				return 0f;
+			if (button.GetThemeStylebox("normal") is not StyleBoxFlat flat)
+				return 0f;
+
+			float r = Mathf.Max(
+				Mathf.Max(flat.CornerRadiusTopLeft, flat.CornerRadiusTopRight),
+				Mathf.Max(flat.CornerRadiusBottomLeft, flat.CornerRadiusBottomRight));
+			// Path is inset by half the stroke; keep the visual outer radius on the button edge.
+			return Mathf.Max(0f, r - BorderWidth * 0.5f);
+		}
+
+		/// <summary>
+		/// Clockwise from the top-left corner: draws <paramref name="fraction"/> of a rounded rect.
+		/// </summary>
+		private void DrawRoundedPerimeter(Rect2 rect, float radius, Color color, float fraction)
+		{
+			float w = rect.Size.X;
+			float h = rect.Size.Y;
+			if (w <= 0f || h <= 0f)
+				return;
+
+			float r = Mathf.Clamp(radius, 0f, Mathf.Min(w, h) * 0.5f);
+			float straightW = Mathf.Max(0f, w - 2f * r);
+			float straightH = Mathf.Max(0f, h - 2f * r);
+			float arcLen = r > 0.01f ? Mathf.Tau * r * 0.25f : 0f;
+			float perim = 2f * (straightW + straightH) + 4f * arcLen;
+			if (perim <= 0f)
+				return;
+
+			float remaining = perim * Mathf.Clamp(fraction, 0f, 1f);
+			float x = rect.Position.X;
+			float y = rect.Position.Y;
+
+			// Clockwise from top-left: TL arc → top → TR arc → right → BR arc → bottom → BL arc → left.
+			if (r > 0.01f)
+				ConsumeArc(new Vector2(x + r, y + r), r, Mathf.Pi, Mathf.Pi * 1.5f, ref remaining, color);
+			ConsumeLine(new Vector2(x + r, y), new Vector2(x + w - r, y), straightW, ref remaining, color);
+			if (r > 0.01f)
+				ConsumeArc(new Vector2(x + w - r, y + r), r, Mathf.Pi * 1.5f, Mathf.Tau, ref remaining, color);
+			ConsumeLine(new Vector2(x + w, y + r), new Vector2(x + w, y + h - r), straightH, ref remaining, color);
+			if (r > 0.01f)
+				ConsumeArc(new Vector2(x + w - r, y + h - r), r, 0f, Mathf.Pi * 0.5f, ref remaining, color);
+			ConsumeLine(new Vector2(x + w - r, y + h), new Vector2(x + r, y + h), straightW, ref remaining, color);
+			if (r > 0.01f)
+				ConsumeArc(new Vector2(x + r, y + h - r), r, Mathf.Pi * 0.5f, Mathf.Pi, ref remaining, color);
+			ConsumeLine(new Vector2(x, y + h - r), new Vector2(x, y + r), straightH, ref remaining, color);
+		}
+
+		private void ConsumeLine(Vector2 from, Vector2 to, float edgeLen, ref float remaining, Color color)
+		{
+			if (remaining <= 0f || edgeLen <= 0.01f)
+				return;
+
+			if (remaining >= edgeLen)
+			{
+				DrawLine(from, to, color, BorderWidth, antialiased: true);
+				remaining -= edgeLen;
+				return;
+			}
+
+			Vector2 dir = (to - from) / edgeLen;
+			DrawLine(from, from + dir * remaining, color, BorderWidth, antialiased: true);
+			remaining = 0f;
+		}
+
+		private void ConsumeArc(Vector2 center, float radius, float startAngle, float endAngle,
+			ref float remaining, Color color)
+		{
+			if (remaining <= 0f || radius <= 0.01f)
+				return;
+
+			float sweep = endAngle - startAngle;
+			if (sweep < 0f)
+				sweep += Mathf.Tau;
+			float arcLen = radius * sweep;
+			if (arcLen <= 0.01f)
+				return;
+
+			float drawSweep = remaining >= arcLen ? sweep : remaining / radius;
+			int points = Mathf.Max(4, (int)Mathf.Ceil(radius * drawSweep * 2f));
+			DrawArc(center, radius, startAngle, startAngle + drawSweep, points, color,
+				BorderWidth, antialiased: true);
+			remaining = remaining >= arcLen ? remaining - arcLen : 0f;
+		}
 	}
 }

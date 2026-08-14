@@ -36,6 +36,9 @@ public partial class CueList : Control
 	/// </summary>
 	public static System.Collections.Generic.Dictionary<int, Cue> CueIndex; // <CueId, Cue>
 
+	/// <summary>The workspace cuelist, or null before <c>_Ready</c> / after teardown.</summary>
+	internal static CueList Live { get; private set; }
+
 	/// <summary>
 	/// Total number of cues in the show (all levels, including group children).
 	/// </summary>
@@ -136,6 +139,7 @@ public partial class CueList : Control
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalData.Cuelist = this;
+		Live = this;
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 
 		// Ui
@@ -233,6 +237,8 @@ public partial class CueList : Control
 			_virtualScrollWired = false;
 		}
 		UnwireHeaderScrollbarPad();
+		if (Live == this)
+			Live = null;
 		base._ExitTree();
 	}
 

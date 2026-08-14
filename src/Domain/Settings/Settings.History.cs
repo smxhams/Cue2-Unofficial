@@ -102,6 +102,8 @@ public partial class Settings
             WaveformResolution = value.AsInt32();
         if (TryGetSettingsValue(settingsData, "StopFadeDuration", out value))
             StopFadeDuration = value.AsSingle();
+        if (TryGetSettingsValue(settingsData, "DoubleGoProtection", out value))
+            DoubleGoProtectionSeconds = Mathf.Clamp(value.AsSingle(), 0f, MaxDoubleGoProtectionSeconds);
         if (TryGetSettingsValue(settingsData, "MediaBackupEnabled", out value))
             MediaBackupEnabled = ReadBoolVariant(value);
         if (TryGetSettingsValue(settingsData, "MultiEditEnabled", out value))
@@ -388,6 +390,9 @@ public partial class Settings
                 return true;
             case "StopFadeDuration":
                 value = StopFadeDuration;
+                return true;
+            case "DoubleGoProtection":
+                value = DoubleGoProtectionSeconds;
                 return true;
             case "MediaBackupEnabled":
                 // Store as int for stable JSON round-trip across Godot versions.
