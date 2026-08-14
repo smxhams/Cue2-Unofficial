@@ -277,7 +277,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             _useAudioCheckBox?.SetPressedNoSignal(s.VideoDefaultUseAudio);
 
             if (_audioVolumeInput != null)
-                _audioVolumeInput.Text = $"{UiUtilities.LinearToDb(s.VideoDefaultAudioVolume)}dB";
+                _audioVolumeInput.Text = UiUtilities.FormatComponentVolumeDb(s.VideoDefaultAudioVolume);
 
             _isUpdatingPanUi = true;
             try
@@ -743,15 +743,14 @@ public partial class SettingsVideoDefaults : ScrollContainer
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                     $"Invalid default audio volume: {text}", 1);
                 _audioVolumeInput.Text =
-                    $"{UiUtilities.LinearToDb(_globalData.Settings.VideoDefaultAudioVolume)}dB";
+                    UiUtilities.FormatComponentVolumeDb(_globalData.Settings.VideoDefaultAudioVolume);
                 return;
             }
 
-            if (dbValue > 0)
-                dbValue = -dbValue;
-
+            // Digital gain allowed (−60…+12 dB).
+            dbValue = Mathf.Clamp(dbValue, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
             float volume = UiUtilities.DbToLinear(dbValue);
-            _audioVolumeInput.Text = $"{UiUtilities.LinearToDb(volume)}dB";
+            _audioVolumeInput.Text = UiUtilities.FormatComponentVolumeDb(volume);
 
             if (Math.Abs(_globalData.Settings.VideoDefaultAudioVolume - volume) < 1e-6f)
             {

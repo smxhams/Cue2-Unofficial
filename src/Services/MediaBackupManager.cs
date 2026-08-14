@@ -432,10 +432,7 @@ public partial class MediaBackupManager : Node
         {
             string localRel = MediaPaths.TryMakeRelative(resolvedSource, _globalData.SessionDir);
             if (!string.IsNullOrEmpty(localRel))
-            {
-                GD.Print($"MediaBackupManager:EnsureMediaBackedUp - Already local → {localRel}");
                 return localRel;
-            }
             return null;
         }
 
@@ -467,10 +464,7 @@ public partial class MediaBackupManager : Node
             try
             {
                 if (new FileInfo(resolvedSource).Length == new FileInfo(destPath).Length)
-                {
-                    GD.Print($"MediaBackupManager:EnsureMediaBackedUp - Dest exists → {relative}");
                     return relative;
-                }
             }
             catch { /* fall through to copy */ }
         }

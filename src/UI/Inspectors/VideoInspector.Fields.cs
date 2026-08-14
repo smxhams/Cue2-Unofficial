@@ -705,6 +705,7 @@ public partial class VideoInspector
 			_inspectorContent.Visible = false;
 			_previewContainer.Visible = false;
 			_fileUrl.Text = "";
+			ClearFileMetadataLabel();
 			if (_deleteVideoComponentButton != null)
 				_deleteVideoComponentButton.Visible = false;
 			return;
@@ -1022,13 +1023,10 @@ public partial class VideoInspector
 				if (textField.HasFocus()) textField.ReleaseFocus();
 				return;
 			}
-			if (dbValue > 0)
-			{
-				dbValue = -dbValue;
-			}
-			float volume = (float)UiUtilities.DbToLinear(dbValue.ToString());
-			var dbReturn = UiUtilities.LinearToDb(volume);
-			textField.Text = $"{dbReturn}dB";
+			// Digital gain allowed (−60…+12 dB). Do not treat positive as attenuation.
+			dbValue = Mathf.Clamp(dbValue, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
+			float volume = UiUtilities.DbToLinear(dbValue);
+			textField.Text = UiUtilities.FormatComponentVolumeDb(volume);
 
 			bool unchanged = targets.All(t =>
 			{

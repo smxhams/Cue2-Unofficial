@@ -167,7 +167,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
                 s.AudioDefaultOutputMode, s.AudioDefaultPatchId, s.AudioDefaultDirectOutput);
 
             if (_volumeInput != null)
-                _volumeInput.Text = $"{UiUtilities.LinearToDb((float)s.AudioDefaultVolume)}dB";
+                _volumeInput.Text = UiUtilities.FormatComponentVolumeDb((float)s.AudioDefaultVolume);
 
             _isUpdatingPanUi = true;
             try
@@ -293,11 +293,10 @@ public partial class SettingsAudioDefaults : ScrollContainer
                 return;
             }
 
-            if (dbValue > 0)
-                dbValue = -dbValue;
-
+            // Digital gain allowed (−60…+12 dB).
+            dbValue = Mathf.Clamp(dbValue, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
             float volume = UiUtilities.DbToLinear(dbValue);
-            _volumeInput.Text = $"{UiUtilities.LinearToDb(volume)}dB";
+            _volumeInput.Text = UiUtilities.FormatComponentVolumeDb(volume);
 
             if (Math.Abs(_globalData.Settings.AudioDefaultVolume - volume) < 1e-6)
             {

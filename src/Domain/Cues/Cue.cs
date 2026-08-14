@@ -850,6 +850,27 @@ public class Cue : ICue
                 if (contentsDuration < text.TotalDuration)
                     contentsDuration = text.TotalDuration;
             }
+            else if (component is ControlComponent control)
+            {
+                // Timed fades (property / stop / GO fade-in / layer translate) occupy content time.
+                float sessionStop = 0f;
+                try
+                {
+                    if (Engine.GetMainLoop() is SceneTree st)
+                    {
+                        var gd = st.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
+                        sessionStop = gd?.Settings?.StopFadeDuration ?? 0f;
+                    }
+                }
+                catch
+                {
+                    /* offline / tests */
+                }
+
+                double controlDur = control.GetContentDurationSeconds(sessionStop);
+                if (controlDur > contentsDuration)
+                    contentsDuration = controlDur;
+            }
         }
 
         // If loop

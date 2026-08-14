@@ -4,6 +4,7 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Cue2.Domain.Cues;
 using Cue2.Services;
 
@@ -223,23 +224,21 @@ internal sealed class CueReorder(
             }
         }
 
-        // Record after validation so cancelled reorders do not pollute history.
         owner.RecordHistory("Reorder cues");
 
-        // Snapshot the shells we will move, trying to preserve their relative visual order.
-        // Fall back to SelectedCues order if we cannot obtain a full ordered list.
-        var toMove = new List<ShellBar>();
-        try
+        var selectedIds = new HashSet<int>(ShellSelection.SelectedCues.Select(c => c.Id));
+        var visual = owner.GetModelVisualOrder(includeCollapsed: true);
+        var toMove = new List<Cue>();
+        foreach (int id in visual)
         {
-            foreach (var c in ShellSelection.SelectedCues)
-            {
-                if (c?.ShellBar != null) toMove.Add(c.ShellBar);
-            }
-        }
-        catch
-        {
-            foreach (var c in ShellSelection.SelectedCues)
-                if (c?.ShellBar != null) toMove.Add(c.ShellBar);
+            if (!selectedIds.Contains(id))
+                continue;
+            var cue = CueList.FetchCueFromId(id);
+            if (cue == null)
+                continue;
+            if (cue.ParentId != -1 && selectedIds.Contains(cue.ParentId))
+                continue;
+            toMove.Add(cue);
         }
 
         if (toMove.Count == 0)
@@ -248,109 +247,48 @@ internal sealed class CueReorder(
             return;
         }
 
-        // Snapshot child counts before any structural changes
-        var childCountBefore = new Dictionary<Cue, int>();
-        foreach (var c in CueList.CueIndex.Values)
+        int newParentId;
+        int insertIndex;
+        if (DropAtEndAsTopLevel || targetCue == null)
         {
-            childCountBefore[c] = c.ChildCues.Count;
+            newParentId = -1;
+            insertIndex = owner.RootOrder.Count;
+        }
+        else if (!InsertAbove && !InsertBelow)
+        {
+            newParentId = targetCue.Id;
+            insertIndex = targetCue.ChildCues.Count;
+            targetCue.Expanded = true;
+        }
+        else
+        {
+            newParentId = targetCue.ParentId;
+            var siblings = owner.GetSiblingIdList(newParentId) ?? owner.RootOrder;
+            insertIndex = siblings.IndexOf(targetCue.Id);
+            if (insertIndex < 0)
+                insertIndex = siblings.Count;
+            if (InsertBelow)
+                insertIndex++;
         }
 
-        // Track parents that will lose or gain children
-        var affectedParents = new HashSet<Cue>();
-        foreach (var mc in ShellSelection.SelectedCues)
+        owner.BeginVirtualRefreshSuppress();
+        try
         {
-            if (mc != null && mc.ParentId != -1)
+            foreach (var cue in toMove)
             {
-                var op = CueList.FetchCueFromId(mc.ParentId);
-                if (op != null) affectedParents.Add(op);
-            }
-        }
-
-        // Compute final target container / parent (index resolved after detach — see below).
-        var (targetContainer, _, newParentId, isMakeChild) = DetermineReorderTarget();
-        var targetShell = MouseOverShellBar;
-
-        // Detach all to-move shells
-        foreach (var sb in toMove)
-        {
-            var cue = CueList.FetchCueFromId(sb.CueId);
-            if (cue == null) continue;
-
-            if (cue.ParentId != -1)
-            {
-                var oldP = CueList.FetchCueFromId(cue.ParentId);
-                oldP?.ChildCues.Remove(cue.Id);
-            }
-            sb.GetParent()?.RemoveChild(sb);
-            cue.ParentId = -1;
-        }
-
-        // Resolve insert index AFTER detach so removing earlier siblings does not shift the target.
-        // Above = target's current index; Below = one past the target (classic list insert).
-        int insertIndex = ResolveInsertIndexAfterDetach(targetContainer, targetShell, isMakeChild);
-
-        // Insert the moved items
-        foreach (var sb in toMove)
-        {
-            targetContainer.AddChild(sb);
-            if (!DropAtEndAsTopLevel && !isMakeChild && (InsertAbove || InsertBelow))
-            {
-                targetContainer.MoveChild(sb, insertIndex);
+                var list = owner.GetSiblingIdList(cue.ParentId) ?? owner.RootOrder;
+                int oldIdx = list.IndexOf(cue.Id);
+                if (cue.ParentId == newParentId && oldIdx >= 0 && oldIdx < insertIndex)
+                    insertIndex--;
+                owner.InsertCueInModel(cue, newParentId, insertIndex);
                 insertIndex++;
             }
         }
-
-        // Sync data model
-        SyncChildListsFromContainers();
-
-        // Apply ParentId
-        foreach (var sb in toMove)
+        finally
         {
-            var cue = CueList.FetchCueFromId(sb.CueId);
-            if (cue == null) continue;
-
-            bool foundParent = false;
-            foreach (var other in CueList.CueIndex.Values)
-            {
-                if (other.ChildCues.Contains(cue.Id))
-                {
-                    cue.ParentId = other.Id;
-                    foundParent = true;
-                    break;
-                }
-            }
-            if (!foundParent)
-                cue.ParentId = -1;
-
-            sb.RelationshipChanged();
+            owner.EndVirtualRefreshSuppress();
         }
 
-        // Add any new parents
-        foreach (var sb in toMove)
-        {
-            var mc = CueList.FetchCueFromId(sb.CueId);
-            if (mc != null && mc.ParentId != -1)
-            {
-                var np = CueList.FetchCueFromId(mc.ParentId);
-                if (np != null) affectedParents.Add(np);
-            }
-        }
-
-        // Refresh UI on affected parents
-        foreach (var parent in affectedParents)
-        {
-            if (parent.ShellBar != null)
-            {
-                int before = childCountBefore.TryGetValue(parent, out var b) ? b : 0;
-                if (parent.ChildCues.Count > 0 && before == 0)
-                {
-                    parent.Expanded = true;
-                }
-                parent.ShellBar.RelationshipChanged();
-            }
-        }
-
-        owner.RefreshShellZebra();
         Cleanup(keepChanges: true);
     }
 

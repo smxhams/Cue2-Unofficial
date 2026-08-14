@@ -77,9 +77,11 @@ public partial class DisplaysManager : Node
         _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         Canvas = new Canvas();
 
-        // Add default layer and a virtual screen
+        // Default layer is always needed. Skip the throwaway Screen 1 when last-show will
+        // replace it immediately (LoadFromData / ClearForOpen).
         AddLayer("Default", 0);
-        EnsureDefaultScreen();
+        if (string.IsNullOrEmpty(_globalData?.StartupOpenPath))
+            EnsureDefaultScreen();
 
         _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "DisplaysManager initialized.", 0);
     }
@@ -237,15 +239,16 @@ public partial class DisplaysManager : Node
     }
 
     /// <summary>
-    /// Resets canvas, layers, and screens to a clean new-show default state.
+    /// Frees all output windows and layers without seeding a default screen.
+    /// Used as the wipe step before <see cref="LoadFromData"/> so Open does not
+    /// create a throwaway virtual window.
     /// </summary>
     /// <remarks>
-    /// Canvas 1920×1080, one "Default" layer, one virtual "Screen 1". Emits
-    /// <see cref="GlobalSignals.CanvasSizeChanged"/> and <see cref="GlobalSignals.DisplaysChanged"/>.
+    /// Does not emit <see cref="GlobalSignals.DisplaysChanged"/> — the following
+    /// <see cref="LoadFromData"/> (or <see cref="ResetToDefaults"/>) notifies once.
     /// </remarks>
-    public void ResetToDefaults()
+    public void ClearForOpen()
     {
-        // Free all output windows
         foreach (var output in Outputs.ToList())
         {
             if (output != null && GodotObject.IsInstanceValid(output))
@@ -261,6 +264,22 @@ public partial class DisplaysManager : Node
         VideoTargetLayer.SetNextLayerId(0);
 
         Canvas ??= new Canvas();
+        ClearRuntimeOutputControls();
+
+        GD.Print("DisplaysManager:ClearForOpen - Screens and layers freed (no default seed).");
+    }
+
+    /// <summary>
+    /// Resets canvas, layers, and screens to a clean new-show default state.
+    /// </summary>
+    /// <remarks>
+    /// Canvas 1920×1080, one "Default" layer, one virtual "Screen 1". Emits
+    /// <see cref="GlobalSignals.CanvasSizeChanged"/> and <see cref="GlobalSignals.DisplaysChanged"/>.
+    /// </remarks>
+    public void ResetToDefaults()
+    {
+        ClearForOpen();
+
         Canvas.SetCanvasSize(new Vector2I(1920, 1080));
         Canvas.TestPatternEnabled = false;
 
@@ -270,7 +289,6 @@ public partial class DisplaysManager : Node
         UpdateCanvasTestPatterns();
         UpdateAllLayerTestPatterns();
         ApplyLayerDrawOrderToOutputs();
-        ClearRuntimeOutputControls();
         ApplyOutputPresentationState();
 
         _globalSignals?.EmitSignal(nameof(GlobalSignals.CanvasSizeChanged), Canvas.CanvasSize);

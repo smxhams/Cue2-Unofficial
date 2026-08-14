@@ -430,7 +430,8 @@ public partial class TimelineInspector : Control
         if (!IsInstanceValid(this) || !Visible) return;
         if (scope == (int)HistoryManager.HistoryScope.Settings
             || scope == (int)HistoryManager.HistoryScope.Cue
-            || scope == (int)HistoryManager.HistoryScope.Cuelist)
+            || scope == (int)HistoryManager.HistoryScope.Cuelist
+            || scope == (int)HistoryManager.HistoryScope.MultiCue)
         {
             LoadTimeline();
         }

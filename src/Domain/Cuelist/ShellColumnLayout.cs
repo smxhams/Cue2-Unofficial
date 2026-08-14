@@ -82,6 +82,10 @@ public static class ShellColumnLayout
 	private static float _numberWidth = DefaultNumberWidth;
 	private static float _timeWidth = DefaultTimeWidth;
 
+	private static float _compactStyleScale = float.NaN;
+	private static StyleBoxFlat _compactNormal;
+	private static StyleBoxFlat _compactFocus;
+
 	/// <summary>
 	/// Fired after a user-resizable column width or <see cref="Scale"/> changes.
 	/// Listeners (shell rows, header, zebra) re-apply sizes.
@@ -101,6 +105,7 @@ public static class ShellColumnLayout
 			if (Mathf.IsEqualApprox(_scale, clamped))
 				return;
 			_scale = clamped;
+			InvalidateCompactStyles();
 			Changed?.Invoke();
 		}
 	}
@@ -110,6 +115,54 @@ public static class ShellColumnLayout
 	public static void SetScaleSilent(float scale)
 	{
 		_scale = Mathf.Clamp(scale, 0.5f, 2.0f);
+		InvalidateCompactStyles();
+	}
+
+	/// <summary>
+	/// Shared compact LineEdit styleboxes for shell fields (one pair per scale).
+	/// </summary>
+	/// <param name="field">LineEdit to style.</param>
+	public static void ApplyCompactLineEditStyleBoxes(LineEdit field)
+	{
+		if (field == null)
+			return;
+		EnsureCompactStyles();
+		if (_compactNormal != null)
+		{
+			field.AddThemeStyleboxOverride("normal", _compactNormal);
+			field.AddThemeStyleboxOverride("read_only", _compactNormal);
+		}
+		if (_compactFocus != null)
+			field.AddThemeStyleboxOverride("focus", _compactFocus);
+	}
+
+	private static void InvalidateCompactStyles()
+	{
+		_compactStyleScale = float.NaN;
+		_compactNormal = null;
+		_compactFocus = null;
+	}
+
+	private static void EnsureCompactStyles()
+	{
+		if (_compactNormal != null && Mathf.IsEqualApprox(_compactStyleScale, _scale))
+			return;
+
+		_compactStyleScale = _scale;
+		float padH = Mathf.Max(2f, 4f * _scale);
+		float padV = Mathf.Max(1f, 2f * _scale);
+		_compactNormal = new StyleBoxFlat
+		{
+			BgColor = new Color(0.12f, 0.12f, 0.12f, 0.55f),
+			ContentMarginLeft = padH,
+			ContentMarginRight = padH,
+			ContentMarginTop = padV,
+			ContentMarginBottom = padV
+		};
+		_compactNormal.SetCornerRadiusAll(3);
+		_compactFocus = (StyleBoxFlat)_compactNormal.Duplicate();
+		_compactFocus.SetBorderWidthAll(1);
+		_compactFocus.BorderColor = new Color(0.02f, 0.33f, 0.36f, 0.9f);
 	}
 
 	// ── Scaled metrics ──────────────────────────────────────────────────────

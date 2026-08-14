@@ -19,11 +19,11 @@ using AppSettings = Cue2.Domain.ShowSettings.Settings;
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// Audio settings panel: show-scoped latency, de-click, and master volume (dB);
-/// runtime master mute; live open-device status (rate, in/out channels, buffer samples).
+/// Audio settings panel: show-scoped latency, de-click, master volume (dB),
+/// output peak clamp / silence floor; runtime master mute; live open-device status.
 /// </summary>
 /// <remarks>
-/// Performance knobs and master volume persist with the showfile and support undo.
+/// Performance knobs, master volume, and output limits persist with the showfile and support undo.
 /// Master mute is operator runtime (like video blackout). Device list is status-only.
 /// </remarks>
 public partial class SettingsAudio : ScrollContainer
@@ -42,6 +42,10 @@ public partial class SettingsAudio : ScrollContainer
     private LineEdit _masterVolumeInput;
     private Button _masterVolumeResetButton;
     private CheckBox _masterMuteCheckBox;
+    private LineEdit _outputMaxInput;
+    private Button _outputMaxResetButton;
+    private LineEdit _outputMinInput;
+    private Button _outputMinResetButton;
     private ItemList _openDevicesList;
     private Button _refreshDevicesButton;
 
@@ -64,19 +68,48 @@ public partial class SettingsAudio : ScrollContainer
         _masterVolumeInput = GetNode<LineEdit>("%MasterVolumeInput");
         _masterVolumeResetButton = GetNode<Button>("%MasterVolumeResetButton");
         _masterMuteCheckBox = GetNode<CheckBox>("%MasterMuteCheckBox");
+        _outputMaxInput = GetNodeOrNull<LineEdit>("%OutputMaxInput");
+        _outputMaxResetButton = GetNodeOrNull<Button>("%OutputMaxResetButton");
+        _outputMinInput = GetNodeOrNull<LineEdit>("%OutputMinInput");
+        _outputMinResetButton = GetNodeOrNull<Button>("%OutputMinResetButton");
         _openDevicesList = GetNode<ItemList>("%OpenDevicesList");
         _refreshDevicesButton = GetNode<Button>("%RefreshDevicesButton");
 
         SetupResetButton(_latencyModeResetButton, OnLatencyModeResetPressed);
         SetupResetButton(_declickResetButton, OnDeclickResetPressed);
         SetupResetButton(_masterVolumeResetButton, OnMasterVolumeResetPressed);
+        SetupResetButton(_outputMaxResetButton, OnOutputMaxResetPressed);
+        SetupResetButton(_outputMinResetButton, OnOutputMinResetPressed);
 
         _latencyModeOption.ItemSelected += OnLatencyModeSelected;
         _declickSpinBox.ValueChanged += OnDeclickChanged;
         _masterVolumeInput.TextSubmitted += OnMasterVolumeSubmitted;
         _masterVolumeInput.FocusExited += OnMasterVolumeFocusExited;
-        LineEditDbDragSlider.EnableVolume(_masterVolumeInput);
+        // Master is session unity-gain only (−60…0 dB); component boost is separate.
+        LineEditDbDragSlider.EnableUnityVolume(_masterVolumeInput);
         _masterMuteCheckBox.Toggled += OnMasterMuteToggled;
+
+        if (_outputMaxInput != null)
+        {
+            _outputMaxInput.TextSubmitted += OnOutputMaxSubmitted;
+            _outputMaxInput.FocusExited += OnOutputMaxFocusExited;
+            LineEditDbDragSlider.Enable(_outputMaxInput, new LineEditDbDragSlider.Config
+            {
+                MinDb = AppSettings.MinAudioOutputMaxDb,
+                MaxDb = AppSettings.MaxAudioOutputMaxDb,
+            });
+        }
+        if (_outputMinInput != null)
+        {
+            _outputMinInput.TextSubmitted += OnOutputMinSubmitted;
+            _outputMinInput.FocusExited += OnOutputMinFocusExited;
+            LineEditDbDragSlider.Enable(_outputMinInput, new LineEditDbDragSlider.Config
+            {
+                MinDb = AppSettings.MinAudioOutputMinDb,
+                MaxDb = AppSettings.MaxAudioOutputMinDb,
+            });
+        }
+
         _refreshDevicesButton.Pressed += RefreshOpenDevicesList;
 
         if (_historyManager != null)
@@ -89,7 +122,12 @@ public partial class SettingsAudio : ScrollContainer
         }
 
         if (_audioDevices != null && _globalData?.Settings != null)
+        {
             _audioDevices.SetSessionMasterVolume(_globalData.Settings.AudioMasterVolume);
+            _audioDevices.SetOutputLimits(
+                _globalData.Settings.AudioOutputMaxDb,
+                _globalData.Settings.AudioOutputMinDb);
+        }
 
         SyncSettings();
         RefreshOpenDevicesList();
@@ -217,9 +255,16 @@ public partial class SettingsAudio : ScrollContainer
                 _masterMuteCheckBox.SetPressedNoSignal(muted);
             }
 
+            if (_outputMaxInput != null && !_outputMaxInput.HasFocus())
+                _outputMaxInput.Text = FormatDb(settings.AudioOutputMaxDb);
+            if (_outputMinInput != null && !_outputMinInput.HasFocus())
+                _outputMinInput.Text = FormatDb(settings.AudioOutputMinDb);
+
             UpdateLatencyModeResetButton();
             UpdateDeclickResetButton();
             UpdateMasterVolumeResetButton();
+            UpdateOutputMaxResetButton();
+            UpdateOutputMinResetButton();
         }
         finally
         {
@@ -252,6 +297,19 @@ public partial class SettingsAudio : ScrollContainer
 
     private static string FormatMasterVolumeDb(float linear) =>
         $"{UiUtilities.LinearToDb(Mathf.Clamp(linear, 0f, 1f))}dB";
+
+    private static string FormatDb(float db) => $"{db:0.0}dB";
+
+    private static bool TryParseDb(string text, out float db)
+    {
+        db = 0f;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        string cleaned = text.Replace("dB", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("db", "", StringComparison.OrdinalIgnoreCase)
+            .Trim();
+        return float.TryParse(cleaned, out db);
+    }
 
     // ── Latency mode ────────────────────────────────────────────────────────
 
@@ -422,6 +480,155 @@ public partial class SettingsAudio : ScrollContainer
         if (_isSyncingUi || _audioDevices == null)
             return;
         _audioDevices.SetSessionMasterMuted(pressed);
+    }
+
+    // ── Output max (peak clamp) ─────────────────────────────────────────────
+
+    private void OnOutputMaxSubmitted(string text) => CommitOutputMax(text);
+
+    private void OnOutputMaxFocusExited()
+    {
+        if (_isSyncingUi || _outputMaxInput == null)
+            return;
+        CommitOutputMax(_outputMaxInput.Text);
+    }
+
+    private void CommitOutputMax(string text)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (_outputMaxInput == null)
+            return;
+
+        if (!TryParseDb(text, out float db))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Invalid max output level: {text}", 1);
+            _outputMaxInput.Text = FormatDb(_globalData.Settings.AudioOutputMaxDb);
+            return;
+        }
+
+        // Positive typed as attenuation toward 0, same habit as volume fields.
+        if (db > 0f)
+            db = 0f;
+        db = Mathf.Clamp(db, AppSettings.MinAudioOutputMaxDb, AppSettings.MaxAudioOutputMaxDb);
+        // Max must stay above (or equal) the silence floor.
+        if (db < _globalData.Settings.AudioOutputMinDb)
+            db = Mathf.Clamp(_globalData.Settings.AudioOutputMinDb,
+                AppSettings.MinAudioOutputMaxDb, AppSettings.MaxAudioOutputMaxDb);
+
+        _outputMaxInput.Text = FormatDb(db);
+        if (Mathf.IsEqualApprox(_globalData.Settings.AudioOutputMaxDb, db))
+        {
+            UpdateOutputMaxResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change audio max output level", null, "AudioOutputMaxDb");
+        _globalData.Settings.AudioOutputMaxDb = db;
+        _audioDevices?.SetOutputLimits(db, _globalData.Settings.AudioOutputMinDb);
+        UpdateOutputMaxResetButton();
+    }
+
+    private void OnOutputMaxResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (Mathf.IsEqualApprox(_globalData.Settings.AudioOutputMaxDb, AppSettings.DefaultAudioOutputMaxDb))
+            return;
+
+        _historyManager?.RecordSettingsChange("Reset audio max output level", null, "AudioOutputMaxDb");
+        _globalData.Settings.AudioOutputMaxDb = AppSettings.DefaultAudioOutputMaxDb;
+        _audioDevices?.SetOutputLimits(
+            AppSettings.DefaultAudioOutputMaxDb,
+            _globalData.Settings.AudioOutputMinDb);
+        SyncSettings();
+    }
+
+    private void UpdateOutputMaxResetButton()
+    {
+        if (_outputMaxResetButton == null || _globalData?.Settings == null)
+            return;
+        bool atDefault = Mathf.IsEqualApprox(
+            _globalData.Settings.AudioOutputMaxDb, AppSettings.DefaultAudioOutputMaxDb);
+        _outputMaxResetButton.Visible = !atDefault;
+        if (!atDefault)
+            _outputMaxResetButton.TooltipText =
+                $"Reset to default: {FormatDb(AppSettings.DefaultAudioOutputMaxDb)}";
+    }
+
+    // ── Output min (silence floor) ──────────────────────────────────────────
+
+    private void OnOutputMinSubmitted(string text) => CommitOutputMin(text);
+
+    private void OnOutputMinFocusExited()
+    {
+        if (_isSyncingUi || _outputMinInput == null)
+            return;
+        CommitOutputMin(_outputMinInput.Text);
+    }
+
+    private void CommitOutputMin(string text)
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (_outputMinInput == null)
+            return;
+
+        if (!TryParseDb(text, out float db))
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"Invalid min output level: {text}", 1);
+            _outputMinInput.Text = FormatDb(_globalData.Settings.AudioOutputMinDb);
+            return;
+        }
+
+        if (db > 0f)
+            db = -db;
+        db = Mathf.Clamp(db, AppSettings.MinAudioOutputMinDb, AppSettings.MaxAudioOutputMinDb);
+        // Floor must stay at or below the peak clamp.
+        if (db > _globalData.Settings.AudioOutputMaxDb)
+            db = Mathf.Clamp(_globalData.Settings.AudioOutputMaxDb,
+                AppSettings.MinAudioOutputMinDb, AppSettings.MaxAudioOutputMinDb);
+
+        _outputMinInput.Text = FormatDb(db);
+        if (Mathf.IsEqualApprox(_globalData.Settings.AudioOutputMinDb, db))
+        {
+            UpdateOutputMinResetButton();
+            return;
+        }
+
+        _historyManager?.RecordSettingsChange("Change audio min output level", null, "AudioOutputMinDb");
+        _globalData.Settings.AudioOutputMinDb = db;
+        _audioDevices?.SetOutputLimits(_globalData.Settings.AudioOutputMaxDb, db);
+        UpdateOutputMinResetButton();
+    }
+
+    private void OnOutputMinResetPressed()
+    {
+        if (_isSyncingUi || _globalData?.Settings == null || _historyManager?.IsRestoring == true)
+            return;
+        if (Mathf.IsEqualApprox(_globalData.Settings.AudioOutputMinDb, AppSettings.DefaultAudioOutputMinDb))
+            return;
+
+        _historyManager?.RecordSettingsChange("Reset audio min output level", null, "AudioOutputMinDb");
+        _globalData.Settings.AudioOutputMinDb = AppSettings.DefaultAudioOutputMinDb;
+        _audioDevices?.SetOutputLimits(
+            _globalData.Settings.AudioOutputMaxDb,
+            AppSettings.DefaultAudioOutputMinDb);
+        SyncSettings();
+    }
+
+    private void UpdateOutputMinResetButton()
+    {
+        if (_outputMinResetButton == null || _globalData?.Settings == null)
+            return;
+        bool atDefault = Mathf.IsEqualApprox(
+            _globalData.Settings.AudioOutputMinDb, AppSettings.DefaultAudioOutputMinDb);
+        _outputMinResetButton.Visible = !atDefault;
+        if (!atDefault)
+            _outputMinResetButton.TooltipText =
+                $"Reset to default: {FormatDb(AppSettings.DefaultAudioOutputMinDb)}";
     }
 
     /// <summary>

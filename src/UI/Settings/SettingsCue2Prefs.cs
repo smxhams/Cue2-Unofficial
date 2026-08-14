@@ -9,7 +9,7 @@ using static Cue2.UI.Utilities.UiLocalizer;
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// Cue2 Preferences panel: language, startup, autosave, backup depth, undo depth, and log session depth.
+/// Cue2 Preferences panel: language, UI scale, startup, autosave, backup depth, undo depth, and log session depth.
 /// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
 /// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
@@ -22,6 +22,9 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	private Label _languageLabel;
 	private OptionButton _languageOptionButton;
 	private Button _languageResetButton;
+	private LineEdit _uiScaleNum;
+	private HSlider _uiScaleSlider;
+	private Button _uiScaleResetButton;
 	private SpinBox _autosaveInterval;
 	private Button _autosaveResetButton;
 	private SpinBox _backupDepth;
@@ -35,6 +38,9 @@ public partial class SettingsCue2Prefs : ScrollContainer
 
 	/// <summary>True while rebuilding language options so selection handlers do not re-apply.</summary>
 	private bool _isSyncingLanguage;
+
+	/// <summary>True while pushing model → UI scale controls so handlers do not re-apply.</summary>
+	private bool _isSyncingUiScale;
 
 	public override void _Ready()
 	{
@@ -56,6 +62,28 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_languageResetButton = GetNode<Button>("%LanguageResetButton");
 		_languageResetButton.Pressed += OnLanguageResetButtonPressed;
 		_languageResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+
+		_uiScaleNum = GetNodeOrNull<LineEdit>("%UiScaleNum");
+		_uiScaleSlider = GetNodeOrNull<HSlider>("%UiScaleSlider");
+		_uiScaleResetButton = GetNodeOrNull<Button>("%UiScaleResetButton");
+		if (_uiScaleSlider != null)
+		{
+			_uiScaleSlider.MinValue = UserDataManager.MinUiScalePercent;
+			_uiScaleSlider.MaxValue = UserDataManager.MaxUiScalePercent;
+			_uiScaleSlider.ValueChanged += OnUiScaleSliderValueChanged;
+			_uiScaleSlider.DragEnded += OnUiScaleSliderDragEnded;
+		}
+		if (_uiScaleNum != null)
+		{
+			_uiScaleNum.FocusMode = FocusModeEnum.All;
+			_uiScaleNum.Editable = true;
+			_uiScaleNum.TextSubmitted += OnUiScaleTextSubmitted;
+		}
+		if (_uiScaleResetButton != null)
+		{
+			_uiScaleResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
+			_uiScaleResetButton.Pressed += OnUiScaleResetPressed;
+		}
 
 		_autosaveInterval = GetNode<SpinBox>("%AutosaveInterval");
 		_autosaveInterval.ValueChanged += OnAutosaveIntervalChanged;
@@ -100,7 +128,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			DialogText =
 				"Reset all Cue2 preferences stored for this user?\n\n" +
 				"This will restore defaults for:\n" +
-				"• Language, startup, autosave, backup, undo, and log session settings\n" +
+				"• Language, UI scale, startup, autosave, backup, undo, and log session settings\n" +
 				"• Keyboard shortcuts (Input Map)\n" +
 				"• Recent show files list\n" +
 				"• Remembered window sizes and positions\n" +
@@ -131,6 +159,21 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			_globalSignals.UiScaleChanged -= OnResetDialogUiScaleChanged;
 			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
+
+		// ConfirmationDialog is a nested Window; free explicitly so DisplayServer/ObjectDB
+		// resources do not outlive Settings on app exit.
+		if (_resetUserDataDialog != null)
+		{
+			if (GodotObject.IsInstanceValid(_resetUserDataDialog))
+			{
+				_resetUserDataDialog.Confirmed -= OnResetUserDataConfirmed;
+				if (_resetUserDataDialog.Visible)
+					_resetUserDataDialog.Hide();
+				_resetUserDataDialog.QueueFree();
+			}
+			_resetUserDataDialog = null;
+		}
+
 		base._ExitTree();
 	}
 
@@ -141,18 +184,136 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			var udm = _globalData.UserDataManager;
 			_startupOptionButton.Selected = (int)udm.Startup;
 			SyncLanguageOption();
+			SyncUiScaleControls();
 			_autosaveInterval.Value = udm.AutosaveInterval;
 			_backupDepth.Value = udm.BackupDepth;
 			_undoDepth.Value = udm.UndoDepth;
 			_logSessionDepth.Value = udm.LogSessionDepth;
 			UpdateStartupResetButton();
 			UpdateLanguageResetButton();
+			UpdateUiScaleResetButton();
 			UpdateAutosaveResetButton();
 			UpdateBackupResetButton();
 			UpdateUndoDepthResetButton();
 			UpdateLogSessionDepthResetButton();
 			ApplyLocalizedLanguageUi();
 		}
+	}
+
+	/// <summary>
+	/// Pulls current user UI scale into the form without re-firing edit handlers.
+	/// </summary>
+	private void SyncUiScaleControls()
+	{
+		if (_globalData?.UserDataManager == null)
+			return;
+
+		_isSyncingUiScale = true;
+		try
+		{
+			float uiPct = _globalData.UserDataManager.UiScale * 100f;
+			if (_uiScaleNum != null)
+				_uiScaleNum.Text = uiPct + "%";
+			_uiScaleSlider?.SetValueNoSignal(uiPct);
+			UpdateUiScaleResetButton();
+		}
+		finally
+		{
+			_isSyncingUiScale = false;
+		}
+	}
+
+	// ── UI Scale ──────────────────────────────────────────────────────────
+
+	private void OnUiScaleSliderValueChanged(double value)
+	{
+		if (_isSyncingUiScale)
+			return;
+		if (_uiScaleNum != null)
+			_uiScaleNum.Text = value + "%";
+	}
+
+	private void OnUiScaleSliderDragEnded(bool _)
+	{
+		if (_isSyncingUiScale || _uiScaleSlider == null)
+			return;
+		ApplyUiScale((float)(_uiScaleSlider.Value / 100.0));
+	}
+
+	private void OnUiScaleTextSubmitted(string input)
+	{
+		if (_isSyncingUiScale)
+			return;
+		CommitUiScaleFromText(input);
+	}
+
+	/// <summary>
+	/// Parses and clamps typed percent (25–400), then applies UI scale.
+	/// </summary>
+	private void CommitUiScaleFromText(string input)
+	{
+		if (_globalData?.UserDataManager == null || _uiScaleNum == null)
+			return;
+
+		string cleaned = (input ?? string.Empty).Replace("%", "").Trim();
+		if (!float.TryParse(cleaned, out float value))
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Invalid value for UI Scale entered", 1);
+			_uiScaleNum.Text = _globalData.UserDataManager.UiScale * 100f + "%";
+			return;
+		}
+
+		value = Mathf.Clamp(value, UserDataManager.MinUiScalePercent, UserDataManager.MaxUiScalePercent);
+		_uiScaleNum.Text = value + "%";
+		_uiScaleSlider?.SetValueNoSignal(value);
+		ApplyUiScale(value / 100f);
+		if (_uiScaleNum.HasFocus())
+			_uiScaleNum.ReleaseFocus();
+	}
+
+	/// <summary>
+	/// Writes UI scale to user preferences and notifies listeners (via <see cref="UserDataManager.UiScale"/>).
+	/// </summary>
+	private void ApplyUiScale(float scaleFactor)
+	{
+		if (_isSyncingUiScale || _globalData?.UserDataManager == null)
+			return;
+
+		scaleFactor = Mathf.Clamp(scaleFactor, UserDataManager.MinUiScale, UserDataManager.MaxUiScale);
+		if (Mathf.IsEqualApprox(_globalData.UserDataManager.UiScale, scaleFactor))
+		{
+			UpdateUiScaleResetButton();
+			return;
+		}
+
+		// Setter persists + emits UiScaleChanged.
+		_globalData.UserDataManager.UiScale = scaleFactor;
+		UpdateUiScaleResetButton();
+	}
+
+	private void OnUiScaleResetPressed()
+	{
+		if (_isSyncingUiScale || _globalData?.UserDataManager == null)
+			return;
+		if (Mathf.IsEqualApprox(_globalData.UserDataManager.UiScale, UserDataManager.DefaultUiScale))
+		{
+			SyncUiScaleControls();
+			return;
+		}
+
+		_globalData.UserDataManager.UiScale = UserDataManager.DefaultUiScale;
+		SyncUiScaleControls();
+	}
+
+	private void UpdateUiScaleResetButton()
+	{
+		if (_uiScaleResetButton == null || _globalData?.UserDataManager == null)
+			return;
+
+		bool atDefault = Mathf.IsEqualApprox(_globalData.UserDataManager.UiScale, UserDataManager.DefaultUiScale);
+		_uiScaleResetButton.Visible = !atDefault;
+		if (!atDefault)
+			_uiScaleResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUiScale * 100f:0}%";
 	}
 
 	/// <summary>
@@ -460,24 +621,27 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	{
 		if (_resetUserDataDialog == null || !GodotObject.IsInstanceValid(_resetUserDataDialog))
 			return;
-		if (_globalData?.Settings == null)
+		if (_globalData == null)
 			return;
 
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
 		// Match FileDropPopup / AboutWindow / SettingsWindow scaling path.
 		_resetUserDataDialog.WrapControls = true;
 		UiUtilities.RescaleUi(
 			_resetUserDataDialog,
-			_globalData.Settings.UiScale,
+			userScale,
 			_globalData.BaseDisplayScale);
 	}
 
 	/// <summary>
-	/// Live UI-scale updates while the confirmation dialog is open.
+	/// Live UI-scale updates while the confirmation dialog is open; also re-syncs the scale row.
 	/// </summary>
-	/// <param name="value">New user UI scale (ignored; read from Settings for consistency).</param>
+	/// <param name="value">New user UI scale (ignored; read from UserDataManager for consistency).</param>
 	private void OnResetDialogUiScaleChanged(float value)
 	{
 		ApplyResetDialogUiScale();
+		if (GodotObject.IsInstanceValid(this) && IsVisibleInTree())
+			SyncUiScaleControls();
 	}
 
 	/// <summary>

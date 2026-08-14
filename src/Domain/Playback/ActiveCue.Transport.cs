@@ -362,6 +362,8 @@ public partial class ActiveCue
 
     private void HandleControlComponentCompleted(PanelContainer componentPanel)
     {
+        if (componentPanel != null)
+            _controlTimedProgress.Remove(componentPanel);
         RemoveInstantComponent(componentPanel, _activeControlComponents);
     }
 
@@ -538,6 +540,7 @@ public partial class ActiveCue
         _activeMidiOutputComponents.Clear();
         _activeCueLightComponents.Clear();
         _activeControlComponents.Clear();
+        _controlTimedProgress.Clear();
 
         HookIncomingWaitUpdate(false);
         FreeIncomingWaitTimer();

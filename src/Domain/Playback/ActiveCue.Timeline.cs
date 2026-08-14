@@ -34,6 +34,12 @@ public partial class ActiveCue
         }
         // Video components are updated via TimeUpdated event for real-time updates
 
+        foreach (var kv in _activeControlComponents.ToList())
+        {
+            if (!IsInstanceValid(kv.Key) || kv.Value == null) continue;
+            UpdateControlComponentUiState(kv.Key, kv.Value);
+        }
+
         UpdateHeadProgressUi();
     }
 

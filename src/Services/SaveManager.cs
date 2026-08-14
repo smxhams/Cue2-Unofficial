@@ -5,6 +5,9 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Cue2.Domain.Cuelist;
+using Cue2.Domain.Cues;
+using Cue2.Media.Audio;
 using Cue2.UI.Popups;
 using Cue2.UI.Shell;
 using Cue2.UI.Utilities;
@@ -43,6 +46,20 @@ public partial class SaveManager : Node
 	/// <summary>Prevents overlapping open/version-dialog flows for concurrent open requests.</summary>
 	private bool _isOpenInProgress;
 
+	/// <summary>
+	/// True while a showfile is being applied (reset + settings + cues + first bind).
+	/// New/Open/Save and document edits must refuse until this returns to false.
+	/// File-read / version dialog do not set this unless the current session is already
+	/// empty (startup / New Session). GO uses <see cref="IsPlaybackReady"/>.
+	/// </summary>
+	public bool IsSessionLoading { get; private set; }
+
+	/// <summary>
+	/// True when GO may fire. False from apply start until cue models exist (or apply ends).
+	/// First viewport bind and deferred housekeeping do not keep this false.
+	/// </summary>
+	public bool IsPlaybackReady { get; private set; } = true;
+
 	private VersionMismatchDialog _activeVersionDialog;
 
 	/// <summary>
@@ -58,6 +75,9 @@ public partial class SaveManager : Node
 	private int _saveGeneration;
 
 	private Godot.Timer _autosaveTimer;
+
+	/// <summary>P0 stage timings for the in-flight open (null when idle).</summary>
+	private SessionLoadTimer _loadTimer;
 
 	public override void _Ready()
 	{
@@ -105,18 +125,21 @@ public partial class SaveManager : Node
 		{
 			if (!GodotObject.IsInstanceValid(this))
 				return;
-			await ToSignal(GetTree(), "process_frame");
+			// One frame so Cue2Base can paint the session-load overlay first.
+			await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
 			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
 				return;
 			string path = _globalData.StartupOpenPath;
 			GD.Print($"SaveManager:LoadStartupSession - Opening startup showfile: {path}");
 			if (!string.IsNullOrEmpty(path))
-				OpenSelectedSession(path);
-			ConfigureAutosave();
+				await OpenSelectedSessionAsync(path);
+			// Successful open already configured autosave in CompleteOpenSessionAsync.
 		}
 		catch (Exception ex)
 		{
 			GD.PrintErr($"SaveManager:LoadStartupSessionAsync - {ex.Message}");
+			EndSessionApply();
+			FinishLoadTimer("failed");
 		}
 	}
 
@@ -146,6 +169,9 @@ public partial class SaveManager : Node
 	/// </summary>
 	private void Save()
 	{
+		if (RejectIfSessionBusy("save"))
+			return;
+
 		if (_globalData.SessionName == null || _globalData.SessionPath == null)
 		{
 			SaveAs();
@@ -174,6 +200,9 @@ public partial class SaveManager : Node
 	/// </summary>
 	private void SaveAs()
 	{
+		if (RejectIfSessionBusy("save as"))
+			return;
+
 		if (_saveDialog == null || !IsInstanceValid(_saveDialog))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -444,6 +473,7 @@ public partial class SaveManager : Node
 
 	/// <summary>
 	/// Applies session file path, name, and type-based media folder paths to <see cref="GlobalData"/>.
+	/// Ensures the <c>Waveforms/</c> peak-cache folder exists so disk cache hits work after open.
 	/// </summary>
 	/// <param name="sessionFilePath">Absolute path to the .c2 file.</param>
 	/// <param name="folderPaths">Optional precomputed folder layout; derived from the session path when null.</param>
@@ -462,7 +492,143 @@ public partial class SaveManager : Node
 		_globalData.SessionImagesPath = folderPaths.ImagesDir;
 		_globalData.SessionWaveformsPath = folderPaths.WaveformsDir;
 
+		// Peak envelopes are stored only under Waveforms/ (not in the .c2). Create on open as well as save.
+		try
+		{
+			if (!string.IsNullOrEmpty(folderPaths.WaveformsDir) && !Directory.Exists(folderPaths.WaveformsDir))
+				Directory.CreateDirectory(folderPaths.WaveformsDir);
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:ApplySessionPaths - Failed to create Waveforms dir: {ex.Message}");
+		}
+
 		GD.Print($"SaveManager:ApplySessionPaths - SessionDir={_globalData.SessionDir}, Audio={_globalData.SessionAudioPath}, Video={_globalData.SessionVideoPath}, Images={_globalData.SessionImagesPath}, Waveforms={_globalData.SessionWaveformsPath}");
+	}
+
+	/// <summary>
+	/// True when the workspace is empty so the read phase should show the load overlay
+	/// (startup last-show, or File → Open after New Session).
+	/// </summary>
+	private bool ShouldCoverReadPhase()
+	{
+		if (!string.IsNullOrEmpty(_globalData?.SessionPath))
+			return false;
+		var index = CueList.CueIndex;
+		return index == null || index.Count == 0;
+	}
+
+	/// <summary>
+	/// Logs and returns true when New / Open / Save should be refused (open in flight or applying).
+	/// </summary>
+	/// <param name="actionLabel">Short action name for the log message.</param>
+	/// <returns>True if the caller should abort.</returns>
+	private bool RejectIfSessionBusy(string actionLabel)
+	{
+		if (!IsSessionLoading && !_isOpenInProgress)
+			return false;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"Please wait — a showfile is still loading. Cannot {actionLabel}.", (int)LogType.Info);
+		return true;
+	}
+
+	/// <summary>
+	/// Marks the apply phase, shows the workspace overlay, and gates GO / document edits.
+	/// </summary>
+	/// <param name="sessionPath">Showfile path (name is derived for the overlay title).</param>
+	/// <param name="statusText">English source status key.</param>
+	/// <param name="percent">Initial progress 0–100.</param>
+	private void BeginSessionApply(string sessionPath, string statusText, float percent)
+	{
+		IsSessionLoading = true;
+		IsPlaybackReady = false;
+		string showName = string.IsNullOrEmpty(sessionPath)
+			? string.Empty
+			: Path.GetFileNameWithoutExtension(sessionPath);
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SessionLoadStarted), showName ?? string.Empty);
+		EmitSessionLoadProgress(percent, statusText, string.Empty, 0, 0);
+	}
+
+	/// <summary>
+	/// Updates overlay + footer-compatible session-load progress.
+	/// </summary>
+	private void EmitSessionLoadProgress(float percent, string statusText, string detail, int completed, int total)
+	{
+		if (_globalSignals == null || !IsSessionLoading)
+			return;
+		_globalSignals.EmitSignal(nameof(GlobalSignals.SessionLoadProgress),
+			percent, statusText ?? string.Empty, detail ?? string.Empty, completed, total);
+	}
+
+	/// <summary>
+	/// Cue models (or a settings-only show) are live. GO may fire; overlay may still be up
+	/// for the first viewport bind.
+	/// </summary>
+	private void MarkPlaybackReady()
+	{
+		IsPlaybackReady = true;
+		_loadTimer?.MarkApplyComplete();
+	}
+
+	/// <summary>
+	/// Clears the apply gate and hides the overlay. Safe to call when not loading.
+	/// </summary>
+	private void EndSessionApply()
+	{
+		if (!IsSessionLoading)
+			return;
+		IsSessionLoading = false;
+		IsPlaybackReady = true;
+		string applySummary = _loadTimer?.FormatApplySummary();
+		if (!string.IsNullOrEmpty(applySummary))
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), applySummary, 0);
+		}
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SessionLoadFinished));
+	}
+
+	/// <summary>Prints P0 timings and drops the in-flight timer.</summary>
+	private void FinishLoadTimer(string outcome)
+	{
+		if (_loadTimer == null)
+			return;
+		_loadTimer.Finish(outcome);
+		_loadTimer = null;
+	}
+
+	/// <summary>Awaits one process frame so the overlay can paint.</summary>
+	private async Task YieldProcessFrame()
+	{
+		var tree = GetTree();
+		if (tree != null)
+			await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+	}
+
+	/// <summary>
+	/// Media health + legacy waveform cache after the overlay is gone (not required for GO).
+	/// </summary>
+	private async Task RunDeferredOpenHousekeepingAsync()
+	{
+		try
+		{
+			if (!GodotObject.IsInstanceValid(this))
+				return;
+			await YieldProcessFrame();
+			if (!GodotObject.IsInstanceValid(this))
+				return;
+
+			_globalData?.UserDataManager?.PersistUserData();
+			_loadTimer?.Begin("housekeeping.health");
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+			_loadTimer?.Begin("housekeeping.waveforms");
+			MigrateLegacyEmbeddedWaveformsToDisk();
+			FinishLoadTimer("complete");
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:RunDeferredOpenHousekeepingAsync - {ex.Message}");
+			FinishLoadTimer("complete");
+		}
 	}
 	
 	/// <summary>
@@ -470,6 +636,9 @@ public partial class SaveManager : Node
 	/// </summary>
 	private void OpenSession()
 	{
+		if (RejectIfSessionBusy("open a showfile"))
+			return;
+
 		if (_openDialog == null || !IsInstanceValid(_openDialog))
 			_openDialog = GetNodeOrNull<FileDialog>("/root/Cue2Base/OpenDialog");
 
@@ -485,13 +654,23 @@ public partial class SaveManager : Node
 	}
 	
 	/// <summary>
-	/// Loads and processes a selected session file.
+	/// Loads and processes a selected session file (startup last-show, File → Open, recents).
 	/// Version is checked first (before any session reset); mismatches require user confirmation.
 	/// </summary>
 	/// <param name="selectedPath">The file path of the session to load.</param>
 	private void OpenSelectedSession(string selectedPath)
 	{
-		if (_isOpenInProgress)
+		TaskUtil.Run(() => OpenSelectedSessionAsync(selectedPath), "SaveManager.OpenSelectedSession");
+	}
+
+	/// <summary>
+	/// Shared async open: read/parse off the critical paint path, then apply via
+	/// <see cref="CompleteOpenSessionAsync"/>. Used for startup and File → Open.
+	/// </summary>
+	/// <param name="selectedPath">Absolute path of the .c2 file.</param>
+	private async Task OpenSelectedSessionAsync(string selectedPath)
+	{
+		if (_isOpenInProgress || IsSessionLoading)
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 				"A showfile open is already in progress.", (int)LogType.Warning);
@@ -499,7 +678,6 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Verify file before resetting current session.
 		if (!File.Exists(selectedPath))
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session file not found: {selectedPath}", 2);
@@ -507,38 +685,80 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		// Peek plain JSON without mutating the live session.
-		if (!TryReadSaveData(selectedPath, out var saveData, out string readError))
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-				$"Failed to read session (session not changed): {readError}", 2);
-			GD.PrintErr($"SaveManager:OpenSelectedSession - Read failed: {readError}");
-			return;
-		}
+		// Empty workspace (startup / New Session): cover the read so the grey list never shows.
+		// A live show stays interactive until the version gate passes and apply begins.
+		bool coverRead = ShouldCoverReadPhase();
+		if (coverRead)
+			BeginSessionApply(selectedPath, "Reading showfile…", 2f);
 
-		var fileVersion = ShowfileFormat.ReadVersion(saveData);
-		GD.Print(
-			$"SaveManager:OpenSelectedSession - File version: {fileVersion.ToDisplayString()}; " +
-			$"app: {Cue2.Version.SemanticVersionString} format {ShowfileFormat.CurrentFormatVersion}");
-
-		// Gate only on schema formatVersion — not appVersion. Patch releases keep the same
-		// format and must open without a blocking dialog.
-		if (!fileVersion.RequiresVersionConfirmation)
+		_isOpenInProgress = true;
+		bool handedToVersionDialog = false;
+		bool enteredComplete = false;
+		_loadTimer = SessionLoadTimer.Start(selectedPath);
+		try
 		{
-			if (!fileVersion.MatchesCurrentApp && !string.IsNullOrEmpty(fileVersion.AppVersion))
+			try
 			{
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-					$"Showfile app version differs ({fileVersion.AppVersion} → {Cue2.Version.SemanticVersionString}); " +
-					$"format {fileVersion.FormatVersion} matches — opening without prompt.",
-					0);
+				_loadTimer.FileBytes = new FileInfo(selectedPath).Length;
+			}
+			catch
+			{
+				// Size is diagnostics only.
 			}
 
-			CompleteOpenSession(selectedPath, saveData, fileVersion, userConfirmedMismatch: false);
-			return;
-		}
+			var (ok, saveData, readError) = await ReadSaveDataAsync(selectedPath);
+			if (!ok)
+			{
+				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+					$"Failed to read session (session not changed): {readError}", 2);
+				GD.PrintErr($"SaveManager:OpenSelectedSession - Read failed: {readError}");
+				return;
+			}
 
-		// Format older/newer/unknown: confirm before any open/reset actions.
-		ShowVersionMismatchDialog(selectedPath, saveData, fileVersion);
+			var fileVersion = ShowfileFormat.ReadVersion(saveData);
+			GD.Print(
+				$"SaveManager:OpenSelectedSession - File version: {fileVersion.ToDisplayString()}; " +
+				$"app: {Cue2.Version.SemanticVersionString} format {ShowfileFormat.CurrentFormatVersion}");
+
+			if (!fileVersion.RequiresVersionConfirmation)
+			{
+				if (!fileVersion.MatchesCurrentApp && !string.IsNullOrEmpty(fileVersion.AppVersion))
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Showfile app version differs ({fileVersion.AppVersion} → {Cue2.Version.SemanticVersionString}); " +
+						$"format {fileVersion.FormatVersion} matches — opening without prompt.",
+						0);
+				}
+
+				enteredComplete = true;
+				await CompleteOpenSessionAsync(selectedPath, saveData, fileVersion, userConfirmedMismatch: false);
+				return;
+			}
+
+			// Version dialog: current show (if any) is still live. Drop the empty-session overlay.
+			if (coverRead)
+				EndSessionApply();
+			FinishLoadTimer("pre-apply");
+			handedToVersionDialog = true;
+			ShowVersionMismatchDialog(selectedPath, saveData, fileVersion);
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:OpenSelectedSessionAsync - {ex.Message}\n{ex.StackTrace}");
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				$"Failed to open session (session not changed): {ex.Message}", 2);
+		}
+		finally
+		{
+			if (!handedToVersionDialog)
+				_isOpenInProgress = false;
+			// Read failed (or threw) after a cover-read BeginSessionApply — drop the overlay.
+			// Successful apply ends itself; version dialog already ended the cover-read overlay.
+			if (coverRead && IsSessionLoading && !handedToVersionDialog)
+				EndSessionApply();
+			if (!enteredComplete && !handedToVersionDialog)
+				FinishLoadTimer("failed");
+		}
 	}
 
 	/// <summary>
@@ -566,7 +786,9 @@ public partial class SaveManager : Node
 		{
 			_activeVersionDialog = null;
 			_isOpenInProgress = false;
-			CompleteOpenSession(selectedPath, saveData, fileVersion, userConfirmedMismatch: true);
+			TaskUtil.Run(
+				() => CompleteOpenSessionAsync(selectedPath, saveData, fileVersion, userConfirmedMismatch: true),
+				"SaveManager.CompleteOpenSession");
 		};
 
 		dialog.Cancelled += () =>
@@ -615,15 +837,30 @@ public partial class SaveManager : Node
 	/// <param name="saveData">Already-parsed root dictionary (may be mutated by migration).</param>
 	/// <param name="fileVersion">Version metadata as read from the file.</param>
 	/// <param name="userConfirmedMismatch">True when the user accepted the version warning.</param>
-	private void CompleteOpenSession(
+	private async Task CompleteOpenSessionAsync(
 		string selectedPath,
 		Dictionary saveData,
 		ShowfileVersionInfo fileVersion,
 		bool userConfirmedMismatch)
 	{
 		bool sessionWiped = false;
+		bool applyStarted = false;
+		bool success = false;
 		try
 		{
+			_loadTimer ??= SessionLoadTimer.Start(selectedPath);
+
+			if (!IsSessionLoading)
+				BeginSessionApply(selectedPath, "Opening show…", 5f);
+			applyStarted = true;
+
+			// Let the overlay paint before the first heavy main-thread chunk.
+			_loadTimer.Pause();
+			await YieldProcessFrame();
+
+			EmitSessionLoadProgress(8f, "Checking showfile…", string.Empty, 0, 0);
+			_loadTimer.Begin("migrate");
+
 			// Migrate older (or stamp current) formats before applying to the live model.
 			// Session is not wiped yet — failed migration leaves the previous show intact.
 			if (ShowfileMigrator.NeedsMigration(fileVersion.FormatVersion) ||
@@ -660,22 +897,29 @@ public partial class SaveManager : Node
 				return;
 			}
 
+			EmitSessionLoadProgress(12f, "Loading settings…", string.Empty, 0, 0);
+
 			// Wipe previous show only after version gate + successful migration + shape check.
-			ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+			// Clear-for-open: do not seed a throwaway New Session (P1).
+			_loadTimer.Begin("reset");
+			ClearSessionForOpen();
 			sessionWiped = true;
 
 			ApplySessionPaths(selectedPath);
 
-			if (!LoadSessionFromData(saveData, out var loadError))
+			_loadTimer.Pause();
+			await YieldProcessFrame();
+
+			if (!await LoadSessionFromDataAsync(saveData))
 			{
-				FailOpenAfterReset(selectedPath, loadError ?? "Unknown load error");
+				FailOpenAfterReset(selectedPath, "Failed to apply showfile data.");
 				return;
 			}
 
-			// Success only: history, recents, autosave, title.
+			// Success only: history, recents, autosave, title. Housekeeping after overlay hides.
 			_openedFromNewerFormat = fileVersion.IsNewerFormat;
 			_globalData.HistoryManager?.Clear();
-			_globalData.UserDataManager?.AddRecentShowFile(selectedPath);
+			_globalData.UserDataManager?.AddRecentShowFile(selectedPath, persistImmediately: false);
 			ConfigureAutosave();
 			GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")
 				?.CallDeferred("UpdateTitle");
@@ -696,6 +940,10 @@ public partial class SaveManager : Node
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 					$"Opened showfile after version confirmation: {selectedPath}", 0);
 			}
+
+			_loadTimer?.MarkApplyComplete();
+			TaskUtil.Run(RunDeferredOpenHousekeepingAsync, "SaveManager.DeferredOpenHousekeeping");
+			success = true;
 		}
 		catch (Exception ex)
 		{
@@ -719,6 +967,13 @@ public partial class SaveManager : Node
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 					$"Failed to open session (session not changed): {ex.Message}", 2);
 			}
+		}
+		finally
+		{
+			if (applyStarted)
+				EndSessionApply();
+			if (!success)
+				FinishLoadTimer("failed");
 		}
 	}
 
@@ -784,74 +1039,106 @@ public partial class SaveManager : Node
 	}
 
 	/// <summary>
-	/// Reads and parses a plain UTF-8 JSON showfile without modifying session state.
+	/// Reads and parses a plain UTF-8 .c2 on a worker thread. Does not modify session state.
 	/// </summary>
+	/// <remarks>
+	/// Read + UTF-8 / <c>{</c> checks run off-main. <see cref="Json.Parse"/> is tried on the
+	/// worker (same as save stringify). If Godot objects refuse a background thread, parse
+	/// retries on the main thread with the already-read string.
+	/// </remarks>
 	/// <param name="selectedPath">Absolute path to the .c2 file.</param>
-	/// <param name="saveData">Parsed root dictionary on success.</param>
-	/// <param name="error">Error description on failure.</param>
-	/// <returns>True when the file was read and parsed as a dictionary.</returns>
-	private bool TryReadSaveData(string selectedPath, out Dictionary saveData, out string error)
+	/// <returns>Ok flag, parsed root dictionary, and error text.</returns>
+	private async Task<(bool Ok, Dictionary Data, string Error)> ReadSaveDataAsync(string selectedPath)
 	{
-		saveData = null;
-		error = null;
-
 		string jsonString;
 		try
 		{
-			if (!System.IO.File.Exists(selectedPath))
-			{
-				error = "file not found";
-				return false;
-			}
-			jsonString = System.IO.File.ReadAllText(selectedPath);
+			if (!File.Exists(selectedPath))
+				return (false, null, "file not found");
+
+			EmitSessionLoadProgress(3f, "Reading showfile…", string.Empty, 0, 0);
+			SessionLoadTimer.Current?.Begin("read");
+			jsonString = await Task.Run(() => ReadShowfileText(selectedPath)).ConfigureAwait(true);
 		}
 		catch (Exception ex)
 		{
-			error = ex.Message;
-			return false;
+			return (false, null, ex.Message);
 		}
 
 		if (string.IsNullOrWhiteSpace(jsonString))
-		{
-			error = "empty or unreadable";
-			return false;
-		}
+			return (false, null, "empty or unreadable");
 
 		string trimmed = jsonString.TrimStart();
 		if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
-		{
-			error = "not JSON text (expected plain UTF-8 .c2)";
-			return false;
-		}
+			return (false, null, "not JSON text (expected plain UTF-8 .c2)");
 
+		EmitSessionLoadProgress(6f, "Reading showfile…", string.Empty, 0, 0);
+		SessionLoadTimer.Current?.Begin("parse");
+
+		try
+		{
+			var worker = await Task.Run(() => ParseShowfileJson(jsonString)).ConfigureAwait(true);
+			if (worker.Ok)
+			{
+				SessionLoadTimer.Current?.Pause();
+				return (true, worker.Data, null);
+			}
+
+			if (!worker.RetryOnMain)
+			{
+				SessionLoadTimer.Current?.Pause();
+				return (false, null, worker.Error);
+			}
+
+			GD.Print($"SaveManager:ReadSaveDataAsync - Worker parse threw ({worker.Error}); retrying on main thread.");
+			var main = ParseShowfileJson(jsonString);
+			SessionLoadTimer.Current?.Pause();
+			return main.Ok ? (true, main.Data, null) : (false, null, main.Error);
+		}
+		catch (Exception ex)
+		{
+			SessionLoadTimer.Current?.Pause();
+			return (false, null, ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// Reads a showfile as strict UTF-8 (no BOM required; invalid bytes throw).
+	/// Safe to call from a worker thread.
+	/// </summary>
+	private static string ReadShowfileText(string selectedPath)
+	{
+		return File.ReadAllText(selectedPath, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true));
+	}
+
+	/// <summary>
+	/// Parses showfile JSON into a root dictionary. Safe to attempt on a worker;
+	/// callers retry on the main thread when <c>RetryOnMain</c> is true.
+	/// </summary>
+	private static (bool Ok, Dictionary Data, string Error, bool RetryOnMain) ParseShowfileJson(string jsonString)
+	{
 		try
 		{
 			using var json = new Json();
 			Error parseResult = json.Parse(jsonString);
 			if (parseResult != Error.Ok)
-			{
-				error = $"JSON parse error: {parseResult}";
-				return false;
-			}
+				return (false, null, $"JSON parse error: {parseResult}", false);
 
-			saveData = json.Data.AsGodotDictionary();
+			var saveData = json.Data.AsGodotDictionary();
 			if (saveData == null)
-			{
-				error = "root is not a dictionary";
-				return false;
-			}
+				return (false, null, "root is not a dictionary", false);
 
-			return true;
+			return (true, saveData, null, false);
 		}
 		catch (Exception ex)
 		{
-			error = ex.Message;
-			return false;
+			return (false, null, ex.Message, true);
 		}
 	}
 
 	/// <summary>
 	/// Builds the root save dictionary (version stamps + cues + settings).
+	/// Waveform peaks are omitted from component payloads; they live under <c>Waveforms/</c>.
 	/// </summary>
 	/// <returns>Dictionary ready for JSON serialization.</returns>
 	private Dictionary BuildSaveDataDictionary()
@@ -868,15 +1155,130 @@ public partial class SaveManager : Node
 		return saveData;
 	}
 
+	/// <summary>
+	/// Writes in-memory <c>WaveformData</c> (from legacy showfiles) into <c>SessionDir/Waveforms</c>
+	/// when a matching <c>.c2wf</c> cache file is not already present.
+	/// </summary>
+	/// <remarks>
+	/// New saves never embed peaks. Without this one-shot migration, opening an old show and
+	/// re-saving would drop peaks from the .c2 with no disk cache yet, forcing a full FFmpeg regen.
+	/// </remarks>
+	private void MigrateLegacyEmbeddedWaveformsToDisk()
+	{
+		string root = _globalData?.SessionWaveformsPath;
+		if (string.IsNullOrEmpty(root))
+			return;
+
+		try
+		{
+			if (!Directory.Exists(root))
+				Directory.CreateDirectory(root);
+		}
+		catch (Exception ex)
+		{
+			GD.PrintErr($"SaveManager:MigrateLegacyEmbeddedWaveformsToDisk - Create dir failed: {ex.Message}");
+			return;
+		}
+
+		var index = CueList.CueIndex;
+		if (index == null || index.Count == 0)
+			return;
+
+		int written = 0;
+		foreach (var cue in index.Values)
+		{
+			if (cue?.Components == null) continue;
+			foreach (var comp in cue.Components)
+			{
+				string mediaPath = null;
+				byte[] peaks = null;
+				if (comp is AudioComponent audio)
+				{
+					mediaPath = audio.AudioFile;
+					peaks = audio.WaveformData;
+				}
+				else if (comp is VideoComponent video)
+				{
+					mediaPath = video.VideoFile;
+					peaks = video.WaveformData;
+				}
+
+				if (string.IsNullOrEmpty(mediaPath) || peaks == null || peaks.Length == 0)
+					continue;
+				if (WaveformPeaks.FromBytes(peaks) == null)
+					continue;
+
+				try
+				{
+					string absolute = _globalData.ResolveMediaPath(mediaPath);
+					string cachePath = Path.Combine(root, WaveformPeaks.CacheFileName(absolute));
+					if (File.Exists(cachePath))
+						continue;
+					File.WriteAllBytes(cachePath, peaks);
+					written++;
+				}
+				catch (Exception ex)
+				{
+					GD.PrintErr($"SaveManager:MigrateLegacyEmbeddedWaveformsToDisk - {mediaPath}: {ex.Message}");
+				}
+			}
+		}
+
+		if (written > 0)
+			GD.Print($"SaveManager:MigrateLegacyEmbeddedWaveformsToDisk - Migrated {written} waveform cache file(s).");
+	}
+
 	/// <summary>Signal handler for File → New / New Session hotkey.</summary>
 	private void OnNewSession()
 	{
+		if (RejectIfSessionBusy("start a new session"))
+			return;
 		ResetSession(clearSessionIdentity: true, logAsNewSession: true);
 	}
 
 	/// <summary>
+	/// Wipes the live show for a showfile apply without seeding a playable empty session.
+	/// </summary>
+	/// <remarks>
+	/// Stops playback, frees cues/patches/windows, clears OSC/MIDI/cue lights.
+	/// Does not create a Default Patch or default canvas screen, and does not
+	/// poke inspectors beyond dropping focus on the previous (now-freed) cue.
+	/// <see cref="LoadSessionFromDataAsync"/> then constructs the incoming show.
+	/// File → New still uses <see cref="ResetSession"/>.
+	/// </remarks>
+	private void ClearSessionForOpen()
+	{
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+		_openedFromNewerFormat = false;
+
+		_globalData.SessionName = null;
+		_globalData.SessionPath = null;
+		_globalData.SessionDir = null;
+		_globalData.SessionAudioPath = null;
+		_globalData.SessionVideoPath = null;
+		_globalData.SessionImagesPath = null;
+		_globalData.SessionWaveformsPath = null;
+
+		_globalData.FocusedCue = -1;
+		_globalData.NextCue = -1;
+		_globalData.CueTotal = 0;
+
+		_globalData.Cuelist?.ResetCuelist();
+		_globalData.Devices?.ResetAudioDevices();
+		_globalData.Settings?.ClearForOpen();
+
+		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
+		_mediaBackupManager?.ClearPendingJobs();
+
+		// Drop inspector bindings to freed cues; do not SyncShellInspector (no media reload).
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), -1);
+
+		ConfigureAutosave();
+		GD.Print("SaveManager:ClearSessionForOpen - Session cleared for showfile apply.");
+	}
+
+	/// <summary>
 	/// Fully clears the open show and restores session defaults (File → New / New Session hotkey).
-	/// Also used as the wipe step before Open Session.
 	/// </summary>
 	/// <param name="clearSessionIdentity">
 	/// When true (New Session), clears SessionPath/name/media dirs.
@@ -932,20 +1334,16 @@ public partial class SaveManager : Node
 	
 	
 	/// <summary>
-	/// Loads session data from an already-parsed (and optionally migrated) dictionary.
+	/// Applies settings then cues from an already-parsed (and optionally migrated) dictionary.
+	/// Cue models are built synchronously (GO-safe), then the viewport is bound.
+	/// Media health is deferred to <see cref="RunDeferredOpenHousekeepingAsync"/>.
 	/// </summary>
 	/// <param name="saveData">Root showfile dictionary with settings/cues keys.</param>
-	/// <param name="error">On failure, a reason (null on success).</param>
-	/// <returns>
-	/// True when settings and cues were applied without throwing. False on null payload or
-	/// any exception (caller must treat the live model as unusable / half-applied). //TODO: This
-	/// </returns>
-	private bool LoadSessionFromData(Dictionary saveData, out string error)
+	/// <returns>True when settings and cues were applied without throwing.</returns>
+	private async Task<bool> LoadSessionFromDataAsync(Dictionary saveData)
 	{
-		error = null;
 		if (saveData == null)
 		{
-			error = "Save data is null.";
 			GD.PrintErr("SaveManager:LoadSessionFromData - save data is null");
 			return false;
 		}
@@ -956,26 +1354,55 @@ public partial class SaveManager : Node
 			{
 				GD.Print("SaveManager:LoadSessionFromData - Loading Settings");
 				var settingsData = saveData["settings"].AsGodotDictionary();
-				_globalData.Settings.LoadSettings(settingsData);
+				var settings = _globalData.Settings;
+
+				EmitSessionLoadProgress(14f, "Opening audio devices…", string.Empty, 0, 0);
+				settings.LoadAudioFromData(settingsData);
+				SessionLoadTimer.Current?.Pause();
+				await YieldProcessFrame();
+
+				EmitSessionLoadProgress(16f, "Creating outputs…", string.Empty, 0, 0);
+				settings.LoadDisplaysFromData(settingsData);
+				SessionLoadTimer.Current?.Pause();
+				await YieldProcessFrame();
+
+				EmitSessionLoadProgress(18f, "Loading settings…", string.Empty, 0, 0);
+				settings.LoadRemainingFromData(settingsData);
+				SessionLoadTimer.Current?.Pause();
+				await YieldProcessFrame();
 			}
 
-			if (saveData.ContainsKey("cues"))
+			if (saveData.ContainsKey("cues") && _globalData.Cuelist != null)
 			{
 				GD.Print("SaveManager:LoadSessionFromData - Loading Cues");
+				EmitSessionLoadProgress(20f, "Loading cues…", string.Empty, 0, 0);
 				var cuesData = saveData["cues"].AsGodotDictionary();
-				_globalData.Cuelist.LoadData(cuesData);
+				_globalData.Cuelist.LoadCueModels(cuesData);
+				int cueCount = _globalData.Cuelist.TotalCueCount;
+				OnCueLoadProgress(cueCount, cueCount);
 			}
 
-			// After settings + cues are linked, evaluate missing files / output / target layers.
-			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+			// Models (or settings-only show) exist — GO may fire while the first bind finishes.
+			MarkPlaybackReady();
+			EmitSessionLoadProgress(100f, "Loading cues…", string.Empty, 1, 1);
+
+			if (saveData.ContainsKey("cues") && _globalData.Cuelist != null)
+				_globalData.Cuelist.BindLoadedViewport();
+
 			return true;
 		}
 		catch (Exception ex)
 		{
-			error = ex.Message;
 			GD.PrintErr($"SaveManager:LoadSessionFromData - Error: {ex.Message}  \n{ex.StackTrace}");
 			return false;
 		}
+	}
+
+	private void OnCueLoadProgress(int completed, int total)
+	{
+		float percent = total <= 0 ? 95f : 20f + completed * 75f / total;
+		string detail = total > 0 ? $"{completed}/{total} cues" : string.Empty;
+		EmitSessionLoadProgress(percent, "Loading cues…", detail, completed, total);
 	}
 	
 	/// <summary>

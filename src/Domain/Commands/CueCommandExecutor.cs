@@ -83,12 +83,30 @@ public partial class CueCommandExecutor : Node
     }
 
     /// <summary>
+    /// Logs and returns true when GO must wait for cue models to finish applying.
+    /// </summary>
+    /// <param name="actionLabel">Short action name for logs.</param>
+    /// <returns>True if the caller should abort.</returns>
+    private bool RejectIfSessionLoading(string actionLabel)
+    {
+        if (_globalData?.IsPlaybackReady != false)
+            return false;
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+            $"Please wait — a showfile is still loading. Cannot {actionLabel}.", (int)LogType.Info);
+        GD.Print($"CueCommandExecutor:RejectIfSessionLoading - blocked {actionLabel}");
+        return true;
+    }
+
+    /// <summary>
     /// GO: pre-spawn the entire continue/follow chain for each selected armed cue, wire event-driven
     /// arming (continue at content-phase start, follow at real content complete), advance playhead.
     /// Disarmed cues do not play; selection moves to the next eligible cue.
     /// </summary>
     public void GoCommand()
     {
+        if (RejectIfSessionLoading("GO"))
+            return;
+
         if (!ShellSelection.SelectedCues.Any())
         {
             GD.Print("CueCommandExecutor:GoCommand - No Shells Selected");
@@ -248,6 +266,9 @@ public partial class CueCommandExecutor : Node
     /// </param>
     public async Task ActivateSequenceFromAsync(Cue head, double? controlGoFadeIn = null, double? startAtTimelineSeconds = null)
     {
+        if (RejectIfSessionLoading("GO"))
+            return;
+
         if (head == null)
         {
             GD.PrintErr("CueCommandExecutor:ActivateSequenceFromAsync - Cue is null");
@@ -984,11 +1005,14 @@ public partial class CueCommandExecutor : Node
     /// </summary>
     private static float ResolveFadeAudioLinear(float startLinear, float targetOrDeltaDb, ControlFadeMode mode)
     {
-        float startDb = UiUtilities.LinearToDb(Mathf.Clamp(startLinear, 0f, 1f));
+        // Start may already include digital gain (above unity linear).
+        float startDb = UiUtilities.LinearToDb(
+            Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(startLinear));
         float endDb = mode == ControlFadeMode.Absolute
             ? targetOrDeltaDb
             : startDb + targetOrDeltaDb;
-        endDb = Mathf.Clamp(endDb, -60f, 0f);
+        // Absolute and relative ends share component gain range (−60…+12 dB).
+        endDb = Mathf.Clamp(endDb, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
         return UiUtilities.DbToLinear(endDb);
     }
 

@@ -340,9 +340,7 @@ public partial class VideoInspector
 
 		if (_focusedVideoComponent.Metadata == null)
 		{
-			ClearVideoRoutingMatrixUi();
-			if (_routingContainer != null)
-				_routingContainer.Visible = false;
+			// Defer — drop-create focus can run before metadata is probed. Avoid wiping a valid grid.
 			return;
 		}
 
@@ -410,7 +408,8 @@ public partial class VideoInspector
 				int col1 = col;
 				volumeEdit.TextSubmitted += newText => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
 				volumeEdit.FocusExited += () => OnMatrixVolumeSubmitted(volumeEdit.Text, volumeEdit, row1, col1);
-				LineEditDbDragSlider.EnableVolume(volumeEdit);
+				// Routing matrix stays unity-max (no digital boost); boost lives on component volume.
+				LineEditDbDragSlider.EnableUnityVolume(volumeEdit);
 				_routingMatrixGrid.AddChild(volumeEdit);
 				_routingVolumeEdits.Add(volumeEdit);
 			}
@@ -595,7 +594,8 @@ public partial class VideoInspector
 				return;
 			}
 
-			float linear = (float)UiUtilities.DbToLinear(dbValue.ToString());
+			// Matrix is unity-max only (−60…0 dB).
+			float linear = UiUtilities.DbToUnityLinear(dbValue);
 			var routingForSet = _focusedVideoComponent.Routing;
 			float current = routingForSet.GetVolume(inputCh, outputCh);
 			if (Math.Abs(current - linear) < 1e-6f)

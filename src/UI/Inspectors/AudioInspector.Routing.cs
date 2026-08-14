@@ -62,10 +62,10 @@ public partial class AudioInspector
 
         if (_focusedAudioComponent.Metadata == null)
         {
-            GD.Print("AudioInspector:BuildRoutingMatrix - Metadata not ready; skipping matrix.");
-            ClearRoutingMatrixUi();
-            if (_routingContainer != null)
-                _routingContainer.Visible = false;
+            // Do not clear an existing matrix here — drop-create / focus races often call
+            // BuildRoutingMatrix before metadata is attached. Clearing would flash empty UI;
+            // ShellSelected re-invokes once metadata is ready.
+            GD.Print("AudioInspector:BuildRoutingMatrix - Metadata not ready; deferring matrix.");
             return;
         }
 
@@ -138,7 +138,8 @@ public partial class AudioInspector
                 int col1 = col;
                 volumeEdit.TextSubmitted += newText => OnMatrixVolumeSubmitted(newText, volumeEdit, row1, col1);
                 volumeEdit.FocusExited += () => OnMatrixVolumeSubmitted(volumeEdit.Text, volumeEdit, row1, col1);
-                LineEditDbDragSlider.EnableVolume(volumeEdit);
+                // Routing matrix stays unity-max (no digital boost); boost lives on component volume.
+                LineEditDbDragSlider.EnableUnityVolume(volumeEdit);
                 _routingMatrixGrid.AddChild(volumeEdit);
                 _routingVolumeEdits.Add(volumeEdit);
             }
@@ -334,7 +335,8 @@ public partial class AudioInspector
                 return;
             }
 
-            float linear = (float)UiUtilities.DbToLinear(dbValue.ToString());
+            // Matrix is unity-max only (−60…0 dB).
+            float linear = UiUtilities.DbToUnityLinear(dbValue);
             float current = _focusedAudioComponent.Routing.GetVolume(inputCh, outputCh);
             if (Math.Abs(current - linear) < 1e-6f)
             {

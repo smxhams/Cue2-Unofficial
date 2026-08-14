@@ -50,6 +50,10 @@ public partial class SettingsCanvasEditor : Control
 
     private GlobalData _globalData;
     private GlobalSignals _globalSignals;
+    /// <summary>Stored so we can disconnect from the process-lifetime autoload on exit.</summary>
+    private Callable _displaysChangedCallable;
+    /// <summary>Stored so we can disconnect from the process-lifetime autoload on exit.</summary>
+    private Callable _canvasSizeChangedCallable;
     private Callable _layerGeometryChangedCallable;
     private HistoryManager _historyManager;
     private Canvas _canvas;
@@ -294,9 +298,13 @@ public partial class SettingsCanvasEditor : Control
         _canvas = DisplaysManager.Canvas;
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 
-        _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), Callable.From(OnDisplaysChanged));
-        _globalSignals.Connect(nameof(GlobalSignals.CanvasSizeChanged), Callable.From<Vector2I>(OnCanvasSizeChanged));
+        // Store Callables: GlobalSignals is an autoload and outlives Settings. Connecting with
+        // anonymous Callable.From(...) without Disconnect keeps the editor (and settings tree) alive → ObjectDB leak on exit.
+        _displaysChangedCallable = Callable.From(OnDisplaysChanged);
+        _canvasSizeChangedCallable = Callable.From<Vector2I>(OnCanvasSizeChanged);
         _layerGeometryChangedCallable = Callable.From<int>(OnLayerGeometryChanged);
+        _globalSignals.Connect(nameof(GlobalSignals.DisplaysChanged), _displaysChangedCallable);
+        _globalSignals.Connect(nameof(GlobalSignals.CanvasSizeChanged), _canvasSizeChangedCallable);
         _globalSignals.Connect(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable);
 
         if (_historyManager != null)
@@ -570,6 +578,8 @@ public partial class SettingsCanvasEditor : Control
     
     public override void _ExitTree()
     {
+        // TreeExiting may have already run Cleanup; safe to call again.
+        Cleanup();
         if (_globalSignals != null)
             _globalSignals.LocaleChanged -= OnLocaleChanged;
         base._ExitTree();

@@ -154,11 +154,20 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(34, 0)
 layout_mode = 2
 size_flags_horizontal = 0
+tooltip_text = "Continue mode: auto-continue (→) or auto-follow (↳)."
 theme_override_colors/font_color = Color(0.45822102, 0.5533762, 0.6033557, 1)
 theme_override_font_sizes/font_size = 9
-text = "Cont."
+text = "↳"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="HeaderScrollPad" type="Control" parent="VBoxContainer/CueListHeader"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+mouse_filter = 2
 
 [node name="Cue List" type="ScrollContainer" parent="VBoxContainer" unique_id=785083590]
 layout_mode = 2

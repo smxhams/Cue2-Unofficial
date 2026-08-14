@@ -56,6 +56,15 @@ public partial class LibraryInspector : Control
 
     private const int DefaultSplitOffset = 200;
 
+    /// <summary>Design-time Save dialog size (unscaled logical pixels).</summary>
+    private static readonly Vector2I SaveDialogDesignSize = new(560, 260);
+
+    /// <summary>Design-time name/rename dialog size (unscaled logical pixels).</summary>
+    private static readonly Vector2I NameDialogDesignSize = new(360, 140);
+
+    /// <summary>Design-time confirm/delete dialog size (unscaled logical pixels).</summary>
+    private static readonly Vector2I ConfirmDialogDesignSize = new(440, 180);
+
     // Save dialog
     private AcceptDialog _saveDialog;
     private LineEdit _saveNameEdit;
@@ -72,7 +81,7 @@ public partial class LibraryInspector : Control
     private LineEdit _nameDialogEdit;
     private Action<string> _nameDialogCallback;
 
-    // Confirm delete
+    // Confirm delete / overwrite
     private ConfirmationDialog _confirmDialog;
     private Action _confirmCallback;
 
@@ -106,7 +115,7 @@ public partial class LibraryInspector : Control
         {
             _globalSignals.ShellFocused -= OnShellFocused;
             _globalSignals.LocaleChanged -= OnLocaleChanged;
-            _globalSignals.UiScaleChanged -= OnSaveDialogUiScaleChanged;
+            _globalSignals.UiScaleChanged -= OnLibraryDialogUiScaleChanged;
         }
         UnwireScrollFit();
         UnwireToolbarSignals();
@@ -182,8 +191,8 @@ public partial class LibraryInspector : Control
             // Avoid double-subscribe if retried
             _globalSignals.ShellFocused -= OnShellFocused;
             _globalSignals.ShellFocused += OnShellFocused;
-            _globalSignals.UiScaleChanged -= OnSaveDialogUiScaleChanged;
-            _globalSignals.UiScaleChanged += OnSaveDialogUiScaleChanged;
+            _globalSignals.UiScaleChanged -= OnLibraryDialogUiScaleChanged;
+            _globalSignals.UiScaleChanged += OnLibraryDialogUiScaleChanged;
         }
 
         if (_library == null || !GodotObject.IsInstanceValid(_library))
@@ -395,19 +404,23 @@ public partial class LibraryInspector : Control
         _saveDialog.Confirmed += OnSaveDialogConfirmed;
         AddChild(_saveDialog);
 
-        // Generic name dialog
+        // Generic name dialog (new folder / rename)
         _nameDialog = new AcceptDialog
         {
             Title = "Name",
             OkButtonText = "OK",
             DialogHideOnOk = false
         };
-        _nameDialogEdit = new LineEdit();
+        _nameDialogEdit = new LineEdit
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(280, 0)
+        };
         _nameDialog.AddChild(_nameDialogEdit);
         _nameDialog.Confirmed += OnNameDialogConfirmed;
         AddChild(_nameDialog);
 
-        // Confirm
+        // Confirm (delete / overwrite)
         _confirmDialog = new ConfirmationDialog
         {
             Title = "Confirm",
@@ -419,33 +432,98 @@ public partial class LibraryInspector : Control
     }
 
     /// <summary>
-    /// Applies content scale to the Save to Library dialog only (it is a separate Window
-    /// and does not inherit the main window scale). Call immediately before showing it.
+    /// User UI scale × system/HiDPI base scale (same product used by content scale factor).
     /// </summary>
-    private void ApplySaveDialogUiScale()
+    private float GetEffectiveUiScale()
     {
-        if (_saveDialog == null || !GodotObject.IsInstanceValid(_saveDialog))
-            return;
         if (_globalData?.Settings == null)
-            return;
+            return 1f;
 
-        // Match FileDropPopup / SettingsCue2Prefs scaling path.
-        _saveDialog.WrapControls = true;
-        UiUtilities.RescaleUi(
-            _saveDialog,
-            _globalData.Settings.UiScale,
-            _globalData.BaseDisplayScale);
+        float user = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+        float baseScale = (float)_globalData.BaseDisplayScale;
+        if (user <= 0f) user = 1f;
+        if (baseScale <= 0f) baseScale = 1f;
+        return user * baseScale;
     }
 
     /// <summary>
-    /// Live UI-scale updates only while the Save to Library dialog is open.
+    /// Applies content scale to a library dialog <see cref="Window"/>.
+    /// These dialogs are separate windows and do not inherit the main window scale.
+    /// </summary>
+    /// <param name="dialog">Accept/confirm dialog to scale.</param>
+    /// <returns>Effective scale factor (user × system), or 1 when unavailable.</returns>
+    private float ApplyLibraryDialogUiScale(Window dialog)
+    {
+        if (dialog == null || !GodotObject.IsInstanceValid(dialog))
+            return 1f;
+        if (_globalData == null)
+            return 1f;
+
+        float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+        // Match FileDropPopup / SettingsCue2Prefs: wrap so outer size tracks scaled content.
+        dialog.WrapControls = true;
+        UiUtilities.RescaleUi(
+            dialog,
+            userScale,
+            _globalData.BaseDisplayScale);
+        return GetEffectiveUiScale();
+    }
+
+    /// <summary>
+    /// Centers a library dialog at a design-time size multiplied by effective UI scale.
+    /// </summary>
+    /// <param name="dialog">Dialog window to show.</param>
+    /// <param name="designSize">Unscaled logical size that fits the content at 1×.</param>
+    private void PopupLibraryDialog(Window dialog, Vector2I designSize)
+    {
+        if (dialog == null || !GodotObject.IsInstanceValid(dialog))
+            return;
+
+        float scale = ApplyLibraryDialogUiScale(dialog);
+        var size = ScaleDialogSize(designSize, scale);
+        dialog.MinSize = size;
+        dialog.PopupCentered(size);
+        // Ensure wrap remeasures after text/controls were updated for this show.
+        dialog.ChildControlsChanged();
+    }
+
+    /// <summary>
+    /// Scales a design-time size by effective UI scale (physical pixels for PopupCentered).
+    /// </summary>
+    private static Vector2I ScaleDialogSize(Vector2I designSize, float scale)
+    {
+        scale = Mathf.Max(0.01f, scale);
+        return new Vector2I(
+            Mathf.Max(1, Mathf.RoundToInt(designSize.X * scale)),
+            Mathf.Max(1, Mathf.RoundToInt(designSize.Y * scale)));
+    }
+
+    /// <summary>
+    /// Live UI-scale updates for any open library dialog (save / name / confirm).
     /// </summary>
     /// <param name="value">New user UI scale (ignored; read from Settings).</param>
-    private void OnSaveDialogUiScaleChanged(float value)
+    private void OnLibraryDialogUiScaleChanged(float value)
     {
-        if (_saveDialog == null || !GodotObject.IsInstanceValid(_saveDialog) || !_saveDialog.Visible)
-            return;
-        ApplySaveDialogUiScale();
+        if (_saveDialog != null && GodotObject.IsInstanceValid(_saveDialog) && _saveDialog.Visible)
+        {
+            float scale = ApplyLibraryDialogUiScale(_saveDialog);
+            _saveDialog.Size = ScaleDialogSize(SaveDialogDesignSize, scale);
+            _saveDialog.MinSize = _saveDialog.Size;
+        }
+
+        if (_nameDialog != null && GodotObject.IsInstanceValid(_nameDialog) && _nameDialog.Visible)
+        {
+            float scale = ApplyLibraryDialogUiScale(_nameDialog);
+            _nameDialog.Size = ScaleDialogSize(NameDialogDesignSize, scale);
+            _nameDialog.MinSize = _nameDialog.Size;
+        }
+
+        if (_confirmDialog != null && GodotObject.IsInstanceValid(_confirmDialog) && _confirmDialog.Visible)
+        {
+            float scale = ApplyLibraryDialogUiScale(_confirmDialog);
+            _confirmDialog.Size = ScaleDialogSize(ConfirmDialogDesignSize, scale);
+            _confirmDialog.MinSize = _confirmDialog.Size;
+        }
     }
 
     private void OnVisibilityChanged()
@@ -955,8 +1033,7 @@ public partial class LibraryInspector : Control
             ? "Folder: / (library root)"
             : $"Folder: /{_selectedFolder}";
 
-        ApplySaveDialogUiScale();
-        _saveDialog.PopupCentered(new Vector2I(560, 260));
+        PopupLibraryDialog(_saveDialog, SaveDialogDesignSize);
         _saveNameEdit.GrabFocus();
         _saveNameEdit.SelectAll();
     }
@@ -1036,7 +1113,7 @@ public partial class LibraryInspector : Control
             _confirmDialog.DialogText = $"'{name}' already exists. Overwrite?";
             _confirmCallback = () => DoSave(cue, name, overwrite: true);
             _confirmDialog.OkButtonText = "Overwrite";
-            _confirmDialog.PopupCentered();
+            PopupLibraryDialog(_confirmDialog, ConfirmDialogDesignSize);
             return;
         }
 
@@ -1124,7 +1201,7 @@ public partial class LibraryInspector : Control
             RefreshEntryList();
             UpdateActionButtons();
         };
-        _nameDialog.PopupCentered(new Vector2I(360, 120));
+        PopupLibraryDialog(_nameDialog, NameDialogDesignSize);
         _nameDialogEdit.GrabFocus();
         _nameDialogEdit.SelectAll();
     }
@@ -1164,7 +1241,7 @@ public partial class LibraryInspector : Control
                     }
                 }
             };
-            _nameDialog.PopupCentered(new Vector2I(360, 120));
+            PopupLibraryDialog(_nameDialog, NameDialogDesignSize);
             _nameDialogEdit.GrabFocus();
             _nameDialogEdit.SelectAll();
             return;
@@ -1190,7 +1267,7 @@ public partial class LibraryInspector : Control
                 SelectFolderInTree(_selectedFolder);
                 RefreshEntryList();
             };
-            _nameDialog.PopupCentered(new Vector2I(360, 120));
+            PopupLibraryDialog(_nameDialog, NameDialogDesignSize);
             _nameDialogEdit.GrabFocus();
             _nameDialogEdit.SelectAll();
         }
@@ -1221,7 +1298,7 @@ public partial class LibraryInspector : Control
                 RefreshEntryList();
                 UpdateActionButtons();
             };
-            _confirmDialog.PopupCentered();
+            PopupLibraryDialog(_confirmDialog, ConfirmDialogDesignSize);
             return;
         }
 
@@ -1246,7 +1323,7 @@ public partial class LibraryInspector : Control
                 RefreshEntryList();
                 UpdateActionButtons();
             };
-            _confirmDialog.PopupCentered();
+            PopupLibraryDialog(_confirmDialog, ConfirmDialogDesignSize);
         }
     }
 

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "f4mjyuwLKLo=",
+  "dgSpecHash": "3FHjCKKv9JE=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
@@ -13,16 +13,5 @@
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs\\3.4.2\\sdl3-cs.3.4.2.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs.native\\3.4.2\\sdl3-cs.native.3.4.2.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1701",
-      "level": "Warning",
-      "warningLevel": 1,
-      "message": "Package 'Rug.Osc 1.2.5' was restored using '.NETFramework,Version=v4.6.1, .NETFramework,Version=v4.6.2, .NETFramework,Version=v4.7, .NETFramework,Version=v4.7.1, .NETFramework,Version=v4.7.2, .NETFramework,Version=v4.8, .NETFramework,Version=v4.8.1' instead of the project target framework 'net8.0'. This package may not be fully compatible with your project.",
-      "libraryId": "Rug.Osc",
-      "targetGraphs": [
-        "net8.0"
-      ]
-    }
-  ]
+  "logs": []
 }

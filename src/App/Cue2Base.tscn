@@ -20,6 +20,7 @@
 [ext_resource type="Script" uid="uid://bpxw1fu0sgxtl" path="res://src/App/MainWindowHandles.cs" id="12_7xm62"]
 [ext_resource type="Script" uid="uid://b6p30ddy04yla" path="res://src/UI/Windows/OpenDialog.cs" id="14_5gc0s"]
 [ext_resource type="Script" uid="uid://dt1xvmnrr6u75" path="res://src/UI/Inspectors/InspectorTabsController.cs" id="15_insp_tabs"]
+[ext_resource type="Script" path="res://src/UI/Shell/SessionLoadOverlay.cs" id="16_sess_load"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e2apv"]
 draw_center = false
@@ -177,6 +178,81 @@ layout_mode = 2
 
 [node name="Footer" parent="MarginContainer/BoxContainer" unique_id=149458541 instance=ExtResource("8_jn5cm")]
 layout_mode = 2
+
+[node name="SessionLoadOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 20
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("16_sess_load")
+
+[node name="Dim" type="ColorRect" parent="SessionLoadOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.04, 0.05, 0.055, 0.88)
+
+[node name="Center" type="CenterContainer" parent="SessionLoadOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="SessionLoadOverlay/Center"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+
+[node name="CardMargin" type="MarginContainer" parent="SessionLoadOverlay/Center/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="SessionLoadOverlay/Center/Card/CardMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="SessionLoadOverlay/Center/Card/CardMargin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Opening show…"
+horizontal_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="SessionLoadOverlay/Center/Card/CardMargin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+max_value = 100.0
+show_percentage = false
+
+[node name="StatusLabel" type="Label" parent="SessionLoadOverlay/Center/Card/CardMargin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reading showfile…"
+horizontal_alignment = 1
+
+[node name="DetailLabel" type="Label" parent="SessionLoadOverlay/Center/Card/CardMargin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.72, 0.74, 1)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
 
 [node name="MainWindowHandles" type="Control" parent="." unique_id=1985802328]
 layout_mode = 1

@@ -132,7 +132,7 @@ public partial class Settings
     public void ApplyAudioDefaults(AudioComponent comp)
     {
         if (comp == null) return;
-        comp.Volume = Math.Clamp(AudioDefaultVolume, 0.0, 1.0);
+        comp.Volume = Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear((float)AudioDefaultVolume);
         comp.Pan = AudioDefaultPan;
         comp.Loop = AudioDefaultLoop;
         comp.PlayCount = Math.Max(1, AudioDefaultPlayCount);
@@ -178,7 +178,7 @@ public partial class Settings
         if (data == null) return;
 
         if (TryGetSettingsValue(data, "Volume", out var v))
-            AudioDefaultVolume = Math.Clamp(v.AsDouble(), 0.0, 1.0);
+            AudioDefaultVolume = Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear((float)v.AsDouble());
         if (TryGetSettingsValue(data, "Pan", out v))
             AudioDefaultPan = Mathf.Clamp(v.AsSingle(), -1f, 1f);
         if (TryGetSettingsValue(data, "Loop", out v))
@@ -238,7 +238,7 @@ public partial class Settings
         comp.Loop = VideoDefaultLoop;
         comp.PlayCount = Math.Max(1, VideoDefaultPlayCount);
         comp.UseAudio = VideoDefaultUseAudio;
-        comp.AudioVolume = Mathf.Clamp(VideoDefaultAudioVolume, 0f, 1f);
+        comp.AudioVolume = Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(VideoDefaultAudioVolume);
         comp.Volume = comp.AudioVolume;
         comp.Pan = VideoDefaultPan;
         comp.FadeInDuration = Math.Max(0.0, VideoDefaultFadeIn);
@@ -321,7 +321,7 @@ public partial class Settings
         if (TryGetSettingsValue(data, "UseAudio", out v))
             VideoDefaultUseAudio = ReadBoolVariant(v);
         if (TryGetSettingsValue(data, "AudioVolume", out v))
-            VideoDefaultAudioVolume = Mathf.Clamp(v.AsSingle(), 0f, 1f);
+            VideoDefaultAudioVolume = Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(v.AsSingle());
         if (TryGetSettingsValue(data, "Pan", out v))
             VideoDefaultPan = Mathf.Clamp(v.AsSingle(), -1f, 1f);
         if (TryGetSettingsValue(data, "FadeIn", out v))

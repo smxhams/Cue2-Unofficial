@@ -229,7 +229,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
                 if (_runtimeLevelLinear.HasValue)
                     return _runtimeLevelLinear.Value;
             }
-            return Mathf.Clamp((float)_audioComponent.Volume, 0f, 1f);
+            return AudioMixMatrix.ClampComponentGainLinear((float)_audioComponent.Volume);
         }
     }
 
@@ -257,7 +257,7 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
     public void SetRuntimeLevelLinear(float linear)
     {
         lock (_lock)
-            _runtimeLevelLinear = Mathf.Clamp(linear, 0f, 1f);
+            _runtimeLevelLinear = AudioMixMatrix.ClampComponentGainLinear(linear);
     }
 
     /// <summary>
@@ -691,7 +691,8 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
         {
             // Cue fade envelope × session master (volume + runtime mute from AudioDevices).
             masterVol = _volume * (_audioDevices?.GetEffectiveSessionMasterLinear() ?? 1f);
-            componentVol = _runtimeLevelLinear ?? Mathf.Clamp((float)_audioComponent.Volume, 0f, 1f);
+            componentVol = _runtimeLevelLinear
+                ?? AudioMixMatrix.ClampComponentGainLinear((float)_audioComponent.Volume);
             // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
             pan = SourceChannels == 2
                 ? (_runtimePan ?? Mathf.Clamp(_audioComponent.Pan, -1f, 1f))
@@ -728,6 +729,13 @@ public partial class ActiveAudioPlayback : GodotObject, IAudioPlayback
             _declickFramesRemaining = declickRemainSnapshot;
             _declickRampTotalFrames = declickTotalSnapshot;
             ApplyDeclickRamp(_mixBuffer.AsSpan(0, outSamples), frames, outCh);
+
+            // Peak clamp + silence floor (show Audio settings) before handing PCM to SDL.
+            if (_audioDevices != null)
+            {
+                _audioDevices.GetOutputLimits(out float maxAbs, out float minAbs);
+                AudioMixMatrix.ApplyOutputLimits(_mixBuffer.AsSpan(0, outSamples), maxAbs, minAbs);
+            }
 
             int byteCount = outSamples * sizeof(float);
             fixed (float* p = _mixBuffer)

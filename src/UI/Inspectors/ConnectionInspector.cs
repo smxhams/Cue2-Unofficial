@@ -95,7 +95,8 @@ public partial class ConnectionInspector : Control
     private void OnHistoryRestored(int scope)
     {
         if (scope != (int)HistoryManager.HistoryScope.Cue
-            && scope != (int)HistoryManager.HistoryScope.Cuelist)
+            && scope != (int)HistoryManager.HistoryScope.Cuelist
+            && scope != (int)HistoryManager.HistoryScope.MultiCue)
             return;
         if (!Visible || _connectionCardContainer == null || !_connectionCardContainer.Visible)
             return;

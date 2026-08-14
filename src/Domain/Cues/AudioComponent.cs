@@ -38,6 +38,9 @@ public class AudioComponent : ICueComponent
     /// </summary>
     /// <value>Returns -1 if looping enabled</value>
     public double TotalDuration { get; set; } = 0.0;
+    /// <summary>
+    /// Component volume (linear). Unity = 1.0 (0 dB); digital gain up to ≈3.98 (+12 dB) is allowed.
+    /// </summary>
     public double Volume { get; set; } = 1.0f;
 
     /// <summary>
@@ -58,7 +61,12 @@ public class AudioComponent : ICueComponent
     public double FadeInDuration { get; set; } = 0.0; // In seconds
     public double FadeOutDuration { get; set; } = 0.0; // In seconds
 
-    public byte[] WaveformData { get; set; } // Serialised waveform for display
+    /// <summary>
+    /// In-memory peak envelope for UI display only.
+    /// Not written into showfiles — peaks persist under <c>SessionDir/Waveforms/*.c2wf</c>
+    /// via <see cref="Cue2.Services.MediaEngine.GenerateWaveformAsync"/>.
+    /// </summary>
+    public byte[] WaveformData { get; set; }
     
     /// <summary>
     /// Full metadata from file (duration, channels, sample rate, bit depth, codec, format).
@@ -86,8 +94,7 @@ public class AudioComponent : ICueComponent
         {
             data.Add("Routing", Routing.GetData());
         }
-        data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
-        
+        // Waveform peaks are session disk-cache only (Waveforms/*.c2wf), not showfile payload.
 
         if (Metadata != null) 
         { 
@@ -162,6 +169,8 @@ public class AudioComponent : ICueComponent
         PlayCount = data.ContainsKey("PlayCount") ? data["PlayCount"].AsInt32() : 1;
         FadeInDuration = data.ContainsKey("FadeInDuration") ? data["FadeInDuration"].AsDouble() : 0.0;
         FadeOutDuration = data.ContainsKey("FadeOutDuration") ? data["FadeOutDuration"].AsDouble() : 0.0;
+        // Legacy showfiles may still embed peaks; accept into memory so open can migrate to Waveforms/.
+        // New saves omit this key — UI regenerates via MediaEngine disk cache when empty.
         WaveformData = TryReadByteArray(data, "WaveformData");
         PatchId = data.ContainsKey("PatchId") ? data["PatchId"].AsInt32() : -1;
         // Runtime Patch reference is re-linked after load; clear here so a stale object cannot win.

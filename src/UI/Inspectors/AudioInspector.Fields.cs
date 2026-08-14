@@ -292,6 +292,8 @@ public partial class AudioInspector
             _selectFileContainer.Visible = true;
             _inspectorContent.Visible = false;
             _fileUrl.Text = "";
+            RestoreFileUrlPlaceholder();
+            ClearFileMetadataLabel();
             if (_deleteAudioComponentButton != null)
                 _deleteAudioComponentButton.Visible = false;
             return;
@@ -372,13 +374,10 @@ public partial class AudioInspector
                 if (textField.HasFocus()) textField.ReleaseFocus();
                 return;
             }
-            if (dbValue > 0)
-            {
-                dbValue = -dbValue;
-            }
-            var volume = UiUtilities.DbToLinear(dbValue.ToString());
-            var dbReturn = UiUtilities.LinearToDb(volume);
-            textField.Text = $"{dbReturn}dB";
+            // Digital gain allowed (−60…+12 dB). Do not treat positive as attenuation.
+            dbValue = Mathf.Clamp(dbValue, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
+            var volume = UiUtilities.DbToLinear(dbValue);
+            textField.Text = UiUtilities.FormatComponentVolumeDb(volume);
             if (targets.All(t => Math.Abs(t.Component.Volume - volume) < 1e-6f))
             {
                 if (textField.HasFocus()) textField.ReleaseFocus();

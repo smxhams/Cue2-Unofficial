@@ -458,8 +458,17 @@ public partial class ActiveCue
     /// True when the control action's <see cref="ControlComponent.ExecuteAsync"/> may take
     /// many seconds (property animation). These must not gate media or later transport controls.
     /// </summary>
-    private static bool IsLongRunningControlAction(ControlAction action) =>
-        action is ControlAction.Fade or ControlAction.TranslateLayer;
+    /// <summary>
+    /// True when the control may occupy wall-clock time (progress bar / non-blocking of media).
+    /// Includes Stop/GO when they have a non-zero fade duration.
+    /// </summary>
+    private bool IsLongRunningControlAction(ControlComponent control)
+    {
+        if (control == null) return false;
+        float sessionStop = _settings?.StopFadeDuration ?? 0f;
+        // Fade defaults to 1s; Stop may use session default; GO only if fade-in &gt; 0.
+        return control.GetContentDurationSeconds(sessionStop) > 1e-9;
+    }
 
     /// <summary>
     /// Runs control components in list order. Transport actions are awaited; Fade / Translate
@@ -479,9 +488,10 @@ public partial class ActiveCue
             if (_isCleaned || _suppressContentCompleted)
                 return;
 
-            if (IsLongRunningControlAction(controlComp.Action))
+            if (IsLongRunningControlAction(controlComp))
             {
-                // Panel completes when the fade/translate task finishes (see TriggerControlComponent finally).
+                // Panel completes when the timed action finishes (see TriggerControlComponent finally).
+                // Fire-and-forget so media / other controls are not gated by long fades.
                 _ = TriggerControlComponent(controlComp);
             }
             else
@@ -665,14 +675,44 @@ public partial class ActiveCue
 
     private async Task TriggerControlComponent(ControlComponent comp)
     {
+        var panel = _activeControlComponents.FirstOrDefault(kv => kv.Value == comp).Key;
+        double holdDuration = 0;
+        ulong startMsec = 0;
         try
         {
+            // Mark timed progress start so the active bar fills while ExecuteAsync runs.
+            float sessionStop = _settings?.StopFadeDuration ?? 0f;
+            holdDuration = comp?.GetContentDurationSeconds(sessionStop) ?? 0;
+            if (panel != null && holdDuration > 1e-9)
+            {
+                startMsec = Time.GetTicksMsec();
+                _controlTimedProgress[panel] = new ControlTimedProgress
+                {
+                    DurationSec = holdDuration,
+                    StartMsec = startMsec,
+                    Started = true
+                };
+            }
+
             GlobalData gd = null;
             if (Engine.GetMainLoop() is SceneTree st)
                 gd = st.Root.GetNodeOrNull<GlobalData>("/root/GlobalData");
 
             float sessionStopFade = gd?.Settings?.StopFadeDuration ?? 0f;
             await comp.ExecuteAsync(gd?.CueCommandExecutor, _cue?.Id ?? -1, sessionStopFade);
+
+            // Stop/GO kick off target fades without awaiting them — keep this row until
+            // its configured duration elapses so the progress bar can complete.
+            if (holdDuration > 1e-9 && startMsec > 0)
+            {
+                while (!_isCleaned && !_suppressContentCompleted)
+                {
+                    double elapsed = (Time.GetTicksMsec() - startMsec) / 1000.0;
+                    if (elapsed >= holdDuration - 1e-3)
+                        break;
+                    await Task.Delay(16);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -682,7 +722,6 @@ public partial class ActiveCue
         }
         finally
         {
-            var panel = _activeControlComponents.FirstOrDefault(kv => kv.Value == comp).Key;
             if (panel != null)
                 HandleControlComponentCompleted(panel);
         }

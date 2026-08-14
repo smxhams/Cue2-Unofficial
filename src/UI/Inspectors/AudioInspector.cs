@@ -71,6 +71,8 @@ public partial class AudioInspector : Control
     private VBoxContainer _inspectorContent;
     private Button _buttonSelectFile;
     private LineEdit _fileUrl;
+    private Label _fileMetadataLabel;
+    private const string FileUrlPlaceholderKey = "URL (Can drag and drop files here)";
     private Button _routingCollapseButton;
     private VBoxContainer _routingAccordian;
     private Button _waveformCollapseButton;
@@ -139,6 +141,7 @@ public partial class AudioInspector : Control
         _buttonSelectFile = GetNode<Button>("%ButtonSelectFile");
         _fileUrl = GetNode<LineEdit>("%FileURL");
         _fileUrlMissingStyle = InspectorMediaUrlStyle.CreateMissingStyle();
+        _fileMetadataLabel = GetNodeOrNull<Label>("%FileMetadataLabel");
         _deleteAudioComponentButton = GetNodeOrNull<Button>("%DeleteAudioComponentButton");
         if (_deleteAudioComponentButton != null)
         {
@@ -274,7 +277,91 @@ public partial class AudioInspector : Control
         UiLocalizer.LocalizeTree(this);
         if (_globalSignals != null)
             _globalSignals.LocaleChanged += OnLocaleChanged;
-}
+    }
+
+    /// <summary>
+    /// Restores the File URL placeholder used when no path is set (matches video inspector).
+    /// </summary>
+    private void RestoreFileUrlPlaceholder()
+    {
+        if (_fileUrl == null)
+            return;
+        _fileUrl.PlaceholderText = UiLocalizer.T(FileUrlPlaceholderKey);
+    }
+
+    /// <summary>
+    /// Hides the compact audio file-details line under the File URL.
+    /// </summary>
+    private void ClearFileMetadataLabel()
+    {
+        if (_fileMetadataLabel == null)
+            return;
+        _fileMetadataLabel.Text = "";
+        _fileMetadataLabel.TooltipText = "";
+        _fileMetadataLabel.Visible = false;
+    }
+
+    /// <summary>
+    /// Fills the compact file-details label from the focused audio component metadata.
+    /// </summary>
+    private void UpdateFileMetadataLabel()
+    {
+        if (_fileMetadataLabel == null)
+            return;
+
+        var meta = _focusedAudioComponent?.Metadata;
+        if (meta == null || (meta.Channels <= 0 && string.IsNullOrEmpty(meta.Codec)))
+        {
+            ClearFileMetadataLabel();
+            return;
+        }
+
+        var parts = new List<string>();
+        if (meta.Channels > 0)
+            parts.Add($"{meta.Channels}ch");
+        if (meta.SampleRate > 0)
+            parts.Add(FormatAudioSampleRate(meta.SampleRate));
+        if (meta.BitDepth > 0)
+            parts.Add($"{meta.BitDepth}-bit");
+        if (!string.IsNullOrWhiteSpace(meta.Codec))
+            parts.Add(meta.Codec);
+
+        string compact = string.Join(" · ", parts);
+        if (string.IsNullOrWhiteSpace(compact))
+        {
+            ClearFileMetadataLabel();
+            return;
+        }
+
+        string tooltip = $"Duration: {UiUtilities.FormatTime(meta.Duration)}\n" +
+                         $"Channels: {meta.Channels}\n" +
+                         $"Sample Rate: {meta.SampleRate} Hz\n" +
+                         $"Bit Depth: {meta.BitDepth}\n" +
+                         $"Codec: {meta.Codec}\n" +
+                         $"Format: {meta.Format}";
+
+        _fileMetadataLabel.Text = compact;
+        _fileMetadataLabel.TooltipText = tooltip;
+        _fileMetadataLabel.Visible = true;
+        if (_fileUrl != null && !_fileUrlMissing)
+            _fileUrl.TooltipText = tooltip;
+    }
+
+    /// <summary>
+    /// Formats a sample rate for the compact file-details line (e.g. 48000 → 48 kHz).
+    /// </summary>
+    /// <param name="hz">Sample rate in Hertz.</param>
+    /// <returns>Short display string.</returns>
+    private static string FormatAudioSampleRate(int hz)
+    {
+        if (hz <= 0)
+            return string.Empty;
+        if (hz % 1000 == 0)
+            return $"{hz / 1000} kHz";
+        if (hz % 100 == 0)
+            return $"{hz / 1000.0:0.0} kHz";
+        return $"{hz} Hz";
+    }
 
     /// <inheritdoc />
     public override void _ExitTree()

@@ -526,7 +526,8 @@ public partial class TextInspector : Control
     private void OnHistoryRestored(int scope)
     {
         if (scope == (int)HistoryManager.HistoryScope.Cue
-            || scope == (int)HistoryManager.HistoryScope.Cuelist)
+            || scope == (int)HistoryManager.HistoryScope.Cuelist
+            || scope == (int)HistoryManager.HistoryScope.MultiCue)
         {
             CallDeferred(MethodName.RefreshFromFocusedCue);
         }

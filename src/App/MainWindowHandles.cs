@@ -82,7 +82,8 @@ public partial class MainWindowHandles : Control
 		// 2) Restore saved geometry OR scale design-time default once — never both
 		// 3) Deferred re-apply after the display server settles
 		_suppressGeometrySave = true;
-		UiUtilities.RescaleUi(window, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(window, userScale, _globalData.BaseDisplayScale);
 		// WrapControls would auto-grow the frame when ContentScaleFactor changes and
 		// overwrite the restored size; main window geometry is managed explicitly.
 		window.WrapControls = false;

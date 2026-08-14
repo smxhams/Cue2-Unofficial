@@ -46,6 +46,12 @@ public partial class AudioDevices : Node
 	/// </summary>
 	private bool _sessionMasterMuted;
 
+	/// <summary>Peak clamp magnitude (linear) after mix; fill threads read this under the master lock.</summary>
+	private float _outputMaxAbs = 1f;
+
+	/// <summary>Silence-floor magnitude (linear); samples below this are zeroed after mix.</summary>
+	private float _outputMinAbs;
+
 	/// <summary>Lock for session master fields read from audio fill threads.</summary>
 	private readonly object _sessionMasterLock = new object();
 	
@@ -56,6 +62,12 @@ public partial class AudioDevices : Node
 	    _globalData = GetNode<GlobalData>("/root/GlobalData");
 	    _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	    _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");
+
+	    // Seed fill-thread limit cache from show settings (or defaults if not loaded yet).
+	    if (_globalData?.Settings != null)
+		    SetOutputLimits(_globalData.Settings.AudioOutputMaxDb, _globalData.Settings.AudioOutputMinDb);
+	    else
+		    SetOutputLimits(Settings.DefaultAudioOutputMaxDb, Settings.DefaultAudioOutputMinDb);
 
 	    _pollTimer = new Timer();
 	    _pollTimer.WaitTime = 0.5;
@@ -122,8 +134,23 @@ public partial class AudioDevices : Node
 		{
 			if (name != null && patch.Value.OutputDevices.ContainsKey(name))
 			{
+				bool alreadyOpen = false;
+				foreach (var dev in _openDevices.Values)
+				{
+					if (dev.Name == name)
+					{
+						alreadyOpen = true;
+						break;
+					}
+				}
+
 				OpenAudioDevice(name, out var _);
-				_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Needed audio device reconnected: {name}", 0);
+				if (!alreadyOpen)
+				{
+					_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+						$"Needed audio device reconnected: {name}", 0);
+				}
+
 				return;
 			}
 		}
@@ -291,8 +318,22 @@ public partial class AudioDevices : Node
 				anyClosed = true;
 		}
 
-		if (anyClosed)
+		if (anyClosed && !SuppressChangedSignals)
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+	}
+
+	/// <summary>
+	/// When true, open/close and <see cref="SyncOpenDevices"/> do not emit
+	/// <see cref="GlobalSignals.AudioDevicesChanged"/>. The caller emits once after a batch.
+	/// </summary>
+	public bool SuppressChangedSignals { get; set; }
+
+	/// <summary>
+	/// Emits <see cref="GlobalSignals.AudioDevicesChanged"/> (used after a suppressed batch).
+	/// </summary>
+	public void NotifyDevicesChanged()
+	{
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
 	}
 
     /// <summary>
@@ -346,7 +387,8 @@ public partial class AudioDevices : Node
 		    _openDevices.Add(device.DeviceId, device);
 		    _physicalIdToDeviceId[device.PhysicalId] = device.DeviceId;
 
-		    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
+		    if (!SuppressChangedSignals)
+			    _globalSignals.EmitSignal(nameof(GlobalSignals.AudioDevicesChanged));
 
 		    error = "";
 		    return device;
@@ -607,6 +649,40 @@ public partial class AudioDevices : Node
     }
 
     /// <summary>
+    /// Peak clamp and silence-floor magnitudes for fill/mix threads. Thread-safe.
+    /// </summary>
+    /// <param name="maxAbs">Absolute sample ceiling (linear). ≤0 means no clamp.</param>
+    /// <param name="minAbs">Silence floor (linear). ≤0 means no gate.</param>
+    public void GetOutputLimits(out float maxAbs, out float minAbs)
+    {
+	    lock (_sessionMasterLock)
+	    {
+		    maxAbs = _outputMaxAbs;
+		    minAbs = _outputMinAbs;
+	    }
+    }
+
+    /// <summary>
+    /// Pushes show-scoped max/min dB levels into the live fill-thread cache.
+    /// </summary>
+    /// <param name="maxDb">Peak clamp ceiling in dBFS (0 = full scale).</param>
+    /// <param name="minDb">Silence floor in dBFS (−120 ≈ gate off).</param>
+    public void SetOutputLimits(float maxDb, float minDb)
+    {
+	    float maxAbs = AudioMixMatrix.DbToAbsLinear(maxDb);
+	    float minAbs = AudioMixMatrix.DbToAbsLinear(minDb);
+	    // 0 dB must remain exact full-scale clamp (1.0), not a float drift under 1.
+	    if (maxDb >= -0.0001f)
+		    maxAbs = 1f;
+
+	    lock (_sessionMasterLock)
+	    {
+		    _outputMaxAbs = maxAbs;
+		    _outputMinAbs = minAbs;
+	    }
+    }
+
+    /// <summary>
     /// Current session master volume linear 0–1 (ignores mute). Thread-safe.
     /// </summary>
     public float SessionMasterLinear
@@ -660,19 +736,26 @@ public partial class AudioDevices : Node
     }
 
     /// <summary>
-    /// Clears runtime mute and reloads volume from show settings (New Session / load).
+    /// Clears runtime mute and reloads volume + output limits from show settings (New Session / load).
     /// </summary>
     public void SyncSessionMasterFromSettings()
     {
 	    float linear = 1f;
+	    float maxDb = Settings.DefaultAudioOutputMaxDb;
+	    float minDb = Settings.DefaultAudioOutputMinDb;
 	    if (_globalData?.Settings != null)
+	    {
 		    linear = Math.Clamp(_globalData.Settings.AudioMasterVolume, 0f, 1f);
+		    maxDb = _globalData.Settings.AudioOutputMaxDb;
+		    minDb = _globalData.Settings.AudioOutputMinDb;
+	    }
 
 	    lock (_sessionMasterLock)
 	    {
 		    _sessionMasterLinear = linear;
 		    _sessionMasterMuted = false;
 	    }
+	    SetOutputLimits(maxDb, minDb);
 	    EmitSessionMasterControlChanged();
     }
 

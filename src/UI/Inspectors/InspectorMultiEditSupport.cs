@@ -24,7 +24,7 @@ namespace Cue2.UI.Inspectors;
 /// <remarks>
 /// Multi-edit is active when Settings → Multi-edit is on and more than one cue is selected.
 /// Component targets are the subset of the selection that actually has that component type.
-/// History uses a cuelist snapshot when applying to two or more cues so undo restores together.
+/// History uses a multi-cue snapshot (selected ids only) when applying to two or more cues.
 /// Field display policy: show a value when all targets agree; otherwise blank / mixed.
 /// </remarks>
 public static class InspectorMultiEditSupport
@@ -128,7 +128,16 @@ public static class InspectorMultiEditSupport
                 ?? (string.IsNullOrEmpty(singleDescription)
                     ? "Multi-edit"
                     : "Multi-edit " + singleDescription);
-            history.RecordCuelistChange(multi, coalesceKey);
+            // Capture only selected cues — full cuelist mementos rebuild every shell on undo (too slow).
+            var ids = new List<int>();
+            foreach (var cue in GetSelectedCues())
+            {
+                if (cue != null)
+                    ids.Add(cue.Id);
+            }
+            if (ids.Count == 0 && primaryCueId >= 0)
+                ids.Add(primaryCueId);
+            history.RecordMultiCueChange(ids, multi, coalesceKey);
         }
         else if (primaryCueId >= 0)
         {

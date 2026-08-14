@@ -257,9 +257,24 @@ public partial class SettingsCanvasEditor
         ForceStageRedraw();
     }
 
+    private bool _cleanedUp;
+
+    /// <summary>
+    /// Disconnects process-lifetime signals and window listeners so Settings can free on close/exit.
+    /// Idempotent — called from TreeExiting and <see cref="_ExitTree"/>.
+    /// </summary>
     private void Cleanup()
     {
-        GetWindow().SizeChanged -= OnWindowSizeChanged;
+        if (_cleanedUp)
+            return;
+        _cleanedUp = true;
+
+        TreeExiting -= Cleanup;
+
+        var hostWindow = GetWindow();
+        if (hostWindow != null && GodotObject.IsInstanceValid(hostWindow))
+            hostWindow.SizeChanged -= OnWindowSizeChanged;
+
         VisibilityChanged -= OnEditorVisibilityChanged;
         if (_scrollContainer != null && IsInstanceValid(_scrollContainer))
             _scrollContainer.Resized -= OnStageResized;
@@ -267,11 +282,33 @@ public partial class SettingsCanvasEditor
             _bodyHSplit.Resized -= OnBodyHSplitResized;
         if (_historyManager != null)
             _historyManager.HistoryRestored -= OnHistoryRestored;
-        if (_globalSignals != null && GodotObject.IsInstanceValid(_globalSignals) &&
-            _layerGeometryChangedCallable.Target != null &&
-            _globalSignals.IsConnected(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable))
+
+        if (_globalSignals != null && GodotObject.IsInstanceValid(_globalSignals))
         {
-            _globalSignals.Disconnect(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable);
+            if (_displaysChangedCallable.Target != null
+                && _globalSignals.IsConnected(nameof(GlobalSignals.DisplaysChanged), _displaysChangedCallable))
+            {
+                _globalSignals.Disconnect(nameof(GlobalSignals.DisplaysChanged), _displaysChangedCallable);
+            }
+
+            if (_canvasSizeChangedCallable.Target != null
+                && _globalSignals.IsConnected(nameof(GlobalSignals.CanvasSizeChanged), _canvasSizeChangedCallable))
+            {
+                _globalSignals.Disconnect(nameof(GlobalSignals.CanvasSizeChanged), _canvasSizeChangedCallable);
+            }
+
+            if (_layerGeometryChangedCallable.Target != null
+                && _globalSignals.IsConnected(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable))
+            {
+                _globalSignals.Disconnect(nameof(GlobalSignals.LayerGeometryChanged), _layerGeometryChangedCallable);
+            }
+        }
+
+        // Drop any open layer-delete popup so it does not outlive Settings.
+        if (_activeLayerDeleteDialog != null && GodotObject.IsInstanceValid(_activeLayerDeleteDialog))
+        {
+            _activeLayerDeleteDialog.QueueFree();
+            _activeLayerDeleteDialog = null;
         }
     }
 

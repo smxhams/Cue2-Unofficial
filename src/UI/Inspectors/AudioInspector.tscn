@@ -114,11 +114,22 @@ layout_mode = 2
 focus_mode = 0
 text = "Select File"
 
-[node name="FileURL" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer" unique_id=470711093]
+[node name="FileUrlColumn" type="VBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="FileURL" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer/FileUrlColumn" unique_id=470711093]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "URL (Can drag and drop files here)"
+
+[node name="FileMetadataLabel" type="Label" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer/FileUrlColumn"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
 
 [node name="DeleteAudioComponentButton" type="Button" parent="MarginContainer/ShellScroll/VBoxContainer/SelectFileContainer"]
 unique_name_in_owner = true
@@ -132,7 +143,7 @@ tooltip_text = "Remove the audio component from this cue."
 expand_icon = true
 
 [node name="Spacer" type="Control" parent="MarginContainer/ShellScroll/VBoxContainer" unique_id=1439553204]
-custom_minimum_size = Vector2(0, 20)
+custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 
 [node name="InspectorContent" type="VBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer" unique_id=613218714]
@@ -149,7 +160,7 @@ text = "Start Time:"
 
 [node name="StartTimeInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/HBoxContainer3" unique_id=1746075234]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 tooltip_text = "m:s:ms"
 placeholder_text = "00m:00s.000ms"
@@ -160,7 +171,7 @@ text = "End Time:"
 
 [node name="EndTimeInput" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/HBoxContainer3" unique_id=561618994]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 tooltip_text = "m:s:ms"
 placeholder_text = "00m:00s.000ms"
@@ -171,7 +182,7 @@ text = "Duration:"
 
 [node name="DurationValue" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/HBoxContainer3" unique_id=63512769]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 tooltip_text = "m:s:ms"
 placeholder_text = "00m:00s.000ms"
@@ -183,7 +194,7 @@ text = "File Duration:"
 
 [node name="FileDurationValue" type="LineEdit" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/HBoxContainer3" unique_id=1603900997]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 tooltip_text = "m:s:ms"
 placeholder_text = "00m:00s.000ms"
@@ -330,14 +341,19 @@ theme_type_variation = &"HSepLight"
 
 [node name="RoutingAccordian" type="VBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent" unique_id=337451202]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(1137, 31)
 layout_mode = 2
+size_flags_horizontal = 3
 
-[node name="RoutingContainer" type="VBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/RoutingAccordian" unique_id=409762368]
+[node name="RoutingScroll" type="ScrollContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/RoutingAccordian"]
+layout_mode = 2
+size_flags_horizontal = 3
+vertical_scroll_mode = 0
+
+[node name="RoutingContainer" type="VBoxContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/RoutingAccordian/RoutingScroll" unique_id=409762368]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="RoutingMatrixGrid" type="GridContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/RoutingAccordian/RoutingContainer" unique_id=859822815]
+[node name="RoutingMatrixGrid" type="GridContainer" parent="MarginContainer/ShellScroll/VBoxContainer/InspectorContent/RoutingAccordian/RoutingScroll/RoutingContainer" unique_id=859822815]
 unique_name_in_owner = true
 layout_mode = 2
 

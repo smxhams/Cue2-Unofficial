@@ -175,6 +175,82 @@ tooltip_text = "Silences all cue audio immediately without changing master volum
 focus_mode = 0
 text = "Mute all outputs"
 
+[node name="HSeparatorLimits" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="LimitsHeader" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="LimitsSectionLabel" type="Label" parent="VBoxContainer/LimitsHeader"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Output protection"
+
+[node name="LimitsDescription" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "Applied after mixing each cue path (standalone and video audio). Max level hard-clamps peaks to avoid digital overload; min level zeros near-silence (noise gate). Concurrent cues still sum on the device — leave master headroom for dense stacks."
+autowrap_mode = 3
+
+[node name="OutputMaxRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OutputMaxLabel" type="Label" parent="VBoxContainer/OutputMaxRow"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+tooltip_text = "Peak clamp ceiling after mix (dBFS). Samples above this absolute level are limited. 0dB = full scale."
+text = "Max level"
+vertical_alignment = 1
+
+[node name="OutputMaxInput" type="LineEdit" parent="VBoxContainer/OutputMaxRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+tooltip_text = "Peak clamp ceiling after mix (dBFS). Samples above this absolute level are limited. 0dB = full scale."
+text = "0.0dB"
+alignment = 1
+max_length = 12
+
+[node name="OutputMaxResetButton" type="Button" parent="VBoxContainer/OutputMaxRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
+[node name="OutputMinRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="OutputMinLabel" type="Label" parent="VBoxContainer/OutputMinRow"]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+tooltip_text = "Silence floor after mix (dBFS). Samples quieter than this become digital silence. −120dB effectively disables the gate."
+text = "Min level (silence)"
+vertical_alignment = 1
+
+[node name="OutputMinInput" type="LineEdit" parent="VBoxContainer/OutputMinRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+tooltip_text = "Silence floor after mix (dBFS). Samples quieter than this become digital silence. −120dB effectively disables the gate."
+text = "-90.0dB"
+alignment = 1
+max_length = 12
+
+[node name="OutputMinResetButton" type="Button" parent="VBoxContainer/OutputMinRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+tooltip_text = "Reset to default"
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+
 [node name="HSeparatorPerf" type="HSeparator" parent="VBoxContainer" unique_id=937025652]
 layout_mode = 2
 

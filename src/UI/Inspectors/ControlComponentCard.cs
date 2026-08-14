@@ -168,8 +168,11 @@ public partial class ControlComponentCard : PanelContainer
             _audioFadeLineEdit.TextSubmitted += OnAudioFadeSubmitted;
             _audioFadeLineEdit.FocusExited += OnAudioFadeFocusExited;
             _audioFadeLineEdit.TextChanged += _ => _audioFadeEditing = true;
-            // Relative fades may go above 0 dB; absolute commit still clamps in handler.
-            LineEditDbDragSlider.EnableSignedDb(_audioFadeLineEdit);
+            // Volume fades: absolute −60…+12; relative ± with result clamped on execute.
+            LineEditDbDragSlider.EnableSignedDb(
+                _audioFadeLineEdit,
+                minDb: UiUtilities.MinVolumeDb,
+                maxDb: UiUtilities.MaxComponentGainDb);
         }
 
         if (_opacityFadeLineEdit != null)
@@ -287,6 +290,28 @@ public partial class ControlComponentCard : PanelContainer
         _fadeLineEdit.TextSubmitted += OnFadeSubmitted;
         _fadeLineEdit.FocusExited += OnFadeFocusExited;
         _fadeLineEdit.TextChanged += _ => _fadeEditing = true;
+
+        // Esc releases focus so show hotkeys (GO, etc.) resume. Dynamic matrix cells wired on build.
+        WireAllLineEditEscapeUnfocus();
+    }
+
+    /// <summary>
+    /// Ensures every LineEdit on this card unfocuses on Escape (including fields that may be
+    /// hidden for the current action type).
+    /// </summary>
+    private void WireAllLineEditEscapeUnfocus()
+    {
+        UiUtilities.WireLineEditEscapeReleasesFocus(_idLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_numberLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_fadeLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_audioFadeLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_opacityFadeLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_panFadeLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_seekTimeLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_sizeXLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_sizeYLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_posXLineEdit);
+        UiUtilities.WireLineEditEscapeReleasesFocus(_posYLineEdit);
     }
 
     /// <inheritdoc />
@@ -663,13 +688,13 @@ public partial class ControlComponentCard : PanelContainer
     {
         if (_audioFadeLineEdit == null || _component == null) return;
         string dbText = $"{_component.FadeAudioDb:0.#}dB";
-        if (relative && _component.FadeAudioDb > 0)
+        if (_component.FadeAudioDb > 0)
             dbText = $"+{_component.FadeAudioDb:0.#}dB";
         _audioFadeLineEdit.Text = dbText;
         _audioFadeLineEdit.PlaceholderText = relative ? "±dB" : "0dB";
         _audioFadeLineEdit.TooltipText = relative
-            ? "Relative change in dB (clamped to −60…0). Active playback only."
-            : "Absolute target level in dB (−60…0). Active playback only.";
+            ? "Relative change in dB (result clamped to −60…+12). Active playback only."
+            : "Absolute target level in dB (−60…+12 digital gain). Active playback only.";
         _audioFadeLineEdit.Editable = true;
     }
 
@@ -841,8 +866,10 @@ public partial class ControlComponentCard : PanelContainer
                 if (relative)
                     LineEditDbDragSlider.EnableSignedDb(volumeEdit);
                 else
-                    LineEditDbDragSlider.EnableVolume(volumeEdit);
+                    // Matrix fade absolute targets are unity-max (routing cells cannot boost).
+                    LineEditDbDragSlider.EnableUnityVolume(volumeEdit);
 
+                UiUtilities.WireLineEditEscapeReleasesFocus(volumeEdit);
                 _matrixGrid.AddChild(volumeEdit);
             }
         }
@@ -1046,6 +1073,7 @@ public partial class ControlComponentCard : PanelContainer
         }
 
         RefreshFromComponent();
+        NotifyOwnerDurationChanged();
     }
 
     private void OnFadeSubmitted(string text)
@@ -1105,6 +1133,7 @@ public partial class ControlComponentCard : PanelContainer
             _component.ResetTranslateDurationToDefault();
             _fadeEditing = false;
             RefreshFromComponent();
+            NotifyOwnerDurationChanged();
             return;
         }
 
@@ -1129,6 +1158,7 @@ public partial class ControlComponentCard : PanelContainer
         _component.TranslateDuration = seconds;
         _fadeEditing = false;
         RefreshFromComponent();
+        NotifyOwnerDurationChanged();
     }
 
     private void CommitPropertyFadeDuration(string text)
@@ -1147,6 +1177,7 @@ public partial class ControlComponentCard : PanelContainer
             _component.ResetPropertyFadeDurationToDefault();
             _fadeEditing = false;
             RefreshFromComponent();
+            NotifyOwnerDurationChanged();
             return;
         }
 
@@ -1171,6 +1202,7 @@ public partial class ControlComponentCard : PanelContainer
         _component.PropertyFadeDuration = seconds;
         _fadeEditing = false;
         RefreshFromComponent();
+        NotifyOwnerDurationChanged();
     }
 
     private void OnFadeModeSelected(long index)
@@ -1701,7 +1733,13 @@ public partial class ControlComponentCard : PanelContainer
         }
 
         if (_component.FadeMode == ControlFadeMode.Absolute)
-            db = Mathf.Clamp(db, -60f, 0f);
+        {
+            // Component volume fades allow digital gain; routing-matrix targets stay unity-max.
+            if (_component.FadeProperty == ControlFadeProperty.RoutingMatrix)
+                db = Mathf.Clamp(db, UiUtilities.MinVolumeDb, 0f);
+            else
+                db = Mathf.Clamp(db, UiUtilities.MinVolumeDb, UiUtilities.MaxComponentGainDb);
+        }
 
         if (Math.Abs(_component.FadeAudioDb - db) < 1e-4f)
         {
@@ -1832,6 +1870,7 @@ public partial class ControlComponentCard : PanelContainer
             _component.ResetGoFadeInToDefault();
             _fadeEditing = false;
             RefreshFromComponent();
+            NotifyOwnerDurationChanged();
             return;
         }
 
@@ -1856,6 +1895,7 @@ public partial class ControlComponentCard : PanelContainer
         _component.GoFadeInDuration = seconds;
         _fadeEditing = false;
         RefreshFromComponent();
+        NotifyOwnerDurationChanged();
     }
 
     private void CommitStopFade(string text)
@@ -1877,6 +1917,7 @@ public partial class ControlComponentCard : PanelContainer
             _component.ResetStopFadeToSessionDefault();
             _fadeEditing = false;
             RefreshFromComponent();
+            NotifyOwnerDurationChanged();
             return;
         }
 
@@ -1903,6 +1944,7 @@ public partial class ControlComponentCard : PanelContainer
             _component.ResetStopFadeToSessionDefault();
             _fadeEditing = false;
             RefreshFromComponent();
+            NotifyOwnerDurationChanged();
             return;
         }
 
@@ -1919,6 +1961,7 @@ public partial class ControlComponentCard : PanelContainer
         _component.StopFadeDuration = seconds;
         _fadeEditing = false;
         RefreshFromComponent();
+        NotifyOwnerDurationChanged();
     }
 
     private void OnDeletePressed()
@@ -2448,5 +2491,26 @@ public partial class ControlComponentCard : PanelContainer
         if (cueId < 0) return;
         InspectorMultiEditSupport.RecordBeforeEditById(
             _globalData, multiHistory: false, cueId, description);
+    }
+
+    /// <summary>
+    /// Recalculates the owning cue's duration after a timed control field changes
+    /// (property fade, stop fade, GO fade-in, translate duration).
+    /// </summary>
+    private void NotifyOwnerDurationChanged()
+    {
+        int cueId = GetOwnerCueId();
+        var owner = cueId >= 0 ? CueList.FetchCueFromId(cueId) : null;
+        if (owner == null) return;
+        try
+        {
+            owner.CalculateTotalDuration();
+        }
+        catch
+        {
+            /* best-effort */
+        }
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cueId);
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
     }
 }

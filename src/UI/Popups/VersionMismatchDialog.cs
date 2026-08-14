@@ -52,7 +52,8 @@ public partial class VersionMismatchDialog : Window
 		GD.Print("VersionMismatchDialog:Loading VersionMismatchDialog");
 
 		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
 

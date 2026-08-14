@@ -45,7 +45,12 @@ public partial class HistoryManager : Node
 		/// <summary>Settings keys only (optionally filtered).</summary>
 		Settings = 2,
 		/// <summary>Selected cue ids + focused cue only (no document mutation).</summary>
-		Selection = 3
+		Selection = 3,
+		/// <summary>
+		/// Multiple cues only (id → <see cref="Cue.GetData"/>). Used for multi-edit so undo
+		/// does not free/rebuild the entire cuelist UI.
+		/// </summary>
+		MultiCue = 4
 	}
 
 	private GlobalData _globalData;
@@ -80,12 +85,12 @@ public partial class HistoryManager : Node
 	/// Whether there is at least one undo step that can actually apply right now.
 	/// In Show Mode, cue/cuelist steps are skipped (menu stays disabled if only those remain).
 	/// </summary>
-	public bool CanUndo => FindApplicableIndex(_undoStack) >= 0;
+	public bool CanUndo => _globalData?.IsSessionLoading != true && FindApplicableIndex(_undoStack) >= 0;
 
 	/// <summary>
 	/// Whether there is at least one redo step that can actually apply right now.
 	/// </summary>
-	public bool CanRedo => FindApplicableIndex(_redoStack) >= 0;
+	public bool CanRedo => _globalData?.IsSessionLoading != true && FindApplicableIndex(_redoStack) >= 0;
 
 	/// <summary>
 	/// Maximum undo steps, from user preferences.
@@ -114,6 +119,8 @@ public partial class HistoryManager : Node
 		_globalSignals.NewSession += Clear;
 		// Show Mode changes which scopes are applicable — refresh Edit menu CanUndo/CanRedo.
 		_globalSignals.ShowModeChanged += OnShowModeChanged;
+		_globalSignals.SessionLoadStarted += OnSessionLoadStarted;
+		_globalSignals.SessionLoadFinished += OnSessionLoadFinished;
 
 		GD.Print("HistoryManager:_Ready - Initialized (scoped history).");
 	}
@@ -126,10 +133,22 @@ public partial class HistoryManager : Node
 			_globalSignals.Redo -= Redo;
 			_globalSignals.NewSession -= Clear;
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
+			_globalSignals.SessionLoadStarted -= OnSessionLoadStarted;
+			_globalSignals.SessionLoadFinished -= OnSessionLoadFinished;
 		}
 	}
 
 	private void OnShowModeChanged(bool _)
+	{
+		EmitSignal(SignalName.HistoryChanged);
+	}
+
+	private void OnSessionLoadStarted(string showName)
+	{
+		EmitSignal(SignalName.HistoryChanged);
+	}
+
+	private void OnSessionLoadFinished()
 	{
 		EmitSignal(SignalName.HistoryChanged);
 	}
@@ -188,6 +207,34 @@ public partial class HistoryManager : Node
 		try
 		{
 			PushUndo(CaptureCuelistEntry(description ?? "Edit cuelist"), coalesceKey);
+		}
+		catch (Exception ex)
+		{
+			LogRecordFailure(ex);
+		}
+	}
+
+	/// <summary>
+	/// Records snapshots for a set of cues only (multi-edit). Restores in place without
+	/// rebuilding the full cuelist shell tree.
+	/// </summary>
+	/// <param name="cueIds">Cue ids to capture (duplicates ignored).</param>
+	/// <param name="description">Readable undo label.</param>
+	/// <param name="coalesceKey">Optional continuous-session key.</param>
+	public void RecordMultiCueChange(IEnumerable<int> cueIds, string description, string coalesceKey = null)
+	{
+		if (_isRestoring) return;
+		if (_globalData?.Settings?.IsCueEditingLocked == true) return;
+		if (_globalData?.Cuelist == null) return;
+		if (cueIds == null) return;
+		if (ShouldCoalesce(coalesceKey)) return;
+
+		try
+		{
+			var entry = CaptureMultiCueEntry(cueIds, description ?? "Multi-edit cues", coalesceKey);
+			if (entry == null)
+				return;
+			PushUndo(entry, coalesceKey);
 		}
 		catch (Exception ex)
 		{
@@ -346,6 +393,12 @@ public partial class HistoryManager : Node
 	public void Undo()
 	{
 		if (_isRestoring) return;
+		if (_globalData?.IsSessionLoading == true)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Please wait — a showfile is still loading. Cannot undo.", (int)LogType.Info);
+			return;
+		}
 
 		int idx = FindApplicableIndex(_undoStack);
 		if (idx < 0) return;
@@ -407,6 +460,12 @@ public partial class HistoryManager : Node
 	public void Redo()
 	{
 		if (_isRestoring) return;
+		if (_globalData?.IsSessionLoading == true)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Please wait — a showfile is still loading. Cannot redo.", (int)LogType.Info);
+			return;
+		}
 
 		int idx = FindApplicableIndex(_redoStack);
 		if (idx < 0) return;
@@ -536,16 +595,16 @@ public partial class HistoryManager : Node
 	{
 		if (_globalData?.Settings?.IsCueEditingLocked != true)
 			return false;
-		return scope == HistoryScope.Cue || scope == HistoryScope.Cuelist;
+		return scope is HistoryScope.Cue or HistoryScope.Cuelist or HistoryScope.MultiCue;
 	}
 
 	/// <summary>
 	/// True when a frame-sliced bulk cuelist mutation is running and restore would race shell creation.
-	/// Blocks Cue and Cuelist scopes (both rebuild/touch shells); settings undos remain allowed.
+	/// Blocks Cue / Cuelist / MultiCue scopes (all touch shells); settings undos remain allowed.
 	/// </summary>
 	private bool IsCuelistBulkBusy(HistoryScope scope)
 	{
-		if (scope != HistoryScope.Cue && scope != HistoryScope.Cuelist)
+		if (scope is not (HistoryScope.Cue or HistoryScope.Cuelist or HistoryScope.MultiCue))
 			return false;
 		return _globalData?.Cuelist?.IsBulkOpInProgress == true;
 	}
@@ -577,6 +636,11 @@ public partial class HistoryManager : Node
 		{
 			HistoryScope.Cue => CaptureCueEntry(template.CueId, template.Description, null),
 			HistoryScope.Cuelist => CaptureCuelistEntry(template.Description),
+			HistoryScope.MultiCue => CaptureMultiCueEntry(
+				EnumerateMultiCueIds(template.CuesData),
+				template.Description,
+				null) ?? throw new InvalidOperationException(
+					"Cannot capture multi-cue history: no matching live cues."),
 			HistoryScope.Settings => CaptureSettingsEntry(
 				template.Description,
 				// Capture the same key set that was stored on the template (never full GetData).
@@ -636,6 +700,59 @@ public partial class HistoryManager : Node
 			null,
 			selectedIds,
 			focusedId);
+	}
+
+	/// <summary>
+	/// Captures only the listed cues (multi-edit). Returns null when no valid cues were found.
+	/// </summary>
+	private HistoryEntry CaptureMultiCueEntry(IEnumerable<int> cueIds, string description, string coalesceKey)
+	{
+		if (cueIds == null)
+			return null;
+
+		var map = new Dictionary();
+		var seen = new HashSet<int>();
+		foreach (int cueId in cueIds)
+		{
+			if (cueId < 0 || !seen.Add(cueId))
+				continue;
+			var cue = CueList.FetchCueFromId(cueId);
+			if (cue == null)
+				continue;
+			var data = cue.GetData();
+			StripWaveformPayloads(data);
+			map[cueId.ToString()] = DeepCloneDictionary(data);
+		}
+
+		if (map.Count == 0)
+		{
+			GD.PrintErr("HistoryManager:CaptureMultiCueEntry - No valid cues; skipping.");
+			return null;
+		}
+
+		var (selectedIds, focusedId) = CaptureSelectionState();
+		return new HistoryEntry(
+			description,
+			coalesceKey,
+			HistoryScope.MultiCue,
+			-1,
+			null,
+			map,
+			null,
+			selectedIds,
+			focusedId);
+	}
+
+	private static IEnumerable<int> EnumerateMultiCueIds(Dictionary multiMap)
+	{
+		if (multiMap == null)
+			yield break;
+		foreach (var key in multiMap.Keys)
+		{
+			string s = key.AsString();
+			if (int.TryParse(s, out int id))
+				yield return id;
+		}
 	}
 
 	private HistoryEntry CaptureSettingsEntry(string description, Dictionary settingsData)
@@ -776,7 +893,6 @@ public partial class HistoryManager : Node
 
 	private static readonly HashSet<string> ScalarSettingsKeys = new(StringComparer.Ordinal)
 	{
-		"UiScale",
 		"GoScale",
 		"CueListScale",
 		"WaveformResolution",
@@ -851,15 +967,21 @@ public partial class HistoryManager : Node
 			switch (entry.Scope)
 			{
 				case HistoryScope.Cue:
-					_globalData.Cuelist.ApplyCueHistorySnapshot(entry.CueId, DeepCloneDictionary(entry.CueData));
+					// Stack mementos are exclusive copies; do not deep-clone again on restore.
+					_globalData.Cuelist.ApplyCueHistorySnapshot(entry.CueId, entry.CueData);
 					break;
 
 				case HistoryScope.Cuelist:
-					_globalData.Cuelist.ApplyCuelistHistorySnapshot(DeepCloneDictionary(entry.CuesData));
+					_globalData.Cuelist.ApplyCuelistHistorySnapshot(entry.CuesData);
+					break;
+
+				case HistoryScope.MultiCue:
+					_globalData.Cuelist.ApplyMultiCueHistorySnapshot(entry.CuesData);
 					break;
 
 				case HistoryScope.Settings:
 					// Scalar slices are already plain dictionaries; deep-clone nested snapshots (patches, OSC/MIDI maps…).
+					// Settings apply mutates nested structures in place for some keys — clone when nested.
 					var settingsData = entry.SettingsData;
 					if (settingsData != null && NeedsDeepSettingsClone(settingsData))
 						settingsData = DeepCloneDictionary(settingsData);

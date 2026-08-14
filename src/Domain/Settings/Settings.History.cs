@@ -87,12 +87,8 @@ public partial class Settings
             _globalData.CueLightManager.LoadData(cueLightsAsDict);
         }
 
-        if (TryGetSettingsValue(settingsData, "UiScale", out var value))
-        {
-            UiScale = value.AsSingle();
-            _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
-        }
-        if (TryGetSettingsValue(settingsData, "GoScale", out value))
+        // UiScale is user-scoped (UserDataManager) — not restored via settings history.
+        if (TryGetSettingsValue(settingsData, "GoScale", out var value))
         {
             GoScale = value.AsSingle();
             _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
@@ -141,6 +137,17 @@ public partial class Settings
         {
             AudioMasterVolume = Math.Clamp(value.AsSingle(), 0f, 1f);
             _audioDevices?.SetSessionMasterVolume(AudioMasterVolume);
+        }
+        if (TryGetSettingsValue(settingsData, "AudioOutputMaxDb", out value)
+            || TryGetSettingsValue(settingsData, "AudioOutputMinDb", out _))
+        {
+            if (TryGetSettingsValue(settingsData, "AudioOutputMaxDb", out value))
+                AudioOutputMaxDb = Math.Clamp(value.AsSingle(), MinAudioOutputMaxDb, MaxAudioOutputMaxDb);
+            if (TryGetSettingsValue(settingsData, "AudioOutputMinDb", out value))
+                AudioOutputMinDb = Math.Clamp(value.AsSingle(), MinAudioOutputMinDb, MaxAudioOutputMinDb);
+            if (AudioOutputMaxDb < AudioOutputMinDb)
+                AudioOutputMaxDb = Math.Clamp(AudioOutputMinDb, MinAudioOutputMaxDb, MaxAudioOutputMaxDb);
+            _audioDevices?.SetOutputLimits(AudioOutputMaxDb, AudioOutputMinDb);
         }
 
         if (TryGetSettingsValue(settingsData, "CueDefaults", out value)
@@ -370,9 +377,6 @@ public partial class Settings
     {
         switch (key)
         {
-            case "UiScale":
-                value = UiScale;
-                return true;
             case "GoScale":
                 value = GoScale;
                 return true;
@@ -421,6 +425,12 @@ public partial class Settings
                 return true;
             case "AudioMasterVolume":
                 value = AudioMasterVolume;
+                return true;
+            case "AudioOutputMaxDb":
+                value = AudioOutputMaxDb;
+                return true;
+            case "AudioOutputMinDb":
+                value = AudioOutputMinDb;
                 return true;
             default:
                 value = default;

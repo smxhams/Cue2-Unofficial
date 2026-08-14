@@ -4,7 +4,6 @@
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Cue2.pdb
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/FFmpeg.AutoGen.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharp.dll
-/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Rug.Osc.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/SDL3-CS.Native.dll
@@ -62,6 +61,7 @@ C:/MyFiles/Cue2_Home/Cue2/.godot/mono/temp/bin/Debug/Melanchall.DryWetMidi.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Melanchall_DryWetMidi_Native64.dll
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Melanchall_DryWetMidi_Native64.dylib
 /Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/Melanchall.DryWetMidi.dll
+/Users/smxham/Library/CloudStorage/GoogleDrive-smxham@gmail.com/Other computers/My Computer/Cue2/.godot/mono/temp/bin/Debug/GodotSharpEditor.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native32.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native64.dll
 C:\MyFiles\Cue2_Home\Cue2\.godot\mono\temp\bin\Debug\Melanchall_DryWetMidi_Native64.dylib

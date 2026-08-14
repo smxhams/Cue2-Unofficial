@@ -94,7 +94,7 @@ public static class DirectoryUtils
 
             // Create or verify session directory
             Error err = DirAccess.MakeDirAbsolute(sessionDir);
-            if (err != Error.Ok && err != Error.AlreadyInUse) // AlreadyInUse means it exists
+            if (!IsDirReady(err))
             {
                 GD.Print($"DirectoryUtils:PrepareSessionDirectory - Failed to create or verify session directory '{sessionDir}': {err}");
             }
@@ -163,10 +163,14 @@ public static class DirectoryUtils
     {
         string path = sessionDir + "/" + folderName;
         Error err = DirAccess.MakeDirAbsolute(path);
-        if (err != Error.Ok && err != Error.AlreadyInUse)
-        {
+        if (!IsDirReady(err))
             GD.Print($"DirectoryUtils:EnsureSubfolder - Failed to create or verify '{path}': {err}");
-        }
         return path;
     }
+
+    /// <summary>
+    /// True when <see cref="DirAccess.MakeDirAbsolute"/> succeeded or the folder already exists.
+    /// </summary>
+    private static bool IsDirReady(Error err) =>
+        err == Error.Ok || err == Error.AlreadyExists || err == Error.AlreadyInUse;
 }

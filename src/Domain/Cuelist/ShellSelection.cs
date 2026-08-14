@@ -62,17 +62,14 @@ public partial class ShellSelection : Node
     /// <param name="recordHistory">When true, records a selection undo step before expanding.</param>
     public void SelectThrough(Cue pressedCue, bool recordHistory = true)
     {
-        var cueContainer = _globalData.Cuelist.GetNode<VBoxContainer>("%CueContainer");
-        var allShellBars = GetAllShellBarsInOrder(cueContainer);
+        var ordered = GetAllCuesInOrder();
 
-        if (SelectedCues.Count == 0 || pressedCue?.ShellBar == null)
+        if (SelectedCues.Count == 0 || pressedCue == null)
             return;
 
-        var startShell = SelectedCues.Last().ShellBar;
-        if (startShell == null) return;
-
-        int startIndex = allShellBars.IndexOf(startShell);
-        int pressedIndex = allShellBars.IndexOf(pressedCue.ShellBar);
+        var startCue = SelectedCues.Last();
+        int startIndex = ordered.IndexOf(startCue);
+        int pressedIndex = ordered.IndexOf(pressedCue);
         if (startIndex < 0 || pressedIndex < 0) return;
 
         int start = Math.Min(startIndex, pressedIndex);
@@ -82,9 +79,7 @@ public partial class ShellSelection : Node
         bool willAdd = false;
         for (int i = start; i <= end; i++)
         {
-            var sb = allShellBars[i];
-            int cueId = sb.Get("CueId").AsInt32();
-            Cue cue = CueList.FetchCueFromId(cueId);
+            Cue cue = ordered[i];
             if (cue != null && !SelectedCues.Contains(cue))
             {
                 willAdd = true;
@@ -103,9 +98,7 @@ public partial class ShellSelection : Node
         // (Per-cue AddSelection would flood async audio/video inspectors mid multi-select.)
         for (int i = start; i <= end; i++)
         {
-            var sb = allShellBars[i];
-            int cueId = sb.Get("CueId").AsInt32();
-            Cue cue = CueList.FetchCueFromId(cueId);
+            Cue cue = ordered[i];
             if (cue == null || SelectedCues.Contains(cue))
                 continue;
             cue.ShellBar?.Select();
@@ -314,19 +307,7 @@ public partial class ShellSelection : Node
     /// </summary>
     public List<Cue> GetAllCuesInOrder()
     {
-        var container = _globalData?.Cuelist?.GetNode<VBoxContainer>("%CueContainer");
-        if (container == null) return new List<Cue>();
-
-        var shellBars = GetAllShellBarsInOrder(container);
-        var cues = new List<Cue>(shellBars.Count);
-        foreach (var sb in shellBars)
-        {
-            int cueId = sb.Get("CueId").AsInt32();
-            var cue = CueList.FetchCueFromId(cueId);
-            if (cue != null)
-                cues.Add(cue);
-        }
-        return cues;
+        return _globalData?.Cuelist?.GetVisibleCues() ?? new List<Cue>();
     }
 
     public void SelectNextCue()

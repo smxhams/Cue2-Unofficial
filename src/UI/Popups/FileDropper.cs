@@ -237,7 +237,8 @@ public partial class FileDropper : Control
             else if (IsSupportedMediaFile(files[0]))
             {
                 var cue2Base = GetTree().Root.GetNode("Cue2Base");
-                var videoInspector = cue2Base?.GetNode<VideoInspector>("%Video");
+                // Tab node was renamed Video → Visual; component type remains Video.
+                var videoInspector = cue2Base?.GetNode<VideoInspector>("%Visual");
                 if (videoInspector != null)
                 {
                     videoInspector.SetVideoFileUrlFromDrop(files[0]);
@@ -375,13 +376,14 @@ public partial class FileDropper : Control
             }
         }
 
-        var videoInspector = cue2Base.GetNodeOrNull<Control>("%Video");
+        // Inspector tab node is "Visual" (unique name %Visual); component type remains Video.
+        var videoInspector = cue2Base.GetNodeOrNull<Control>("%Visual");
         if (videoInspector != null && videoInspector.Visible)
         {
             var videoFileUrl = videoInspector.GetNodeOrNull<LineEdit>("%FileUrl");
             if (videoFileUrl != null && videoFileUrl.Visible && videoFileUrl.GetGlobalRect().HasPoint(mousePos))
             {
-                GD.Print("FileDropper:GetDropTarget - Video URL drop detected");
+                GD.Print("FileDropper:GetDropTarget - Video/Visual URL drop detected");
                 return new DropTarget { TargetType = FileDropTargetType.FileUrlVideo, TargetInfo = "VideoFileURL" };
             }
         }

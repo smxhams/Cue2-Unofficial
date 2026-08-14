@@ -95,17 +95,14 @@ public partial class AudioOutputPatch : Godot.GodotObject
     /// </remarks>
     public static AudioOutputPatch FromData(Godot.Collections.Dictionary dataDict)
     {
-        GD.Print("Attempting to create patch from save data:");
         try
         {
             int id = dataDict["Id"].AsInt32();
             string name = dataDict["Name"].AsString();
             float volume = dataDict.ContainsKey("Volume") ? (float)dataDict["Volume"] : 1.0f;
-            GD.Print("Got ID and Name");
 
             var channels = new System.Collections.Generic.Dictionary<int, string>();
             var channelsDict = dataDict["Channels"].AsGodotDictionary();
-            GD.Print("Created variables for channels");
             foreach (var channelKey in channelsDict.Keys)
             {
                 int key = channelKey.AsInt32();
@@ -113,7 +110,6 @@ public partial class AudioOutputPatch : Godot.GodotObject
                 channels.Add(key, value);
             }
 
-            GD.Print("Added channel data");
 
             var outputDevices = new System.Collections.Generic.Dictionary<string, List<OutputChannel>>();
             var outputDevicesDict = dataDict["OutputDevices"].AsGodotDictionary();

@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 // SPDX-License-Identifier: MIT
 
+using System.IO;
 using Godot;
 using Cue2.Services;
+using Cue2.UI.Shell;
 using Cue2.UI.Utilities;
 using Cue2.UI.Windows;
 
@@ -36,6 +38,9 @@ public partial class Cue2Base : Control
 	/// <summary>Active first-time welcome window, if any.</summary>
 	private FirstTimeStartupWindow _firstTimeStartupWindow;
 
+	/// <summary>Workspace overlay shown while the startup (or later) showfile apply is in progress.</summary>
+	private SessionLoadOverlay _sessionLoadOverlay;
+
 	public WorkspaceStates State { get; set; }
 
 	//public GlobalMediaPlayerManager mediaManager;
@@ -55,6 +60,9 @@ public partial class Cue2Base : Control
 
 		ApplyShowModeUi(_globalData?.Settings?.ShowMode == true);
 
+		_sessionLoadOverlay = GetNodeOrNull<SessionLoadOverlay>("%SessionLoadOverlay");
+		MaybeShowStartupLoadOverlay();
+
 		// Initial window size/position/scale order is owned by MainWindowHandles:
 		// content scale first, then restore saved geometry (or design-size RescaleWindow once).
 		// Do not call RescaleWindow here — it runs after child restore and corrupts saved size/pos
@@ -62,6 +70,20 @@ public partial class Cue2Base : Control
 
 		// Deferred so main window geometry/chrome settles before a modal-style sub-window opens.
 		CallDeferred(nameof(MaybeShowFirstTimeStartup));
+	}
+
+	/// <summary>
+	/// Covers the workspace before the deferred last-show open starts so the grey empty
+	/// cuelist is never the first painted frame after the engine splash.
+	/// </summary>
+	private void MaybeShowStartupLoadOverlay()
+	{
+		string path = _globalData?.StartupOpenPath;
+		if (string.IsNullOrEmpty(path))
+			return;
+
+		string name = Path.GetFileNameWithoutExtension(path);
+		_sessionLoadOverlay?.ShowOpening(name);
 	}
 
 	/// <summary>
@@ -121,7 +143,8 @@ public partial class Cue2Base : Control
 	{
 		// Runtime scale changes only touch ContentScaleFactor, not outer pixel size.
 		var window = GetWindow();
-		UiUtilities.RescaleUi(window, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? Cue2.Services.UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(window, userScale, _globalData.BaseDisplayScale);
 		// Keep explicit geometry; do not let WrapControls auto-resize the main frame.
 		if (window != null)
 			window.WrapControls = false;

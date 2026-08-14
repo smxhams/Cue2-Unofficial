@@ -5,7 +5,6 @@ using System;
 using Cue2.Services;
 using Cue2.UI.Utilities;
 using Godot;
-using AppSettings = Cue2.Domain.ShowSettings.Settings;
 using static Cue2.UI.Utilities.UiLocalizer;
 
 namespace Cue2.UI.Windows;
@@ -16,7 +15,7 @@ namespace Cue2.UI.Windows;
 /// </summary>
 /// <remarks>
 /// Welcome message, documentation/website links, language preference, optional UI scale
-/// adjustment (same controls as Settings → General), then dismiss via Get Started or window chrome.
+/// adjustment (same controls as Cue2 Preferences), then dismiss via Get Started or window chrome.
 /// Dismiss marks <see cref="UserDataManager.IsFirstTimeStartup"/> complete.
 /// </remarks>
 public partial class FirstTimeStartupWindow : Window
@@ -24,7 +23,6 @@ public partial class FirstTimeStartupWindow : Window
 	private GlobalData _globalData;
 	private GlobalSignals _globalSignals;
 	private UserDataManager _userDataManager;
-	private HistoryManager _historyManager;
 	private LocalizationService _localization;
 
 	private LinkButton _docsLinkButton;
@@ -40,7 +38,7 @@ public partial class FirstTimeStartupWindow : Window
 	private HSlider _uiScaleSlider;
 	private Button _uiScaleResetButton;
 
-	/// <summary>True while pushing model → controls so handlers do not re-record history.</summary>
+	/// <summary>True while pushing model → controls so handlers do not re-apply.</summary>
 	private bool _isSyncingUi;
 
 	/// <summary>True while rebuilding the language option list.</summary>
@@ -54,7 +52,6 @@ public partial class FirstTimeStartupWindow : Window
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_userDataManager = _globalData?.UserDataManager;
-		_historyManager = _globalData?.HistoryManager;
 		_localization = _globalData?.LocalizationService;
 
 		_docsLinkButton = GetNode<LinkButton>("%DocsLinkButton");
@@ -77,12 +74,9 @@ public partial class FirstTimeStartupWindow : Window
 		SyncUiScaleControls();
 		ApplyLocalizedStrings();
 
-		// Re-sync if UI scale is undone/redone while this window is open (e.g. via Settings).
-		if (_historyManager != null)
-			_historyManager.HistoryRestored += OnHistoryRestored;
-
+		float userScale = _userDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
 		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
 		_globalSignals.LocaleChanged += OnLocaleChanged;
@@ -253,7 +247,7 @@ public partial class FirstTimeStartupWindow : Window
 	}
 
 	/// <summary>
-	/// Wires the UI scale LineEdit / HSlider / reset button to match Settings → General.
+	/// Wires the UI scale LineEdit / HSlider / reset button to match Cue2 Preferences.
 	/// </summary>
 	private void WireUiScaleControls()
 	{
@@ -271,24 +265,29 @@ public partial class FirstTimeStartupWindow : Window
 		_uiScaleNum.FocusMode = Control.FocusModeEnum.All;
 		_uiScaleNum.Editable = true;
 
-		_uiScaleSlider.ValueChanged += OnUiScaleSliderValueChanged;
-		_uiScaleSlider.DragEnded += OnUiScaleSliderDragEnded;
-		// Commit typed scale on Enter only (same as SettingsGeneral).
+		if (_uiScaleSlider != null)
+		{
+			_uiScaleSlider.MinValue = UserDataManager.MinUiScalePercent;
+			_uiScaleSlider.MaxValue = UserDataManager.MaxUiScalePercent;
+			_uiScaleSlider.ValueChanged += OnUiScaleSliderValueChanged;
+			_uiScaleSlider.DragEnded += OnUiScaleSliderDragEnded;
+		}
+		// Commit typed scale on Enter only (same as SettingsCue2Prefs).
 		_uiScaleNum.TextSubmitted += OnUiScaleTextSubmitted;
 	}
 
 	/// <summary>
-	/// Pulls current show UI scale into the form without re-firing edit handlers.
+	/// Pulls current user UI scale into the form without re-firing edit handlers.
 	/// </summary>
 	private void SyncUiScaleControls()
 	{
-		if (_globalData?.Settings == null)
+		if (_userDataManager == null)
 			return;
 
 		_isSyncingUi = true;
 		try
 		{
-			float uiPct = _globalData.Settings.UiScale * 100f;
+			float uiPct = _userDataManager.UiScale * 100f;
 			if (_uiScaleNum != null)
 				_uiScaleNum.Text = uiPct + "%";
 			_uiScaleSlider?.SetValueNoSignal(uiPct);
@@ -300,25 +299,12 @@ public partial class FirstTimeStartupWindow : Window
 		}
 	}
 
-	/// <summary>
-	/// After undo/redo of a settings-scoped entry, refresh the scale controls if needed.
-	/// </summary>
-	/// <param name="scope">History scope enum cast to int.</param>
-	private void OnHistoryRestored(int scope)
-	{
-		if (!GodotObject.IsInstanceValid(this) || _globalData?.Settings == null)
-			return;
-		if (scope != (int)HistoryManager.HistoryScope.Settings)
-			return;
-		SyncUiScaleControls();
-	}
-
-	// ── UI Scale (mirrors SettingsGeneral) ────────────────────────────────
+	// ── UI Scale (mirrors SettingsCue2Prefs) ──────────────────────────────
 
 	/// <summary>
 	/// Live-updates the percentage field while dragging; applies on mouse release.
 	/// </summary>
-	/// <param name="value">Slider value in percent (50–200).</param>
+	/// <param name="value">Slider value in percent (25–400).</param>
 	private void OnUiScaleSliderValueChanged(double value)
 	{
 		if (_isSyncingUi)
@@ -355,18 +341,18 @@ public partial class FirstTimeStartupWindow : Window
 	/// <param name="input">Raw text from the LineEdit.</param>
 	private void CommitUiScaleFromText(string input)
 	{
-		if (_globalData?.Settings == null || _uiScaleNum == null)
+		if (_userDataManager == null || _uiScaleNum == null)
 			return;
 
 		string cleaned = (input ?? string.Empty).Replace("%", "").Trim();
 		if (!float.TryParse(cleaned, out float value))
 		{
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "Invalid value for UI Scale entered", 1);
-			_uiScaleNum.Text = _globalData.Settings.UiScale * 100f + "%";
+			_uiScaleNum.Text = _userDataManager.UiScale * 100f + "%";
 			return;
 		}
 
-		value = Mathf.Clamp(value, 50f, 200f);
+		value = Mathf.Clamp(value, UserDataManager.MinUiScalePercent, UserDataManager.MaxUiScalePercent);
 		_uiScaleNum.Text = value + "%";
 		_uiScaleSlider?.SetValueNoSignal(value);
 		ApplyUiScale(value / 100f);
@@ -375,46 +361,40 @@ public partial class FirstTimeStartupWindow : Window
 	}
 
 	/// <summary>
-	/// Writes UI scale to show settings, records history, and notifies listeners.
+	/// Writes UI scale to user preferences (persists + emits <see cref="GlobalSignals.UiScaleChanged"/>).
 	/// </summary>
-	/// <param name="scaleFactor">Scale factor in the range 0.5–2.0.</param>
+	/// <param name="scaleFactor">Scale factor in the range 0.25–4.0.</param>
 	private void ApplyUiScale(float scaleFactor)
 	{
-		if (_isSyncingUi || _globalData?.Settings == null)
-			return;
-		if (_historyManager?.IsRestoring == true)
+		if (_isSyncingUi || _userDataManager == null)
 			return;
 
-		scaleFactor = Mathf.Clamp(scaleFactor, 0.5f, 2.0f);
-		if (Mathf.IsEqualApprox(_globalData.Settings.UiScale, scaleFactor))
+		scaleFactor = Mathf.Clamp(scaleFactor, UserDataManager.MinUiScale, UserDataManager.MaxUiScale);
+		if (Mathf.IsEqualApprox(_userDataManager.UiScale, scaleFactor))
 		{
 			UpdateUiScaleResetButton();
 			return;
 		}
 
-		_historyManager?.RecordSettingsChange("Change UI scale", null, "UiScale");
-		_globalData.Settings.UiScale = scaleFactor;
-		_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), scaleFactor);
+		_userDataManager.UiScale = scaleFactor;
 		UpdateUiScaleResetButton();
 	}
 
 	/// <summary>
-	/// Resets UI scale to the show default and syncs controls.
+	/// Resets UI scale to the user default and syncs controls.
 	/// </summary>
 	private void OnUiScaleResetPressed()
 	{
-		if (_isSyncingUi || _globalData?.Settings == null)
+		if (_isSyncingUi || _userDataManager == null)
 			return;
-		if (Mathf.IsEqualApprox(_globalData.Settings.UiScale, AppSettings.DefaultUiScale))
+		if (Mathf.IsEqualApprox(_userDataManager.UiScale, UserDataManager.DefaultUiScale))
 		{
 			SyncUiScaleControls();
 			return;
 		}
 
-		_historyManager?.RecordSettingsChange("Reset UI scale", null, "UiScale");
-		_globalData.Settings.UiScale = AppSettings.DefaultUiScale;
+		_userDataManager.UiScale = UserDataManager.DefaultUiScale;
 		SyncUiScaleControls();
-		_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), AppSettings.DefaultUiScale);
 	}
 
 	/// <summary>
@@ -422,13 +402,13 @@ public partial class FirstTimeStartupWindow : Window
 	/// </summary>
 	private void UpdateUiScaleResetButton()
 	{
-		if (_uiScaleResetButton == null || _globalData?.Settings == null)
+		if (_uiScaleResetButton == null || _userDataManager == null)
 			return;
 
-		bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.UiScale, AppSettings.DefaultUiScale);
+		bool atDefault = Mathf.IsEqualApprox(_userDataManager.UiScale, UserDataManager.DefaultUiScale);
 		_uiScaleResetButton.Visible = !atDefault;
 		if (!atDefault)
-			_uiScaleResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultUiScale * 100f:0}%";
+			_uiScaleResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUiScale * 100f:0}%";
 	}
 
 	// ── Dismiss ───────────────────────────────────────────────────────────
@@ -520,9 +500,6 @@ public partial class FirstTimeStartupWindow : Window
 			_uiScaleNum.TextSubmitted -= OnUiScaleTextSubmitted;
 		if (_uiScaleResetButton != null)
 			_uiScaleResetButton.Pressed -= OnUiScaleResetPressed;
-
-		if (_historyManager != null)
-			_historyManager.HistoryRestored -= OnHistoryRestored;
 
 		if (_globalSignals != null)
 		{

@@ -32,7 +32,17 @@ public partial class CueList
 	public Cue CreateCue(Dictionary data) // Create a cue from data
 	{
 		var newCue = new Cue(data);
-		AddCue(newCue);
+		if (!CueIndex.ContainsKey(newCue.Id))
+			CueIndex.Add(newCue.Id, newCue);
+		else
+			CueIndex[newCue.Id] = newCue;
+
+		// History may have already restored parent ChildCues / RootOrder — do not reshuffle.
+		var siblings = GetSiblingIdList(newCue.ParentId) ?? RootOrder;
+		if (siblings != null && !siblings.Contains(newCue.Id))
+			InsertCueInModel(newCue, newCue.ParentId, siblings.Count);
+
+		NotifyVirtualStructureChanged();
 		return newCue;
 	}
 
@@ -112,85 +122,42 @@ public partial class CueList
 		// Determine insertion point from the first selected cue's current location.
 		// The group will be inserted as a sibling at the same level as the anchor.
 		Cue anchor = toGroup[0];
-		VBoxContainer targetContainer = _cueContainer;
-		int insertIndex = _cueContainer.GetChildCount();
-		int newGroupParentId = -1;
-
-		if (anchor.ShellBar != null)
-		{
-			var currentParentNode = anchor.ShellBar.GetParent();
-			if (currentParentNode is VBoxContainer vc)
-			{
-				targetContainer = vc;
-				insertIndex = anchor.ShellBar.GetIndex();
-			}
-
-			if (anchor.ParentId != -1)
-			{
-				newGroupParentId = anchor.ParentId;
-			}
-		}
+		int newGroupParentId = anchor.ParentId;
+		var siblings = GetSiblingIdList(newGroupParentId) ?? RootOrder;
+		int insertIndex = siblings.IndexOf(anchor.Id);
+		if (insertIndex < 0)
+			insertIndex = siblings.Count;
 
 		// Create the wrapping group cue (shell defaults, then override display name)
 		var groupCue = new Cue();
 		_globalData?.Settings?.ApplyShellDefaults(groupCue);
 		groupCue.Name = $"Group ({toGroup.Count} cues)";
 		groupCue.CueNum = groupCue.Id.ToString();
-
-		// Insert the group shell at the anchor's former position (sibling level)
-		var groupShellBar = CreateShellAndInsert(groupCue, targetContainer, insertIndex, newGroupParentId);
 		groupCue.Expanded = true;
 
-		var groupChildContainer = groupCue.ShellBar?.ShellChildContainer ?? _cueContainer;
-
-		var oldParentsToRefresh = new HashSet<Cue>();
-
-		// Only move the "top level" of the selection (cues whose direct parent is not also selected).
-		// Their descendants (if any were selected) will travel with them because child ShellBars live inside the parent's ShellChildContainer.
-		var selectedIds = new HashSet<int>(toGroup.Select(c => c.Id));
-		var topLevelToMove = toGroup
-			.Where(c => c.ParentId == -1 || !selectedIds.Contains(c.ParentId))
-			.ToList();
-
-		// Detach the top-level selected shells and reparent them (with their subtrees) under the group
-		foreach (var cue in topLevelToMove)
+		BeginVirtualRefreshSuppress();
+		try
 		{
-			if (cue?.ShellBar == null) continue;
+			if (!CueIndex.ContainsKey(groupCue.Id))
+				CueIndex.Add(groupCue.Id, groupCue);
+			InsertCueInModel(groupCue, newGroupParentId, insertIndex);
 
-			// Record old parent for later UI refresh
-			if (cue.ParentId != -1)
+			var selectedIds = new HashSet<int>(toGroup.Select(c => c.Id));
+			var topLevelToMove = toGroup
+				.Where(c => c.ParentId == -1 || !selectedIds.Contains(c.ParentId))
+				.ToList();
+
+			foreach (var cue in topLevelToMove)
 			{
-				var oldParent = FetchCueFromId(cue.ParentId);
-				if (oldParent != null)
-				{
-					oldParent.ChildCues.Remove(cue.Id);
-					oldParentsToRefresh.Add(oldParent);
-				}
-			}
-
-			// Remove the shell (and any contained child shells) from its current location
-			var currentParent = cue.ShellBar.GetParent();
-			currentParent?.RemoveChild(cue.ShellBar);
-
-			// Place inside the new group's child area
-			groupChildContainer.AddChild(cue.ShellBar);
-
-			// Update data model for this subtree root
-			cue.ParentId = groupCue.Id;
-			if (!groupCue.ChildCues.Contains(cue.Id))
-			{
-				groupCue.ChildCues.Add(cue.Id);
+				if (cue == null)
+					continue;
+				InsertCueInModel(cue, groupCue.Id, groupCue.ChildCues.Count);
 			}
 		}
-
-		// Refresh relationship UI on former parents (they may have lost children)
-		foreach (var oldP in oldParentsToRefresh)
+		finally
 		{
-			oldP.ShellBar?.RelationshipChanged();
+			EndVirtualRefreshSuppress();
 		}
-
-		// Update the new group
-		groupCue.ShellBar?.RelationshipChanged();
 
 		// Select the group cue (replacing the previous multi-selection).
 		// Covered by the group cuelist history step.
@@ -390,102 +357,78 @@ public partial class CueList
 	private (VBoxContainer container, int index, int parentId) ResolveInsertLocation(int targetCueId, DropInsertMode mode)
 	{
 		if (targetCueId < 0 || mode == DropInsertMode.AtEnd)
-		{
-			// End of top level
-			return (_cueContainer, _cueContainer.GetChildCount(), -1);
-		}
+			return (_cueContainer, RootOrder.Count, -1);
 
 		var targetCue = FetchCueFromId(targetCueId);
-		if (targetCue == null || targetCue.ShellBar == null)
-		{
-			return (_cueContainer, _cueContainer.GetChildCount(), -1);
-		}
-
-		var targetShell = targetCue.ShellBar;
+		if (targetCue == null)
+			return (_cueContainer, RootOrder.Count, -1);
 
 		switch (mode)
 		{
 			case DropInsertMode.Above:
-				if (targetCue.ParentId != -1)
-				{
-					var p = FetchCueFromId(targetCue.ParentId);
-					var cont = p?.ShellBar?.ShellChildContainer ?? _cueContainer;
-					int idx = targetShell.GetIndex();
-					return (cont, idx, targetCue.ParentId);
-				}
-				else
-				{
-					int idx = targetShell.GetIndex();
-					return (_cueContainer, idx, -1);
-				}
+			{
+				var siblings = GetSiblingIdList(targetCue.ParentId) ?? RootOrder;
+				int idx = siblings.IndexOf(targetCue.Id);
+				if (idx < 0)
+					idx = siblings.Count;
+				return (_cueContainer, idx, targetCue.ParentId);
+			}
 
 			case DropInsertMode.Below:
-				if (targetCue.ParentId != -1)
-				{
-					var p = FetchCueFromId(targetCue.ParentId);
-					var cont = p?.ShellBar?.ShellChildContainer ?? _cueContainer;
-					int idx = targetShell.GetIndex() + 1;
-					return (cont, idx, targetCue.ParentId);
-				}
+			{
+				var siblings = GetSiblingIdList(targetCue.ParentId) ?? RootOrder;
+				int idx = siblings.IndexOf(targetCue.Id);
+				if (idx < 0)
+					idx = siblings.Count;
 				else
-				{
-					int idx = targetShell.GetIndex() + 1;
-					return (_cueContainer, idx, -1);
-				}
+					idx += 1;
+				return (_cueContainer, idx, targetCue.ParentId);
+			}
 
 			case DropInsertMode.AsChild:
-				var childCont = targetShell.ShellChildContainer ?? _cueContainer;
-				return (childCont, childCont.GetChildCount(), targetCue.Id);
+				targetCue.Expanded = true;
+				return (_cueContainer, targetCue.ChildCues.Count, targetCue.Id);
 
 			default:
-				return (_cueContainer, _cueContainer.GetChildCount(), -1);
+				return (_cueContainer, RootOrder.Count, -1);
 		}
 	}
 
 	/// <summary>
 	/// Creates the ShellBar UI, wires it, inserts it into the given container at index, updates data model.
 	/// </summary>
-	private ShellBar CreateShellAndInsert(Cue cue, VBoxContainer container, int insertIndex, int parentId)
+	/// <param name="skipIssueLookup">
+	/// When true, skip media-health lookup in <see cref="ShellBar.SetCue"/> (showfile load;
+	/// health runs after the overlay).
+	/// </param>
+	private ShellBar CreateShellAndInsert(
+		Cue cue,
+		VBoxContainer container,
+		int insertIndex,
+		int parentId,
+		bool skipIssueLookup = false)
 	{
-		var shellBar = _shellBarPackedScene.Instantiate<ShellBar>();
+		if (cue == null)
+			return null;
 
-		int countBefore = container.GetChildCount();
-		container.AddChild(shellBar);
-
-		int desired = insertIndex;
-		if (desired < 0 || desired > countBefore)
-			desired = countBefore;
-
-		container.MoveChild(shellBar, desired);
-
-		shellBar.MouseEntered += () => OnMouseEntered(shellBar);
-		shellBar.SetCue(cue);
-		cue.ShellBar = shellBar;
-		shellBar.Set("CueId", cue.Id);
+		_ = container;
+		_ = skipIssueLookup;
 
 		if (!CueIndex.ContainsKey(cue.Id))
 			CueIndex.Add(cue.Id, cue);
 		else
 			CueIndex[cue.Id] = cue;
-		if (_bulkNotifySuppressDepth == 0)
-			NotifyTotalCuesChanged();
 
-		cue.ParentId = parentId;
-		// ParentId is applied after SetCue — refresh depth-based indent now.
-		shellBar.ApplyTreeIndent();
 		if (parentId != -1)
 		{
 			var parent = FetchCueFromId(parentId);
-			if (parent != null && !parent.ChildCues.Contains(cue.Id))
-			{
-				parent.ChildCues.Add(cue.Id);
-				bool wasEmpty = parent.ChildCues.Count == 1;
-				if (wasEmpty) parent.Expanded = true;
-				parent.ShellBar?.RelationshipChanged();
-			}
+			if (parent != null && parent.ChildCues.Count == 0)
+				parent.Expanded = true;
 		}
 
-		return shellBar;
+		InsertCueInModel(cue, parentId, insertIndex);
+		NotifyVirtualStructureChanged();
+		return cue.ShellBar;
 	}
 
 	/// <summary>
@@ -567,6 +510,14 @@ public partial class CueList
 
 			// Notify UI that a shell may need refresh (duration etc.)
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), cue.Id);
+
+			// Drop-create often focuses the cue before this async metadata/waveform finishes.
+			// Re-emit focus so open audio/video inspectors rebuild matrix + waveform from hydrated data.
+			if (_globalData != null && _globalData.FocusedCue == cue.Id)
+			{
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), cue.Id);
+				_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+			}
 		}
 		catch (Exception ex)
 		{
@@ -577,10 +528,11 @@ public partial class CueList
 
 	private void AddCue(Cue cue)
 	{
+		if (cue == null)
+			return;
+		if (!CueIndex.ContainsKey(cue.Id))
+			CueIndex.Add(cue.Id, cue);
 		CreateNewShell(cue);
-		CueIndex.Add(cue.Id, cue);
-		if (_bulkNotifySuppressDepth == 0)
-			NotifyTotalCuesChanged();
 	}
 
 	/// <summary>
@@ -592,9 +544,11 @@ public partial class CueList
 	/// </summary>
 	public void RefreshShellZebra()
 	{
-		if (_cueContainer == null) return;
-		int index = 0;
-		AssignZebraRecursive(_cueContainer, ref index);
+		for (int i = 0; i < VisibleRowIds.Count; i++)
+		{
+			var cue = FetchCueFromId(VisibleRowIds[i]);
+			cue?.ShellBar?.SetZebraIndex(i);
+		}
 	}
 
 	private static void AssignZebraRecursive(VBoxContainer container, ref int index)
@@ -623,41 +577,25 @@ public partial class CueList
 	// This instantiates the shell scene which creates the UI elements to represent the cue in the scene
 	private void CreateNewShell(Cue newCue)
 	{
-		var shellBar = _shellBarPackedScene.Instantiate<ShellBar>();
-		if (ShellSelection.SelectedCues.Count == 0) // No selection, add cue at end of cuelist
-		{
-			_cueContainer.AddChild(shellBar);
-		}
-		else
+		int parentId = -1;
+		int insertIndex = RootOrder.Count;
+		if (ShellSelection.SelectedCues.Count > 0)
 		{
 			var selectedCue = ShellSelection.SelectedCues.Last();
-			if (selectedCue.ParentId == -1) // Cue selected in main cuelist, add after
+			parentId = selectedCue.ParentId;
+			var siblings = GetSiblingIdList(parentId) ?? RootOrder;
+			int selIdx = siblings.IndexOf(selectedCue.Id);
+			insertIndex = selIdx >= 0 ? selIdx + 1 : siblings.Count;
+			if (parentId != -1)
 			{
-				var newIndex = selectedCue.ShellBar.GetIndex() + 1;
-				_cueContainer.AddChild(shellBar);
-				_cueContainer.MoveChild(shellBar, newIndex);
-			}
-			else // Selected cue has parent, add as child of that parent
-			{
-				var parent = FetchCueFromId(selectedCue.ParentId);
-				var newIndex = selectedCue.ShellBar.GetIndex() + 1;
-				parent.ShellBar.ShellChildContainer.AddChild(shellBar);
-				parent.ShellBar.ShellChildContainer.MoveChild(shellBar, newIndex);
-				newCue.ParentId = selectedCue.ParentId;
-				bool wasNewParent = parent.ChildCues.Count == 0;
-				parent.ChildCues.Add(newCue.Id);
-				if (wasNewParent)
-				{
+				var parent = FetchCueFromId(parentId);
+				if (parent != null && parent.ChildCues.Count == 0)
 					parent.Expanded = true;
-				}
-				parent.ShellBar.RelationshipChanged();
 			}
 		}
 
-		shellBar.MouseEntered += () => OnMouseEntered(shellBar);
-		shellBar.SetCue(newCue);
-		newCue.ShellBar = shellBar; // Adds shellbar scene to the cue object.
-		shellBar.Set("CueId", newCue.Id); // Sets shell_bar property CueId
+		InsertCueInModel(newCue, parentId, insertIndex);
+		NotifyVirtualStructureChanged();
 	}
 	
 	/// <summary>
@@ -727,20 +665,7 @@ public partial class CueList
 	/// </summary>
 	private List<int> GetVisualCueOrderIncludingCollapsed()
 	{
-		var result = new List<int>();
-		void Walk(VBoxContainer container)
-		{
-			if (container == null) return;
-			foreach (var child in container.GetChildren())
-			{
-				if (child is not ShellBar sb) continue;
-				int id = sb.CueId;
-				result.Add(id);
-				Walk(sb.ShellChildContainer);
-			}
-		}
-		Walk(_cueContainer);
-		return result;
+		return GetModelVisualOrder(includeCollapsed: true);
 	}
 
 	/// <summary>
@@ -988,21 +913,6 @@ public partial class CueList
 	}
 
 	/// <summary>
-	/// Rebuilds <see cref="Cue.ChildCues"/> from the shell child container order.
-	/// </summary>
-	private static void SyncChildCuesFromShellContainer(Cue parent)
-	{
-		if (parent?.ShellBar?.ShellChildContainer == null) return;
-		parent.ChildCues.Clear();
-		foreach (var child in parent.ShellBar.ShellChildContainer.GetChildren())
-		{
-			if (child is ShellBar sb)
-				parent.ChildCues.Add(sb.CueId);
-		}
-		parent.ShellBar.RelationshipChanged();
-	}
-
-	/// <summary>
 	/// Deletes all currently selected cues (Delete key / shell inspector).
 	/// When a parent is selected, children are removed with it even if not multi-selected.
 	/// Large deletes are frame-sliced with footer progress.
@@ -1046,13 +956,14 @@ public partial class CueList
 			}
 		}
 
+		DetachCueFromModel(cue);
 		if (cue.ShellBar != null && IsInstanceValid(cue.ShellBar))
-			cue.ShellBar.QueueFree();
+			ReleaseVirtualShell(cue.ShellBar);
 		cue.ShellBar = null;
 
 		CueIndex?.Remove(cue.Id);
-		if (_bulkNotifySuppressDepth == 0)
-			NotifyTotalCuesChanged();
+		if (_bulkNotifySuppressDepth == 0 && _virtualRefreshSuppress == 0)
+			NotifyVirtualStructureChanged();
 	}
 
 	/// <summary>
@@ -1177,24 +1088,8 @@ public partial class CueList
 	/// </summary>
 	internal void ClearAllShellHoverChrome()
 	{
-		if (_cueContainer == null)
-			return;
-		ClearShellHoverRecursive(_cueContainer);
-	}
-
-	private static void ClearShellHoverRecursive(VBoxContainer container)
-	{
-		if (container == null)
-			return;
-		foreach (var child in container.GetChildren())
-		{
-			if (child is ShellBar shell)
-			{
-				shell.ClearHoverChrome();
-				if (shell.ShellChildContainer != null)
-					ClearShellHoverRecursive(shell.ShellChildContainer);
-			}
-		}
+		foreach (int id in VisibleRowIds)
+			FetchCueFromId(id)?.ShellBar?.ClearHoverChrome();
 	}
 	
 	public override void _Input(InputEvent @event)
@@ -1207,6 +1102,12 @@ public partial class CueList
 		}
 
 		_boxSelectController?.ProcessInput(@event);
+	}
+
+	/// <inheritdoc />
+	public override void _Process(double delta)
+	{
+		_boxSelectController?.Tick();
 	}
 
 	private void EndReorder()
@@ -1245,7 +1146,15 @@ public partial class CueList
 	/// </summary>
 	internal ShellBar GetLastVisibleShellBar()
 	{
-		return FindLastShell(_cueContainer);
+		if (VisibleRowIds.Count == 0)
+			return null;
+		for (int i = VisibleRowIds.Count - 1; i >= 0; i--)
+		{
+			var shell = FetchCueFromId(VisibleRowIds[i])?.ShellBar;
+			if (shell != null && IsInstanceValid(shell))
+				return shell;
+		}
+		return null;
 	}
 
 	internal void EmitLog(string message, int type)
@@ -1343,23 +1252,184 @@ public partial class CueList
 	}
 
 	/// <summary>
-	/// Rebuilds only the cuelist from a history snapshot (no settings / displays reload).
+	/// Applies a multi-cue history memento in place (no full list free/rebuild).
 	/// </summary>
-	/// <param name="cuesData">Deep-cloned <see cref="GetData"/> dictionary.</param>
+	/// <param name="cuesById">Map of cue-id string → <see cref="Cue.GetData"/> dictionary.</param>
+	internal void ApplyMultiCueHistorySnapshot(Dictionary cuesById)
+	{
+		if (cuesById == null || cuesById.Count == 0)
+			return;
+
+		var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+		int lastId = -1;
+
+		foreach (var key in cuesById.Keys)
+		{
+			if (!int.TryParse(key.AsString(), out int cueId))
+				continue;
+			if (cuesById[key].VariantType != Variant.Type.Dictionary)
+				continue;
+
+			var data = cuesById[key].AsGodotDictionary();
+			var cue = FetchCueFromId(cueId);
+			if (cue == null)
+			{
+				GD.PrintErr($"CueList:ApplyMultiCueHistorySnapshot - Cue {cueId} not found; skip.");
+				continue;
+			}
+
+			cue.ApplyFromData(data);
+			RelinkCueComponents(cue);
+			cue.ShellBar?.RefreshAllFromCue();
+			health?.CheckCue(cueId);
+			lastId = cueId;
+		}
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+		if (_globalData != null && _globalData.FocusedCue >= 0
+		    && FetchCueFromId(_globalData.FocusedCue) != null)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.ShellFocused), _globalData.FocusedCue);
+		}
+		else if (lastId >= 0)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), lastId);
+		}
+	}
+
+	/// <summary>
+	/// Restores cuelist structure from a history snapshot without settings/displays reload.
+	/// Prefers in-place update of existing shells; only instantiates/frees changed cue ids.
+	/// </summary>
+	/// <param name="cuesData"><see cref="GetData"/> dictionary (Cues + CueOrder).</param>
 	internal void ApplyCuelistHistorySnapshot(Dictionary cuesData)
 	{
-		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+		if (cuesData == null)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+			ResetCuelist();
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+			return;
+		}
 
-		ResetCuelist();
-		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
-
-		if (cuesData != null)
+		// Full free/rebuild remains correct fallback when snapshot is empty or malformed.
+		if (!cuesData.TryGetValue("Cues", out var cuesVar) || cuesVar.VariantType != Variant.Type.Dictionary)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+			ResetCuelist();
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.ClearAll();
 			LoadData(cuesData);
+			GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
+			return;
+		}
 
-		// Selection + focus are restored by HistoryManager after this returns
-		// (snapshots include ordered selected cue ids).
+		var snapshotCues = cuesVar.AsGodotDictionary();
+		var snapshotIds = new HashSet<int>();
+		foreach (var key in snapshotCues.Keys)
+		{
+			if (int.TryParse(key.AsString(), out int id))
+				snapshotIds.Add(id);
+			else if (key.VariantType == Variant.Type.Int)
+				snapshotIds.Add(key.AsInt32());
+		}
 
-		GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.RecheckAllQuiet();
+		// Structural change can leave orphan active playbacks — stop all before mutating list.
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.StopAll));
+		BeginVirtualRefreshSuppress();
+		try
+		{
+
+		// Remove live cues not present in snapshot (children first via recursive remove on roots).
+		var liveIds = CueIndex?.Keys.ToList() ?? new List<int>();
+		var toRemove = new List<Cue>();
+		foreach (int id in liveIds)
+		{
+			if (snapshotIds.Contains(id)) continue;
+			var cue = FetchCueFromId(id);
+			if (cue == null) continue;
+			// Only remove roots of deleted subtrees; recursive remove handles descendants.
+			// If parent is also deleted, wait for parent pass — mark for remove only if parent stays
+			// or parent is also deleted (then remove deepest roots among deleted set).
+			if (cue.ParentId >= 0 && !snapshotIds.Contains(cue.ParentId))
+				continue; // parent deleted too — will be removed with parent
+			toRemove.Add(cue);
+		}
+
+		foreach (var cue in toRemove)
+			RemoveCueRecursive(cue);
+
+		var health = GetNodeOrNull<MediaHealthService>("/root/MediaHealthService");
+		var changedIds = new List<int>();
+
+		// Create missing / update existing
+		foreach (var kv in snapshotCues)
+		{
+			string keyStr = kv.Key.AsString();
+			if (!int.TryParse(keyStr, out int cueId) && kv.Key.VariantType == Variant.Type.Int)
+				cueId = kv.Key.AsInt32();
+			else if (!int.TryParse(keyStr, out cueId))
+				continue;
+
+			if (kv.Value.VariantType != Variant.Type.Dictionary)
+				continue;
+			var data = kv.Value.AsGodotDictionary();
+
+			// Ensure Id field present for constructor/apply
+			if (!data.ContainsKey("Id"))
+				data["Id"] = cueId.ToString();
+
+			var live = FetchCueFromId(cueId);
+			if (live != null)
+			{
+				live.ApplyFromData(data);
+				RelinkCueComponents(live);
+				live.ShellBar?.RefreshAllFromCue();
+				changedIds.Add(cueId);
+			}
+			else
+			{
+				// CreateCue → AddCue instantiates a shell (insert position fixed later by StructureCuelist).
+				CreateCue(data);
+				changedIds.Add(cueId);
+			}
+		}
+
+		// Apply order + nesting from snapshot
+		if (cuesData.TryGetValue("CueOrder", out var orderVar))
+		{
+			var cueOrder = new Godot.Collections.Dictionary<int, int>();
+			if (orderVar.VariantType == Variant.Type.Dictionary)
+			{
+				foreach (var cue in orderVar.AsGodotDictionary())
+					cueOrder.Add((int)cue.Key, (int)cue.Value);
+			}
+			StructureCuelist(cueOrder);
+		}
+
+		// Bump id allocator past any restored ids
+		int maxId = 0;
+		if (CueIndex != null)
+		{
+			foreach (int id in CueIndex.Keys)
+				if (id >= maxId) maxId = id + 1;
+		}
+		// Cue.ResetIdAllocator only zeros; ApplyFromData already raises _nextId when Id >= _nextId.
+
+		if (health != null)
+		{
+			foreach (int id in changedIds)
+				health.CheckCue(id);
+		}
+
+		// Selection + focus are restored by HistoryManager after this returns.
+		}
+		finally
+		{
+			EndVirtualRefreshSuppress();
+		}
+
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.SyncShellInspector));
 	}
 
@@ -1404,23 +1474,7 @@ public partial class CueList
 
 	private void SetAllExpanded(bool expanded)
 	{
-		SetExpandedRecursive(_cueContainer, expanded);
-	}
-
-	private void SetExpandedRecursive(VBoxContainer container, bool expanded)
-	{
-		foreach (var child in container.GetChildren())
-		{
-			if (child is ShellBar shellBar)
-			{
-				shellBar.SetExpanded(expanded);
-				var childCont = shellBar.ShellChildContainer;
-				if (childCont != null)
-				{
-					SetExpandedRecursive(childCont, expanded);
-				}
-			}
-		}
+		SetExpandedAllGroups(expanded);
 	}
 
 	/// <summary>
@@ -1441,25 +1495,34 @@ public partial class CueList
 
 	private void SetExpandedOneLayer(bool expanded)
 	{
-		foreach (var child in _cueContainer.GetChildren())
+		foreach (int id in RootOrder)
 		{
-			if (child is ShellBar shellBar)
-			{
-				shellBar.SetExpanded(expanded);
-				// Intentionally do not recurse into child containers - this is "one layer"
-			}
+			var cue = FetchCueFromId(id);
+			if (cue == null || cue.ChildCues.Count == 0)
+				continue;
+			cue.Expanded = expanded;
 		}
-		RefreshShellZebra();
+		NotifyVirtualStructureChanged();
+	}
+
+	/// <summary>
+	/// Sets expand/collapse on every group in the model (all nesting levels).
+	/// </summary>
+	private void SetExpandedAllGroups(bool expanded)
+	{
+		if (CueIndex == null)
+			return;
+		foreach (var cue in CueIndex.Values)
+		{
+			if (cue != null && cue.ChildCues.Count > 0)
+				cue.Expanded = expanded;
+		}
+		NotifyVirtualStructureChanged();
 	}
 	
 	public void ResetCuelist()
 	{
-		// Removes shellbars from ui
-		foreach (var cue in CueIndex)
-		{
-			cue.Value.ShellBar?.QueueFree();
-		}
-		// Resets 
+		ClearVirtualState();
 		CueIndex = new System.Collections.Generic.Dictionary<int, Cue>();
 		ShellSelection.SelectedCues = new List<Cue>();
 		Cue.ResetIdAllocator();

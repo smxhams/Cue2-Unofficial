@@ -34,11 +34,16 @@ public partial class LineEditDbDragSlider : Node
     /// <summary>Child node name used for idempotent <see cref="Enable"/>.</summary>
     public const string ChildName = "DbDragSlider";
 
-    /// <summary>Default practical floor matching <see cref="UiUtilities.LinearToDb"/>.</summary>
+    /// <summary>Default practical floor (−60 dB).</summary>
     public const float DefaultMinDb = -60f;
 
-    /// <summary>Default ceiling (unity / 0 dBFS).</summary>
-    public const float DefaultMaxDb = 0f;
+    /// <summary>
+    /// Default ceiling for cue component volume fields (digital gain up to +12 dB).
+    /// </summary>
+    public const float DefaultMaxDb = 12f;
+
+    /// <summary>Unity ceiling (0 dBFS) for master / routing matrix fields that must not boost.</summary>
+    public const float UnityMaxDb = 0f;
 
     private const float DefaultHoldDelaySec = 0.18f;
     private const float DefaultActivateDragPx = 5f;
@@ -152,7 +157,8 @@ public partial class LineEditDbDragSlider : Node
     }
 
     /// <summary>
-    /// Convenience: standard absolute volume range (−60…0 dB).
+    /// Convenience: cue component / embedded-audio volume range (−60…+12 dB) with digital gain.
+    /// Positive values format with a leading '+'.
     /// </summary>
     /// <param name="field">Target LineEdit.</param>
     /// <returns>The behavior node, or null if invalid.</returns>
@@ -162,6 +168,21 @@ public partial class LineEditDbDragSlider : Node
         {
             MinDb = DefaultMinDb,
             MaxDb = DefaultMaxDb,
+            FormatSigned = true
+        });
+    }
+
+    /// <summary>
+    /// Convenience: unity-gain-only absolute volume (−60…0 dB) for master and routing matrices.
+    /// </summary>
+    /// <param name="field">Target LineEdit.</param>
+    /// <returns>The behavior node, or null if invalid.</returns>
+    public static LineEditDbDragSlider EnableUnityVolume(LineEdit field)
+    {
+        return Enable(field, new Config
+        {
+            MinDb = DefaultMinDb,
+            MaxDb = UnityMaxDb,
             FormatSigned = false
         });
     }

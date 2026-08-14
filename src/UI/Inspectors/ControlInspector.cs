@@ -124,7 +124,8 @@ public partial class ControlInspector : Control
     private void OnHistoryRestored(int scope)
     {
         if (scope != (int)HistoryManager.HistoryScope.Cue
-            && scope != (int)HistoryManager.HistoryScope.Cuelist)
+            && scope != (int)HistoryManager.HistoryScope.Cuelist
+            && scope != (int)HistoryManager.HistoryScope.MultiCue)
             return;
         if (!Visible)
             return;
@@ -191,6 +192,8 @@ public partial class ControlInspector : Control
         InspectorMultiEditSupport.RecordBeforeEdit(
             _globalData, multiHistory: false, _focusedCue, "Remove control component");
         _focusedCue.RemoveICueComponent(component);
+        try { _focusedCue.CalculateTotalDuration(); } catch { /* best-effort */ }
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"Removed control component from cue {_focusedCue.Id}", (int)LogType.Info);
         LoadCards();
@@ -246,6 +249,9 @@ public partial class ControlInspector : Control
         var component = new ControlComponent { Action = action };
         // Append — runs after existing controls in list order.
         _focusedCue.AddICueComponent(component);
+        // Default Fade is 1s — include control times in shell duration.
+        try { _focusedCue.CalculateTotalDuration(); } catch { /* best-effort */ }
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.UpdateShellBar), _focusedCue.Id);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"Added {action} control to cue {_focusedCue.Id}", (int)LogType.Info);
         LoadCards();

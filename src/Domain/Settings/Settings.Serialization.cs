@@ -34,7 +34,7 @@ public partial class Settings
         saveTable.Add("Displays", _displaysManager.GetData());
         saveTable.Add("CueLights", _globalData.CueLightManager.GetData());
         
-        saveTable.Add("UiScale", UiScale);
+        // UiScale is a user preference (user_data.json), not showfile settings.
         saveTable.Add("GoScale", GoScale);
         saveTable.Add("CueListScale", CueListScale);
         saveTable.Add("WaveformResolution", WaveformResolution);
@@ -51,6 +51,8 @@ public partial class Settings
         saveTable.Add("AudioLatencyMode", (int)AudioLatencyMode);
         saveTable.Add("AudioDeclickMs", AudioDeclickMs);
         saveTable.Add("AudioMasterVolume", AudioMasterVolume);
+        saveTable.Add("AudioOutputMaxDb", AudioOutputMaxDb);
+        saveTable.Add("AudioOutputMinDb", AudioOutputMinDb);
 
         // Cue shell defaults (show-scoped)
         saveTable.Add("CueDefaults", CaptureCueDefaultsDict());
@@ -91,75 +93,140 @@ public partial class Settings
         return saveTable;
     }
 
+    /// <summary>
+    /// Applies a full showfile settings block (audio, displays, then remaining prefs).
+    /// History / import should prefer this sync entry; showfile open uses the sliced loaders
+    /// with a frame yield between them so the overlay can paint.
+    /// </summary>
+    /// <param name="settingsData">Root <c>settings</c> dictionary from the showfile.</param>
     public void LoadSettings(Dictionary settingsData)
     {
+        if (settingsData == null)
+            return;
         GD.Print($"Settings:LoadSettings - Loading Settings");
+        LoadAudioFromData(settingsData);
+        LoadDisplaysFromData(settingsData);
+        LoadRemainingFromData(settingsData);
+    }
+
+    /// <summary>
+    /// Opens show audio devices, rebuilds the patch table, and reconciles leftover SDL devices.
+    /// Emits <see cref="GlobalSignals.AudioDevicesChanged"/> once at the end of the batch.
+    /// </summary>
+    /// <param name="settingsData">Showfile settings dictionary.</param>
+    public void LoadAudioFromData(Dictionary settingsData)
+    {
+        if (settingsData == null)
+            return;
 
         // Names from the showfile open-device list (may include devices opened for direct-output
         // that are not currently in a patch). Unioned with patch keys before reconcile.
         var showfileDeviceNames = new System.Collections.Generic.List<string>();
-        bool loadedAudioDevicesOrPatches = false;
 
-        if (settingsData.TryGetValue("AudioDevices", out var devices))
+        SessionLoadTimer.Current?.Begin("settings.audio");
+
+        bool prevSuppress = _audioDevices != null && _audioDevices.SuppressChangedSignals;
+        if (_audioDevices != null)
+            _audioDevices.SuppressChangedSignals = true;
+        try
         {
-            GD.Print($"Settings:LoadSettings - Loading AudioDevices");
-            loadedAudioDevicesOrPatches = true;
-            // Soft convert — hard cast (Array<string>) throws when JSON yields Array or Variant mix.
-            var deviceArray = devices.AsGodotArray();
-            foreach (var device in deviceArray)
+            if (settingsData.TryGetValue("AudioDevices", out var devices))
             {
-                string deviceName = device.AsString();
-                if (string.IsNullOrEmpty(deviceName)) continue;
-                showfileDeviceNames.Add(deviceName);
-                _audioDevices.OpenAudioDevice(deviceName, out var _);
-            }
-        }
-
-        if (settingsData.TryGetValue("AudioPatch", out var patchs))
-        {
-            GD.Print($"Settings:LoadSettings - Loading AudioPatches");
-            loadedAudioDevicesOrPatches = true;
-            // Replace any session-seeded Default Patch from ResetSettings so open/load is authoritative.
-            foreach (var existing in _audioOutputPatches.Values.ToList())
-            {
-                if (existing != null && GodotObject.IsInstanceValid(existing))
-                    existing.Free();
-            }
-            _audioOutputPatches.Clear();
-
-            if (patchs.VariantType == Variant.Type.Dictionary)
-            {
-                var patchDict = patchs.AsGodotDictionary();
-                foreach (var patchKey in patchDict.Keys)
+                GD.Print($"Settings:LoadSettings - Loading AudioDevices");
+                // Soft convert — hard cast (Array<string>) throws when JSON yields Array or Variant mix.
+                var deviceArray = devices.AsGodotArray();
+                foreach (var device in deviceArray)
                 {
-                    var patchAsDict = patchDict[patchKey].AsGodotDictionary();
-                    var patchObj = AudioOutputPatch.FromData(patchAsDict);
-                    if (patchObj != null)
-                        AddPatch(patchObj);
-                    else
-                        GD.PrintErr("Settings:LoadSettings - Failed to deserialize an audio output patch.");
+                    string deviceName = device.AsString();
+                    if (string.IsNullOrEmpty(deviceName)) continue;
+                    showfileDeviceNames.Add(deviceName);
+                    _audioDevices.OpenAudioDevice(deviceName, out var _);
                 }
             }
-            else
+
+            if (settingsData.TryGetValue("AudioPatch", out var patchs))
             {
-                GD.PrintErr($"Settings:LoadSettings - AudioPatch is not a Dictionary (got {patchs.VariantType}).");
+                GD.Print($"Settings:LoadSettings - Loading AudioPatches");
+                // Replace any leftover patches so open/load is authoritative.
+                foreach (var existing in _audioOutputPatches.Values.ToList())
+                {
+                    if (existing != null && GodotObject.IsInstanceValid(existing))
+                        existing.Free();
+                }
+                _audioOutputPatches.Clear();
+
+                if (patchs.VariantType == Variant.Type.Dictionary)
+                {
+                    var patchDict = patchs.AsGodotDictionary();
+                    foreach (var patchKey in patchDict.Keys)
+                    {
+                        var patchAsDict = patchDict[patchKey].AsGodotDictionary();
+                        var patchObj = AudioOutputPatch.FromData(patchAsDict);
+                        if (patchObj != null)
+                            AddPatch(patchObj);
+                        else
+                            GD.PrintErr("Settings:LoadSettings - Failed to deserialize an audio output patch.");
+                    }
+                }
+                else
+                {
+                    GD.PrintErr($"Settings:LoadSettings - AudioPatch is not a Dictionary (got {patchs.VariantType}).");
+                }
             }
 
-            // Older showfiles with an empty patch table still get a usable Default Patch.
+            // Missing or empty patch table still gets a usable Default Patch.
             EnsureDefaultAudioPatch();
+            ReconcileOpenAudioDevices(showfileDeviceNames);
+        }
+        finally
+        {
+            if (_audioDevices != null)
+            {
+                _audioDevices.SuppressChangedSignals = prevSuppress;
+                if (!prevSuppress)
+                    _audioDevices.NotifyDevicesChanged();
+            }
         }
 
-        // After open + patch apply: close SDL devices left over from the previous session that
-        // are not in the showfile open list and not referenced by any loaded patch.
-        if (loadedAudioDevicesOrPatches)
-            ReconcileOpenAudioDevices(showfileDeviceNames);
-        
+        SessionLoadTimer.Current?.Pause();
+    }
+
+    /// <summary>
+    /// Recreates canvas / layers / output windows from the showfile Displays block.
+    /// </summary>
+    /// <param name="settingsData">Showfile settings dictionary.</param>
+    public void LoadDisplaysFromData(Dictionary settingsData)
+    {
+        if (settingsData == null)
+            return;
+
+        SessionLoadTimer.Current?.Begin("settings.displays");
+
         if (settingsData.TryGetValue("Displays", out var displays))
         {
             GD.Print($"Settings:LoadSettings - Loading Displays");
             var displaysAsDict = displays.AsGodotDictionary();
             _displaysManager.LoadFromData(displaysAsDict);
         }
+        else if (_displaysManager != null && DisplaysManager.Outputs.Count == 0)
+        {
+            // Legacy / partial showfile with no Displays block after ClearForOpen.
+            _displaysManager.ResetToDefaults();
+        }
+
+        SessionLoadTimer.Current?.Pause();
+    }
+
+    /// <summary>
+    /// Applies scalars, component defaults, cue lights, OSC, and MIDI after audio and displays.
+    /// </summary>
+    /// <param name="settingsData">Showfile settings dictionary.</param>
+    public void LoadRemainingFromData(Dictionary settingsData)
+    {
+        if (settingsData == null)
+            return;
+
+        SessionLoadTimer.Current?.Begin("settings.other");
 
         if (settingsData.TryGetValue("CueLights", out var cueLights))
         {
@@ -168,9 +235,8 @@ public partial class Settings
             _globalData.CueLightManager.LoadData(cueLightsAsDict);
         }
         
-        UiScale = settingsData.TryGetValue("UiScale", out var value) ? (float)value : UiScale;
-        _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
-        GoScale = settingsData.TryGetValue("GoScale", out value) ? (float)value : GoScale;
+        // Legacy showfiles may still contain "UiScale"; ignore — scale lives in UserDataManager.
+        GoScale = settingsData.TryGetValue("GoScale", out var value) ? (float)value : GoScale;
         _globalSignals.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
         CueListScale = settingsData.TryGetValue("CueListScale", out value)
             ? (float)value
@@ -217,6 +283,15 @@ public partial class Settings
         AudioMasterVolume = settingsData.TryGetValue("AudioMasterVolume", out value)
             ? Math.Clamp(value.AsSingle(), 0f, 1f)
             : DefaultAudioMasterVolume;
+        AudioOutputMaxDb = settingsData.TryGetValue("AudioOutputMaxDb", out value)
+            ? Math.Clamp(value.AsSingle(), MinAudioOutputMaxDb, MaxAudioOutputMaxDb)
+            : DefaultAudioOutputMaxDb;
+        AudioOutputMinDb = settingsData.TryGetValue("AudioOutputMinDb", out value)
+            ? Math.Clamp(value.AsSingle(), MinAudioOutputMinDb, MaxAudioOutputMinDb)
+            : DefaultAudioOutputMinDb;
+        // Keep max ≥ min so the gate and clamp cannot invert.
+        if (AudioOutputMaxDb < AudioOutputMinDb)
+            AudioOutputMaxDb = Math.Clamp(AudioOutputMinDb, MinAudioOutputMaxDb, MaxAudioOutputMaxDb);
 
         // Loading a showfile should not keep the previous show's emergency disable/blackout.
         _displaysManager?.ClearRuntimeOutputControls();
@@ -252,6 +327,7 @@ public partial class Settings
         CueLightBrightness = settingsData.TryGetValue("CueLightBrightness", out value) ? (byte)value : CueLightBrightness;
         
         // Osc Listen
+        SessionLoadTimer.Current?.Begin("settings.osc");
         if (settingsData.TryGetValue("OscListen", out var oscListen))
         {
             GD.Print($"Settings:LoadSettings - Loading OscListen");
@@ -275,6 +351,7 @@ public partial class Settings
             GetNode<OscConnections>("/root/OscConnections").LoadFromData(oscConnectionsAsDict);
         }
 
+        SessionLoadTimer.Current?.Begin("settings.midi");
         if (settingsData.TryGetValue("Midi", out var midiData) && midiData.VariantType == Variant.Type.Dictionary)
         {
             GD.Print("Settings:LoadSettings - Loading Midi");
@@ -297,5 +374,6 @@ public partial class Settings
 
         // Sync show/edit mode UI after load (always notify so chrome matches the loaded value).
         NotifyShowModeChanged();
+        SessionLoadTimer.Current?.Pause();
     }
 }

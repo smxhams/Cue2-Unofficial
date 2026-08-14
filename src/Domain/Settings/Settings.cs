@@ -55,9 +55,6 @@ public partial class Settings : Node
     private Dictionary<int, AudioOutputPatch> _audioOutputPatches = new Dictionary<int, AudioOutputPatch>();
     private DisplaysManager _displaysManager;
 
-    /// <summary>System default UI scale (1.0 = 100%).</summary>
-    public const float DefaultUiScale = 1.0f;
-
     /// <summary>System default Go button scale (1.0 = base).</summary>
     public const float DefaultGoScale = 1.0f;
 
@@ -126,6 +123,27 @@ public partial class Settings : Node
 
     /// <summary>Default session master volume (linear 1.0 = 0 dB / 100%).</summary>
     public const float DefaultAudioMasterVolume = 1f;
+
+    /// <summary>Default peak clamp ceiling (dBFS). 0 dB = full scale; prevents samples above digital full scale.</summary>
+    public const float DefaultAudioOutputMaxDb = 0f;
+
+    /// <summary>Minimum allowed peak clamp ceiling (dBFS).</summary>
+    public const float MinAudioOutputMaxDb = -24f;
+
+    /// <summary>Maximum allowed peak clamp ceiling (dBFS).</summary>
+    public const float MaxAudioOutputMaxDb = 0f;
+
+    /// <summary>
+    /// Default silence floor (dBFS). Samples quieter than this are forced to zero after mix.
+    /// −90 dB is near-silent for float PCM and avoids gating normal program material.
+    /// </summary>
+    public const float DefaultAudioOutputMinDb = -90f;
+
+    /// <summary>Minimum allowed silence floor (dBFS). −120 ≈ digital mute / gate off.</summary>
+    public const float MinAudioOutputMinDb = -120f;
+
+    /// <summary>Maximum allowed silence floor (dBFS).</summary>
+    public const float MaxAudioOutputMinDb = -20f;
 
     // ── Cue shell defaults (system factory values) ─────────────────────────
 
@@ -275,7 +293,8 @@ public partial class Settings : Node
     public const ComponentTargetLayerDefaultMode SystemDefaultTextTargetLayerMode =
         ComponentTargetLayerDefaultMode.FirstAvailable;
 
-    public float UiScale = DefaultUiScale;
+    // UI scale is a user preference (UserDataManager.UiScale), not showfile data.
+
     public float GoScale = DefaultGoScale;
 
     /// <summary>
@@ -371,6 +390,18 @@ public partial class Settings : Node
     /// Runtime mute is separate (see <see cref="AudioDevices.SessionMasterMuted"/>).
     /// </summary>
     public float AudioMasterVolume = DefaultAudioMasterVolume;
+
+    /// <summary>
+    /// Peak clamp ceiling in dBFS applied after mix (standalone + video embedded audio).
+    /// Samples above this absolute level are hard-limited. Default 0 dB (full scale).
+    /// </summary>
+    public float AudioOutputMaxDb = DefaultAudioOutputMaxDb;
+
+    /// <summary>
+    /// Silence floor in dBFS applied after mix. Samples below this absolute level become silence.
+    /// Default −90 dB. Set to −120 dB to effectively disable the gate.
+    /// </summary>
+    public float AudioOutputMinDb = DefaultAudioOutputMinDb;
 
     /// <summary>
     /// Resolved present tuning for the current <see cref="VideoQualityMode"/>.
@@ -567,9 +598,9 @@ public partial class Settings : Node
         _audioDevices = GetNode<AudioDevices>("/root/AudioDevices");
         _displaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
 
-        // First launch / empty show: ensure a Default Patch exists (same as DisplaysManager defaults).
-        // Deferred so AudioDevices autoload _Ready and SDL device enumeration are fully available.
-        CallDeferred(nameof(EnsureDefaultAudioPatch));
+        // First launch / empty show: seed Default Patch after SDL enumerate.
+        // Skip when opening last-show — LoadAudioFromData builds the real patches.
+        CallDeferred(nameof(EnsureBootDefaultAudioPatch));
     }
 
     public override void _ExitTree()
@@ -645,6 +676,17 @@ public partial class Settings : Node
 
         CreateDefaultAudioPatch();
         GD.Print("Settings:EnsureDefaultAudioPatch - No patches present; created Default Patch.");
+    }
+
+    /// <summary>
+    /// Boot-only seed. Skips when <see cref="GlobalData.StartupOpenPath"/> is set so last-show
+    /// open does not open headphones then throw them away in <c>ClearForOpen</c>.
+    /// </summary>
+    private void EnsureBootDefaultAudioPatch()
+    {
+        if (!string.IsNullOrEmpty(_globalData?.StartupOpenPath))
+            return;
+        EnsureDefaultAudioPatch();
     }
 
     /// <summary>
@@ -824,34 +866,23 @@ public partial class Settings : Node
     
     // Save and loads
     /// <summary>
-    /// Resets all show/session settings to factory defaults (New Session / before Open).
+    /// Frees all audio output patches without seeding a Default Patch.
     /// </summary>
-    /// <remarks>
-    /// Clears audio patches then seeds a <see cref="DefaultAudioPatchName"/> (system playback
-    /// device when available). Also resets displays (canvas/layers/screens), cue lights,
-    /// OSC listen/connections, and general scalars. Does <b>not</b> reset Input Map — that
-    /// lives in user preferences. Emits scale/display signals so live UI can resync.
-    /// When used as the wipe step before Open, <see cref="LoadSettings"/> replaces the seeded
-    /// Default Patch with the showfile's patch table.
-    /// </remarks>
-    public void ResetSettings()
+    private void FreeAllAudioPatches()
     {
-        // Audio output patches
-        foreach (var patch in _audioOutputPatches.Values.ToList())
+        foreach (var existing in _audioOutputPatches.Values.ToList())
         {
-            if (patch != null && GodotObject.IsInstanceValid(patch))
-                patch.Free();
+            if (existing != null && GodotObject.IsInstanceValid(existing))
+                existing.Free();
         }
         _audioOutputPatches.Clear();
+    }
 
-        // Seed a Default Patch (system playback device when available) so new cues can play out.
-        CreateDefaultAudioPatch();
-
-        // Close leftover SDL devices from the previous show; keep only what the new Default Patch needs.
-        ReconcileOpenAudioDevices();
-
-        // General show scalars
-        UiScale = DefaultUiScale;
+    /// <summary>
+    /// Restores show scalars and component defaults in memory (no UI signals).
+    /// </summary>
+    private void ResetScalarSettingsToDefaults()
+    {
         GoScale = DefaultGoScale;
         CueListScale = DefaultCueListScale;
         WaveformResolution = DefaultWaveformResolution;
@@ -868,7 +899,67 @@ public partial class Settings : Node
         AudioLatencyMode = DefaultAudioLatencyMode;
         AudioDeclickMs = DefaultAudioDeclickMs;
         AudioMasterVolume = DefaultAudioMasterVolume;
+        AudioOutputMaxDb = DefaultAudioOutputMaxDb;
+        AudioOutputMinDb = DefaultAudioOutputMinDb;
         VerbosePrint = true;
+
+        ResetCueDefaultsToSystem();
+        ResetAudioDefaultsToSystem();
+        ResetVideoDefaultsToSystem();
+        ResetTextDefaultsToSystem();
+
+        CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
+        CueLightGoColour = new Color(0f, 1f, 0f, 1f);
+        CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
+        CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
+        CueLightBrightness = 50;
+    }
+
+    /// <summary>
+    /// Clears live show settings for a showfile apply without seeding a playable empty show.
+    /// </summary>
+    /// <remarks>
+    /// Frees patches and output windows, resets scalars/OSC/MIDI/cue lights. Does <b>not</b>
+    /// create a Default Patch or default canvas screen, does <b>not</b> open/close SDL devices,
+    /// and does <b>not</b> emit scale/show-mode/displays signals.
+    /// <see cref="LoadSettings"/> is the single constructor of the incoming show.
+    /// </remarks>
+    public void ClearForOpen()
+    {
+        FreeAllAudioPatches();
+        ResetScalarSettingsToDefaults();
+
+        _displaysManager?.ClearForOpen();
+        _globalData?.CueLightManager?.Reset();
+        GetNodeOrNull<OscListen>("/root/OscListen")?.ResetToDefaults();
+        GetNodeOrNull<OscConnections>("/root/OscConnections")?.ClearAll();
+        GetNodeOrNull<MidiManager>("/root/MidiManager")?.ResetToDefaults();
+
+        GD.Print("Settings:ClearForOpen - Settings cleared for showfile apply (no default seed).");
+    }
+
+    /// <summary>
+    /// Resets all show/session settings to factory defaults (File → New).
+    /// </summary>
+    /// <remarks>
+    /// Clears audio patches then seeds a <see cref="DefaultAudioPatchName"/> (system playback
+    /// device when available). Also resets displays (canvas/layers/screens), cue lights,
+    /// OSC listen/connections, and general scalars. Does <b>not</b> reset Input Map — that
+    /// lives in user preferences. Emits scale/display signals so live UI can resync.
+    /// Showfile open uses <see cref="ClearForOpen"/> instead so LoadSettings does not
+    /// throw away a just-created Default Patch and virtual screen.
+    /// </remarks>
+    public void ResetSettings()
+    {
+        FreeAllAudioPatches();
+
+        // Seed a Default Patch (system playback device when available) so new cues can play out.
+        CreateDefaultAudioPatch();
+
+        // Close leftover SDL devices from the previous show; keep only what the new Default Patch needs.
+        ReconcileOpenAudioDevices();
+
+        ResetScalarSettingsToDefaults();
 
         // Operator runtime video controls should never carry across New Session.
         _displaysManager?.ClearRuntimeOutputControls();
@@ -876,36 +967,15 @@ public partial class Settings : Node
         _displaysManager?.ApplyOutputVSyncPreference();
         _audioDevices?.SyncSessionMasterFromSettings();
 
-        // Cue shell defaults for newly created cues
-        ResetCueDefaultsToSystem();
-        ResetAudioDefaultsToSystem();
-        ResetVideoDefaultsToSystem();
-        ResetTextDefaultsToSystem();
+        // Input Map / UI scale are user-scoped (UserDataManager) — leave alone on New Session.
 
-        // Cue light appearance defaults
-        CueLightIdleColour = new Color(0f, 0f, 0.1f, 1f);
-        CueLightGoColour = new Color(0f, 1f, 0f, 1f);
-        CueLightStandbyColour = new Color(1f, 0.4f, 0f, 1f);
-        CueLightCountInColour = new Color(1f, 0f, 0f, 1f);
-        CueLightBrightness = 50;
-
-        // Input Map is user-scoped (UserDataManager) — leave live bindings alone on New Session.
-
-        // Displays / canvas editor model
         _displaysManager?.ResetToDefaults();
 
-        // Cue lights registry
         _globalData?.CueLightManager?.Reset();
-
-        // OSC
         GetNodeOrNull<OscListen>("/root/OscListen")?.ResetToDefaults();
         GetNodeOrNull<OscConnections>("/root/OscConnections")?.ClearAll();
-
-        // MIDI session inputs
         GetNodeOrNull<MidiManager>("/root/MidiManager")?.ResetToDefaults();
 
-        // Notify live UI (settings general, GO scale, cuelist scale, show mode, etc.)
-        _globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), UiScale);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.GoScaleChanged), GoScale);
         _globalSignals?.EmitSignal(nameof(GlobalSignals.CueListScaleChanged), CueListScale);
         NotifyShowModeChanged();

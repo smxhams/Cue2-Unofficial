@@ -18,6 +18,8 @@ namespace Cue2.Domain.Cuelist;
 /// and accepts the event). Plain click without drag still selects a single cue / clears
 /// empty space. Ctrl/Cmd-click toggles membership of that cue; Ctrl/Cmd-drag marquee still
 /// unions hits with the selection at press time.
+/// The press point is pinned to list content: when the cuelist scrolls (edge auto-scroll
+/// or wheel), the origin cue stays inside the box and the marquee grows with the scroll.
 /// </remarks>
 internal sealed class CueBoxSelect
 {
@@ -34,11 +36,13 @@ internal sealed class CueBoxSelect
     private bool _pending;
     private bool _active;
     private Vector2 _startGlobal;
+    private float _startScrollY;
     private Vector2 _currentGlobal;
     private ShellBar _originShell;
     private bool _additive;
     private List<Cue> _baselineSelection = new();
     private int _baselineFocusId = -1;
+    private bool _scrollWired;
 
     /// <summary>True while a marquee rectangle is being dragged.</summary>
     public bool IsActive => _active;
@@ -110,8 +114,10 @@ internal sealed class CueBoxSelect
         _active = false;
         _originShell = originShell != null && GodotObject.IsInstanceValid(originShell) ? originShell : null;
         _startGlobal = globalPos;
+        _startScrollY = GetScrollY();
         _currentGlobal = globalPos;
         _additive = additive;
+        WireScrollWatch();
 
         _baselineSelection = ShellSelection.SelectedCues != null
             ? ShellSelection.SelectedCues.Where(c => c != null).ToList()
@@ -159,11 +165,7 @@ internal sealed class CueBoxSelect
             }
 
             if (_active)
-            {
-                UpdateMarqueeVisual();
-                ApplyLiveSelection();
-                AutoScroll(_currentGlobal);
-            }
+                RefreshMarqueeAndSelection();
 
             return;
         }
@@ -185,6 +187,8 @@ internal sealed class CueBoxSelect
         _pending = false;
         _active = false;
         _originShell = null;
+        SetOwnerProcess(false);
+        UnwireScrollWatch();
         HideMarquee();
     }
 
@@ -195,8 +199,22 @@ internal sealed class CueBoxSelect
 
         _active = true;
         _pending = true; // stays true until commit so ProcessInput keeps running
-        UpdateMarqueeVisual();
-        ApplyLiveSelection();
+        SetOwnerProcess(true);
+        RefreshMarqueeAndSelection();
+    }
+
+    /// <summary>
+    /// Per-frame update while the marquee is active: keep auto-scroll running when the
+    /// mouse is held at an edge (no motion events) and rebuild the box after scroll.
+    /// </summary>
+    public void Tick()
+    {
+        if (!_active || _owner == null || !GodotObject.IsInstanceValid(_owner))
+            return;
+
+        _currentGlobal = _owner.GetGlobalMousePosition();
+        AutoScroll(_currentGlobal);
+        RefreshMarqueeAndSelection();
     }
 
     private void Commit()
@@ -248,6 +266,8 @@ internal sealed class CueBoxSelect
         _pending = false;
         _active = false;
         _originShell = null;
+        SetOwnerProcess(false);
+        UnwireScrollWatch();
         HideMarquee();
     }
 
@@ -324,49 +344,57 @@ internal sealed class CueBoxSelect
         return true;
     }
 
+    /// <summary>
+    /// Press point in current global space: Y follows list scroll so the origin cue
+    /// stays inside the box as the cuelist moves.
+    /// </summary>
+    private Vector2 GetContentPinnedStartGlobal()
+    {
+        float dy = GetScrollY() - _startScrollY;
+        return new Vector2(_startGlobal.X, _startGlobal.Y - dy);
+    }
+
+    private float GetScrollY()
+    {
+        if (_scrollContainer == null || !GodotObject.IsInstanceValid(_scrollContainer))
+            return 0f;
+        return _scrollContainer.ScrollVertical;
+    }
+
     private Rect2 BuildMarqueeRect()
     {
-        float x = Mathf.Min(_startGlobal.X, _currentGlobal.X);
-        float y = Mathf.Min(_startGlobal.Y, _currentGlobal.Y);
-        float w = Mathf.Abs(_currentGlobal.X - _startGlobal.X);
-        float h = Mathf.Abs(_currentGlobal.Y - _startGlobal.Y);
+        var start = GetContentPinnedStartGlobal();
+        float x = Mathf.Min(start.X, _currentGlobal.X);
+        float y = Mathf.Min(start.Y, _currentGlobal.Y);
+        float w = Mathf.Abs(_currentGlobal.X - start.X);
+        float h = Mathf.Abs(_currentGlobal.Y - start.Y);
         return new Rect2(x, y, w, h);
     }
 
     private List<Cue> CollectHits(Rect2 marqueeGlobal)
     {
         var hits = new List<Cue>();
-        if (_cueContainer == null || !GodotObject.IsInstanceValid(_cueContainer))
+        var list = _owner;
+        if (list == null)
             return hits;
 
-        CollectHitsRecursive(_cueContainer, marqueeGlobal, hits);
+        for (int i = 0; i < list.VisibleRowIds.Count; i++)
+        {
+            var rect = list.GetVisibleRowGlobalRect(i);
+            if (!marqueeGlobal.Intersects(rect))
+                continue;
+            var cue = CueList.FetchCueFromId(list.VisibleRowIds[i]);
+            if (cue != null)
+                hits.Add(cue);
+        }
+
         return hits;
     }
 
-    private static void CollectHitsRecursive(VBoxContainer container, Rect2 marqueeGlobal, List<Cue> hits)
+    private void RefreshMarqueeAndSelection()
     {
-        if (container == null)
-            return;
-
-        foreach (var child in container.GetChildren())
-        {
-            if (child is not ShellBar shell || !GodotObject.IsInstanceValid(shell))
-                continue;
-
-            // Row only — expanded groups must not select every nested cue via parent bounds.
-            var rowRect = shell.GetRowGlobalRect();
-            if (marqueeGlobal.Intersects(rowRect))
-            {
-                var cue = CueList.FetchCueFromId(shell.CueId);
-                if (cue != null)
-                    hits.Add(cue);
-            }
-
-            var childContainer = shell.ShellChildContainer
-                ?? shell.GetNodeOrNull<VBoxContainer>("%ShellChildContainer");
-            if (childContainer != null && childContainer.Visible)
-                CollectHitsRecursive(childContainer, marqueeGlobal, hits);
-        }
+        UpdateMarqueeVisual();
+        ApplyLiveSelection();
     }
 
     private void UpdateMarqueeVisual()
@@ -375,6 +403,10 @@ internal sealed class CueBoxSelect
             return;
 
         var rect = BuildMarqueeRect();
+        // Clip the overlay to the list viewport so it does not paint over the header.
+        if (_scrollContainer != null && GodotObject.IsInstanceValid(_scrollContainer))
+            rect = rect.Intersection(_scrollContainer.GetGlobalRect());
+
         // Marquee is parented to CueList; convert global → local.
         var parent = _marqueePanel.GetParentOrNull<Control>();
         Vector2 localPos = parent != null
@@ -384,6 +416,44 @@ internal sealed class CueBoxSelect
         _marqueePanel.Position = localPos;
         _marqueePanel.Size = rect.Size;
         _marqueePanel.Visible = rect.Size.X > 0.5f || rect.Size.Y > 0.5f;
+    }
+
+    private void WireScrollWatch()
+    {
+        if (_scrollWired || _scrollContainer == null || !GodotObject.IsInstanceValid(_scrollContainer))
+            return;
+        var vBar = _scrollContainer.GetVScrollBar();
+        if (vBar == null)
+            return;
+        vBar.ValueChanged += OnScrollChanged;
+        _scrollWired = true;
+    }
+
+    private void UnwireScrollWatch()
+    {
+        if (!_scrollWired || _scrollContainer == null || !GodotObject.IsInstanceValid(_scrollContainer))
+        {
+            _scrollWired = false;
+            return;
+        }
+
+        var vBar = _scrollContainer.GetVScrollBar();
+        if (vBar != null)
+            vBar.ValueChanged -= OnScrollChanged;
+        _scrollWired = false;
+    }
+
+    private void OnScrollChanged(double value)
+    {
+        if (!_active)
+            return;
+        RefreshMarqueeAndSelection();
+    }
+
+    private void SetOwnerProcess(bool enabled)
+    {
+        if (_owner != null && GodotObject.IsInstanceValid(_owner))
+            _owner.SetProcess(enabled);
     }
 
     private void HideMarquee()

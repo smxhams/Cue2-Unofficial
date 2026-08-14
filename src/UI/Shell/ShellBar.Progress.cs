@@ -133,8 +133,7 @@ public partial class ShellBar
 		if (_cue == null) return;
 		_cue.Expanded = !_cue.Expanded;
 		UpdateCollapseUI();
-		// Visibility of nested rows changed → re-stripe even/odd.
-		_globalData?.Cuelist?.RefreshShellZebra();
+		_globalData?.Cuelist?.NotifyVirtualStructureChanged();
 	}
 
 	/// <summary>
@@ -176,8 +175,10 @@ public partial class ShellBar
 	public void SetExpanded(bool expanded)
 	{
 		if (_cue == null || _cue.ChildCues.Count == 0) return;
+		if (_cue.Expanded == expanded) return;
 		_cue.Expanded = expanded;
 		UpdateCollapseUI();
+		_globalData?.Cuelist?.NotifyVirtualStructureChanged();
 	}
 
 	private void OnMouseEntered()

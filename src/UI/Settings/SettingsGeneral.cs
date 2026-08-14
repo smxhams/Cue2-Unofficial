@@ -9,20 +9,17 @@ using AppSettings = Cue2.Domain.ShowSettings.Settings;
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// General settings panel: UI scale, Go button scale, cuelist scale, stop fade-out, media backup,
+/// General settings panel: Go button scale, cuelist scale, stop fade-out, media backup,
 /// multi-edit, select-new-cues, and timeline waveforms.
 /// Each setting shows a refresh button when not at its system default (same pattern as Cue2 Preferences).
 /// Values are stored with the showfile via <see cref="AppSettings"/>.
+/// UI scale lives in Cue2 Preferences (<see cref="UserDataManager"/>), not this panel.
 /// </summary>
 public partial class SettingsGeneral : ScrollContainer
 {
     private GlobalSignals _globalSignals;
     private GlobalData _globalData;
     private HistoryManager _historyManager;
-
-    private LineEdit _uiScaleNum;
-    private HSlider _uiScaleSlider;
-    private Button _uiScaleResetButton;
 
     private OptionButton _goScaleOptionButton;
     private Button _goScaleResetButton;
@@ -76,21 +73,6 @@ public partial class SettingsGeneral : ScrollContainer
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNode<GlobalData>("/root/GlobalData");
         _historyManager = _globalData?.HistoryManager;
-
-        _uiScaleNum = GetNode<LineEdit>("%UiScaleNum");
-        _uiScaleSlider = GetNode<HSlider>("%UiScaleSlider");
-        _uiScaleResetButton = GetNode<Button>("%UiScaleResetButton");
-        _uiScaleResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
-        _uiScaleResetButton.Pressed += OnUiScaleResetPressed;
-
-        // Ensure the percentage field can receive focus (scene default was FOCUS_NONE).
-        _uiScaleNum.FocusMode = FocusModeEnum.All;
-        _uiScaleNum.Editable = true;
-
-        _uiScaleSlider.ValueChanged += OnUiScaleSliderValueChanged;
-        _uiScaleSlider.DragEnded += OnUiScaleSliderDragEnded;
-        // Commit typed scale on Enter only.
-        _uiScaleNum.TextSubmitted += OnUiScaleTextSubmitted;
 
         _goScaleOptionButton = GetNode<OptionButton>("%GoScaleOptionButton");
         _goScaleResetButton = GetNode<Button>("%GoScaleResetButton");
@@ -222,11 +204,6 @@ public partial class SettingsGeneral : ScrollContainer
         _isSyncingUi = true;
         try
         {
-            float uiPct = _globalData.Settings.UiScale * 100f;
-            if (_uiScaleNum != null)
-                _uiScaleNum.Text = uiPct + "%";
-            _uiScaleSlider?.SetValueNoSignal(uiPct);
-
             if (_goScaleOptionButton != null)
             {
                 _goScaleOptionButton.SetBlockSignals(true);
@@ -257,7 +234,6 @@ public partial class SettingsGeneral : ScrollContainer
 
     private void UpdateAllResetButtons()
     {
-        UpdateUiScaleResetButton();
         UpdateGoScaleResetButton();
         UpdateCueListScaleResetButton();
         UpdateStopFadeResetButton();
@@ -265,87 +241,6 @@ public partial class SettingsGeneral : ScrollContainer
         UpdateMultiEditResetButton();
         UpdateSelectNewCuesResetButton();
         UpdateTimelineWaveformsResetButton();
-    }
-
-    // ── UI Scale ──────────────────────────────────────────────────────────
-
-    private void OnUiScaleSliderValueChanged(double value)
-    {
-        if (_isSyncingUi) return;
-        _uiScaleNum.Text = value + "%";
-    }
-
-    private void OnUiScaleSliderDragEnded(bool _)
-    {
-        if (_isSyncingUi) return;
-        ApplyUiScale((float)(_uiScaleSlider.Value / 100.0));
-    }
-
-    private void OnUiScaleTextSubmitted(string input)
-    {
-        if (_isSyncingUi) return;
-        CommitUiScaleFromText(input);
-    }
-
-    private void CommitUiScaleFromText(string input)
-    {
-        string cleaned = (input ?? string.Empty).Replace("%", "").Trim();
-        if (!float.TryParse(cleaned, out float value))
-        {
-            _globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Invalid value for UI Scale entered", 1);
-            _uiScaleNum.Text = _globalData.Settings.UiScale * 100f + "%";
-            return;
-        }
-
-        value = Mathf.Clamp(value, 50f, 200f);
-        _uiScaleNum.Text = value + "%";
-        _uiScaleSlider.SetValueNoSignal(value);
-        ApplyUiScale(value / 100f);
-        if (_uiScaleNum.HasFocus())
-            _uiScaleNum.ReleaseFocus();
-    }
-
-    private void ApplyUiScale(float scaleFactor)
-    {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (_historyManager?.IsRestoring == true) return;
-
-        scaleFactor = Mathf.Clamp(scaleFactor, 0.5f, 2.0f);
-        if (Mathf.IsEqualApprox(_globalData.Settings.UiScale, scaleFactor))
-        {
-            UpdateUiScaleResetButton();
-            return;
-        }
-
-        _historyManager?.RecordSettingsChange("Change UI scale", null, "UiScale");
-        _globalData.Settings.UiScale = scaleFactor;
-        _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), scaleFactor);
-        UpdateUiScaleResetButton();
-    }
-
-    private void OnUiScaleResetPressed()
-    {
-        if (_isSyncingUi || _globalData?.Settings == null) return;
-        if (Mathf.IsEqualApprox(_globalData.Settings.UiScale, AppSettings.DefaultUiScale))
-        {
-            SyncSettings();
-            return;
-        }
-
-        _historyManager?.RecordSettingsChange("Reset UI scale", null, "UiScale");
-        _globalData.Settings.UiScale = AppSettings.DefaultUiScale;
-        SyncSettings();
-        _globalSignals.EmitSignal(nameof(GlobalSignals.UiScaleChanged), AppSettings.DefaultUiScale);
-    }
-
-    private void UpdateUiScaleResetButton()
-    {
-        if (_uiScaleResetButton == null || _globalData?.Settings == null) return;
-
-        bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.UiScale, AppSettings.DefaultUiScale);
-        _uiScaleResetButton.Visible = !atDefault;
-        if (!atDefault)
-            _uiScaleResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultUiScale * 100f:0}%";
     }
 
     // ── Go Button Scale ───────────────────────────────────────────────────

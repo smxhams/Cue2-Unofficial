@@ -137,15 +137,14 @@ public partial class CueList
 						if (job.IsTopLevelRoot)
 							newTopLevel.Add(clone);
 
-						var childContainer = clone.ShellBar?.ShellChildContainer;
-						if (childContainer != null && source.ChildCues.Count > 0)
+						if (source.ChildCues.Count > 0)
 						{
 							int childIndex = 0;
 							foreach (int childId in source.ChildCues.ToList())
 							{
 								var child = FetchCueFromId(childId);
 								if (child == null) continue;
-								queue.Enqueue(new BulkShellJob(child, clone.Id, childContainer, childIndex, isTopLevelRoot: false));
+								queue.Enqueue(new BulkShellJob(child, clone.Id, job.Container, childIndex, isTopLevelRoot: false));
 								childIndex++;
 							}
 
@@ -183,12 +182,6 @@ public partial class CueList
 						index++;
 					}
 				}
-			}
-
-			if (parentId != -1)
-			{
-				var parentCue = FetchCueFromId(parentId);
-				SyncChildCuesFromShellContainer(parentCue);
 			}
 
 			if (newTopLevel.Count == 0)
@@ -458,13 +451,12 @@ public partial class CueList
 						newTopLevel.Add(cue);
 
 					var children = oldChildOrder.TryGetValue(oldId, out var list) ? list : new List<int>();
-					var childContainer = cue.ShellBar?.ShellChildContainer;
-					if (childContainer != null && children.Count > 0)
+					if (children.Count > 0)
 					{
 						int childIndex = 0;
 						foreach (int childOld in children)
 						{
-							queue.Enqueue(new BulkShellJob(childOld, cue.Id, childContainer, childIndex, isTopLevelRoot: false));
+							queue.Enqueue(new BulkShellJob(childOld, cue.Id, job.Container, childIndex, isTopLevelRoot: false));
 							childIndex++;
 						}
 
@@ -497,12 +489,6 @@ public partial class CueList
 			{
 				if (asyncPath)
 					EndBulkNotifySuppress();
-			}
-
-			if (parentId != -1)
-			{
-				var parentCue = FetchCueFromId(parentId);
-				SyncChildCuesFromShellContainer(parentCue);
 			}
 
 			if (newTopLevel.Count == 0)
@@ -791,10 +777,11 @@ public partial class CueList
 	{
 		_bulkOpInProgress = false;
 		// Ensure suppress is fully cleared even if an exception left depth non-zero
-		if (_bulkNotifySuppressDepth != 0)
+		if (_bulkNotifySuppressDepth != 0 || _virtualRefreshSuppress != 0)
 		{
 			_bulkNotifySuppressDepth = 0;
-			NotifyTotalCuesChanged();
+			_virtualRefreshSuppress = 0;
+			NotifyVirtualStructureChanged();
 		}
 
 		if (showedProgress)
@@ -807,13 +794,13 @@ public partial class CueList
 	private void BeginBulkNotifySuppress()
 	{
 		_bulkNotifySuppressDepth++;
+		BeginVirtualRefreshSuppress();
 	}
 
 	private void EndBulkNotifySuppress()
 	{
 		_bulkNotifySuppressDepth = Math.Max(0, _bulkNotifySuppressDepth - 1);
-		if (_bulkNotifySuppressDepth == 0)
-			NotifyTotalCuesChanged();
+		EndVirtualRefreshSuppress();
 	}
 
 	/// <summary>

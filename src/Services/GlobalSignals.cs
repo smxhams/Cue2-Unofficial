@@ -173,12 +173,38 @@ public partial class GlobalSignals : Node
 	/// <summary>Fired when a generic background process finishes (footer may hide after a short delay).</summary>
 	[Signal] public delegate void BackgroundProcessCompletedEventHandler();
 
+	/// <summary>
+	/// Fired when a showfile apply starts (startup last-show or File → Open after the version gate).
+	/// </summary>
+	/// <param name="showName">Show file name without extension (may be empty).</param>
+	[Signal] public delegate void SessionLoadStartedEventHandler(string showName);
+
+	/// <summary>
+	/// Determinate progress while a showfile is applied to the live session.
+	/// </summary>
+	/// <param name="percent">0–100.</param>
+	/// <param name="statusText">English source status key (e.g. <c>Loading cues…</c>).</param>
+	/// <param name="detail">Secondary line (e.g. <c>120/840 cues</c>).</param>
+	/// <param name="completed">Completed units for the current stage.</param>
+	/// <param name="total">Total units for the current stage (0 when unknown).</param>
+	[Signal] public delegate void SessionLoadProgressEventHandler(
+		float percent, string statusText, string detail, int completed, int total);
+
+	/// <summary>Fired when showfile apply finishes (success or fail). Overlay hides; GO is unblocked.</summary>
+	[Signal] public delegate void SessionLoadFinishedEventHandler();
+
 	// Media health (missing files, etc.)
 	/// <summary>
 	/// Fired when a cue's media health state changes.
 	/// Args: cueId, hasIssue, message (tooltip text when hasIssue is true).
 	/// </summary>
 	[Signal] public delegate void CueMediaHealthChangedEventHandler(int cueId, bool hasIssue, string message);
+
+	/// <summary>
+	/// When true, <see cref="OnNodeAdded"/> does not wire LineEdit/OptionButton keyboard policy.
+	/// Showfile first-bind suppresses this, then calls <see cref="ScanForUiKeyboardPolicy"/> once.
+	/// </summary>
+	public bool SuppressUiKeyboardScan { get; set; }
 
 	/// <summary>Text fields wired for focus-gate + Esc/submit unfocus.</summary>
 	private readonly HashSet<Node> _connectedTextFields = new();
@@ -213,8 +239,12 @@ public partial class GlobalSignals : Node
 	/// <summary>
 	/// Recursively wires keyboard policy for text fields and OptionButtons under <paramref name="node"/>.
 	/// </summary>
-	private void ScanForUiKeyboardPolicy(Node node)
+	/// <param name="node">Root of the subtree to scan. Ignored when null or invalid.</param>
+	public void ScanForUiKeyboardPolicy(Node node)
 	{
+		if (node == null || !GodotObject.IsInstanceValid(node))
+			return;
+
 		if (node is LineEdit or TextEdit)
 			ConnectFocusSignals(node);
 		else if (node is OptionButton optionButton)
@@ -226,6 +256,8 @@ public partial class GlobalSignals : Node
 
 	private void OnNodeAdded(Node node)
 	{
+		if (SuppressUiKeyboardScan)
+			return;
 		if (node is LineEdit or TextEdit)
 			ConnectFocusSignals(node);
 		else if (node is OptionButton optionButton)

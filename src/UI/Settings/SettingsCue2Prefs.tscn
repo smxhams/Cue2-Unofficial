@@ -98,6 +98,53 @@ expand_icon = true
 visible = false
 tooltip_text = "Reset to default"
 
+[node name="UiScaleRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="UiScaleLabel" type="Label" parent="VBoxContainer/UiScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "UI Scaling"
+vertical_alignment = 1
+tooltip_text = "Scales the whole application UI. Saved as a user preference (not with the showfile)."
+
+[node name="UiScaleNum" type="LineEdit" parent="VBoxContainer/UiScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 0)
+layout_mode = 2
+tooltip_text = "Scales whole UI.
+Caution: Will apply on Enter."
+focus_mode = 2
+text = "100%"
+alignment = 1
+max_length = 6
+
+[node name="UiScaleSlider" type="HSlider" parent="VBoxContainer/UiScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+size_flags_stretch_ratio = 3.0
+tooltip_text = "Scales whole UI.
+Caution: Will apply on mouse release."
+focus_mode = 0
+min_value = 25.0
+max_value = 400.0
+value = 100.0
+rounded = true
+
+[node name="UiScaleResetButton" type="Button" parent="VBoxContainer/UiScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+focus_mode = 0
+theme_override_constants/icon_max_width = 12
+expand_icon = true
+visible = false
+tooltip_text = "Reset to default"
+
 [node name="AutosaveRow" type="HBoxContainer" parent="VBoxContainer" unique_id=6677889900]
 layout_mode = 2
 

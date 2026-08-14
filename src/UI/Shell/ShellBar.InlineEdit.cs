@@ -521,7 +521,22 @@ public partial class ShellBar
 			return;
 		}
 
-		var ret = UiUtilities.ParseAndFormatTime(_preWaitLineEdit.Text, out var time, out bool isValid);
+		// Blank submit → 0 (clear the wait).
+		string raw = _preWaitLineEdit.Text ?? string.Empty;
+		string ret;
+		double time;
+		bool isValid;
+		if (string.IsNullOrWhiteSpace(raw))
+		{
+			time = 0;
+			ret = FormatDurationField(0);
+			isValid = true;
+		}
+		else
+		{
+			ret = UiUtilities.ParseAndFormatTime(raw, out time, out isValid);
+		}
+
 		if (string.IsNullOrEmpty(ret) || !isValid)
 		{
 			_preWaitLineEdit.Text = FormatDurationField(_cue.PreWait);
@@ -562,7 +577,22 @@ public partial class ShellBar
 			return;
 		}
 
-		var ret = UiUtilities.ParseAndFormatTime(_postWaitLineEdit.Text, out var time, out bool isValid);
+		// Blank submit → 0 (clear the wait).
+		string raw = _postWaitLineEdit.Text ?? string.Empty;
+		string ret;
+		double time;
+		bool isValid;
+		if (string.IsNullOrWhiteSpace(raw))
+		{
+			time = 0;
+			ret = FormatDurationField(0);
+			isValid = true;
+		}
+		else
+		{
+			ret = UiUtilities.ParseAndFormatTime(raw, out time, out isValid);
+		}
+
 		if (string.IsNullOrEmpty(ret) || !isValid)
 		{
 			_postWaitLineEdit.Text = FormatDurationField(_cue.PostWait);

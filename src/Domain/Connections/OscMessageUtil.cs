@@ -112,15 +112,71 @@ public static class OscMessageUtil
         };
     }
 
-    /// <summary>Builds an <see cref="OscMessage"/> from path + optional args text.</summary>
+    /// <summary>
+    /// Splits a free-form command line into a valid OSC address and optional args text.
+    /// </summary>
+    /// <remarks>
+    /// OSC addresses cannot contain whitespace. Users often type QLab-style lines such as
+    /// <c>/jump 2</c> or <c>/Mx/playback/page1/0/GO 1</c> into the path field; everything after
+    /// the first whitespace is treated as arguments. When <paramref name="existingArgs"/> is
+    /// already set, path trailing tokens are discarded so explicit args win.
+    /// </remarks>
+    /// <param name="pathOrCommand">Path only, or path plus trailing args.</param>
+    /// <param name="existingArgs">Args from a dedicated args field (may be empty).</param>
+    /// <param name="path">Normalized address starting with <c>/</c>.</param>
+    /// <param name="args">Merged args text ready for <see cref="ParseArgsText"/>.</param>
+    /// <returns>False when no usable path remains after trimming.</returns>
+    public static bool SplitPathAndArgs(
+        string pathOrCommand,
+        string existingArgs,
+        out string path,
+        out string args)
+    {
+        path = "/";
+        args = existingArgs?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(pathOrCommand))
+            return false;
+
+        string s = pathOrCommand.Trim();
+        int split = -1;
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (char.IsWhiteSpace(s[i]))
+            {
+                split = i;
+                break;
+            }
+        }
+
+        string pathPart = split < 0 ? s : s.Substring(0, split);
+        string trailing = split < 0 ? string.Empty : s.Substring(split).Trim();
+
+        if (string.IsNullOrEmpty(pathPart))
+            return false;
+
+        if (!pathPart.StartsWith('/'))
+            pathPart = "/" + pathPart;
+
+        path = pathPart;
+
+        // Path trailing only fills args when the dedicated args field is empty.
+        if (!string.IsNullOrEmpty(trailing) && string.IsNullOrWhiteSpace(args))
+            args = trailing;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Builds an <see cref="OscMessage"/> from path + optional args text.
+    /// Accepts QLab-style combined lines in the path (e.g. <c>/jump 2</c>).
+    /// </summary>
     public static OscMessage BuildMessage(string address, string argsText)
     {
-        if (string.IsNullOrWhiteSpace(address))
+        if (!SplitPathAndArgs(address, argsText, out string path, out string mergedArgs))
             throw new ArgumentException("OSC address is empty.", nameof(address));
-        string path = address.Trim();
-        if (!path.StartsWith('/'))
-            path = "/" + path;
-        object[] args = ParseArgsText(argsText);
+
+        object[] args = ParseArgsText(mergedArgs);
         return args.Length == 0 ? new OscMessage(path) : new OscMessage(path, args);
     }
 

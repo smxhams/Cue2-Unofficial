@@ -56,7 +56,9 @@ public partial class AudioInspector
             _isMultiEdit = false;
             _audioTargets.Clear();
             _fileUrl.Text = "";
+            RestoreFileUrlPlaceholder();
             ApplyFileUrlMissingStyle(false, null);
+            ClearFileMetadataLabel();
             if (_deleteAudioComponentButton != null)
                 _deleteAudioComponentButton.Visible = false;
             _inspectorContent.Visible = false;
@@ -80,19 +82,33 @@ public partial class AudioInspector
 
         _audioTargets.Clear();
 
-        // Only skip a full reload when we still hold a valid component reference on the same cue.
-        // After undo/redo, ApplyFromData replaces component instances — early-out would leave a stale ref.
-        // Still refresh output routing UI: a second ShellFocused (same cue) often hits this path while
-        // the first async ShellSelected was cancelled via generation — without this, the dropdown
-        // stays on "No output" even though the component already has a Default Patch assigned.
+        // Same-cue re-entry (rapid ShellFocused, e.g. drop-create + select): only take the
+        // lightweight path when the component is fully hydrated. A second ShellFocused that
+        // early-outs while metadata is still null cancels the in-flight full load (generation
+        // guard) and leaves the matrix empty / waveform blank — common on file-drop into cuelist.
         if (_focusedCue != null && _focusedCue.Id == cueId
             && _focusedAudioComponent != null
-            && _focusedCue.Components.Contains(_focusedAudioComponent))
+            && _focusedCue.Components.Contains(_focusedAudioComponent)
+            && _focusedAudioComponent.Metadata != null
+            && _inspectorContent != null && _inspectorContent.Visible)
         {
             UpdateAudioUiFields(_focusedAudioComponent.AudioFile ?? string.Empty);
             PopulateOutputOptions();
             BuildRoutingMatrix();
-            return;
+
+            // Peaks may still be missing (drop path generates them async) — draw or generate.
+            if (_focusedAudioComponent.WaveformData != null
+                && _focusedAudioComponent.WaveformData.Length > 0)
+            {
+                if (gen != _shellSelectGeneration) return;
+                await DrawWaveform();
+                if (gen != _shellSelectGeneration || _focusedCue == null) return;
+                GetNodeOrNull<MediaHealthService>("/root/MediaHealthService")?.CheckCue(_focusedCue.Id);
+                ApplyFileUrlMissingStyleFromHealth();
+                return;
+            }
+
+            // Fall through to full path so missing waveform is generated (keep component refs).
         }
 
         // New cue focus — cancel prior waveform and start a fresh job token.
@@ -117,7 +133,9 @@ public partial class AudioInspector
             _inspectorContent.Visible = false;
             _focusedAudioComponent = null;
             _fileUrl.Text = "";
+            RestoreFileUrlPlaceholder();
             ApplyFileUrlMissingStyle(false, null);
+            ClearFileMetadataLabel();
             if (_deleteAudioComponentButton != null)
                 _deleteAudioComponentButton.Visible = false;
             return;
@@ -216,7 +234,9 @@ public partial class AudioInspector
             _selectFileContainer.Visible = true;
             _inspectorContent.Visible = false;
             _fileUrl.Text = "";
+            RestoreFileUrlPlaceholder();
             ApplyFileUrlMissingStyle(false, null);
+            ClearFileMetadataLabel();
             if (_deleteAudioComponentButton != null)
                 _deleteAudioComponentButton.Visible = false;
             return;
@@ -317,7 +337,9 @@ public partial class AudioInspector
         _focusedAudioComponent = null;
         _audioTargets.Clear();
         _fileUrl.Text = "";
+        RestoreFileUrlPlaceholder();
         ApplyFileUrlMissingStyle(false, null);
+        ClearFileMetadataLabel();
         if (_deleteAudioComponentButton != null)
             _deleteAudioComponentButton.Visible = false;
 
@@ -358,7 +380,7 @@ public partial class AudioInspector
                     targets.Select(t => t.Component.AudioFile ?? string.Empty), out string path))
             {
                 _fileUrl.Text = path;
-                _fileUrl.PlaceholderText = string.Empty;
+                RestoreFileUrlPlaceholder();
             }
             else
             {
@@ -373,6 +395,7 @@ public partial class AudioInspector
             }
 
             ApplyFileUrlMissingStyleFromHealth();
+            UpdateFileMetadataLabel();
 
             // Start time
             if (InspectorMultiEditSupport.TryGetUniformDouble(targets.Select(t => t.Component.StartTime), out double start))
@@ -434,8 +457,7 @@ public partial class AudioInspector
 
             if (InspectorMultiEditSupport.TryGetUniformDouble(targets.Select(t => t.Component.Volume), out double vol))
             {
-                var volumeDb = UiUtilities.LinearToDb((float)vol);
-                _volumeInput.Text = $"{volumeDb}dB";
+                _volumeInput.Text = UiUtilities.FormatComponentVolumeDb((float)vol);
                 _volumeInput.PlaceholderText = string.Empty;
             }
             else

@@ -1041,16 +1041,43 @@ public partial class ActiveCue
             _componentContainer.AddChild(componentPanel);
 
             controlComponent.ResolveTargetIfNeeded();
-            string targetLabel = controlComponent.TargetCueId >= 0
-                ? $"#{controlComponent.TargetCueNum} (id {controlComponent.TargetCueId})"
-                : "(no target)";
+            string targetLabel = controlComponent.Action == ControlAction.TranslateLayer
+                ? (controlComponent.TargetLayerId >= 0
+                    ? $"layer {controlComponent.TargetLayerId}"
+                    : "(no layer)")
+                : (controlComponent.TargetCueId >= 0
+                    ? $"#{controlComponent.TargetCueNum} (id {controlComponent.TargetCueId})"
+                    : "(no target)");
             componentPanel.GetNode<Label>("%ComponentLabel").Text =
                 $"{ControlComponent.GetActionDisplayName(controlComponent.Action)} → {targetLabel}";
 
             var typeIcon = componentPanel.GetNode<TextureRect>("%ComponentIcon");
             componentPanel.GetNode<Button>("%ComponentPause").QueueFree();
             var stopButton = componentPanel.GetNode<Button>("%ComponentStop");
-            componentPanel.GetNode<Label>("%ComponentTime").QueueFree();
+            var timeLabel = componentPanel.GetNodeOrNull<Label>("%ComponentTime");
+
+            float sessionStop = _settings?.StopFadeDuration ?? 0f;
+            double timedDur = controlComponent.GetContentDurationSeconds(sessionStop);
+            bool timed = timedDur > 1e-9;
+
+            if (!timed)
+            {
+                timeLabel?.QueueFree();
+            }
+            else
+            {
+                if (timeLabel != null)
+                    timeLabel.Text = "0.0";
+                var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
+                if (progressBar != null)
+                    progressBar.Value = 0;
+                _controlTimedProgress[componentPanel] = new ControlTimedProgress
+                {
+                    DurationSec = timedDur,
+                    StartMsec = 0,
+                    Started = false
+                };
+            }
 
             string iconName = controlComponent.Action switch
             {
@@ -1059,6 +1086,9 @@ public partial class ActiveCue
                 ControlAction.Stop => "Stop",
                 ControlAction.Resume => "Play",
                 ControlAction.StartNow => "Skip",
+                ControlAction.Fade => "Play",
+                ControlAction.TranslateLayer => "Play",
+                ControlAction.Seek => "Skip",
                 _ => "Play"
             };
             typeIcon.Texture = _activeCueBar.GetThemeIcon(iconName, "AtlasIcons");
@@ -1077,6 +1107,38 @@ public partial class ActiveCue
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Updates progress bar + elapsed time for a timed control component (fade / translate / stop fade).
+    /// </summary>
+    private void UpdateControlComponentUiState(PanelContainer componentPanel, ControlComponent controlComponent)
+    {
+        if (!IsInstanceValid(componentPanel) || controlComponent == null) return;
+        if (!_controlTimedProgress.TryGetValue(componentPanel, out var state)) return;
+        if (state.DurationSec <= 1e-9) return;
+
+        var progressBar = componentPanel.GetNodeOrNull<ProgressBar>("ComponentProgress");
+        var timeLabel = componentPanel.GetNodeOrNull<Label>(
+            "ComponentProgress/MarginContainer/HBoxContainer/ComponentTime");
+        if (progressBar == null) return;
+
+        if (!state.Started)
+        {
+            progressBar.Value = 0;
+            if (timeLabel != null)
+                timeLabel.Text = "0.0";
+            return;
+        }
+
+        double elapsed = (Time.GetTicksMsec() - state.StartMsec) / 1000.0;
+        elapsed = Math.Clamp(elapsed, 0.0, state.DurationSec);
+        float pct = state.DurationSec > 1e-9
+            ? (float)(elapsed / state.DurationSec * 100.0)
+            : 100f;
+        progressBar.Value = Math.Clamp(pct, 0f, 100f);
+        if (timeLabel != null)
+            timeLabel.Text = UiUtilities.FormatTime(elapsed);
     }
 
     private async Task StopComponent(PanelContainer componentPanel)

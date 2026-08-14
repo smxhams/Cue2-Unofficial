@@ -127,7 +127,8 @@ Comma-separated IPs allowed to send OSC. Empty = allow everyone. Loopback always
 Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. ,Connected Cue-Light will run a blue chase until disabled. 
 Connection controls,Connection controls,Connection controls,Connection controls
 Connections,Connections,Hononga,Conexiones
-Cont.,Cont.,Haere.,Cont.
+↳,↳,↳,↳
+Continue mode: auto-continue (→) or auto-follow (↳).,Continue mode: auto-continue (→) or auto-follow (↳).,Continue mode: auto-continue (→) or auto-follow (↳).,Continue mode: auto-continue (→) or auto-follow (↳).
 Content,Content,Content,Content
 Continue,Continue,Haere tonu,Continuar
 "Continue mode (click to cycle):
@@ -864,6 +865,20 @@ Y:,Y:,Y:,Y:
 Zoom %,Zoom %,Zoom %,Zoom %
 Zoom in,Zoom in,Zoom in,Zoom in
 Zoom out,Zoom out,Zoom out,Zoom out
+A showfile open is already in progress.,A showfile open is already in progress.,Kei te haere kē tētahi whakatuwheratanga kōnae whakaaturanga.,Ya hay una apertura de showfile en curso.
+Checking showfile…,Checking showfile…,E tirotiro ana i te kōnae whakaaturanga…,Comprobando el archivo de show…
+Loading cues…,Loading cues…,E uta ana i ngā tohu…,Cargando cues…
+Creating outputs…,Creating outputs…,E hanga ana i ngā putanga…,Creando salidas…
+Loading settings…,Loading settings…,E uta ana i ngā tautuhinga…,Cargando ajustes…
+Opening audio devices…,Opening audio devices…,E whakatuwhera ana i ngā pūrere oro…,Abriendo dispositivos de audio…
+Opening {0}…,Opening {0}…,E whakatuwhera ana i {0}…,Abriendo {0}…
+Opening show…,Opening show…,E whakatuwhera ana i te whakaaturanga…,Abriendo el show…
+Please wait — a showfile is still loading.,Please wait — a showfile is still loading.,Taihoa — kei te uta tonu tētahi kōnae whakaaturanga.,Espere: todavía se está cargando un showfile.
+Please wait — a showfile is still loading. Cannot {0}.,Please wait — a showfile is still loading. Cannot {0}.,Taihoa — kei te uta tonu tētahi kōnae whakaaturanga. Kāore e taea te {0}.,Espere: todavía se está cargando un showfile. No se puede {0}.
+Please wait — a showfile is still loading. Cannot redo.,Please wait — a showfile is still loading. Cannot redo.,Taihoa — kei te uta tonu tētahi kōnae whakaaturanga. Kāore e taea te mahi anō.,Espere: todavía se está cargando un showfile. No se puede rehacer.
+Please wait — a showfile is still loading. Cannot start a new session.,Please wait — a showfile is still loading. Cannot start a new session.,Taihoa — kei te uta tonu tētahi kōnae whakaaturanga. Kāore e taea te tīmata i tētahi wātaka hou.,Espere: todavía se está cargando un showfile. No se puede iniciar una sesión nueva.
+Please wait — a showfile is still loading. Cannot undo.,Please wait — a showfile is still loading. Cannot undo.,Taihoa — kei te uta tonu tētahi kōnae whakaaturanga. Kāore e taea te whakakore.,Espere: todavía se está cargando un showfile. No se puede deshacer.
+Reading showfile…,Reading showfile…,E pānui ana i te kōnae whakaaturanga…,Leyendo el archivo de show…
 {0} total cues,{0} total cues,{0} tohu katoa,{0} cues en total
 {0} total cues in the show,{0} total cues in the show,{0} tohu katoa i te whakaaturanga,{0} cues en total en el show
 {0}% of total system capacity,{0}% of total system capacity,{0}% o te kaha pūnaha katoa,{0}% de la capacidad total del sistema

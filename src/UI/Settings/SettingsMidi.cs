@@ -173,40 +173,13 @@ public partial class SettingsMidi : Control
     }
 
     /// <summary>
-    /// Styles the monitor <see cref="CodeEdit"/> as a dark monospace console.
+    /// Styles the monitor <see cref="CodeEdit"/> as a dark monospace console that cannot steal focus.
     /// </summary>
     private void ConfigureMonitorLogStyle()
     {
-        if (_monitorLog == null) return;
-
-        _monitorLog.Editable = false;
-        _monitorLog.ContextMenuEnabled = true;
-        _monitorLog.GuttersDrawLineNumbers = false;
-        _monitorLog.ScrollPastEndOfFile = false;
-        _monitorLog.WrapMode = TextEdit.LineWrappingMode.None;
-        _monitorLog.CaretBlink = false;
-        _monitorLog.CaretType = TextEdit.CaretTypeEnum.Line;
-
-        var bg = new StyleBoxFlat
-        {
-            BgColor = new Color(0.05f, 0.05f, 0.05f, 1f),
-            BorderColor = new Color(0.22f, 0.22f, 0.22f, 1f),
-            ContentMarginLeft = 8,
-            ContentMarginRight = 8,
-            ContentMarginTop = 6,
-            ContentMarginBottom = 6,
-        };
-        bg.SetBorderWidthAll(1);
-        bg.SetCornerRadiusAll(3);
-        _monitorLog.AddThemeStyleboxOverride("normal", bg);
-        _monitorLog.AddThemeStyleboxOverride("focus", bg);
-        _monitorLog.AddThemeStyleboxOverride("read_only", bg);
-
-        _monitorLog.AddThemeColorOverride("font_color", new Color(0.75f, 0.95f, 0.75f, 1f));
-        _monitorLog.AddThemeColorOverride("font_readonly_color", new Color(0.75f, 0.95f, 0.75f, 1f));
-        _monitorLog.AddThemeColorOverride("caret_color", new Color(0.4f, 0.8f, 0.4f, 0.6f));
-        _monitorLog.AddThemeColorOverride("background_color", new Color(0.05f, 0.05f, 0.05f, 1f));
-        _monitorLog.AddThemeFontSizeOverride("font_size", 12);
+        UiUtilities.ConfigureReadOnlyMonitorLog(
+            _monitorLog,
+            fontColor: new Color(0.75f, 0.95f, 0.75f, 1f));
     }
 
     /// <summary>

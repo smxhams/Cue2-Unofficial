@@ -80,6 +80,8 @@ public partial class CueList : Control
 	private Label _durationHeaderLabel;
 	private Label _postWaitHeaderLabel;
 	private Label _followHeaderLabel;
+	private Control _headerScrollPad;
+	private bool _headerScrollbarWired;
 
 	private Control _reorderCueControl;
 	private Label _reorderLocationLabel;
@@ -152,6 +154,7 @@ public partial class CueList : Control
 		_durationHeaderLabel = GetNodeOrNull<Label>("%DurationHeaderLabel");
 		_postWaitHeaderLabel = GetNodeOrNull<Label>("%PostWaitHeaderLabel");
 		_followHeaderLabel = GetNodeOrNull<Label>("%FollowHeaderLabel");
+		_headerScrollPad = GetNodeOrNull<Control>("%HeaderScrollPad");
 		
 		_reorderCueControl = GetNode<Control>("%ReorderCueControl");
 		_reorderLocationLabel = GetNode<Label>("%ReorderLocationLabel");
@@ -203,6 +206,8 @@ public partial class CueList : Control
 
 	public override void _ExitTree()
 	{
+		// Recycled shells live off the scroll container; free them before this node dies.
+		ClearVirtualState();
 		ShellColumnLayout.Changed -= OnShellColumnLayoutChanged;
 		if (_numberNameResizeGrip != null)
 			_numberNameResizeGrip.GuiInput -= OnNumberNameGripGuiInput;
@@ -219,6 +224,15 @@ public partial class CueList : Control
 			_globalSignals.NewSession -= OnNewSession;
 			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
+		if (_virtualScrollWired && _cueListScroll != null && IsInstanceValid(_cueListScroll))
+		{
+			_cueListScroll.Resized -= OnVirtualScrollChanged;
+			var vBar = _cueListScroll.GetVScrollBar();
+			if (vBar != null)
+				vBar.ValueChanged -= OnVirtualScrollValueChanged;
+			_virtualScrollWired = false;
+		}
+		UnwireHeaderScrollbarPad();
 		base._ExitTree();
 	}
 
@@ -281,6 +295,7 @@ public partial class CueList : Control
 
 		float padPx = Mathf.Max(24f, ShellColumnLayout.RowMinHeight * ScrollEndPaddingRows);
 		_scrollEndPad.CustomMinimumSize = new Vector2(0f, padPx);
+		QueueSyncHeaderScrollbarPad();
 	}
 
 	/// <summary>
@@ -306,36 +321,31 @@ public partial class CueList : Control
 			return;
 
 		var cue = FetchCueFromId(cueId);
-		var shell = cue?.ShellBar;
-		if (shell == null || !IsInstanceValid(shell))
+		if (cue == null)
 			return;
 
-		// Use the cue row only — group shells include nested children in their full height.
-		Control row = shell.GetNodeOrNull<Control>("%RowHBox") ?? shell;
-		if (!IsInstanceValid(row))
+		int vis = GetVisibleRowIndex(cueId);
+		if (vis < 0)
+		{
+			ScrollToCueId(cueId);
 			return;
+		}
 
-		var scrollRect = _cueListScroll.GetGlobalRect();
-		var rowRect = row.GetGlobalRect();
-		if (scrollRect.Size.Y <= 1f || rowRect.Size.Y <= 0f)
-			return;
-
-		float viewTop = scrollRect.Position.Y;
-		float viewBottom = viewTop + scrollRect.Size.Y;
-		float rowTop = rowRect.Position.Y;
-		float rowBottom = rowTop + rowRect.Size.Y;
-
-		// Comfort zone: fully visible with at least half a row of space under the shell.
-		// When the next playhead cue sits at/below that band (bottom of visible area) or is
-		// outside the viewport, re-center it.
-		float comfortBottom = viewBottom - Mathf.Max(1f, ShellColumnLayout.RowMinHeight * 0.5f);
+		float rowH = VirtualRowHeight;
+		float viewH = _cueListScroll.Size.Y;
+		float scrollY = _cueListScroll.ScrollVertical;
+		float rowTop = vis * rowH;
+		float rowBottom = rowTop + rowH;
+		float viewTop = scrollY;
+		float viewBottom = scrollY + viewH;
+		float comfortBottom = viewBottom - Mathf.Max(1f, rowH * 0.5f);
 		bool outsideAbove = rowBottom <= viewTop;
 		bool outsideBelow = rowTop >= viewBottom;
 		bool atOrPastBottom = rowBottom > comfortBottom;
 		if (!outsideAbove && !outsideBelow && !atOrPastBottom)
 			return;
 
-		ScrollControlToVerticalCenter(row);
+		ScrollToCueId(cueId);
 	}
 
 	/// <summary>
@@ -390,6 +400,12 @@ public partial class CueList : Control
 	/// <returns>True if the caller should abort.</returns>
 	private bool BlockIfBulkBusy(string actionLabel)
 	{
+		if (_globalData?.IsSessionLoading == true)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				$"Please wait — a showfile is still loading. Cannot {actionLabel}.", (int)LogType.Info);
+			return true;
+		}
 		if (!_bulkOpInProgress)
 			return false;
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
@@ -418,6 +434,7 @@ public partial class CueList : Control
 	private void SetupShellColumnHeader()
 	{
 		ApplyHeaderChromeSizes();
+		WireHeaderScrollbarPad();
 
 		// Dedicated grip is more reliable than HSplit for this header (Godot 4.6 multi-split quirks).
 		if (_numberNameResizeGrip != null)
@@ -468,6 +485,7 @@ public partial class CueList : Control
 		// Scale changes also fire Changed — refresh header chrome + column labels.
 		ApplyHeaderChromeSizes();
 		ApplyHeaderColumnLayout();
+		SyncVirtualViewport();
 		// Only persist when user-resized widths changed (scale changes do not write prefs).
 		// Persist is cheap and keeps number/time widths saved after drag end via grip handlers;
 		// calling here on scale is harmless (same values).
@@ -512,7 +530,95 @@ public partial class CueList : Control
 		{
 			_followHeaderLabel.CustomMinimumSize = new Vector2(followW, 0);
 			_followHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
+			_followHeaderLabel.Text = "↳";
 		}
+		SyncHeaderScrollbarPad();
+	}
+
+	/// <summary>
+	/// Subscribes to cuelist scrollbar size / visibility so the header can reserve matching width.
+	/// </summary>
+	private void WireHeaderScrollbarPad()
+	{
+		if (_headerScrollbarWired || _cueListScroll == null || !IsInstanceValid(_cueListScroll))
+			return;
+
+		_headerScrollbarWired = true;
+		_cueListScroll.Resized += OnHeaderScrollbarLayoutChanged;
+		var vBar = _cueListScroll.GetVScrollBar();
+		if (vBar != null)
+		{
+			vBar.VisibilityChanged += OnHeaderScrollbarLayoutChanged;
+			vBar.Resized += OnHeaderScrollbarLayoutChanged;
+		}
+		QueueSyncHeaderScrollbarPad();
+	}
+
+	/// <summary>
+	/// Unsubscribes header scrollbar-pad listeners.
+	/// </summary>
+	private void UnwireHeaderScrollbarPad()
+	{
+		if (!_headerScrollbarWired || _cueListScroll == null || !IsInstanceValid(_cueListScroll))
+		{
+			_headerScrollbarWired = false;
+			return;
+		}
+
+		_cueListScroll.Resized -= OnHeaderScrollbarLayoutChanged;
+		var vBar = _cueListScroll.GetVScrollBar();
+		if (vBar != null)
+		{
+			vBar.VisibilityChanged -= OnHeaderScrollbarLayoutChanged;
+			vBar.Resized -= OnHeaderScrollbarLayoutChanged;
+		}
+		_headerScrollbarWired = false;
+	}
+
+	private void OnHeaderScrollbarLayoutChanged()
+	{
+		SyncHeaderScrollbarPad();
+	}
+
+	/// <summary>
+	/// Defers pad sync one frame so ScrollContainer can show/hide the bar after content changes.
+	/// </summary>
+	private void QueueSyncHeaderScrollbarPad()
+	{
+		if (!IsInsideTree())
+			return;
+		CallDeferred(MethodName.SyncHeaderScrollbarPad);
+	}
+
+	/// <summary>
+	/// Reserves header width matching the visible vertical scrollbar so Pre/Dur/Post/Follow
+	/// line up with shell rows. Hidden when the bar is not taking layout space.
+	/// </summary>
+	private void SyncHeaderScrollbarPad()
+	{
+		if (_headerScrollPad == null || !IsInstanceValid(_headerScrollPad) || _cueListScroll == null)
+			return;
+
+		float barW = 0f;
+		var vBar = _cueListScroll.GetVScrollBar();
+		// Visible can stay true when the bar is unused; require a real scroll range.
+		bool barNeeded = vBar != null && IsInstanceValid(vBar)
+		                 && vBar.Visible
+		                 && vBar.MaxValue > vBar.MinValue + vBar.Page + 0.5;
+		if (barNeeded)
+		{
+			barW = vBar.Size.X;
+			if (barW < 1f)
+				barW = vBar.GetCombinedMinimumSize().X;
+		}
+
+		// Subtract the header HBox separation so TimeColumns + gap + pad == content + scrollbar.
+		var header = _headerScrollPad.GetParent() as BoxContainer;
+		int sep = header != null ? header.GetThemeConstant("separation") : 0;
+		float pad = barW > 0.5f ? Mathf.Max(0f, barW - sep) : 0f;
+
+		_headerScrollPad.Visible = pad > 0.5f;
+		_headerScrollPad.CustomMinimumSize = new Vector2(pad, 0);
 	}
 
 	/// <summary>
@@ -556,24 +662,8 @@ public partial class CueList : Control
 	/// </summary>
 	private void ApplyColumnLayoutToAllShells()
 	{
-		if (_cueContainer == null)
-			return;
-		ApplyColumnLayoutRecursive(_cueContainer);
-	}
-
-	private static void ApplyColumnLayoutRecursive(VBoxContainer container)
-	{
-		if (container == null)
-			return;
-		foreach (var child in container.GetChildren())
-		{
-			if (child is ShellBar shell)
-			{
-				shell.ApplyColumnLayout();
-				if (shell.ShellChildContainer != null)
-					ApplyColumnLayoutRecursive(shell.ShellChildContainer);
-			}
-		}
+		foreach (int id in VisibleRowIds)
+			FetchCueFromId(id)?.ShellBar?.ApplyColumnLayout();
 	}
 
 	/// <summary>

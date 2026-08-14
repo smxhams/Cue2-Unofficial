@@ -3,9 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 using Godot;
 using Godot.Collections;
@@ -25,7 +22,7 @@ namespace Cue2.Domain.Cuelist;
 /// <summary>
 /// Manages the main cue list UI, including creation, removal, drag-and-drop reordering
 /// (with support for nesting/grouping), box multi-select, and save/load of cue hierarchy and order.
-/// Partial: ResetCuelist, GetData, LoadData, StructureCuelist
+/// Partial: ResetCuelist, GetData, LoadData / LoadCueModels (tree-order), StructureCuelist (history)
 /// </summary>
 public partial class CueList
 {
@@ -56,162 +53,208 @@ public partial class CueList
 	public Godot.Collections.Dictionary<int, int> GetCueOrder()
 	{
 		var cueOrder = new Godot.Collections.Dictionary<int, int>();
-		for (int i = 0; i < _cueContainer.GetChildren().Count; i++)
-		{
-			var cueId = _cueContainer.GetChild(i).Get("CueId");
-			cueOrder.Add(i, (int)cueId);
-		}
+		for (int i = 0; i < RootOrder.Count; i++)
+			cueOrder.Add(i, RootOrder[i]);
 
 		return cueOrder;
 	}
 
 	/// <summary>
-	/// Loads cues from serialized data, creates shells, links components (patches, OSC, cue lights),
-	/// then applies saved cue order via StructureCuelist.
+	/// Loads cues from serialized data in tree order (CueOrder, then ChildCues), then binds
+	/// the virtual viewport. Used by history fallback. Showfile open splits model vs bind
+	/// via <see cref="LoadCueModels"/> / <see cref="BindLoadedViewport"/>.
 	/// </summary>
 	/// <param name="cueData">The "cues" sub-dictionary from session save.</param>
 	public void LoadData(Dictionary cueData)
 	{
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "CueList:LoadData - Loading Cues", (int)LogType.Info);
+		LoadCueModels(cueData);
+		BindLoadedViewport();
+	}
 
-		if (cueData.TryGetValue("Cues", out var cues))
+	/// <summary>
+	/// Builds Cue models from showfile data in tree order. Does not instantiate ShellBars.
+	/// After this returns, the document is GO-safe; call <see cref="BindLoadedViewport"/> for the list UI.
+	/// </summary>
+	/// <param name="cueData">The "cues" sub-dictionary from session save.</param>
+	public void LoadCueModels(Dictionary cueData)
+	{
+		if (cueData == null)
+			return;
+
+		var payloads = IndexCuePayloads(cueData);
+		int total = payloads.Count;
+		if (SessionLoadTimer.Current != null)
+			SessionLoadTimer.Current.CueCount = total;
+
+		SessionLoadTimer.Current?.Begin("cues");
+
+		var visited = new HashSet<int>();
+		var stack = new Stack<(int Id, int ParentId)>();
+
+		var topIds = ParseTopLevelCueIds(cueData, payloads);
+		RootOrder.Clear();
+		foreach (int id in topIds)
 		{
-			foreach (var cue in (Dictionary)cues)
-			{
-				var asDict = cue.Value.AsGodotDictionary();
-				var cueDict = new Dictionary();
-				foreach (var key in asDict.Keys)
-				{
-					var value = asDict[key];
-					string keyStr = key.ToString();
-						
-					cueDict[keyStr] = value;
-				} 
-				Cue newCue = CreateCue(cueDict);
-				
-				// Patches are instantiated in load sequence seperate form cues. Once patchs and cues are created they
-				// need to be linked.
-				var newCueAudioComponent = newCue.GetAudioComponent();
-				if (newCueAudioComponent != null)
-				{
-					var patches = _globalData.Settings.GetAudioOutputPatches();
-					patches.TryGetValue(newCueAudioComponent.PatchId, out var patch);
-					if (patch != null)
-					{
-						newCueAudioComponent.Patch = patch;
-					}
-				}
-				
-				var newCueVideoComponent = newCue.GetVideoComponent();
-				if (newCueVideoComponent != null)
-				{
-					var patches = _globalData.Settings.GetAudioOutputPatches();
-					patches.TryGetValue(newCueVideoComponent.PatchId, out var patch);
-					if (patch != null)
-					{
-						newCueVideoComponent.Patch = patch;
-					}
-				}
-
-				var cueLightComps = newCue.GetCueLightComponents();
-				if (cueLightComps != null)
-				{
-					foreach (var cueLightComp in cueLightComps)
-					{
-						var cuelight = _globalData.CueLightManager.GetCueLight(cueLightComp.CueLightId);
-						cueLightComp.CueLight = cuelight;
-					}
-				}
-				
-				var oscComponents = newCue.GetOscComponents();
-				if (oscComponents != null)
-				{
-					foreach (var oscComp in oscComponents)
-					{
-						var oscConnection = OscConnections.GetCueOscConnection(oscComp.OscConnectionId);
-						oscComp.OscConnection = oscConnection;
-					}
-				}
-
-
-			}
+			if (payloads.ContainsKey(id) && !RootOrder.Contains(id))
+				RootOrder.Add(id);
 		}
 
-		if (cueData.TryGetValue("CueOrder", out var order))
+		for (int i = topIds.Count - 1; i >= 0; i--)
+			stack.Push((topIds[i], -1));
+
+		while (stack.Count > 0)
 		{
-			var cueOrder = new Godot.Collections.Dictionary<int, int>();
-			foreach (var cue in (Godot.Collections.Dictionary)order)
+			var (cueId, parentId) = stack.Pop();
+			if (!visited.Add(cueId))
+				continue;
+			if (!payloads.TryGetValue(cueId, out var data))
+				continue;
+
+			var cue = new Cue(data);
+			cue.ParentId = parentId;
+			if (!CueIndex.ContainsKey(cue.Id))
+				CueIndex.Add(cue.Id, cue);
+			else
+				CueIndex[cue.Id] = cue;
+			RelinkCueComponents(cue);
+
+			for (int i = cue.ChildCues.Count - 1; i >= 0; i--)
+				stack.Push((cue.ChildCues[i], cue.Id));
+		}
+
+		foreach (int id in payloads.Keys)
+		{
+			if (visited.Contains(id))
+				continue;
+			if (!payloads.TryGetValue(id, out var data))
+				continue;
+			var cue = new Cue(data);
+			cue.ParentId = -1;
+			if (!CueIndex.ContainsKey(cue.Id))
+				CueIndex.Add(cue.Id, cue);
+			if (!RootOrder.Contains(cue.Id))
+				RootOrder.Add(cue.Id);
+			RelinkCueComponents(cue);
+			visited.Add(id);
+		}
+
+		SessionLoadTimer.Current?.Pause();
+	}
+
+	/// <summary>
+	/// Binds the virtual viewport after <see cref="LoadCueModels"/>. Suppresses per-node
+	/// keyboard-policy wiring during instantiate, then scans the container once.
+	/// </summary>
+	public void BindLoadedViewport()
+	{
+		var signals = _globalSignals;
+		bool prevSuppress = false;
+		if (signals != null)
+		{
+			prevSuppress = signals.SuppressUiKeyboardScan;
+			signals.SuppressUiKeyboardScan = true;
+		}
+
+		try
+		{
+			SessionLoadTimer.Current?.Begin("finish");
+			RebuildVisibleRowIds();
+			SyncVirtualViewport();
+		}
+		finally
+		{
+			if (signals != null)
 			{
-				cueOrder.Add((int)cue.Key, (int)cue.Value);
-				//GD.Print(cue.Key + " <-order cue -> " + (int)cue.Value);
+				signals.SuppressUiKeyboardScan = prevSuppress;
+				if (_cueContainer != null && IsInstanceValid(_cueContainer))
+					signals.ScanForUiKeyboardPolicy(_cueContainer);
 			}
-			StructureCuelist(cueOrder);	
+
+			SessionLoadTimer.Current?.Pause();
 		}
 	}
+
+	/// <summary>
+	/// Maps showfile cue ids to their payload dictionaries (no extra key-remap copy).
+	/// </summary>
+	private static System.Collections.Generic.Dictionary<int, Dictionary> IndexCuePayloads(Dictionary cueData)
+	{
+		var map = new System.Collections.Generic.Dictionary<int, Dictionary>();
+		if (cueData == null || !cueData.TryGetValue("Cues", out var cuesVar))
+			return map;
+		if (cuesVar.VariantType != Variant.Type.Dictionary)
+			return map;
+
+		foreach (var kv in (Dictionary)cuesVar)
+		{
+			if (kv.Value.VariantType != Variant.Type.Dictionary)
+				continue;
+			var data = kv.Value.AsGodotDictionary();
+			int id;
+			if (data.ContainsKey("Id"))
+				id = data["Id"].AsInt32();
+			else if (!int.TryParse(kv.Key.ToString(), out id))
+				continue;
+			if (!data.ContainsKey("Id"))
+				data["Id"] = id;
+			map[id] = data;
+		}
+
+		return map;
+	}
+
+	/// <summary>
+	/// Top-level ids from <c>CueOrder</c> (position order). If missing, uses payloads with ParentId -1.
+	/// </summary>
+	private static List<int> ParseTopLevelCueIds(
+		Dictionary cueData,
+		System.Collections.Generic.Dictionary<int, Dictionary> payloads)
+	{
+		var ids = new List<int>();
+		if (cueData != null &&
+		    cueData.TryGetValue("CueOrder", out var orderVar) &&
+		    orderVar.VariantType == Variant.Type.Dictionary)
+		{
+			var pairs = new List<(int Pos, int Id)>();
+			foreach (var kv in (Dictionary)orderVar)
+				pairs.Add(((int)kv.Key, (int)kv.Value));
+			pairs.Sort((a, b) => a.Pos.CompareTo(b.Pos));
+			foreach (var pair in pairs)
+				ids.Add(pair.Id);
+			return ids;
+		}
+
+		if (payloads == null)
+			return ids;
+		foreach (var kv in payloads)
+		{
+			int parentId = kv.Value.ContainsKey("ParentId") ? kv.Value["ParentId"].AsInt32() : -1;
+			if (parentId < 0)
+				ids.Add(kv.Key);
+		}
+
+		return ids;
+	}
 	
+	/// <summary>
+	/// Applies top-level <paramref name="cueOrder"/> to <see cref="RootOrder"/> and rebinds
+	/// the virtual viewport. Child order is already on each cue's <c>ChildCues</c>.
+	/// </summary>
 	private void StructureCuelist(Godot.Collections.Dictionary<int, int> cueOrder)
 	{
-		// Key is child order, value is cueId
-		foreach (Cue cue in CueIndex.Values)
+		RootOrder.Clear();
+		if (cueOrder != null)
 		{
-			// Assign child shellbars to parents (reparent only; ordering done after).
-			// Intentionally silent: load/rebuild can reparent many cues and would spam the log.
-			if (cue.ParentId != -1)
+			for (int i = 0; i < cueOrder.Count; i++)
 			{
-				var parentShell = FetchCueFromId(cue.ParentId)?.ShellBar;
-				var childContainer = parentShell?.GetNode<VBoxContainer>("%ShellChildContainer");
-				if (childContainer != null && cue.ShellBar != null && cue.ShellBar.GetParent() != childContainer)
-				{
-					cue.ShellBar.Reparent(childContainer);
-				}
+				if (!cueOrder.TryGetValue(i, out int id))
+					continue;
+				if (CueIndex.ContainsKey(id) && !RootOrder.Contains(id))
+					RootOrder.Add(id);
 			}
 		}
 
-		// Reorder children inside each group container to exactly match the persisted ChildCues order.
-		foreach (Cue cue in CueIndex.Values)
-		{
-			if (cue.ChildCues.Count == 0) continue;
-			var container = cue.ShellBar?.ShellChildContainer;
-			if (container == null) continue;
-
-			// Build lookup of current child shells by id for fast placement
-			var shellsById = new System.Collections.Generic.Dictionary<int, ShellBar>();
-			foreach (var ch in container.GetChildren())
-			{
-				if (ch is ShellBar s) shellsById[s.CueId] = s;
-			}
-
-			int pos = 0;
-			foreach (int childId in cue.ChildCues)
-			{
-				if (shellsById.TryGetValue(childId, out var sb))
-				{
-					container.MoveChild(sb, pos);
-					pos++;
-				}
-			}
-		}
-
-		// Order top-level shells
-		for (int i = 0; i < cueOrder.Count; i++)
-		{
-			if (!CueIndex.TryGetValue(cueOrder[i], out var cue)) continue;
-			var shell = cue.ShellBar as ShellBar;
-			if (shell == null || cue.ParentId != -1) continue;
-			// Use direct call; defer only if needed for init timing (kept simple here)
-			_cueContainer.MoveChild(shell, i);
-		}
-
-		// Refresh collapse/expand buttons and visibility for any groups after load structure
-		// (SetCue ran early; child shells have now been moved into containers)
-		foreach (var cue in CueIndex.Values)
-		{
-			if (cue.ChildCues.Count > 0 && cue.ShellBar != null)
-			{
-				cue.ShellBar.RelationshipChanged();
-			}
-		}
-
-		RefreshShellZebra();
+		NotifyVirtualStructureChanged();
 	}
 }

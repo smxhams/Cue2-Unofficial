@@ -304,27 +304,7 @@ public partial class ShellBar : PanelContainer
 		field.SizeFlagsVertical = SizeFlags.ShrinkCenter;
 		field.Alignment = HorizontalAlignment.Left;
 		field.AddThemeFontSizeOverride("font_size", ShellColumnLayout.FontSize);
-		// Empty-ish flat style keeps height under control without fighting the global theme heavily.
-		float padH = Mathf.Max(2f, 4f * ShellColumnLayout.Scale);
-		float padV = Mathf.Max(1f, 2f * ShellColumnLayout.Scale);
-		var compact = new StyleBoxFlat
-		{
-			BgColor = new Color(0.12f, 0.12f, 0.12f, 0.55f),
-			ContentMarginLeft = padH,
-			ContentMarginRight = padH,
-			ContentMarginTop = padV,
-			ContentMarginBottom = padV
-		};
-		compact.SetCornerRadiusAll(3);
-		field.AddThemeStyleboxOverride("normal", compact);
-		field.AddThemeStyleboxOverride("read_only", compact);
-		var focus = compact.Duplicate() as StyleBoxFlat;
-		if (focus != null)
-		{
-			focus.SetBorderWidthAll(1);
-			focus.BorderColor = new Color(0.02f, 0.33f, 0.36f, 0.9f);
-			field.AddThemeStyleboxOverride("focus", focus);
-		}
+		ShellColumnLayout.ApplyCompactLineEditStyleBoxes(field);
 		field.AddThemeConstantOverride("minimum_character_width", 1);
 	}
 
@@ -350,22 +330,7 @@ public partial class ShellBar : PanelContainer
 			_globalSignals.CueMediaHealthChanged -= OnCueMediaHealthChanged;
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		}
-		if (_cue != null)
-		{
-			_cue.NameChanged -= UpdateName;
-			_cue.CueNumChanged -= UpdateCueNum;
-			_cue.ColorChanged -= UpdateColor;
-			_cue.DurationChanged -= UpdateDuration;
-			_cue.TotalDurationChanged -= UpdateTotalDuration;
-			_cue.PreWaitChanged -= UpdatePreWait;
-			_cue.PostWaitChanged -= UpdatePostWait;
-			_cue.FollowChanged -= UpdateFollowMode;
-			_cue.ArmedChanged -= OnArmedVisualChanged;
-			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
-			_cue.NotesChanged -= OnNotesChanged;
-			_cue.MemoChanged -= OnMemoChanged;
-			_cue = null;
-		}
+		UnbindCue();
 		// Drop duplicated theme StyleBox so it is not retained after node free
 		if (_colorPanel != null && IsInstanceValid(_colorPanel))
 			_colorPanel.RemoveThemeStyleboxOverride("panel");
@@ -747,7 +712,11 @@ public partial class ShellBar : PanelContainer
 		ShellChildContainer = GetNode<VBoxContainer>("%ShellChildContainer");
 	}
 
-	public void SetCue(Cue cue)
+	/// <summary>
+	/// Detaches cue property events so a pooled (out-of-viewport) row does not keep
+	/// the last Cue or this node alive after <see cref="CueList"/> recycle.
+	/// </summary>
+	public void UnbindCue()
 	{
 		if (_cue != null)
 		{
@@ -763,7 +732,30 @@ public partial class ShellBar : PanelContainer
 			_cue.SkipIfDisarmedChanged -= OnArmedVisualChanged;
 			_cue.NotesChanged -= OnNotesChanged;
 			_cue.MemoChanged -= OnMemoChanged;
+			if (ReferenceEquals(_cue.ShellBar, this))
+				_cue.ShellBar = null;
+			_cue = null;
 		}
+
+		CueId = -1;
+	}
+
+	/// <summary>
+	/// Binds this row to <paramref name="cue"/> and refreshes visible fields.
+	/// </summary>
+	/// <param name="cue">Cue to display.</param>
+	/// <param name="skipIssueLookup">
+	/// When true, do not query <see cref="MediaHealthService"/> (showfile load; health is deferred).
+	/// </param>
+	/// <param name="deferChrome">
+	/// When true, skip indent / zebra chrome / redraw — caller applies indent then
+	/// <see cref="SetZebraIndex"/> (first virtual bind).
+	/// </param>
+	public void SetCue(Cue cue, bool skipIssueLookup = false, bool deferChrome = false)
+	{
+		UnbindCue();
+		if (cue == null)
+			return;
 		_cue = cue;
 		_cue.NameChanged += UpdateName;
 		_cue.CueNumChanged += UpdateCueNum;
@@ -780,7 +772,8 @@ public partial class ShellBar : PanelContainer
 		_cueNumLineEdit.Text = cue.CueNum;
 		_cueNameLineEdit.Text = cue.Name;
 		RefreshTimesFromCue();
-		_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
+		if (_colorBarStyle == null)
+			_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
 		if (_colorBarStyle != null)
 			_colorBarStyle.BgColor = _cue.Color;
 		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
@@ -788,11 +781,17 @@ public partial class ShellBar : PanelContainer
 		UpdateFollowMode(cue.Follow);
 		// Initialize collapse/expand UI based on children (SetCue path)
 		UpdateCollapseUI();
-		RefreshIssueIndicatorFromService();
-		ApplyTreeIndent();
-		RefreshShellChrome();
+		if (skipIssueLookup)
+			ApplyIssueIndicator(false, string.Empty);
+		else
+			RefreshIssueIndicatorFromService();
 		ApplyMemoMode();
-		QueueRedraw();
+		if (!deferChrome)
+		{
+			ApplyTreeIndent();
+			RefreshShellChrome();
+			QueueRedraw();
+		}
 
 		_cueNumLineEdit.Editable = false;
 		_cueNameLineEdit.Editable = false;

@@ -49,7 +49,8 @@ public partial class LogWindow : Window
 		_clearLogsButton.Pressed += OnClearLogsPressed;
 
 		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
 		_globalSignals.LogUpdated += OnNewLog;

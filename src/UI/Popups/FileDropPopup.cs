@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Cue2.Domain.Cuelist;
+using Cue2.Domain.Cues;
 using Cue2.UI.Shell;
 using Cue2.Services;
 using Cue2.UI.Utilities;
@@ -51,7 +53,8 @@ public partial class FileDropPopup : Window
 		GD.Print("FileDropPopup:Loading FileDropPopup");
 		
 		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
 
@@ -96,39 +99,40 @@ public partial class FileDropPopup : Window
 		var container = GetNode<VBoxContainer>("%OptionsListContiner");
 		if (container == null) return;
 
-		// Clear previous dynamic content except the two static header labels (identified by node Name)
-		foreach (Node child in container.GetChildren())
+		// Clear previous dynamic content immediately so header MoveChild indices stay correct.
+		// Keep the two static header labels (identified by node Name).
+		foreach (Node child in container.GetChildren().ToArray())
 		{
 			if (child is Label lbl && (lbl.Name == "DropTargetLabel" || lbl.Name == "DropFileName"))
 				continue;
-			child.QueueFree();
+			container.RemoveChild(child);
+			child.Free();
 		}
 
-		// Update header labels
 		var dropTargetLabel = GetNode<Label>("%DropTargetLabel");
 		var dropFileNameLabel = GetNode<Label>("%DropFileName");
 
-		dropTargetLabel.Text = $"Drop Target: {_targetDisplayName}";
-		var fileNames = _files.Select(f => Path.GetFileName(f)).ToArray();
-		dropFileNameLabel.Text = _files.Length == 1 
-			? $"File: {fileNames[0]}" 
-			: $"Files ({_files.Length}): {string.Join(", ", fileNames.Take(3))}{( _files.Length > 3 ? "..." : "")}";
+		// Header: "N Files Dropped" (names on hover), separator, then drop target.
+		var fileNames = _files.Select(Path.GetFileName).ToArray();
+		int count = _files.Length;
+		dropFileNameLabel.Text = count == 1
+			? "1 File Dropped"
+			: $"{count} Files Dropped";
+		// Labels ignore mouse by default; Stop so the tooltip can appear on hover.
+		dropFileNameLabel.MouseFilter = Control.MouseFilterEnum.Stop;
+		dropFileNameLabel.TooltipText = fileNames.Length > 0
+			? string.Join("\n", fileNames)
+			: string.Empty;
 
-		// Dynamic rows use project base_theme (set on Window) — no font-size overrides.
-		var filesHeader = new Label { Text = "Dropped Files:" };
-		container.AddChild(filesHeader);
+		dropTargetLabel.Text = FormatDropTargetLine();
 
-		foreach (string f in _files.Take(6))
-		{
-			container.AddChild(new Label { Text = $"  • {Path.GetFileName(f)}" });
-		}
-		if (_files.Length > 6)
-		{
-			container.AddChild(new Label { Text = $"  ... and {_files.Length - 6} more" });
-		}
+		var headerSep = new HSeparator();
+		container.AddChild(headerSep);
 
-		// Separator
-		container.AddChild(new HSeparator());
+		// Fixed order: files count → H line → drop target → options below.
+		container.MoveChild(dropFileNameLabel, 0);
+		container.MoveChild(headerSep, 1);
+		container.MoveChild(dropTargetLabel, 2);
 
 		// Position options (only meaningful for ShellBar target)
 		if (_targetType == FileDropTargetType.ShellBar && _targetCueId >= 0)
@@ -167,6 +171,32 @@ public partial class FileDropPopup : Window
 				MultiFileDropMode.ParentPerFile));
 			container.AddChild(multiContainer);
 		}
+	}
+
+	/// <summary>
+	/// Builds the drop-target summary line: cue number + name for shell drops, or list fallback.
+	/// </summary>
+	private string FormatDropTargetLine()
+	{
+		if (_targetType == FileDropTargetType.ShellBar && _targetCueId >= 0)
+		{
+			Cue cue = CueList.FetchCueFromId(_targetCueId);
+			if (cue != null)
+			{
+				string cueNum = string.IsNullOrWhiteSpace(cue.CueNum)
+					? cue.Id.ToString()
+					: cue.CueNum.Trim();
+				string cueName = cue.Name ?? string.Empty;
+				return $"Drop Location: Cue Number: {cueNum} - Name: {cueName}";
+			}
+		}
+
+		if (_targetType == FileDropTargetType.CueList)
+			return "Drop Location: Cue List";
+
+		return string.IsNullOrWhiteSpace(_targetDisplayName)
+			? "Drop Location: —"
+			: $"Drop Location: {_targetDisplayName}";
 	}
 
 	/// <summary>

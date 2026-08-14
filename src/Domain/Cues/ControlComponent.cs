@@ -286,10 +286,10 @@ public class ControlComponent : ICueComponent
     public bool FadeVideoOpacityEnabled { get; set; } = true;
 
     /// <summary>
-    /// Level for Volume fades: absolute target dB (−60…0) or relative delta dB.
+    /// Level for Volume fades: absolute target dB (−60…+12 digital gain) or relative delta dB.
     /// Also used as legacy single-cell matrix level when migrating old saves.
     /// </summary>
-    /// <value>Default <c>0</c> dB (full / no change when relative).</value>
+    /// <value>Default <c>0</c> dB (unity / no change when relative).</value>
     public float FadeAudioDb { get; set; }
 
     /// <summary>
@@ -500,6 +500,33 @@ public class ControlComponent : ICueComponent
             return Math.Max(0.0, sessionDefault);
         return Math.Max(0.0, StopFadeDuration);
     }
+
+    /// <summary>
+    /// Wall-clock duration this control may occupy when the parent cue fires (for shell duration
+    /// and active-cue progress). Instant transport (Pause / Resume / Start Now / Seek) is 0.
+    /// </summary>
+    /// <param name="sessionStopFadeDefault">
+    /// Session stop-fade seconds used when <see cref="StopFadeUsesSessionDefault"/> is true.
+    /// </param>
+    /// <returns>Non-negative seconds; <c>0</c> means instantaneous (no progress bar).</returns>
+    public double GetContentDurationSeconds(float sessionStopFadeDefault = 0f)
+    {
+        return Action switch
+        {
+            ControlAction.Fade => Math.Max(0.0, PropertyFadeDuration),
+            ControlAction.TranslateLayer => Math.Max(0.0, TranslateDuration),
+            ControlAction.Stop => ResolveStopFadeDuration(sessionStopFadeDefault),
+            ControlAction.Go => Math.Max(0.0, GoFadeInDuration),
+            _ => 0.0
+        };
+    }
+
+    /// <summary>
+    /// True when <see cref="GetContentDurationSeconds"/> is greater than zero (progress-bar eligible).
+    /// </summary>
+    /// <param name="sessionStopFadeDefault">Session stop-fade for Stop actions.</param>
+    public bool HasTimedProgress(float sessionStopFadeDefault = 0f) =>
+        GetContentDurationSeconds(sessionStopFadeDefault) > 1e-9;
 
     /// <summary>
     /// Clears the target cue (id and number).
@@ -748,8 +775,8 @@ public class ControlComponent : ICueComponent
     {
         if (video == null) return 0f;
         if (video.UseAudio)
-            return Mathf.Clamp(video.AudioVolume, 0f, 1f);
-        return Mathf.Clamp((float)video.Volume, 0f, 1f);
+            return Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(video.AudioVolume);
+        return Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear((float)video.Volume);
     }
 
     /// <summary>
@@ -758,7 +785,7 @@ public class ControlComponent : ICueComponent
     public static void SetVideoAudioLinear(VideoComponent video, float linear)
     {
         if (video == null) return;
-        linear = Mathf.Clamp(linear, 0f, 1f);
+        linear = Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(linear);
         if (video.UseAudio)
             video.AudioVolume = linear;
         else

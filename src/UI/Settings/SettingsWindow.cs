@@ -83,7 +83,8 @@ public partial class SettingsWindow : Window
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_globalData = GetNode<GlobalData>("/root/GlobalData");
 
-		GD.Print($"SettingsWindow:_Ready - UI Scale: " + _globalData.Settings.UiScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		GD.Print($"SettingsWindow:_Ready - UI Scale: " + userScale);
 
 		MinSize = MinWindowSize;
 
@@ -91,7 +92,7 @@ public partial class SettingsWindow : Window
 		EnsureSessionStateSeeded();
 
 		// Content scale only — does not change outer window pixel size.
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		// Prefer session/cached geometry. First run uses a canvas-editor-friendly default, then DPI scale.
 		if (!TryRestoreWindowState())
@@ -855,7 +856,8 @@ public partial class SettingsWindow : Window
 
 	private void ScaleUi(float value)
 	{
-		UiUtilities.RescaleUi(this, _globalData.Settings.UiScale, _globalData.BaseDisplayScale);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 	}
 
 	// On tree item pressed display each settings menu.

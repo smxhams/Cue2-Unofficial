@@ -25,6 +25,26 @@ namespace Cue2.Media.Audio;
 /// </remarks>
 public static class AudioMixMatrix
 {
+    /// <summary>Practical silence floor for component volume (−60 dB → linear 0).</summary>
+    public const float MinVolumeDb = -60f;
+
+    /// <summary>Maximum digital gain for cue component / embedded-audio volume (+12 dB).</summary>
+    public const float MaxComponentGainDb = 12f;
+
+    /// <summary>Linear magnitude for <see cref="MaxComponentGainDb"/> (≈ 3.981).</summary>
+    public static readonly float MaxComponentGainLinear = MathF.Pow(10f, MaxComponentGainDb / 20f);
+
+    /// <summary>
+    /// Clamps a component-gain linear volume to the allowed digital-gain range (0…+12 dB).
+    /// Safe for fill-thread use (no UI dependencies).
+    /// </summary>
+    public static float ClampComponentGainLinear(float linear)
+    {
+        if (linear <= 0f) return 0f;
+        if (linear >= MaxComponentGainLinear) return MaxComponentGainLinear;
+        return linear;
+    }
+
     /// <summary>
     /// Equal-power stereo balance gains for pan in [−1, 1].
     /// Center (0) keeps both channels at unity; full left/right fully attenuates the opposite side.
@@ -70,7 +90,7 @@ public static class AudioMixMatrix
     /// <param name="output">Destination interleaved float32 (frames * outChannels); cleared then filled.</param>
     /// <param name="outChannels">Output channel count for this stream (must match stream creation).</param>
     /// <param name="masterVolume">Runtime master volume [0,1] (includes fades).</param>
-    /// <param name="componentVolume">Cue component volume [0,1].</param>
+    /// <param name="componentVolume">Cue component volume (linear; may exceed 1 for digital gain up to +12 dB).</param>
     /// <param name="pan">Stereo pan [−1,1]; applied only when <paramref name="inChannels"/> is 2.</param>
     /// <param name="routing">Optional per-cue channel matrix (source → patch buses).</param>
     /// <param name="patch">Optional global output patch.</param>
@@ -245,6 +265,69 @@ public static class AudioMixMatrix
                 output[f * outChannels + outCh] = sample;
             }
         }
+    }
+
+    /// <summary>
+    /// Applies show-scoped output protection to a mixed float buffer in-place.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description>
+    /// Samples whose absolute level is below <paramref name="minAbs"/> are zeroed (noise gate / silence floor).
+    /// </description></item>
+    /// <item><description>
+    /// Samples whose absolute level exceeds <paramref name="maxAbs"/> are hard-clamped to ±maxAbs
+    /// (peak limiter / anti-clip for a single mix path).
+    /// </description></item>
+    /// </list>
+    /// Call after volume/pan/routing mix (and de-click) and before <c>PutAudioStreamData</c>.
+    /// Note: with multiple SDL streams bound to one device, SDL sums after this; per-stream clamp
+    /// still prevents each path exceeding the ceiling and gates near-silence, but concurrent cues
+    /// can still sum above full-scale unless the master volume leaves headroom.
+    /// </remarks>
+    /// <param name="buffer">Interleaved float32 PCM to process.</param>
+    /// <param name="maxAbs">Peak clamp magnitude (linear). Values ≤ 0 disable clamping.</param>
+    /// <param name="minAbs">Silence floor magnitude (linear). Values ≤ 0 disable the gate.</param>
+    public static void ApplyOutputLimits(Span<float> buffer, float maxAbs, float minAbs)
+    {
+        if (buffer.IsEmpty)
+            return;
+
+        bool gate = minAbs > 0f;
+        bool clamp = maxAbs > 0f;
+        if (!gate && !clamp)
+            return;
+
+        // Keep max at least the gate floor so gate + clamp cannot invert.
+        if (gate && clamp && maxAbs < minAbs)
+            maxAbs = minAbs;
+
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            float s = buffer[i];
+            float a = MathF.Abs(s);
+            if (gate && a < minAbs)
+            {
+                buffer[i] = 0f;
+                continue;
+            }
+            if (clamp && a > maxAbs)
+                buffer[i] = s >= 0f ? maxAbs : -maxAbs;
+        }
+    }
+
+    /// <summary>
+    /// Converts a dB ceiling/floor into a linear absolute magnitude for <see cref="ApplyOutputLimits"/>.
+    /// </summary>
+    /// <param name="db">Level in dBFS (0 = full scale).</param>
+    /// <param name="floorDb">Below this, treat as digital silence (returns 0).</param>
+    /// <returns>Linear amplitude ≥ 0.</returns>
+    public static float DbToAbsLinear(float db, float floorDb = -120f)
+    {
+        if (float.IsNaN(db) || float.IsInfinity(db) || db <= floorDb)
+            return 0f;
+        // Allow slightly above 0 dB only if caller requests it; typical UI clamps to 0.
+        return MathF.Pow(10f, db / 20f);
     }
 
     /// <summary>

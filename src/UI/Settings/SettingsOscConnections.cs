@@ -36,10 +36,18 @@ public partial class SettingsOscConnections : Control
     private LineEdit _testPathLineEdit;
     private LineEdit _testArgsLineEdit;
     private Button _testSendButton;
+    /// <summary>
+    /// Target for Test send: metadata id = connection Id, or -1 = all connections.
+    /// Defaults to the first connection so loopback tests are not double-delivered.
+    /// </summary>
+    private OptionButton _testTargetOption;
 
     private bool _isSyncingUi;
     private readonly StringBuilder _logBuilder = new();
     private int _logLineCount;
+
+    /// <summary>OptionButton metadata value meaning "send on every connection".</summary>
+    private const int TestTargetAllId = -1;
 
     private const int MaxUiLogLines = OscConnections.MaxMonitorLines;
 
@@ -66,6 +74,7 @@ public partial class SettingsOscConnections : Control
         _testPathLineEdit = GetNodeOrNull<LineEdit>("%TestPathLineEdit");
         _testArgsLineEdit = GetNodeOrNull<LineEdit>("%TestArgsLineEdit");
         _testSendButton = GetNodeOrNull<Button>("%TestSendButton");
+        EnsureTestTargetOption();
 
         _oscConnectionCardScene = SceneLoader.LoadPackedScene(
             "uid://b53mk1xolhtmv", out string err);
@@ -81,7 +90,16 @@ public partial class SettingsOscConnections : Control
         if (_clearLogButton != null)
             _clearLogButton.Pressed += OnClearLogPressed;
         if (_testSendButton != null)
+        {
             _testSendButton.Pressed += OnTestSendPressed;
+            // Prefer single-target test; "All" remains available in the picker.
+            if (string.IsNullOrEmpty(_testSendButton.TooltipText)
+                || _testSendButton.TooltipText.Contains("all", StringComparison.OrdinalIgnoreCase))
+            {
+                _testSendButton.TooltipText =
+                    "Send the test message on the selected connection (or all, if chosen).";
+            }
+        }
         if (_testPathLineEdit != null)
             _testPathLineEdit.TextSubmitted += _ => _testPathLineEdit.ReleaseFocus();
         if (_testArgsLineEdit != null)
@@ -139,6 +157,8 @@ public partial class SettingsOscConnections : Control
             _listenCheckBox.Toggled -= OnListenToggled;
         if (_clearLogButton != null)
             _clearLogButton.Pressed -= OnClearLogPressed;
+        if (_testSendButton != null)
+            _testSendButton.Pressed -= OnTestSendPressed;
 
         base._ExitTree();
     }
@@ -181,37 +201,10 @@ public partial class SettingsOscConnections : Control
 
     private void ConfigureMonitorLogStyle()
     {
-        if (_monitorLog == null) return;
-
-        _monitorLog.Editable = false;
-        _monitorLog.ContextMenuEnabled = true;
-        _monitorLog.GuttersDrawLineNumbers = false;
-        _monitorLog.ScrollPastEndOfFile = false;
-        _monitorLog.WrapMode = TextEdit.LineWrappingMode.None;
-        _monitorLog.CaretBlink = false;
-        _monitorLog.CaretType = TextEdit.CaretTypeEnum.Line;
-
-        var bg = new StyleBoxFlat
-        {
-            BgColor = new Color(0.05f, 0.05f, 0.05f, 1f),
-            BorderColor = new Color(0.22f, 0.22f, 0.22f, 1f),
-            ContentMarginLeft = 8,
-            ContentMarginRight = 8,
-            ContentMarginTop = 6,
-            ContentMarginBottom = 6,
-        };
-        bg.SetBorderWidthAll(1);
-        bg.SetCornerRadiusAll(3);
-        _monitorLog.AddThemeStyleboxOverride("normal", bg);
-        _monitorLog.AddThemeStyleboxOverride("focus", bg);
-        _monitorLog.AddThemeStyleboxOverride("read_only", bg);
-
-        // Slightly cooler green than MIDI to distinguish send vs receive monitors.
-        _monitorLog.AddThemeColorOverride("font_color", new Color(0.7f, 0.9f, 0.95f, 1f));
-        _monitorLog.AddThemeColorOverride("font_readonly_color", new Color(0.7f, 0.9f, 0.95f, 1f));
-        _monitorLog.AddThemeColorOverride("caret_color", new Color(0.4f, 0.7f, 0.8f, 0.6f));
-        _monitorLog.AddThemeColorOverride("background_color", new Color(0.05f, 0.05f, 0.05f, 1f));
-        _monitorLog.AddThemeFontSizeOverride("font_size", 12);
+        // Cool cyan-ish to distinguish send monitor from receive/MIDI (green).
+        UiUtilities.ConfigureReadOnlyMonitorLog(
+            _monitorLog,
+            fontColor: new Color(0.7f, 0.9f, 0.95f, 1f));
     }
 
     private void SyncFromModel()
@@ -223,12 +216,120 @@ public partial class SettingsOscConnections : Control
                 _listenCheckBox.SetPressedNoSignal(_oscConnections.MonitorEnabled);
 
             RebuildConnectionCards();
+            RefreshTestTargetOptions();
             UpdateStatusLabel();
         }
         finally
         {
             _isSyncingUi = false;
         }
+    }
+
+    /// <summary>
+    /// Ensures a connection target OptionButton exists in the test-send row (created in code
+    /// so older scene files still work).
+    /// </summary>
+    private void EnsureTestTargetOption()
+    {
+        if (_testTargetOption != null && GodotObject.IsInstanceValid(_testTargetOption))
+            return;
+
+        // Prefer scene node if present; otherwise insert before the Test button.
+        _testTargetOption = GetNodeOrNull<OptionButton>("%TestTargetOption");
+        if (_testTargetOption != null)
+            return;
+
+        if (_testSendButton?.GetParent() is not Control row)
+            return;
+
+        _testTargetOption = new OptionButton
+        {
+            Name = "TestTargetOption",
+            CustomMinimumSize = new Vector2(140, 0),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            TooltipText = "Which OSC connection receives the test message.",
+        };
+        _testTargetOption.UniqueNameInOwner = true;
+        int insertAt = _testSendButton.GetIndex();
+        row.AddChild(_testTargetOption);
+        row.MoveChild(_testTargetOption, insertAt);
+    }
+
+    /// <summary>
+    /// Rebuilds the test-target dropdown from the live connection list.
+    /// Preserves the previous selection when still valid; otherwise selects the first connection
+    /// (not "All") so a single test click does not fan out to every destination.
+    /// </summary>
+    private void RefreshTestTargetOptions()
+    {
+        EnsureTestTargetOption();
+        if (_testTargetOption == null) return;
+
+        // int.MinValue = first open / empty picker — default to first concrete connection.
+        const int noPriorSelection = int.MinValue;
+        int previousId = noPriorSelection;
+        if (_testTargetOption.ItemCount > 0 && _testTargetOption.Selected >= 0)
+            previousId = (int)_testTargetOption.GetItemMetadata(_testTargetOption.Selected);
+
+        _testTargetOption.Clear();
+
+        var list = OscConnections.Connections;
+        if (list == null || list.Count == 0)
+        {
+            _testTargetOption.AddItem("(no connections)", 0);
+            _testTargetOption.SetItemMetadata(0, TestTargetAllId);
+            _testTargetOption.Disabled = true;
+            return;
+        }
+
+        _testTargetOption.Disabled = false;
+        int selectIndex = 0;
+        int idx = 0;
+
+        foreach (var conn in list)
+        {
+            if (conn == null || !GodotObject.IsInstanceValid(conn)) continue;
+            string label = string.IsNullOrWhiteSpace(conn.Name)
+                ? $"OSC {conn.Id}"
+                : conn.Name;
+            string dest = $"{conn.Address}:{conn.Port}";
+            _testTargetOption.AddItem($"{label} → {dest}", idx);
+            _testTargetOption.SetItemMetadata(idx, conn.Id);
+            if (conn.Id == previousId)
+                selectIndex = idx;
+            idx++;
+        }
+
+        // Optional multi-dest fan-out (explicit choice only).
+        int allIdx = idx;
+        _testTargetOption.AddItem("All connections", allIdx);
+        _testTargetOption.SetItemMetadata(allIdx, TestTargetAllId);
+
+        if (previousId == noPriorSelection)
+        {
+            selectIndex = 0; // first real connection
+        }
+        else if (previousId == TestTargetAllId)
+        {
+            selectIndex = allIdx;
+        }
+        else
+        {
+            bool stillThere = false;
+            for (int i = 0; i < allIdx; i++)
+            {
+                if ((int)_testTargetOption.GetItemMetadata(i) == previousId)
+                {
+                    stillThere = true;
+                    selectIndex = i;
+                    break;
+                }
+            }
+            if (!stillThere)
+                selectIndex = 0;
+        }
+
+        _testTargetOption.Select(selectIndex);
     }
 
     private void RebuildConnectionCards()
@@ -317,30 +418,84 @@ public partial class SettingsOscConnections : Control
             return;
         }
 
-        string path = (_testPathLineEdit?.Text ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(path))
+        string rawPath = (_testPathLineEdit?.Text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(rawPath))
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 "OSC test: enter a path", (int)LogType.Warning);
             return;
         }
-        if (!path.StartsWith("/"))
-            path = "/" + path;
 
         try
         {
-            string args = _testArgsLineEdit?.Text ?? string.Empty;
+            string rawArgs = _testArgsLineEdit?.Text ?? string.Empty;
+            // Accept QLab-style combined lines in the path box ("/jump 2").
+            if (!OscMessageUtil.SplitPathAndArgs(rawPath, rawArgs, out string path, out string args)
+                || string.IsNullOrEmpty(path) || path == "/")
+            {
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    "OSC test: enter a path", (int)LogType.Warning);
+                return;
+            }
+
+            // Reflect normalized path/args back into the UI (space-split once).
+            if (_testPathLineEdit != null && _testPathLineEdit.Text != path)
+                _testPathLineEdit.Text = path;
+            if (_testArgsLineEdit != null
+                && string.IsNullOrWhiteSpace(rawArgs)
+                && !string.IsNullOrEmpty(args)
+                && _testArgsLineEdit.Text != args)
+            {
+                _testArgsLineEdit.Text = args;
+            }
+
             OscMessage msg = string.IsNullOrWhiteSpace(args)
                 ? new OscMessage(path)
                 : OscMessageUtil.BuildMessage(path, args);
-            // Send on all open connections so multi-dest shows can verify.
-            foreach (var conn in list)
+
+            int targetId = TestTargetAllId;
+            if (_testTargetOption != null
+                && _testTargetOption.ItemCount > 0
+                && _testTargetOption.Selected >= 0)
             {
-                if (conn == null || !GodotObject.IsInstanceValid(conn)) continue;
-                conn.SendMessage(msg);
+                targetId = (int)_testTargetOption.GetItemMetadata(_testTargetOption.Selected);
             }
+            else if (list.Count > 0 && list[0] != null)
+            {
+                // No picker yet — still only hit the first connection (not every one).
+                targetId = list[0].Id;
+            }
+
+            int sent = 0;
+            string targetLabel;
+            if (targetId == TestTargetAllId)
+            {
+                targetLabel = "all connections";
+                foreach (var conn in list)
+                {
+                    if (conn == null || !GodotObject.IsInstanceValid(conn)) continue;
+                    conn.SendMessage(msg);
+                    sent++;
+                }
+            }
+            else
+            {
+                var conn = OscConnections.GetCueOscConnection(targetId);
+                if (conn == null || !GodotObject.IsInstanceValid(conn))
+                {
+                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                        "OSC test: selected connection not found", (int)LogType.Warning);
+                    RefreshTestTargetOptions();
+                    return;
+                }
+                targetLabel = conn.Name ?? $"id {conn.Id}";
+                conn.SendMessage(msg);
+                sent = 1;
+            }
+
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                $"OSC test: {path} → {list.Count} connection(s)", (int)LogType.Info);
+                $"OSC test: {path} {OscMessageUtil.FormatArgs(msg)} → {targetLabel} ({sent})",
+                (int)LogType.Info);
         }
         catch (Exception ex)
         {

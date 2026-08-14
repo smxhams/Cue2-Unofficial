@@ -73,13 +73,14 @@ public static class SettingsExport
     {
         // Settings → General (plus related show scalars not currently on that panel)
         new("General", "General",
-            "UiScale", "GoScale", "CueListScale", "WaveformResolution", "StopFadeDuration",
+            "GoScale", "CueListScale", "WaveformResolution", "StopFadeDuration",
             "MediaBackupEnabled", "MultiEditEnabled", "SelectNewCues", "ShowTimelineWaveforms",
             "ShowMode"),
 
         // Settings → Audio
         new("Audio", "Audio",
-            "AudioLatencyMode", "AudioDeclickMs", "AudioMasterVolume"),
+            "AudioLatencyMode", "AudioDeclickMs", "AudioMasterVolume",
+            "AudioOutputMaxDb", "AudioOutputMinDb"),
 
         // Settings → Audio → Audio Output Patch
         new("Audio Output Patch", "Audio Output Patch",

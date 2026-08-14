@@ -81,7 +81,7 @@ placeholder_text = "No Selection"
 
 [node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=538649934]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 4
 theme_override_styles/separator = SubResource("StyleBoxEmpty_frsqn")
 
 [node name="Control2" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=61423710]
@@ -104,7 +104,7 @@ edit_alpha = false
 
 [node name="HSeparator3" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1558728979]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 4
 theme_override_styles/separator = SubResource("StyleBoxEmpty_tpxeo")
 
 [node name="Control" type="Control" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=1213666058]

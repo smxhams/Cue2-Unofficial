@@ -44,6 +44,19 @@ public partial class GlobalData : Node
 	private SaveManager _saveManager;
 
 	/// <summary>
+	/// True while a showfile is being applied to the live session (after the version gate).
+	/// New/Open/Save and document edits should be refused until this is false.
+	/// GO uses <see cref="IsPlaybackReady"/> (true after cue models exist).
+	/// </summary>
+	public bool IsSessionLoading => _saveManager?.IsSessionLoading == true;
+
+	/// <summary>
+	/// False only while settings/cue models are still being applied. True after models exist
+	/// (and whenever no open is in flight) so GO can fire before the first shell bind finishes.
+	/// </summary>
+	public bool IsPlaybackReady => _saveManager == null || _saveManager.IsPlaybackReady;
+
+	/// <summary>
 	/// Captured at startup from the project.godot [input] definitions. Used to restore "factory" bindings on New Session.
 	/// </summary>
 	private System.Collections.Generic.Dictionary<string, Godot.Collections.Array<InputEvent>> _defaultInputBindings = new();
@@ -164,7 +177,7 @@ public partial class GlobalData : Node
 	
 	/// <summary>
 	/// OS display scale of the primary/current screen at startup (HiDPI factor).
-	/// Combined with show <see cref="Settings.UiScale"/> when rescaling windows.
+	/// Combined with user <see cref="UserDataManager.UiScale"/> when rescaling windows.
 	/// </summary>
 	/// <value>Positive scale factor; defaults to 1.0 when the OS reports an invalid value.</value>
 	public float BaseDisplayScale { get; private set; } = 1.0f;

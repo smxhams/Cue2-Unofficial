@@ -54,9 +54,29 @@ public partial class UserDataManager : Node
 	private string _locale = DefaultLocale;
 
 	/// <summary>
+	/// User UI scale multiplier (1.0 = 100%). Combined with system/HiDPI base scale at apply time.
+	/// </summary>
+	private float _uiScale = DefaultUiScale;
+
+	/// <summary>
 	/// Production default UI locale (English).
 	/// </summary>
 	public const string DefaultLocale = "en";
+
+	/// <summary>Default UI scale (1.0 = 100%).</summary>
+	public const float DefaultUiScale = 1.0f;
+
+	/// <summary>Minimum allowed UI scale (25%).</summary>
+	public const float MinUiScale = 0.25f;
+
+	/// <summary>Maximum allowed UI scale (400%).</summary>
+	public const float MaxUiScale = 4.0f;
+
+	/// <summary>Minimum UI scale as a whole percent for sliders/fields.</summary>
+	public const float MinUiScalePercent = 25f;
+
+	/// <summary>Maximum UI scale as a whole percent for sliders/fields.</summary>
+	public const float MaxUiScalePercent = 400f;
 
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
@@ -240,6 +260,27 @@ public partial class UserDataManager : Node
 	}
 
 	/// <summary>
+	/// Application UI scale multiplier (1.0 = 100%). User preference, not showfile data.
+	/// </summary>
+	/// <value>
+	/// Clamped to <see cref="MinUiScale"/>–<see cref="MaxUiScale"/> (25%–400%).
+	/// Setting a new value persists user data and emits <see cref="GlobalSignals.UiScaleChanged"/>.
+	/// </value>
+	public float UiScale
+	{
+		get => _uiScale;
+		set
+		{
+			float clamped = Mathf.Clamp(value, MinUiScale, MaxUiScale);
+			if (Mathf.IsEqualApprox(_uiScale, clamped))
+				return;
+			_uiScale = clamped;
+			SaveUserData();
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), _uiScale);
+		}
+	}
+
+	/// <summary>
 	/// Autosave interval in minutes. 0 disables autosave.
 	/// </summary>
 	public int AutosaveInterval
@@ -395,10 +436,14 @@ public partial class UserDataManager : Node
 	/// <summary>
 	/// Adds the specified show file path to the top of the recent files list.
 	/// Duplicates are moved to the top rather than added again. The list is trimmed
-	/// to MaxRecentShowFiles. Changes are persisted immediately.
+	/// to MaxRecentShowFiles.
 	/// </summary>
 	/// <param name="path">The absolute filesystem path to the .c2 show file.</param>
-	public void AddRecentShowFile(string path)
+	/// <param name="persistImmediately">
+	/// When true (default), writes user data to disk now. Showfile open passes false
+	/// and persists from deferred housekeeping so the write is off the apply path.
+	/// </param>
+	public void AddRecentShowFile(string path, bool persistImmediately = true)
 	{
 		if (string.IsNullOrWhiteSpace(path))
 		{
@@ -423,6 +468,15 @@ public partial class UserDataManager : Node
 		GD.Print($"UserDataManager:AddRecentShowFile - Added recent: {path} (total: {_recentShowFiles.Count})");
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Added to recent files: {Path.GetFileName(path)}", 0);
 
+		if (persistImmediately)
+			SaveUserData();
+	}
+
+	/// <summary>
+	/// Writes in-memory user data (including recents) to disk. Used after a deferred recents update.
+	/// </summary>
+	public void PersistUserData()
+	{
 		SaveUserData();
 	}
 
@@ -517,6 +571,7 @@ public partial class UserDataManager : Node
 		_logSessionDepth = DefaultLogSessionDepth;
 		_isFirstTimeStartup = true;
 		_locale = DefaultLocale;
+		_uiScale = DefaultUiScale;
 
 		_shellNumberColumnWidth = 0;
 		_shellTimeColumnWidth = 0;
@@ -532,6 +587,9 @@ public partial class UserDataManager : Node
 		_globalData?.LocalizationService?.ApplyLocale(DefaultLocale, emitSignal: true);
 
 		SaveUserData();
+
+		// Notify windows that user UI scale returned to default.
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), _uiScale);
 
 		GD.Print("UserDataManager:ResetToDefaults - User preferences reset to factory defaults.");
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log), "User preferences reset to defaults.", 0);
@@ -837,6 +895,16 @@ public partial class UserDataManager : Node
 				_locale = DefaultLocale;
 			}
 
+			// Missing key = legacy install (scale used to live in show Settings); default 100%.
+			if (data.TryGetValue("UiScale", out var uiScaleVal))
+			{
+				_uiScale = Mathf.Clamp(uiScaleVal.AsSingle(), MinUiScale, MaxUiScale);
+			}
+			else
+			{
+				_uiScale = DefaultUiScale;
+			}
+
 			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
 			{
 				_shellNumberColumnWidth = shellNumW.AsSingle();
@@ -858,7 +926,7 @@ public partial class UserDataManager : Node
 			// OutputVSyncMode were machine prefs; they now live in the showfile (Settings). Ignore if present.
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} locale:{_locale} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} locale:{_locale} uiScale:{_uiScale} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
 		}
 		catch (Exception ex)
 		{
@@ -917,6 +985,7 @@ public partial class UserDataManager : Node
 			data["StartupBehavior"] = (int)_startupBehavior;
 			data["IsFirstTimeStartup"] = _isFirstTimeStartup;
 			data["Locale"] = string.IsNullOrWhiteSpace(_locale) ? DefaultLocale : _locale;
+			data["UiScale"] = _uiScale;
 
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;

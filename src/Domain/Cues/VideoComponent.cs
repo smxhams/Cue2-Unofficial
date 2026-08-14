@@ -274,7 +274,10 @@ public class VideoComponent : ICueComponent
 
     /// <summary>Audio routing matrix with volumes</summary>
     public CuePatch Routing { get; set; } = null;
-    /// <summary>Volume multiplier for embedded audio (0-1).</summary>
+    /// <summary>
+    /// Volume multiplier for embedded audio (linear). Unity = 1.0 (0 dB);
+    /// digital gain up to ≈3.98 (+12 dB) is allowed.
+    /// </summary>
     public float AudioVolume { get; set; } = 1f;
 
     /// <summary>
@@ -289,7 +292,11 @@ public class VideoComponent : ICueComponent
     }
     private float _pan;
 
-    /// <summary>Serialised waveform data for display</summary>
+    /// <summary>
+    /// In-memory peak envelope for UI display only.
+    /// Not written into showfiles — peaks persist under <c>SessionDir/Waveforms/*.c2wf</c>
+    /// via <see cref="Cue2.Services.MediaEngine.GenerateWaveformAsync"/>.
+    /// </summary>
     public byte[] WaveformData { get; set; } = null;
 
     public double FadeInDuration { get; set; } = 0.0; // In seconds
@@ -377,7 +384,7 @@ public class VideoComponent : ICueComponent
         }
         data.Add("AudioVolume", AudioVolume);
         data.Add("Pan", Pan);
-        data.Add("WaveformData", WaveformData ?? System.Array.Empty<byte>());
+        // Waveform peaks are session disk-cache only (Waveforms/*.c2wf), not showfile payload.
 
         if (Metadata != null)
         {
@@ -454,6 +461,7 @@ public class VideoComponent : ICueComponent
         PatchId = data.ContainsKey("PatchId") ? data["PatchId"].AsInt32() : -1;
         DirectOutput = data.ContainsKey("DirectOutput") ? data["DirectOutput"].AsString() : null;
 
+        // Legacy showfiles may still embed peaks; accept into memory so open can migrate to Waveforms/.
         WaveformData = TryReadByteArray(data, "WaveformData");
         if (data.ContainsKey("Routing"))
         {

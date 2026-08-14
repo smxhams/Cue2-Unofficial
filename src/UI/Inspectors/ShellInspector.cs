@@ -929,7 +929,23 @@ public partial class ShellInspector : Control
 
 		try
 		{
-			var time = UiUtilities.ParseAndFormatTime(text, out var timeSecs, out string labeledTime, out bool isValid);
+			// Blank pre/post wait → 0 (clear the wait). Other invalid input still reverts.
+			string time;
+			double timeSecs;
+			string labeledTime;
+			bool isValid;
+			if (string.IsNullOrWhiteSpace(text)
+			    && (textField == _preWaitInput || textField == _postWaitInput))
+			{
+				timeSecs = 0;
+				time = UiUtilities.FormatTime(0);
+				UiUtilities.ParseAndFormatTime(time, out _, out labeledTime, out _);
+				isValid = true;
+			}
+			else
+			{
+				time = UiUtilities.ParseAndFormatTime(text, out timeSecs, out labeledTime, out isValid);
+			}
 
 			if (!isValid || string.IsNullOrEmpty(time))
 			{

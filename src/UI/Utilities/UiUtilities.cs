@@ -466,39 +466,67 @@ public partial class UiUtilities : Node
         return true;
     }
     
+    /// <summary>Practical silence floor for volume UI (−60 dB → linear 0).</summary>
+    public const float MinVolumeDb = Cue2.Media.Audio.AudioMixMatrix.MinVolumeDb;
+
     /// <summary>
-    /// Converts a linear volume (0.0f to 1.0f) to decibels (dB).
+    /// Maximum digital gain for cue component / embedded-audio volume fields (+12 dB).
     /// </summary>
-    /// <param name="linear">The linear volume value (0.0f = off, 1.0f = full).</param>
-    /// <returns>The dB value rouinded to one decimal place (e.g., 0dB for 1.0f, -60dB for 0.0f to avoid -inf).</returns>
+    public const float MaxComponentGainDb = Cue2.Media.Audio.AudioMixMatrix.MaxComponentGainDb;
+
+    /// <summary>
+    /// Linear magnitude for <see cref="MaxComponentGainDb"/> (≈ 3.981).
+    /// </summary>
+    public static float MaxComponentGainLinear => Cue2.Media.Audio.AudioMixMatrix.MaxComponentGainLinear;
+
+    /// <summary>Unity gain (0 dBFS) for master / routing matrix paths that must not boost.</summary>
+    public const float MaxUnityVolumeLinear = 1f;
+
+    /// <summary>
+    /// Clamps a component-gain linear volume to the allowed digital-gain range (0…+12 dB).
+    /// </summary>
+    public static float ClampComponentGainLinear(float linear) =>
+        Cue2.Media.Audio.AudioMixMatrix.ClampComponentGainLinear(linear);
+
+    /// <summary>
+    /// Formats a linear volume as a dB label for component fields (e.g. <c>+6.0dB</c>, <c>0.0dB</c>, <c>-12.0dB</c>).
+    /// </summary>
+    public static string FormatComponentVolumeDb(float linear)
+    {
+        float db = LinearToDb(linear);
+        if (db > 0f)
+            return $"+{db:0.0}dB";
+        return $"{db:0.0}dB";
+    }
+
+    /// <summary>
+    /// Converts a linear volume to decibels (dB).
+    /// </summary>
+    /// <param name="linear">Linear volume (0 = silence; 1 = 0 dB; up to <see cref="MaxComponentGainLinear"/> for +12 dB).</param>
+    /// <returns>dB rounded to one decimal (e.g. 0 for 1.0, −60 for silence, +12 for max gain).</returns>
     /// <remarks>
-    /// Formula: 20 * log10(linear). Clamps below -60dB for practicality in UI sliders.
-    /// Logs warnings for invalid input (outside 0-1 range).
+    /// Formula: 20 * log10(linear). Values above max gain or below 0 are clamped.
     /// </remarks>
     public static float LinearToDb(float linear)
     {
-        if (linear < 0f || linear > 1f)
+        if (linear < 0f || linear > MaxComponentGainLinear + 1e-4f)
         {
-            
-            GD.Print($"UiUtilities:LinearToDb - Invalid linear value {linear}; clamping to 0-1.");
-            linear = Mathf.Clamp(linear, 0f, 1f);
+            GD.Print($"UiUtilities:LinearToDb - Linear {linear} outside 0…{MaxComponentGainLinear:0.###}; clamping.");
+            linear = Mathf.Clamp(linear, 0f, MaxComponentGainLinear);
         }
 
-        if (Mathf.IsZeroApprox(linear)) return -60f; // Avoid -inf.
+        if (Mathf.IsZeroApprox(linear)) return MinVolumeDb; // Avoid -inf.
         float db = 20f * MathF.Log10(linear);
         float dbRounded = MathF.Round(db, 1);
-        return dbRounded;
+        // Keep display inside the published component range.
+        return Mathf.Clamp(dbRounded, MinVolumeDb, MaxComponentGainDb);
     }
     
     /// <summary>
-    /// Converts decibels (dB) to a linear volume (0.0f to 1.0f).
+    /// Converts a dB string to linear volume (component gain range −60…+12 dB).
     /// </summary>
-    /// <param name="db">The dB value (e.g., 0dB = full, -60dB or lower = off).</param>
-    /// <returns>The linear volume (0.0f to 1.0f). Returns -1f on failure</returns>
-    /// <remarks>
-    /// Formula: 10^(db/20). Handles -inf/off as 0.0f. Logs warnings for extreme values.
-    /// Use in UI for volume controls syncing dB display with internal linear values.
-    /// </remarks>
+    /// <param name="dbInput">The dB value (e.g. <c>0dB</c>, <c>+6</c>, <c>-12.5dB</c>).</param>
+    /// <returns>Linear volume (0…≈3.98). Returns −1f on parse failure.</returns>
     public static float DbToLinear(string dbInput)
     {
         if (string.IsNullOrWhiteSpace(dbInput))
@@ -527,13 +555,27 @@ public partial class UiUtilities : Node
     }
 
     /// <summary>
-    /// Converts a dB value to linear volume (0…1). Clamps to the practical −60…0 dB UI range.
+    /// Converts a dB value to linear volume with digital gain (range −60…+12 dB → 0…≈3.98).
     /// </summary>
-    /// <param name="db">Decibels (0 = full, −60 or lower = silence).</param>
-    /// <returns>Linear volume in 0…1.</returns>
+    /// <param name="db">Decibels (0 = unity, +12 = max boost, −60 or lower = silence).</param>
+    /// <returns>Linear volume in 0…<see cref="MaxComponentGainLinear"/>.</returns>
     public static float DbToLinear(float db)
     {
-        if (db <= -60f)
+        if (db <= MinVolumeDb)
+            return 0f;
+        if (db > MaxComponentGainDb)
+            db = MaxComponentGainDb;
+        return Mathf.Pow(10f, db / 20f);
+    }
+
+    /// <summary>
+    /// Converts dB to linear with a unity ceiling (master / routing matrix: −60…0 dB → 0…1).
+    /// </summary>
+    /// <param name="db">Decibels (0 = full scale; positive values are clamped to 0).</param>
+    /// <returns>Linear volume in 0…1.</returns>
+    public static float DbToUnityLinear(float db)
+    {
+        if (db <= MinVolumeDb)
             return 0f;
         if (db > 0f)
             db = 0f;
@@ -752,7 +794,7 @@ public partial class UiUtilities : Node
     /// only when no saved geometry exists.
     /// </summary>
     /// <param name="window">Target window.</param>
-    /// <param name="scale">User UI scale (typically 0.5–2.0).</param>
+    /// <param name="scale">User UI scale (typically 0.25–4.0).</param>
     /// <param name="baseDisplayScale">HiDPI factor from <see cref="DisplayServer.ScreenGetScale"/>.</param>
     public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)
     {
@@ -1058,6 +1100,104 @@ public partial class UiUtilities : Node
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// Wires Escape on a <see cref="LineEdit"/> to end edit mode and release focus.
+    /// </summary>
+    /// <remarks>
+    /// Safe to call more than once (hooks stack; release is idempotent). Prefer calling when the
+    /// field is created so Esc always unfocuses even if global text-field policy is unavailable.
+    /// FocusExited still runs after release (commit/cancel remains the host's responsibility).
+    /// </remarks>
+    /// <param name="lineEdit">Target field (ignored if null/invalid).</param>
+    public static void WireLineEditEscapeReleasesFocus(LineEdit lineEdit)
+    {
+        if (lineEdit == null || !GodotObject.IsInstanceValid(lineEdit))
+            return;
+
+        // Avoid double-connect if already tagged by a previous call on this instance.
+        const string metaKey = "cue2_esc_unfocus";
+        if (lineEdit.HasMeta(metaKey))
+            return;
+        lineEdit.SetMeta(metaKey, true);
+
+        lineEdit.GuiInput += @event =>
+        {
+            if (!GodotObject.IsInstanceValid(lineEdit) || !lineEdit.HasFocus())
+                return;
+            if (@event is not InputEventKey key || !key.Pressed || key.Echo)
+                return;
+            if (key.Keycode != Key.Escape
+                && key.PhysicalKeycode != Key.Escape
+                && !key.IsAction("ui_cancel"))
+                return;
+
+            if (lineEdit.IsEditing())
+                lineEdit.Unedit();
+            lineEdit.ReleaseFocus();
+            lineEdit.AcceptEvent();
+            lineEdit.GetViewport()?.SetInputAsHandled();
+            // Same-frame re-focus races (e.g. after submit/engine edit mode).
+            lineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+        };
+    }
+
+    /// <summary>
+    /// Configures a MIDI/OSC monitor <see cref="CodeEdit"/> as a non-interactive log view.
+    /// </summary>
+    /// <remarks>
+    /// Read-only, no keyboard focus, no selection/shortcuts/context menu. Scroll still works
+    /// (mouse wheel / scrollbar) so long histories remain usable without stealing GO/hotkeys.
+    /// </remarks>
+    /// <param name="monitorLog">The monitor CodeEdit to configure (no-op if null).</param>
+    /// <param name="fontColor">Optional monospace log text color; default is a soft green.</param>
+    public static void ConfigureReadOnlyMonitorLog(CodeEdit monitorLog, Color? fontColor = null)
+    {
+        if (monitorLog == null || !GodotObject.IsInstanceValid(monitorLog))
+            return;
+
+        Color text = fontColor ?? new Color(0.75f, 0.95f, 0.75f, 1f);
+
+        monitorLog.Editable = false;
+        monitorLog.FocusMode = Control.FocusModeEnum.None;
+        monitorLog.ContextMenuEnabled = false;
+        monitorLog.SelectingEnabled = false;
+        monitorLog.DragAndDropSelectionEnabled = false;
+        monitorLog.ShortcutKeysEnabled = false;
+        monitorLog.MiddleMousePasteEnabled = false;
+        monitorLog.GuttersDrawLineNumbers = false;
+        monitorLog.ScrollPastEndOfFile = false;
+        monitorLog.WrapMode = TextEdit.LineWrappingMode.None;
+        monitorLog.CaretBlink = false;
+        monitorLog.CaretType = TextEdit.CaretTypeEnum.Line;
+        monitorLog.MouseDefaultCursorShape = Control.CursorShape.Arrow;
+
+        // Keep mouse for scrolling only; never take focus on click.
+        monitorLog.MouseFilter = Control.MouseFilterEnum.Stop;
+        if (monitorLog.HasFocus())
+            monitorLog.ReleaseFocus();
+
+        var bg = new StyleBoxFlat
+        {
+            BgColor = new Color(0.05f, 0.05f, 0.05f, 1f),
+            BorderColor = new Color(0.22f, 0.22f, 0.22f, 1f),
+            ContentMarginLeft = 8,
+            ContentMarginRight = 8,
+            ContentMarginTop = 6,
+            ContentMarginBottom = 6,
+        };
+        bg.SetBorderWidthAll(1);
+        bg.SetCornerRadiusAll(3);
+        monitorLog.AddThemeStyleboxOverride("normal", bg);
+        monitorLog.AddThemeStyleboxOverride("focus", bg);
+        monitorLog.AddThemeStyleboxOverride("read_only", bg);
+
+        monitorLog.AddThemeColorOverride("font_color", text);
+        monitorLog.AddThemeColorOverride("font_readonly_color", text);
+        monitorLog.AddThemeColorOverride("caret_color", new Color(text.R, text.G, text.B, 0.35f));
+        monitorLog.AddThemeColorOverride("background_color", new Color(0.05f, 0.05f, 0.05f, 1f));
+        monitorLog.AddThemeFontSizeOverride("font_size", 12);
     }
 
     /// <summary>

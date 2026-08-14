@@ -1489,6 +1489,13 @@ public partial class MainTitleBarUI : Control
 
     private void StartNewSession()
     {
+        if (_globalData?.IsSessionLoading == true)
+        {
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                "Please wait — a showfile is still loading. Cannot start a new session.", (int)LogType.Info);
+            return;
+        }
+
         _globalData.SessionName = null;
         _globalData.SessionPath = null;
         _globalData.SessionDir = null;

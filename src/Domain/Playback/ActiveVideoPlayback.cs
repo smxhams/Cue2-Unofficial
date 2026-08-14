@@ -512,7 +512,7 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
     public void SetRuntimeLevelLinear(float linear)
     {
         lock (_lock)
-            _runtimeLevelLinear = Mathf.Clamp(linear, 0f, 1f);
+            _runtimeLevelLinear = AudioMixMatrix.ClampComponentGainLinear(linear);
     }
 
     /// <summary>
@@ -1573,9 +1573,9 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             if (_runtimeLevelLinear.HasValue)
                 componentVol = _runtimeLevelLinear.Value;
             else if (_videoComponent.UseAudio)
-                componentVol = Mathf.Clamp(_videoComponent.AudioVolume, 0f, 1f);
+                componentVol = AudioMixMatrix.ClampComponentGainLinear(_videoComponent.AudioVolume);
             else
-                componentVol = Mathf.Clamp((float)_videoComponent.Volume, 0f, 1f);
+                componentVol = AudioMixMatrix.ClampComponentGainLinear((float)_videoComponent.Volume);
             // Stereo pan only; mono / multi-channel ignore (Mix applies identity).
             pan = SourceChannels == 2
                 ? (_runtimePan ?? Mathf.Clamp(_videoComponent.Pan, -1f, 1f))
@@ -1613,6 +1613,13 @@ public partial class ActiveVideoPlayback : Node, IAudioPlayback
             _declickFramesRemaining = declickRemainSnapshot;
             _declickRampTotalFrames = declickTotalSnapshot;
             ApplyDeclickRamp(_audioMixBuffer.AsSpan(0, outSamples), frames, outCh);
+
+            // Peak clamp + silence floor (show Audio settings) before handing PCM to SDL.
+            if (_audioDevices != null)
+            {
+                _audioDevices.GetOutputLimits(out float maxAbs, out float minAbs);
+                AudioMixMatrix.ApplyOutputLimits(_audioMixBuffer.AsSpan(0, outSamples), maxAbs, minAbs);
+            }
 
             int byteCount = outSamples * sizeof(float);
             fixed (float* p = _audioMixBuffer)

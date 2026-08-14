@@ -255,8 +255,9 @@ public partial class MediaEngine : Node
     /// <summary>
     /// Generates a waveform peak envelope for an audio (or video) file using FFmpeg.
     /// Audacity-style: decode once, stream min/max into fixed bins (no full-sample buffer).
-    /// Uses <see cref="Settings.WaveformResolution"/> when available; optional disk cache under
-    /// <see cref="GlobalData.SessionWaveformsPath"/>.
+    /// Uses <see cref="Settings.WaveformResolution"/> when available. Peaks are not stored in
+    /// the .c2 showfile; the session disk cache under <see cref="GlobalData.SessionWaveformsPath"/>
+    /// (<c>Waveforms/*.c2wf</c>) is the durable store across save/load.
     /// </summary>
     /// <remarks>
     /// Single-flight per path+resolution and a global one-at-a-time FFmpeg slot prevent rapid
@@ -392,13 +393,19 @@ public partial class MediaEngine : Node
         }
     }
 
+    /// <summary>
+    /// Resolves the disk cache path for peaks under <see cref="GlobalData.SessionWaveformsPath"/>.
+    /// Creates the folder when missing so open/generate can write without a prior save.
+    /// </summary>
     private string TryGetWaveformCachePath(string mediaPath)
     {
         try
         {
             string root = _globalData?.SessionWaveformsPath;
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+            if (string.IsNullOrEmpty(root))
                 return null;
+            if (!Directory.Exists(root))
+                Directory.CreateDirectory(root);
             return Path.Combine(root, WaveformPeaks.CacheFileName(mediaPath));
         }
         catch

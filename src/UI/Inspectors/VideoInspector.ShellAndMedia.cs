@@ -138,6 +138,7 @@ public partial class VideoInspector
 			_videoTargets.Clear();
 			_fileUrl.Text = "";
 			ApplyFileUrlMissingStyle(false, null);
+			ClearFileMetadataLabel();
 			if (_deleteVideoComponentButton != null)
 				_deleteVideoComponentButton.Visible = false;
 			_inspectorContent.Visible = false;
@@ -169,6 +170,7 @@ public partial class VideoInspector
 		{
 			_focusedVideoComponent = null;
 			ApplyFileUrlMissingStyle(false, null);
+			ClearFileMetadataLabel();
 			if (_deleteVideoComponentButton != null)
 				_deleteVideoComponentButton.Visible = false;
 			return;
@@ -183,6 +185,7 @@ public partial class VideoInspector
 			_focusedVideoComponent = null;
 			_fileUrl.Text = "";
 			ApplyFileUrlMissingStyle(false, null);
+			ClearFileMetadataLabel();
 			if (_deleteVideoComponentButton != null)
 				_deleteVideoComponentButton.Visible = false;
 			return;
@@ -289,6 +292,7 @@ public partial class VideoInspector
 			_previewContainer.Visible = false;
 			_fileUrl.Text = "";
 			ApplyFileUrlMissingStyle(false, null);
+			ClearFileMetadataLabel();
 			if (_deleteVideoComponentButton != null)
 				_deleteVideoComponentButton.Visible = false;
 			try { _videoPreviewer?.ClearDecoder(); } catch { /* optional */ }
@@ -354,6 +358,7 @@ public partial class VideoInspector
 		_videoTargets.Clear();
 		_fileUrl.Text = "";
 		ApplyFileUrlMissingStyle(false, null);
+		ClearFileMetadataLabel();
 		if (_deleteVideoComponentButton != null)
 			_deleteVideoComponentButton.Visible = false;
 
@@ -893,7 +898,13 @@ public partial class VideoInspector
 				_fileMetadataLabel.Text = textSubs > 0
 					? $"{meta.Width}x{meta.Height} · {meta.Codec} · CC×{textSubs}"
 					: $"{meta.Width}x{meta.Height} · {meta.Codec}";
+				_fileMetadataLabel.TooltipText = metadataText;
+				_fileMetadataLabel.Visible = !string.IsNullOrWhiteSpace(_fileMetadataLabel.Text);
 			}
+		}
+		else
+		{
+			ClearFileMetadataLabel();
 		}
 
 		RefreshSubtitleUi();
@@ -914,8 +925,19 @@ public partial class VideoInspector
 		
 		// Update volume
 		var volume = _focusedVideoComponent.UseAudio ? _focusedVideoComponent.AudioVolume : _focusedVideoComponent.Volume;
-		var volumeDb = UiUtilities.LinearToDb((float)volume);
-		_volumeInput.Text = $"{volumeDb}dB";
+		_volumeInput.Text = UiUtilities.FormatComponentVolumeDb((float)volume);
 		UpdatePanUiVisibilityAndValues();
+	}
+
+	/// <summary>
+	/// Hides the compact file-details line under the media URL.
+	/// </summary>
+	private void ClearFileMetadataLabel()
+	{
+		if (_fileMetadataLabel == null)
+			return;
+		_fileMetadataLabel.Text = "";
+		_fileMetadataLabel.TooltipText = "";
+		_fileMetadataLabel.Visible = false;
 	}
 }

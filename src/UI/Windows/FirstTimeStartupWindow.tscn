@@ -156,8 +156,8 @@ size_flags_vertical = 4
 tooltip_text = "Scales whole UI.
 Caution: Will apply on mouse release."
 focus_mode = 0
-min_value = 50.0
-max_value = 200.0
+min_value = 25.0
+max_value = 400.0
 value = 100.0
 rounded = true
 

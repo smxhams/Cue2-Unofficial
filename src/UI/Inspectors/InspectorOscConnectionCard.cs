@@ -90,11 +90,26 @@ public partial class InspectorOscConnectionCard : PanelContainer
         _commandEditing = false;
         _commandLineEdit?.ReleaseFocus();
         if (_oscComponent == null) return;
-        if (_oscComponent.OscMessage == text) return;
         if (IsHistoryRestoring()) return;
 
+        // Split QLab-style "/jump 2" into path + args so Rug.Osc accepts the address.
+        if (!OscMessageUtil.SplitPathAndArgs(text, _argsLineEdit?.Text ?? _oscComponent.ArgsText,
+                out string path, out string args))
+            path = text ?? string.Empty;
+
+        bool pathChanged = _oscComponent.OscMessage != path;
+        bool argsChanged = (_oscComponent.ArgsText ?? string.Empty) != (args ?? string.Empty);
+        if (!pathChanged && !argsChanged) return;
+
         RecordCueHistory("Edit OSC command");
-        _oscComponent.OscMessage = text;
+        _oscComponent.OscMessage = path;
+        if (argsChanged)
+            _oscComponent.ArgsText = args ?? string.Empty;
+
+        if (_commandLineEdit != null && _commandLineEdit.Text != path)
+            _commandLineEdit.Text = path;
+        if (argsChanged && _argsLineEdit != null && _argsLineEdit.Text != args)
+            _argsLineEdit.Text = args ?? string.Empty;
     }
 
     private void OnArgsEditing(bool editing)
@@ -130,23 +145,27 @@ public partial class InspectorOscConnectionCard : PanelContainer
 
         try
         {
-            // Commit fields first
-            if (_commandLineEdit != null)
-                _oscComponent.OscMessage = _commandLineEdit.Text;
-            if (_argsLineEdit != null)
-                _oscComponent.ArgsText = _argsLineEdit.Text;
-
-            string path = (_oscComponent.OscMessage ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(path) || !path.StartsWith("/"))
+            // Commit + normalize fields first (handles "/jump 2" in the path box).
+            string rawPath = _commandLineEdit?.Text ?? _oscComponent.OscMessage ?? string.Empty;
+            string rawArgs = _argsLineEdit?.Text ?? _oscComponent.ArgsText ?? string.Empty;
+            if (!OscMessageUtil.SplitPathAndArgs(rawPath, rawArgs, out string path, out string args)
+                || string.IsNullOrEmpty(path) || path == "/")
             {
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                     "OSC test: path must start with /", (int)LogType.Warning);
                 return;
             }
 
-            OscMessage msg = string.IsNullOrWhiteSpace(_oscComponent.ArgsText)
+            _oscComponent.OscMessage = path;
+            _oscComponent.ArgsText = args ?? string.Empty;
+            if (_commandLineEdit != null && _commandLineEdit.Text != path)
+                _commandLineEdit.Text = path;
+            if (_argsLineEdit != null && _argsLineEdit.Text != args)
+                _argsLineEdit.Text = args ?? string.Empty;
+
+            OscMessage msg = string.IsNullOrWhiteSpace(args)
                 ? new OscMessage(path)
-                : OscMessageUtil.BuildMessage(path, _oscComponent.ArgsText);
+                : OscMessageUtil.BuildMessage(path, args);
             _oscComponent.OscConnection.SendMessage(msg);
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 $"OSC test: {path} {OscMessageUtil.FormatArgs(msg)}", (int)LogType.Info);

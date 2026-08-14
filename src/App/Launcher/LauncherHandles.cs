@@ -117,16 +117,17 @@ public partial class LauncherHandles : Control
 	{
 		if (_resizing)
 		{
+			float uiScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
 			if (_resizeNode == GetNode<Node>("Right")){
-				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0]*_globalData.Settings.UiScale), DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0]*uiScale), DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);
 			}
 			if (_resizeNode == GetNode<Node>("Bottom")){
-				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)(GetLocalMousePosition()[1]*_globalData.Settings.UiScale)), _windowNumber);
+				DisplayServer.WindowSetSize(new Vector2I(DisplayServer.WindowGetSize(_windowNumber)[0], (int)(GetLocalMousePosition()[1]*uiScale)), _windowNumber);
 			}
 			if (_resizeNode == GetNode<Node>("Corner")){
 				DisplayServer.WindowSetSize(new Vector2I((int)(GetLocalMousePosition()[0] *
-				                                               _globalData.Settings.UiScale), (int)
-					(GetLocalMousePosition()[1] * _globalData.Settings.UiScale)), _windowNumber);
+				                                               uiScale), (int)
+					(GetLocalMousePosition()[1] * uiScale)), _windowNumber);
 			}
 			if (DisplayServer.WindowGetSize()[0] < _minWindowSize[0]){
 				DisplayServer.WindowSetSize(new Vector2I(_minWindowSize[0], DisplayServer.WindowGetSize(_windowNumber)[1]), _windowNumber);

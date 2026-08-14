@@ -33,10 +33,13 @@ namespace Cue2.UI.Inspectors;
 public partial class InspectorTabsController : TabContainer
 {
 	/// <summary>Preferred tab order when auto-selecting a tab with content.</summary>
+	/// <remarks>
+	/// Entries must match <see cref="TabContainer"/> child node names (e.g. "Visual", not component type "Video").
+	/// </remarks>
 	private static readonly string[] TabPriority =
 	{
 		"Audio",
-		"Video",
+		"Visual",
 		"Text",
 		"Connection",
 		"Control",
@@ -106,7 +109,8 @@ public partial class InspectorTabsController : TabContainer
 	{
 		// Component add/remove can restore under Cue or Cuelist scope.
 		if (scope == (int)HistoryManager.HistoryScope.Cue
-		    || scope == (int)HistoryManager.HistoryScope.Cuelist)
+		    || scope == (int)HistoryManager.HistoryScope.Cuelist
+		    || scope == (int)HistoryManager.HistoryScope.MultiCue)
 		{
 			OnSyncIndicators();
 		}
@@ -247,7 +251,8 @@ public partial class InspectorTabsController : TabContainer
 					flags.Add("Audio");
 					break;
 				case "Video":
-					flags.Add("Video");
+					// Component type remains "Video"; inspector tab node was renamed to "Visual".
+					flags.Add("Visual");
 					break;
 				case "Text":
 					flags.Add("Text");

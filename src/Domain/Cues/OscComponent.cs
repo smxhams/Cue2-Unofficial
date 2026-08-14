@@ -41,20 +41,17 @@ public class OscComponent : ICueComponent
                 return;
             }
 
-            string path = OscMessage.Trim();
-            if (!path.StartsWith("/"))
+            // Accept QLab-style combined lines ("/jump 2") via SplitPathAndArgs inside BuildMessage.
+            if (!OscMessageUtil.SplitPathAndArgs(OscMessage, ArgsText, out string path, out string args)
+                || string.IsNullOrEmpty(path) || path == "/")
             {
-                GD.Print($"OscComponent:Execute - path must start with '/': '{path}'");
+                GD.Print($"OscComponent:Execute - Invalid OSC message path: '{OscMessage}'");
                 return;
             }
 
-            OscMessage oscMes;
-            // Legacy: empty ArgsText with path-only previously sent a bare int 1 for compatibility
-            // with very old shows. Prefer explicit ArgsText; if empty, send path with no args.
-            if (string.IsNullOrWhiteSpace(ArgsText))
-                oscMes = new OscMessage(path);
-            else
-                oscMes = OscMessageUtil.BuildMessage(path, ArgsText);
+            OscMessage oscMes = string.IsNullOrWhiteSpace(args)
+                ? new OscMessage(path)
+                : OscMessageUtil.BuildMessage(path, args);
 
             OscConnection.SendMessage(oscMes);
         }

@@ -89,6 +89,20 @@ public partial class ActiveCue : GodotObject
     private readonly Dictionary<PanelContainer, MidiOutputComponent> _activeMidiOutputComponents = new();
     private readonly Dictionary<PanelContainer, ControlComponent> _activeControlComponents = new();
 
+    /// <summary>
+    /// Timed control progress (Fade / Translate / Stop fade / GO fade-in) keyed by component panel.
+    /// </summary>
+    private readonly Dictionary<PanelContainer, ControlTimedProgress> _controlTimedProgress = new();
+
+    /// <summary>Wall-clock progress for a long-running control component row.</summary>
+    private struct ControlTimedProgress
+    {
+        public double DurationSec;
+        /// <summary>Engine msec when the control started; 0 = armed but not yet running.</summary>
+        public ulong StartMsec;
+        public bool Started;
+    }
+
     /// <summary>Keeps handler refs so we can disconnect before freeing UI (avoids disposed-panel callbacks).</summary>
     private readonly List<(ActiveAudioPlayback Playback, ActiveAudioPlayback.CompletedEventHandler Handler)> _audioCompleteHandlers = new();
     private readonly List<(ActiveVideoPlayback Playback, ActiveVideoPlayback.CompletedEventHandler Handler)> _videoCompleteHandlers = new();
