@@ -949,7 +949,7 @@ public partial class ActiveCue
                     string msg = string.IsNullOrEmpty(oscComponent.OscMessage)
                         ? "(no path)"
                         : oscComponent.OscMessage;
-                    missingLabel.Text = $"[Missing OSC] {msg}";
+                    missingLabel.Text = UiLocalizer.Tf("[Missing OSC] {0}", msg);
                 }
                 var typeIconMissing = missingPanel.GetNodeOrNull<TextureRect>("%ComponentIcon");
                 if (typeIconMissing != null && _activeCueBar != null)

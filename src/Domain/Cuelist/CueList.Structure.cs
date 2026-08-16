@@ -86,15 +86,10 @@ public partial class CueList
 		string createHotkey = GlobalData.ParseHotkey("CreateCue");
 		string expandHotkey = GlobalData.ParseHotkey("ToggleExpandAll");
 
-		string createTip = "Add a new cue.\nInserts below selection.";
-		if (!string.IsNullOrEmpty(createHotkey))
-			createTip += "\nHotkey: " + createHotkey;
-		_addCueButton.TooltipText = createTip;
-
-		string expandTip = "Expand/Collapse all groups.";
-		if (!string.IsNullOrEmpty(expandHotkey))
-			expandTip += "\nHotkey: " + expandHotkey;
-		_expandAllButton.TooltipText = expandTip;
+		_addCueButton.TooltipText = UiLocalizer.WithHotkey(
+			"Add a new cue.\nInserts below selection.", createHotkey);
+		_expandAllButton.TooltipText = UiLocalizer.WithHotkey(
+			"Expand/Collapse all groups.", expandHotkey);
 	}
 
 	/// <summary>

@@ -564,13 +564,13 @@ public partial class SettingsWindow : Window
 		var selected = GetSelectedCategoryIds();
 		if (selected.Count == 0)
 		{
-			_filterButton.Text = "None";
+			_filterButton.Text = T("None");
 			return;
 		}
 
 		if (selected.Count == SettingsExport.Categories.Length)
 		{
-			_filterButton.Text = "All";
+			_filterButton.Text = T("All");
 			return;
 		}
 
@@ -583,7 +583,7 @@ public partial class SettingsWindow : Window
 			return;
 		}
 
-		_filterButton.Text = $"{selected.Count} selected";
+		_filterButton.Text = Tf("{0} selected", selected.Count);
 	}
 
 	/// <summary>

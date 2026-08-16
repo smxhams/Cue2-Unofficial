@@ -523,7 +523,7 @@ public partial class CueList : Control
 		if (_durationHeaderLabel != null)
 		{
 			_durationHeaderLabel.CustomMinimumSize = new Vector2(timeW, 0);
-			_durationHeaderLabel.TooltipText = "Drag horizontally to resize Pre-Wait / Duration / Post-Wait columns.";
+			_durationHeaderLabel.TooltipText = UiLocalizer.T("Drag horizontally to resize Pre-Wait / Duration / Post-Wait columns.");
 			_durationHeaderLabel.MouseDefaultCursorShape = Control.CursorShape.Hsize;
 			_durationHeaderLabel.AddThemeFontSizeOverride("font_size", headerFont);
 		}

@@ -64,6 +64,7 @@ public partial class FileDropPopup : Window
 		_cancelButton.Pressed += OnCancelPressed;
 		_createButton.Pressed += OnCreatePressed;
 
+		UiLocalizer.LocalizeTree(this);
 	}
 
 	public override void _ExitTree()
@@ -116,8 +117,8 @@ public partial class FileDropPopup : Window
 		var fileNames = _files.Select(Path.GetFileName).ToArray();
 		int count = _files.Length;
 		dropFileNameLabel.Text = count == 1
-			? "1 File Dropped"
-			: $"{count} Files Dropped";
+			? UiLocalizer.T("1 File Dropped")
+			: UiLocalizer.Tf("{0} Files Dropped", count);
 		// Labels ignore mouse by default; Stop so the tooltip can appear on hover.
 		dropFileNameLabel.MouseFilter = Control.MouseFilterEnum.Stop;
 		dropFileNameLabel.TooltipText = fileNames.Length > 0
@@ -137,37 +138,37 @@ public partial class FileDropPopup : Window
 		// Position options (only meaningful for ShellBar target)
 		if (_targetType == FileDropTargetType.ShellBar && _targetCueId >= 0)
 		{
-			container.AddChild(new Label { Text = "Insert Position:" });
+			container.AddChild(new Label { Text = UiLocalizer.T("Insert Position:") });
 
 			var posContainer = new VBoxContainer();
 			posContainer.AddThemeConstantOverride("separation", 2);
-			posContainer.AddChild(CreatePositionChoice("Above target cue", DropInsertMode.Above));
-			posContainer.AddChild(CreatePositionChoice("Below target cue", DropInsertMode.Below, isDefault: true));
-			posContainer.AddChild(CreatePositionChoice("As child of target cue", DropInsertMode.AsChild));
+			posContainer.AddChild(CreatePositionChoice(UiLocalizer.T("Above target cue"), DropInsertMode.Above));
+			posContainer.AddChild(CreatePositionChoice(UiLocalizer.T("Below target cue"), DropInsertMode.Below, isDefault: true));
+			posContainer.AddChild(CreatePositionChoice(UiLocalizer.T("As child of target cue"), DropInsertMode.AsChild));
 			container.AddChild(posContainer);
 		}
 		else
 		{
-			container.AddChild(new Label { Text = "Insert Location: End of list (or after current selection)" });
+			container.AddChild(new Label { Text = UiLocalizer.T("Insert Location: End of list (or after current selection)") });
 		}
 
 		// Multi-file options
 		if (_files.Length > 1)
 		{
 			container.AddChild(new HSeparator());
-			container.AddChild(new Label { Text = "Multiple Files Action:" });
+			container.AddChild(new Label { Text = UiLocalizer.T("Multiple Files Action:") });
 
 			var multiContainer = new VBoxContainer();
 			multiContainer.AddThemeConstantOverride("separation", 2);
 			multiContainer.AddChild(CreateMultiFileChoice(
-				"Create separate cue for each file (recommended)",
+				UiLocalizer.T("Create separate cue for each file (recommended)"),
 				MultiFileDropMode.SeparateCues,
 				isDefault: true));
 			multiContainer.AddChild(CreateMultiFileChoice(
-				"Wrap all files inside one new Group cue",
+				UiLocalizer.T("Wrap all files inside one new Group cue"),
 				MultiFileDropMode.WrapInOneGroup));
 			multiContainer.AddChild(CreateMultiFileChoice(
-				"Create each file as child of its own parent cue",
+				UiLocalizer.T("Create each file as child of its own parent cue"),
 				MultiFileDropMode.ParentPerFile));
 			container.AddChild(multiContainer);
 		}
@@ -187,16 +188,16 @@ public partial class FileDropPopup : Window
 					? cue.Id.ToString()
 					: cue.CueNum.Trim();
 				string cueName = cue.Name ?? string.Empty;
-				return $"Drop Location: Cue Number: {cueNum} - Name: {cueName}";
+				return UiLocalizer.Tf("Drop Location: Cue Number: {0} - Name: {1}", cueNum, cueName);
 			}
 		}
 
 		if (_targetType == FileDropTargetType.CueList)
-			return "Drop Location: Cue List";
+			return UiLocalizer.T("Drop Location: Cue List");
 
 		return string.IsNullOrWhiteSpace(_targetDisplayName)
-			? "Drop Location: —"
-			: $"Drop Location: {_targetDisplayName}";
+			? UiLocalizer.T("Drop Location: —")
+			: UiLocalizer.Tf("Drop Location: {0}", _targetDisplayName);
 	}
 
 	/// <summary>

@@ -490,7 +490,7 @@ public partial class AudioOutputPatchMatrix : Control
         Button deleteChannelButton = new Button();
         deleteChannelButton.CustomMinimumSize = new Vector2(32, 32);
         deleteChannelButton.SetMouseFilter(MouseFilterEnum.Pass);
-        deleteChannelButton.TooltipText = "Delete this channel";
+        deleteChannelButton.TooltipText = UiLocalizer.T("Delete this channel");
         deleteChannelButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
         deleteChannelButton.ExpandIcon = true;
         deleteChannelButton.FocusMode = FocusModeEnum.None;
@@ -566,7 +566,7 @@ public partial class AudioOutputPatchMatrix : Control
     {
         var header = LoadDeviceOutputDeviceHeader(deviceName, true);
         var label = header.GetChild<Label>(1);
-        label.TooltipText = $"{deviceName}: Is used in patch but is currently unavailable.";
+        label.TooltipText = UiLocalizer.Tf("{0}: Is used in patch but is currently unavailable.", deviceName);
         var style = new StyleBoxFlat();
         style.BgColor = new Color(1.0f, 0.0f, 0.0f, 0.5f);
 
@@ -585,7 +585,7 @@ public partial class AudioOutputPatchMatrix : Control
     private void NewUnusedDeviceColumn(string deviceName)
     {
         var header = LoadDeviceOutputDeviceHeader(deviceName);
-        header.GetChild<Label>(1).TooltipText = $"{deviceName}: Currently disabled (enable to use in patch)";
+        header.GetChild<Label>(1).TooltipText = UiLocalizer.Tf("{0}: Currently disabled (enable to use in patch)", deviceName);
     }
 
 

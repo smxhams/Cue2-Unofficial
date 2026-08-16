@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using System;
+using System.Collections.Generic;
 using Godot;
 
 namespace Cue2.UI.Utilities;
@@ -15,9 +16,10 @@ namespace Cue2.UI.Utilities;
 /// session titles, etc.) is not overwritten — only labels, button captions, tooltips,
 /// placeholders, and window titles are localized.
 /// <para/>
-/// Automation: extract scene/code strings into <c>translations/cue2.csv</c> (see
-/// <c>tools/i18n/extract_ui_strings.py</c>), translate columns, then call
-/// <see cref="LocalizeTree"/> from UI <c>_Ready</c> and on <c>LocaleChanged</c>.
+/// Automation: extract scene strings and C# <c>T()</c>/<c>Tf()</c> literals into
+/// <c>translations/cue2.csv</c> (see <c>tools/i18n/extract_ui_strings.py</c>),
+/// translate columns, then call <see cref="LocalizeTree"/> from UI <c>_Ready</c>
+/// and on <c>LocaleChanged</c>. Keep English source text visible in code.
 /// </remarks>
 public static class UiLocalizer
 {
@@ -42,6 +44,16 @@ public static class UiLocalizer
 	/// Stable English menu identity for Settings tree items (display text may be translated).
 	/// </summary>
 	public const string MetaMenuKey = "menu_key";
+
+	/// <summary>
+	/// Parallel English captions for <see cref="OptionButton"/> items (item metadata stays free for ids).
+	/// </summary>
+	public const string MetaOptionKeys = "tr_src_option_keys";
+
+	/// <summary>
+	/// Parallel English tooltips for <see cref="OptionButton"/> items.
+	/// </summary>
+	public const string MetaOptionTooltips = "tr_src_option_tooltips";
 
 	/// <summary>
 	/// Looks up a message key in the current locale (falls back to the key / English catalog).
@@ -120,8 +132,8 @@ public static class UiLocalizer
 				LocalizeTooltip(linkButton);
 				break;
 			case OptionButton optionButton:
-				// Option items are often dynamic; only tooltips are safe here.
 				LocalizeTooltip(optionButton);
+				RelocalizeOptionButton(optionButton);
 				break;
 			case CheckBox checkBox:
 				LocalizeTextControl(checkBox, () => checkBox.Text, v => checkBox.Text = v);
@@ -203,6 +215,188 @@ public static class UiLocalizer
 		if (item.HasMeta(MetaMenuKey))
 			return item.GetMeta(MetaMenuKey).AsString();
 		return item.GetText(0) ?? string.Empty;
+	}
+
+	/// <summary>
+	/// Formats the standard "Reset to default: {value}" tooltip.
+	/// </summary>
+	/// <param name="defaultValue">Already-formatted default shown after the colon.</param>
+	/// <returns>Translated tooltip.</returns>
+	public static string ResetDefaultTip(object defaultValue)
+	{
+		string value = defaultValue?.ToString() ?? string.Empty;
+		return Tf("Reset to default: {0}", value);
+	}
+
+	/// <summary>
+	/// Translates <paramref name="englishTip"/> and appends a hotkey line when one is bound.
+	/// </summary>
+	/// <param name="englishTip">English tooltip body (catalog key).</param>
+	/// <param name="hotkey">Display string from <c>GlobalData.ParseHotkey</c>; omitted when empty.</param>
+	/// <returns>Translated tooltip, optionally with a hotkey suffix.</returns>
+	public static string WithHotkey(string englishTip, string hotkey)
+	{
+		string body = T(englishTip);
+		if (string.IsNullOrEmpty(hotkey))
+			return body;
+		return body + "\n" + Tf("Hotkey: {0}", hotkey);
+	}
+
+	/// <summary>
+	/// Sets a control tooltip from an English source key and stores that key for later locale switches.
+	/// </summary>
+	/// <param name="control">Target control.</param>
+	/// <param name="englishKey">English tooltip (catalog key). Empty clears the tooltip.</param>
+	public static void SetTooltip(Control control, string englishKey)
+	{
+		if (control == null || !GodotObject.IsInstanceValid(control))
+			return;
+
+		if (string.IsNullOrEmpty(englishKey))
+		{
+			control.TooltipText = string.Empty;
+			if (control.HasMeta(MetaTooltip))
+				control.RemoveMeta(MetaTooltip);
+			return;
+		}
+
+		control.SetMeta(MetaTooltip, englishKey);
+		control.TooltipText = T(englishKey);
+	}
+
+	/// <summary>
+	/// Sets label text from an English source key and stores that key for later locale switches.
+	/// </summary>
+	/// <param name="label">Target label.</param>
+	/// <param name="englishKey">English caption (catalog key).</param>
+	public static void SetText(Label label, string englishKey)
+	{
+		if (label == null || !GodotObject.IsInstanceValid(label))
+			return;
+		if (string.IsNullOrEmpty(englishKey))
+		{
+			label.Text = string.Empty;
+			return;
+		}
+
+		label.SetMeta(MetaText, englishKey);
+		label.Text = T(englishKey);
+	}
+
+	/// <summary>
+	/// Sets button caption from an English source key and stores that key for later locale switches.
+	/// </summary>
+	/// <param name="button">Target button.</param>
+	/// <param name="englishKey">English caption (catalog key).</param>
+	public static void SetText(Button button, string englishKey)
+	{
+		if (button == null || !GodotObject.IsInstanceValid(button))
+			return;
+		if (string.IsNullOrEmpty(englishKey))
+		{
+			button.Text = string.Empty;
+			return;
+		}
+
+		button.SetMeta(MetaText, englishKey);
+		button.Text = T(englishKey);
+	}
+
+	/// <summary>
+	/// Sets a LineEdit placeholder from an English source key.
+	/// </summary>
+	/// <param name="edit">Target field.</param>
+	/// <param name="englishKey">English placeholder (catalog key).</param>
+	public static void SetPlaceholder(LineEdit edit, string englishKey)
+	{
+		if (edit == null || !GodotObject.IsInstanceValid(edit))
+			return;
+		if (string.IsNullOrEmpty(englishKey))
+		{
+			edit.PlaceholderText = string.Empty;
+			if (edit.HasMeta(MetaPlaceholder))
+				edit.RemoveMeta(MetaPlaceholder);
+			return;
+		}
+
+		edit.SetMeta(MetaPlaceholder, englishKey);
+		edit.PlaceholderText = T(englishKey);
+	}
+
+	/// <summary>
+	/// Sets a TextEdit placeholder from an English source key.
+	/// </summary>
+	/// <param name="edit">Target field.</param>
+	/// <param name="englishKey">English placeholder (catalog key).</param>
+	public static void SetPlaceholder(TextEdit edit, string englishKey)
+	{
+		if (edit == null || !GodotObject.IsInstanceValid(edit))
+			return;
+		if (string.IsNullOrEmpty(englishKey))
+		{
+			edit.PlaceholderText = string.Empty;
+			if (edit.HasMeta(MetaPlaceholder))
+				edit.RemoveMeta(MetaPlaceholder);
+			return;
+		}
+
+		edit.SetMeta(MetaPlaceholder, englishKey);
+		edit.PlaceholderText = T(englishKey);
+	}
+
+	/// <summary>
+	/// Adds an OptionButton item whose caption (and optional tooltip) are translated
+	/// from English source keys stored on the button — item metadata stays free for ids.
+	/// </summary>
+	/// <param name="button">Target option button.</param>
+	/// <param name="englishKey">English item caption (catalog key).</param>
+	/// <param name="id">Optional item id passed to <see cref="OptionButton.AddItem(string, int)"/>.</param>
+	/// <param name="englishTooltip">Optional English item tooltip (catalog key).</param>
+	public static void AddTranslatedItem(OptionButton button, string englishKey, int id = -1, string englishTooltip = null)
+	{
+		if (button == null || !GodotObject.IsInstanceValid(button) || string.IsNullOrEmpty(englishKey))
+			return;
+
+		int index = button.ItemCount;
+		if (index == 0)
+		{
+			if (button.HasMeta(MetaOptionKeys))
+				button.RemoveMeta(MetaOptionKeys);
+			if (button.HasMeta(MetaOptionTooltips))
+				button.RemoveMeta(MetaOptionTooltips);
+		}
+
+		if (id >= 0)
+			button.AddItem(T(englishKey), id);
+		else
+			button.AddItem(T(englishKey));
+
+		StoreIndexedMeta(button, MetaOptionKeys, index, englishKey);
+		StoreIndexedMeta(button, MetaOptionTooltips, index, englishTooltip ?? string.Empty);
+		if (!string.IsNullOrEmpty(englishTooltip))
+			button.SetItemTooltip(index, T(englishTooltip));
+	}
+
+	/// <summary>
+	/// Re-translates OptionButton items that were added with <see cref="AddTranslatedItem"/>.
+	/// Items without stored English keys (dynamic user data) are left unchanged.
+	/// </summary>
+	/// <param name="button">Target option button.</param>
+	public static void RelocalizeOptionButton(OptionButton button)
+	{
+		if (button == null || !GodotObject.IsInstanceValid(button))
+			return;
+
+		List<string> keys = ReadIndexedMeta(button, MetaOptionKeys);
+		List<string> tips = ReadIndexedMeta(button, MetaOptionTooltips);
+		int count = button.ItemCount;
+		for (int i = 0; i < count; i++)
+		{
+			if (i < keys.Count && !string.IsNullOrEmpty(keys[i]))
+				button.SetItemText(i, T(keys[i]));
+			if (i < tips.Count && !string.IsNullOrEmpty(tips[i]))
+				button.SetItemTooltip(i, T(tips[i]));
+		}
 	}
 
 	/// <summary>
@@ -303,5 +497,34 @@ public static class UiLocalizer
 
 		obj.SetMeta(metaKey, current);
 		return current;
+	}
+
+	/// <summary>
+	/// Stores a string at <paramref name="index"/> in a Godot Array kept as node metadata.
+	/// </summary>
+	private static void StoreIndexedMeta(GodotObject obj, string metaKey, int index, string value)
+	{
+		var arr = obj.HasMeta(metaKey)
+			? obj.GetMeta(metaKey).AsGodotArray()
+			: new Godot.Collections.Array();
+		while (arr.Count <= index)
+			arr.Add(string.Empty);
+		arr[index] = value ?? string.Empty;
+		obj.SetMeta(metaKey, arr);
+	}
+
+	/// <summary>
+	/// Reads a string list stored by <see cref="StoreIndexedMeta"/>.
+	/// </summary>
+	private static List<string> ReadIndexedMeta(GodotObject obj, string metaKey)
+	{
+		var result = new List<string>();
+		if (obj == null || !obj.HasMeta(metaKey))
+			return result;
+
+		var arr = obj.GetMeta(metaKey).AsGodotArray();
+		foreach (Variant v in arr)
+			result.Add(v.AsString());
+		return result;
 	}
 }

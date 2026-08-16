@@ -127,7 +127,7 @@ public partial class AudioInspector
         var hasAudio = UiUtilities.HasComponent<AudioComponent>(_focusedCue);
         if (!hasAudio) // No Audio component in Cue
         {
-            _infoLabel.Text = "No Audio File";
+            _infoLabel.Text = UiLocalizer.T("No Audio File");
             _infoLabel.TooltipText = "";
             _selectFileContainer.Visible = true;
             _inspectorContent.Visible = false;
@@ -229,8 +229,8 @@ public partial class AudioInspector
         if (_audioTargets.Count == 0)
         {
             _focusedAudioComponent = null;
-            _infoLabel.Text = $"No audio on {selected} selected cue(s)";
-            _infoLabel.TooltipText = "None of the selected cues have an audio component. Choose a file to add audio to all.";
+            _infoLabel.Text = UiLocalizer.Tf("No audio on {0} selected cue(s)", selected);
+            _infoLabel.TooltipText = UiLocalizer.T("None of the selected cues have an audio component. Choose a file to add audio to all.");
             _selectFileContainer.Visible = true;
             _inspectorContent.Visible = false;
             _fileUrl.Text = "";
@@ -352,7 +352,7 @@ public partial class AudioInspector
         else
         {
             _inspectorContent.Visible = false;
-            _infoLabel.Text = "No Audio File";
+            _infoLabel.Text = UiLocalizer.T("No Audio File");
         }
     }
 

@@ -383,7 +383,7 @@ public partial class VideoInspector : Control
 		{
 			Text = "Link to Text",
 			TooltipText =
-				"When enabled, the cue’s Text component shows this file’s closed captions during playback. " +
+				UiLocalizer.T("When enabled, the cue’s Text component shows this file’s closed captions during playback. ") +
 				"Requires a Text component on the same cue (use + Text if missing)."
 		};
 		_useSubtitlesCheck.Toggled += OnUseSubtitlesToggled;
@@ -393,7 +393,7 @@ public partial class VideoInspector : Control
 		{
 			CustomMinimumSize = new Vector2(180, 0),
 			SizeFlagsHorizontal = SizeFlags.ExpandFill,
-			TooltipText = "Subtitle / closed-caption track to display.",
+			TooltipText = UiLocalizer.T("Subtitle / closed-caption track to display."),
 			FitToLongestItem = false,
 			ClipText = true
 		};
@@ -402,8 +402,8 @@ public partial class VideoInspector : Control
 
 		_addTextForCcButton = new Button
 		{
-			Text = "+ Text",
-			TooltipText = "Add a Text component to this cue for closed captions.",
+			Text = UiLocalizer.T("+ Text"),
+			TooltipText = UiLocalizer.T("Add a Text component to this cue for closed captions."),
 			Visible = false
 		};
 		_addTextForCcButton.Pressed += OnAddTextForCcPressed;
@@ -453,9 +453,7 @@ public partial class VideoInspector : Control
 
 	private static void AddTextureOption(OptionButton button, string label, int id, string tooltip)
 	{
-		int index = button.ItemCount;
-		button.AddItem(label, id);
-		button.SetItemTooltip(index, tooltip);
+		UiLocalizer.AddTranslatedItem(button, label, id, tooltip);
 	}
 
 	private void SetupWaveformUi()
@@ -473,8 +471,8 @@ public partial class VideoInspector : Control
 		_endDragHandle.CustomMinimumSize = new Vector2(10, 0);
 		_startDragHandle.Modulate = GlobalStyles.LowColor1;
 		_endDragHandle.Modulate = GlobalStyles.HighColor1;
-		_startDragHandle.TooltipText = "Start time (drag)";
-		_endDragHandle.TooltipText = "End time (drag)";
+		UiLocalizer.SetTooltip(_startDragHandle, "Start time (drag)");
+		UiLocalizer.SetTooltip(_endDragHandle, "End time (drag)");
 		_startDragHandle.GuiInput += OnStartHandleInput;
 		_endDragHandle.GuiInput += OnEndHandleInput;
 
@@ -485,7 +483,7 @@ public partial class VideoInspector : Control
 			_zoomSlider.MaxValue = 20;
 			_zoomSlider.Step = 0.1;
 			_zoomSlider.Value = 1;
-			_zoomSlider.TooltipText = "Zoom waveform (1× = full file)";
+			_zoomSlider.TooltipText = UiLocalizer.T("Zoom waveform (1× = full file)");
 			_zoomSlider.ValueChanged += OnZoomChanged;
 		}
 
@@ -495,7 +493,7 @@ public partial class VideoInspector : Control
 			CustomMinimumSize = new Vector2(0, 14),
 			SizeFlagsHorizontal = SizeFlags.ExpandFill,
 			Visible = false,
-			TooltipText = "Scroll zoomed waveform"
+			TooltipText = UiLocalizer.T("Scroll zoomed waveform")
 		};
 		_waveformAccordian.AddChild(_waveformScroll);
 		_waveformScroll.ValueChanged += OnWaveformScrollChanged;
@@ -581,6 +579,11 @@ public partial class VideoInspector : Control
 		if (!GodotObject.IsInstanceValid(this))
 			return;
 		UiLocalizer.LocalizeTree(this);
+		if (_addTextForCcButton != null)
+		{
+			UiLocalizer.SetText(_addTextForCcButton, "+ Text");
+			UiLocalizer.SetTooltip(_addTextForCcButton, "Add a Text component to this cue for closed captions.");
+		}
 	}
 
 }

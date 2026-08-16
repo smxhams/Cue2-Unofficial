@@ -1095,7 +1095,7 @@ public partial class ActiveCue
             _sequenceTimerLabel.Text = UiUtilities.FormatTime(left);
 
         if (!isFollow && _sequenceNameLabel != null)
-            _sequenceNameLabel.Text = $"Continuing after {UiUtilities.FormatTime(left)}";
+            _sequenceNameLabel.Text = UiLocalizer.Tf("Continuing after {0}", UiUtilities.FormatTime(left));
 
         if (isFollow && _sequenceProgress != null && _incomingWaitDuration > 1e-9)
             _sequenceProgress.Value = (left / _incomingWaitDuration) * 100.0;

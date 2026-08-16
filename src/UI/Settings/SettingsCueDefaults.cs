@@ -199,9 +199,8 @@ public partial class SettingsCueDefaults : ScrollContainer
 
     private void AddFollowOption(FollowType type, string label)
     {
-        int index = _followOption.ItemCount;
-        _followOption.AddItem(label);
-        _followOption.SetItemMetadata(index, (int)type);
+        UiLocalizer.AddTranslatedItem(_followOption, label);
+        _followOption.SetItemMetadata(_followOption.ItemCount - 1, (int)type);
     }
 
     private void SelectFollowOption(FollowType follow)
@@ -292,7 +291,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         _preWaitResetButton.Visible = !atDefault;
         if (!atDefault)
             _preWaitResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultCuePreWait)}";
+                UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultCuePreWait));
     }
 
     // ── Post-wait ──────────────────────────────────────────────────────────
@@ -355,7 +354,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         _postWaitResetButton.Visible = !atDefault;
         if (!atDefault)
             _postWaitResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultCuePostWait)}";
+                UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultCuePostWait));
     }
 
     // ── Continue mode ──────────────────────────────────────────────────────
@@ -398,7 +397,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         _followResetButton.Visible = !atDefault;
         if (!atDefault)
             _followResetButton.TooltipText =
-                $"Reset to default: {FollowLabel(AppSettings.SystemDefaultCueFollow)}";
+                UiLocalizer.ResetDefaultTip(FollowLabel(AppSettings.SystemDefaultCueFollow));
     }
 
     // ── Colour ─────────────────────────────────────────────────────────────
@@ -439,7 +438,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         bool atDefault = _globalData.Settings.CueDefaultColor.IsEqualApprox(AppSettings.SystemDefaultCueColor);
         _colorResetButton.Visible = !atDefault;
         if (!atDefault)
-            _colorResetButton.TooltipText = "Reset to default: black";
+            _colorResetButton.TooltipText = UiLocalizer.T("Reset to default: black");
     }
 
     // ── Armed ──────────────────────────────────────────────────────────────
@@ -481,7 +480,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         if (!atDefault)
         {
             string text = AppSettings.SystemDefaultCueArmed ? "Armed" : "Disarmed";
-            _armedResetButton.TooltipText = $"Reset to default: {text}";
+            _armedResetButton.TooltipText = UiLocalizer.ResetDefaultTip(text);
         }
     }
 
@@ -561,7 +560,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         if (!atDefault)
         {
             string text = AppSettings.SystemDefaultCueOnlyOneActiveInstance ? "On" : "Off";
-            _onlyOneActiveResetButton.TooltipText = $"Reset to default: {text}";
+            _onlyOneActiveResetButton.TooltipText = UiLocalizer.ResetDefaultTip(text);
         }
     }
 
@@ -574,7 +573,7 @@ public partial class SettingsCueDefaults : ScrollContainer
         if (!atDefault)
         {
             string text = AppSettings.SystemDefaultCueSkipIfDisarmed ? "On" : "Off";
-            _skipIfDisarmedResetButton.TooltipText = $"Reset to default: {text}";
+            _skipIfDisarmedResetButton.TooltipText = UiLocalizer.ResetDefaultTip(text);
         }
     }
 

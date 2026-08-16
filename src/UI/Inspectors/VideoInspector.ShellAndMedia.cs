@@ -179,7 +179,7 @@ public partial class VideoInspector
 		var hasVideo = UiUtilities.HasComponent<VideoComponent>(_focusedCue);
 		if (!hasVideo) // No Video component in Cue
 		{
-			_infoLabel.Text = "No Video File";
+			_infoLabel.Text = UiLocalizer.T("No Video File");
 			_selectFileContainer.Visible = true;
 			_inspectorContent.Visible = false;
 			_focusedVideoComponent = null;
@@ -285,8 +285,8 @@ public partial class VideoInspector
 		if (_videoTargets.Count == 0)
 		{
 			_focusedVideoComponent = null;
-			_infoLabel.Text = $"No video on {selected} selected cue(s)";
-			_infoLabel.TooltipText = "None of the selected cues have a video component. Choose a file to add video to all.";
+			_infoLabel.Text = UiLocalizer.Tf("No video on {0} selected cue(s)", selected);
+			_infoLabel.TooltipText = UiLocalizer.T("None of the selected cues have a video component. Choose a file to add video to all.");
 			_selectFileContainer.Visible = true;
 			_inspectorContent.Visible = false;
 			_previewContainer.Visible = false;
@@ -372,7 +372,7 @@ public partial class VideoInspector
 			ShellSelected(_focusedCue.Id);
 		else
 		{
-			_infoLabel.Text = "No Video File";
+			_infoLabel.Text = UiLocalizer.T("No Video File");
 			_inspectorContent.Visible = false;
 			_previewContainer.Visible = false;
 		}
@@ -387,7 +387,7 @@ public partial class VideoInspector
 		_fileDialog.FileSelected += FileSelected;
 		_fileDialog.FileMode = FileDialog.FileModeEnum.OpenFile;
 		_fileDialog.Access = FileDialog.AccessEnum.Filesystem;
-		_fileDialog.Title = "Select Video or Image File";
+		_fileDialog.Title = UiLocalizer.T("Select Video or Image File");
 		_fileDialog.UseNativeDialog = true;
 
 		// Add filters from GlobalData
@@ -717,7 +717,7 @@ public partial class VideoInspector
 		{
 			_audioCollapseButton.Visible = false;
 			_useAudioCheckButton.Visible = false;
-			_useAudioLabel.Text = "No audio (still image)";
+			_useAudioLabel.Text = UiLocalizer.T("No audio (still image)");
 			_audioAccordian.Visible = false;
 			_audioCollapseButton.ButtonPressed = false;
 			_waveformAccordian.Visible = false;
@@ -731,7 +731,7 @@ public partial class VideoInspector
 		{
 			_useAudioCheckButton.Visible = true;
 			_useAudioCheckButton.ButtonPressed = _focusedVideoComponent.UseAudio;
-			_useAudioLabel.Text = "Use Embedded Audio";
+			_useAudioLabel.Text = UiLocalizer.T("Use Embedded Audio");
 			_audioCollapseButton.Visible = true;
 			
 			PopulateOutputOptions();
@@ -779,7 +779,7 @@ public partial class VideoInspector
 		{
 			_audioCollapseButton.Visible = false;
 			_useAudioCheckButton.Visible = false;
-			_useAudioLabel.Text = "No audio in file";
+			_useAudioLabel.Text = UiLocalizer.T("No audio in file");
 			_audioAccordian.Visible = false;
 			_audioCollapseButton.ButtonPressed = false;
 			_waveformAccordian.Visible = false;
@@ -816,7 +816,7 @@ public partial class VideoInspector
 			if (_focusedVideoComponent.Duration <= 0)
 			{
 				_durationValue.Text = "0 (until stopped)";
-				_durationValue.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+				_durationValue.TooltipText = UiLocalizer.T("0 = stay active until stopped. Enter a time to auto-end.");
 			}
 			else
 			{
@@ -840,7 +840,7 @@ public partial class VideoInspector
 				_endTimeInput.Text = UiUtilities.FormatTime(_focusedVideoComponent.EndTime);
 			}
 			_durationValue.Text = UiUtilities.FormatTime(_focusedVideoComponent.Duration);
-			_durationValue.TooltipText = "m:s:ms (derived from start/end)";
+			_durationValue.TooltipText = UiLocalizer.T("m:s:ms (derived from start/end)");
 			_fileDurationValue.Text = UiUtilities.FormatTime(metaDur);
 			_loopInput.SetPressedNoSignal(_focusedVideoComponent.Loop);
 			_playCountInput.Text = _focusedVideoComponent.PlayCount.ToString();
@@ -859,19 +859,23 @@ public partial class VideoInspector
 			string metadataText;
 			if (_focusedVideoComponent.IsImage)
 			{
-				metadataText = $"Type: Still Image\n" +
-				               $"Resolution: {meta.Width}x{meta.Height}\n" +
-				               $"Codec: {meta.Codec}\n" +
-				               $"Format: {meta.Format}\n" +
-				               $"Hold: {(_focusedVideoComponent.Duration <= 0 ? "Until stopped" : UiUtilities.FormatTime(_focusedVideoComponent.Duration))}";
+				metadataText =
+					UiLocalizer.T("Type: Still Image") + "\n" +
+					UiLocalizer.Tf("Resolution: {0}x{1}", meta.Width, meta.Height) + "\n" +
+					UiLocalizer.Tf("Codec: {0}", meta.Codec) + "\n" +
+					UiLocalizer.Tf("Format: {0}", meta.Format) + "\n" +
+					UiLocalizer.Tf("Hold: {0}", _focusedVideoComponent.Duration <= 0
+						? UiLocalizer.T("Until stopped")
+						: UiUtilities.FormatTime(_focusedVideoComponent.Duration));
 			}
 			else
 			{
-				metadataText = $"Duration: {UiUtilities.FormatTime(meta.Duration)} \n" +
-				               $"Resolution: {meta.Width}x{meta.Height} \n" +
-				               $"Frame Rate: {meta.FrameRate:F1} fps \n" +
-				               $"Codec: {meta.Codec} \n" +
-				               $"Format: {meta.Format}";
+				metadataText =
+					UiLocalizer.Tf("Duration: {0}", UiUtilities.FormatTime(meta.Duration)) + "\n" +
+					UiLocalizer.Tf("Resolution: {0}x{1}", meta.Width, meta.Height) + "\n" +
+					UiLocalizer.Tf("Frame Rate: {0} fps", meta.FrameRate.ToString("F1")) + "\n" +
+					UiLocalizer.Tf("Codec: {0}", meta.Codec) + "\n" +
+					UiLocalizer.Tf("Format: {0}", meta.Format);
 				if (meta.AudioChannels > 0)
 				{
 					metadataText += $"\nAudio Channels: {meta.AudioChannels} \n" +

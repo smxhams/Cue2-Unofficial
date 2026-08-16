@@ -245,8 +245,8 @@ public partial class SettingsOscListen : Control
 
                 var cat = new Label
                 {
-                    Text = lastCategory,
-                    TooltipText = $"{lastCategory} commands",
+                    Text = UiLocalizer.T(lastCategory),
+                    TooltipText = UiLocalizer.Tf("{0} commands", UiLocalizer.T(lastCategory)),
                     SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 };
                 cat.AddThemeFontSizeOverride("font_size", 11);
@@ -267,7 +267,7 @@ public partial class SettingsOscListen : Control
             // Compact chip: monospaced-looking path with tooltip description.
             var chip = new PanelContainer
             {
-                TooltipText = cmd.Description,
+                TooltipText = UiLocalizer.T(cmd.Description),
                 CustomMinimumSize = new Vector2(148, 0),
                 SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             };
@@ -291,7 +291,7 @@ public partial class SettingsOscListen : Control
                 Editable = false,
                 ExpandToTextLength = false,
                 SelectAllOnFocus = true,
-                TooltipText = cmd.Description,
+                TooltipText = UiLocalizer.T(cmd.Description),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 Flat = true,
                 ContextMenuEnabled = true,
@@ -452,13 +452,13 @@ public partial class SettingsOscListen : Control
 
         if (!_oscListen.OscListenEnabled)
         {
-            _statusLabel.Text = "Listener off";
+            _statusLabel.Text = UiLocalizer.T("Listener off");
             return;
         }
 
         if (!_oscListen.IsListening)
         {
-            _statusLabel.Text = "Enabled · not bound";
+            _statusLabel.Text = UiLocalizer.T("Enabled · not bound");
             return;
         }
 

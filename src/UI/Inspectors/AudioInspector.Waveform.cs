@@ -64,8 +64,8 @@ public partial class AudioInspector
         _endDragHandle.CustomMinimumSize = new Vector2(10, 0);
         _startDragHandle.Modulate = GlobalStyles.LowColor1;
         _endDragHandle.Modulate = GlobalStyles.HighColor1;
-        _startDragHandle.TooltipText = "Start time (drag)";
-        _endDragHandle.TooltipText = "End time (drag)";
+        _startDragHandle.TooltipText = UiLocalizer.T("Start time (drag)");
+        _endDragHandle.TooltipText = UiLocalizer.T("End time (drag)");
     }
 
     private void OnZoomChanged(double value)
@@ -325,7 +325,7 @@ public partial class AudioInspector
         _fileDialog.FileSelected += FileSelected;
         _fileDialog.FileMode = FileDialog.FileModeEnum.OpenFile;
         _fileDialog.Access = FileDialog.AccessEnum.Filesystem;
-        _fileDialog.Title = "Open an Audio File";
+        _fileDialog.Title = UiLocalizer.T("Open an Audio File");
         _fileDialog.UseNativeDialog = true;
         _fileDialog.AddFilter(string.Join(",", GlobalData.AudioFileFilters), "Audio Files");
         AddChild(_fileDialog);

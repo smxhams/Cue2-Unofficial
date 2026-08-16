@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Cue2.Domain.Cues;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 
 namespace Cue2.Domain.Cuelist;
 
@@ -110,7 +111,7 @@ internal sealed class CueReorder(
                 InsertMakeChild = false;
                 DropAtEndAsTopLevel = true;
 
-                reorderLocationLabel.Text = "Reorder at end (top level)";
+                reorderLocationLabel.Text = UiLocalizer.T("Reorder at end (top level)");
                 var indicator = reorderIndicatorPanel;
                 indicator.GlobalPosition = new Vector2(cueContainer.GetGlobalPosition().X, lastBottom);
                 indicator.Size = new Vector2(cueContainer.Size.X, 2);
@@ -168,7 +169,7 @@ internal sealed class CueReorder(
                 }
                 else
                 {
-                    label.Text = $"Make child of: {targetName}";
+                    label.Text = UiLocalizer.Tf("Make child of: {0}", targetName);
                     indicator.GlobalPosition = MouseOverShellBar.GetGlobalPosition();
                     indicator.Size = MouseOverShellBar.Size;
                     indicator.Visible = true;
@@ -176,7 +177,7 @@ internal sealed class CueReorder(
             }
             else
             {
-                reorderLocationLabel.Text = "Cannot reorder here";
+                reorderLocationLabel.Text = UiLocalizer.T("Cannot reorder here");
                 reorderIndicatorPanel.Visible = false;
             }
         }

@@ -292,7 +292,7 @@ public partial class SettingsVideoOutput : ScrollContainer
             .IsEqualApprox(AppSettings.DefaultOutputBackgroundColor);
         _backgroundColorResetButton.Visible = !atDefault;
         if (!atDefault)
-            _backgroundColorResetButton.TooltipText = "Reset to default: black";
+            _backgroundColorResetButton.TooltipText = UiLocalizer.T("Reset to default: black");
     }
 
     // ── Show performance options ────────────────────────────────────────────
@@ -333,7 +333,7 @@ public partial class SettingsVideoOutput : ScrollContainer
         bool atDefault = _globalData.Settings.VideoQualityMode == AppSettings.DefaultVideoQualityMode;
         _qualityModeResetButton.Visible = !atDefault;
         if (!atDefault)
-            _qualityModeResetButton.TooltipText = "Reset to default: Balanced";
+            _qualityModeResetButton.TooltipText = UiLocalizer.T("Reset to default: Balanced");
     }
 
     private void OnPreviewQualitySelected(long index)
@@ -372,7 +372,7 @@ public partial class SettingsVideoOutput : ScrollContainer
         bool atDefault = _globalData.Settings.VideoPreviewQuality == AppSettings.DefaultVideoPreviewQuality;
         _previewQualityResetButton.Visible = !atDefault;
         if (!atDefault)
-            _previewQualityResetButton.TooltipText = "Reset to default: Full";
+            _previewQualityResetButton.TooltipText = UiLocalizer.T("Reset to default: Full");
     }
 
     private void OnVSyncSelected(long index)
@@ -413,7 +413,7 @@ public partial class SettingsVideoOutput : ScrollContainer
         bool atDefault = _globalData.Settings.OutputVSyncMode == AppSettings.DefaultOutputVSyncMode;
         _vsyncResetButton.Visible = !atDefault;
         if (!atDefault)
-            _vsyncResetButton.TooltipText = "Reset to default: Prefer VSync";
+            _vsyncResetButton.TooltipText = UiLocalizer.T("Reset to default: Prefer VSync");
     }
 
     /// <summary>

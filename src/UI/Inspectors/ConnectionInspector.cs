@@ -148,7 +148,7 @@ public partial class ConnectionInspector : Control
             // Load options button in Blank Connection Card (OSC / cue lights / session MIDI outputs).
             _availableConnectionsButton.Clear();
             _availableConnectionsButton.Disabled = false;
-            _availableConnectionsButton.AddItem("Select Connection");
+            _availableConnectionsButton.AddItem(UiLocalizer.T("Select Connection"));
 
             int index = 1;
             var availableConnections = _globalData.GetAvailableConnections();
@@ -193,7 +193,7 @@ public partial class ConnectionInspector : Control
             {
                 // Only the placeholder was added.
                 _availableConnectionsButton.Clear();
-                _availableConnectionsButton.AddItem("No available connections");
+                _availableConnectionsButton.AddItem(UiLocalizer.T("No available connections"));
                 _availableConnectionsButton.Disabled = true;
             }
             else
@@ -270,7 +270,7 @@ public partial class ConnectionInspector : Control
         else
         {
             countInLineEdit.Text = "";
-            countInLineEdit.PlaceholderText = "(Pre-Wait)";
+            countInLineEdit.PlaceholderText = UiLocalizer.T("(Pre-Wait)");
         }
         
         

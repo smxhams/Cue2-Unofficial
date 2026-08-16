@@ -120,22 +120,8 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_resetUserDataButton = GetNode<Button>("%ResetUserDataButton");
 		_resetUserDataButton.Pressed += OnResetUserDataButtonPressed;
 
-		_resetUserDataDialog = new ConfirmationDialog
-		{
-			Title = "Reset User Data",
-			OkButtonText = "Reset",
-			CancelButtonText = "Cancel",
-			DialogText =
-				"Reset all Cue2 preferences stored for this user?\n\n" +
-				"This will restore defaults for:\n" +
-				"• Language, UI scale, startup, autosave, backup, undo, and log session settings\n" +
-				"• Keyboard shortcuts (Input Map)\n" +
-				"• Recent show files list\n" +
-				"• Remembered window sizes and positions\n" +
-				"• Shell column widths\n\n" +
-				"Show files on disk are not deleted.\n" +
-				"This cannot be undone."
-		};
+		_resetUserDataDialog = new ConfirmationDialog();
+		ApplyResetUserDataDialogText();
 		_resetUserDataDialog.Confirmed += OnResetUserDataConfirmed;
 		AddChild(_resetUserDataDialog);
 
@@ -313,7 +299,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		bool atDefault = Mathf.IsEqualApprox(_globalData.UserDataManager.UiScale, UserDataManager.DefaultUiScale);
 		_uiScaleResetButton.Visible = !atDefault;
 		if (!atDefault)
-			_uiScaleResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUiScale * 100f:0}%";
+			_uiScaleResetButton.TooltipText = UiLocalizer.ResetDefaultTip($"{UserDataManager.DefaultUiScale * 100f:0}%");
 	}
 
 	/// <summary>
@@ -373,6 +359,18 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		LocalizeTree(this);
 		ApplyLocalizedLanguageUi();
 		UpdateLanguageResetButton();
+		ApplyResetUserDataDialogText();
+	}
+
+	private void ApplyResetUserDataDialogText()
+	{
+		if (_resetUserDataDialog == null)
+			return;
+		_resetUserDataDialog.Title = T("Reset User Data");
+		_resetUserDataDialog.OkButtonText = T("Reset");
+		_resetUserDataDialog.CancelButtonText = T("Cancel");
+		_resetUserDataDialog.DialogText = T(
+			"Reset all Cue2 preferences stored for this user?\n\nThis will restore defaults for:\n• Language, UI scale, startup, autosave, backup, undo, and log session settings\n• Keyboard shortcuts (Input Map)\n• Recent show files list\n• Remembered window sizes and positions\n• Shell column widths\n\nShow files on disk are not deleted.\nThis cannot be undone.");
 	}
 
 	private void OnStartupItemSelected(long index)
@@ -493,7 +491,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			string defaultText = UserDataManager.DefaultStartupBehavior == UserDataManager.StartupBehavior.OpenLastShowfile 
 				? "Open last showfile" 
 				: "New showfile";
-			_startupResetButton.TooltipText = $"Reset to default: {defaultText}";
+			_startupResetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
 		}
 	}
 
@@ -506,7 +504,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 
 		if (!atDefault)
 		{
-			_autosaveResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultAutosaveInterval}";
+			_autosaveResetButton.TooltipText = UiLocalizer.ResetDefaultTip(UserDataManager.DefaultAutosaveInterval);
 		}
 	}
 
@@ -528,7 +526,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 
 		if (!atDefault)
 		{
-			_backupResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultBackupDepth}";
+			_backupResetButton.TooltipText = UiLocalizer.ResetDefaultTip(UserDataManager.DefaultBackupDepth);
 		}
 	}
 
@@ -561,7 +559,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 
 		if (!atDefault)
 		{
-			_undoDepthResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUndoDepth}";
+			_undoDepthResetButton.TooltipText = UiLocalizer.ResetDefaultTip(UserDataManager.DefaultUndoDepth);
 		}
 	}
 
@@ -597,7 +595,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		if (!atDefault)
 		{
 			_logSessionDepthResetButton.TooltipText =
-				$"Reset to default: {UserDataManager.DefaultLogSessionDepth}";
+				UiLocalizer.ResetDefaultTip(UserDataManager.DefaultLogSessionDepth);
 		}
 	}
 

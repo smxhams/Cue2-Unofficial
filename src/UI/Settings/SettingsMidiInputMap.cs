@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Settings;
@@ -54,6 +55,8 @@ public partial class SettingsMidiInputMap : ScrollContainer
             _historyManager.HistoryRestored += OnHistoryRestored;
         if (_midiManager != null)
             _midiManager.MidiStateChanged += OnMidiStateChanged;
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged += OnLocaleChanged;
 
         if (IsVisibleInTree())
             PopulateActions();
@@ -66,6 +69,8 @@ public partial class SettingsMidiInputMap : ScrollContainer
             _historyManager.HistoryRestored -= OnHistoryRestored;
         if (_midiManager != null)
             _midiManager.MidiStateChanged -= OnMidiStateChanged;
+        if (_globalSignals != null)
+            _globalSignals.LocaleChanged -= OnLocaleChanged;
         ClearCards();
         base._ExitTree();
     }
@@ -92,6 +97,27 @@ public partial class SettingsMidiInputMap : ScrollContainer
         // Bindings may have been set programmatically; refresh labels if visible.
         if (!Visible || _historyManager?.IsRestoring == true) return;
         RefreshAllCardDisplays();
+    }
+
+    private void OnLocaleChanged(string localeCode)
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+        UiLocalizer.LocalizeTree(this);
+        RelocalizeCategoryHeaders();
+        RefreshAllCardDisplays();
+    }
+
+    private void RelocalizeCategoryHeaders()
+    {
+        foreach (var section in _sectionByAction.Values.Distinct())
+        {
+            if (section?.Header == null || !GodotObject.IsInstanceValid(section.Header))
+                continue;
+            section.Header.Text = section.Expanded
+                ? $"▼  {UiLocalizer.T(section.Title)}"
+                : $"▶  {UiLocalizer.T(section.Title)}";
+        }
     }
 
     private void ClearCards()
@@ -160,7 +186,7 @@ public partial class SettingsMidiInputMap : ScrollContainer
         sectionRoot.AddThemeConstantOverride("separation", 2);
 
         var header = new Button();
-        header.Text = $"▼  {categoryTitle}";
+        header.Text = $"▼  {UiLocalizer.T(categoryTitle)}";
         header.Alignment = HorizontalAlignment.Left;
         header.Flat = true;
         header.FocusMode = FocusModeEnum.None;
@@ -187,7 +213,9 @@ public partial class SettingsMidiInputMap : ScrollContainer
         {
             section.Expanded = !section.Expanded;
             content.Visible = section.Expanded;
-            header.Text = section.Expanded ? $"▼  {section.Title}" : $"▶  {section.Title}";
+            header.Text = section.Expanded
+                ? $"▼  {UiLocalizer.T(section.Title)}"
+                : $"▶  {UiLocalizer.T(section.Title)}";
         };
 
         sectionRoot.AddChild(header);
@@ -233,7 +261,7 @@ public partial class SettingsMidiInputMap : ScrollContainer
             {
                 section.Expanded = true;
                 section.Content.Visible = true;
-                section.Header.Text = $"▼  {section.Title}";
+                section.Header.Text = $"▼  {UiLocalizer.T(section.Title)}";
             }
         }
 

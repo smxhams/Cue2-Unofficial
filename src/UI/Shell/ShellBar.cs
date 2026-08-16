@@ -608,7 +608,7 @@ public partial class ShellBar : PanelContainer
 		_issueIndicator.Text = string.Empty;
 		_issueIndicator.Icon = hasIssue ? GetThemeIcon("Stop", "AtlasIcons") : null;
 		_issueIndicator.TooltipText = hasIssue
-			? (string.IsNullOrEmpty(message) ? "Issue" : message)
+			? (string.IsNullOrEmpty(message) ? UiLocalizer.T("Issue") : message)
 			: string.Empty;
 		_issueIndicator.MouseFilter = hasIssue
 			? MouseFilterEnum.Stop
@@ -884,7 +884,7 @@ public partial class ShellBar : PanelContainer
 			{
 				_memoLineEdit.Text = FlattenNotesForShell(_cue?.Notes);
 				_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue?.Notes)
-					? "Memo cue — double-click to edit notes."
+					? UiLocalizer.T("Memo cue — double-click to edit notes.")
 					: _cue.Notes;
 			}
 		}
@@ -906,7 +906,7 @@ public partial class ShellBar : PanelContainer
 			return;
 		_memoLineEdit.Text = FlattenNotesForShell(notes);
 		_memoLineEdit.TooltipText = string.IsNullOrEmpty(notes)
-			? "Memo cue — double-click to edit notes."
+			? UiLocalizer.T("Memo cue — double-click to edit notes.")
 			: notes;
 	}
 
@@ -937,8 +937,8 @@ public partial class ShellBar : PanelContainer
 		// Content duration field already updated via DurationChanged; keep tooltip with total
 		if (_durationLineEdit != null && _cue != null)
 			_durationLineEdit.TooltipText = _cue.TotalDuration < 0
-				? "Looping"
-				: $"Total (with waits): {UiUtilities.FormatTime(_cue.TotalDuration)}";
+				? UiLocalizer.T("Looping")
+				: UiLocalizer.Tf("Total (with waits): {0}", UiUtilities.FormatTime(_cue.TotalDuration));
 	}
 
 	private void UpdatePreWait(double preWait)

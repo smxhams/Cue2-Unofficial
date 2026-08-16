@@ -295,7 +295,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             if (_imageDurationInput != null)
             {
                 if (s.VideoDefaultImageDuration <= 0)
-                    _imageDurationInput.Text = "Until stopped";
+                    _imageDurationInput.Text = UiLocalizer.T("Until stopped");
                 else
                     _imageDurationInput.Text = UiUtilities.FormatTime(s.VideoDefaultImageDuration);
             }
@@ -382,7 +382,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             s.VideoDefaultTargetLayerMode, s.VideoDefaultTargetLayerId);
         _targetLayerResetButton.Visible = !atDefault;
         if (!atDefault)
-            _targetLayerResetButton.TooltipText = "Reset to default: First available layer";
+            _targetLayerResetButton.TooltipText = UiLocalizer.T("Reset to default: First available layer");
     }
 
     private void OnAudioOutputSelected(long index)
@@ -435,7 +435,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             s.VideoDefaultOutputMode, s.VideoDefaultPatchId, s.VideoDefaultDirectOutput);
         _audioOutputResetButton.Visible = !atDefault;
         if (!atDefault)
-            _audioOutputResetButton.TooltipText = "Reset to default: Preferred (Default Patch)";
+            _audioOutputResetButton.TooltipText = UiLocalizer.T("Reset to default: Preferred (Default Patch)");
     }
 
     // ── Expand / Stretch ───────────────────────────────────────────────────
@@ -478,7 +478,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
                          == AppSettings.SystemDefaultVideoExpandMode;
         _expandResetButton.Visible = !atDefault;
         if (!atDefault)
-            _expandResetButton.TooltipText = "Reset to default: Ignore Size";
+            _expandResetButton.TooltipText = UiLocalizer.T("Reset to default: Ignore Size");
     }
 
     private void OnStretchSelected(long index)
@@ -519,7 +519,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
                          == AppSettings.SystemDefaultVideoStretchMode;
         _stretchResetButton.Visible = !atDefault;
         if (!atDefault)
-            _stretchResetButton.TooltipText = "Reset to default: Keep Aspect Centered";
+            _stretchResetButton.TooltipText = UiLocalizer.T("Reset to default: Keep Aspect Centered");
     }
 
     // ── Opacity ────────────────────────────────────────────────────────────
@@ -583,7 +583,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
                                   - AppSettings.SystemDefaultVideoOpacity) < 1e-4f;
         _opacityResetButton.Visible = !atDefault;
         if (!atDefault)
-            _opacityResetButton.TooltipText = "Reset to default: 100%";
+            _opacityResetButton.TooltipText = UiLocalizer.T("Reset to default: 100%");
     }
 
     // ── Loop / play count ──────────────────────────────────────────────────
@@ -623,7 +623,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _loopResetButton.Visible = !atDefault;
         if (!atDefault)
             _loopResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultVideoLoop ? "On" : "Off")}";
+                UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultVideoLoop ? "On" : "Off"));
     }
 
     private void OnPlayCountSubmitted(string text) => CommitPlayCount(text);
@@ -680,7 +680,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _playCountResetButton.Visible = !atDefault;
         if (!atDefault)
             _playCountResetButton.TooltipText =
-                $"Reset to default: {AppSettings.SystemDefaultVideoPlayCount}";
+                UiLocalizer.ResetDefaultTip(AppSettings.SystemDefaultVideoPlayCount);
     }
 
     // ── Use audio / volume / pan ───────────────────────────────────────────
@@ -721,7 +721,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _useAudioResetButton.Visible = !atDefault;
         if (!atDefault)
             _useAudioResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultVideoUseAudio ? "On" : "Off")}";
+                UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultVideoUseAudio ? "On" : "Off"));
     }
 
     private void OnAudioVolumeSubmitted(string text) => CommitAudioVolume(text);
@@ -891,7 +891,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
         _panResetButton.Visible = !atDefault;
         if (!atDefault)
             _panResetButton.TooltipText =
-                $"Reset to default: {UiUtilities.FormatPan(AppSettings.SystemDefaultVideoPan)}";
+                UiLocalizer.ResetDefaultTip(UiUtilities.FormatPan(AppSettings.SystemDefaultVideoPan));
     }
 
     // ── Image duration ─────────────────────────────────────────────────────
@@ -916,7 +916,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             || trimmed.Equals("inf", StringComparison.OrdinalIgnoreCase))
         {
             seconds = 0;
-            _imageDurationInput.Text = "Until stopped";
+            _imageDurationInput.Text = UiLocalizer.T("Until stopped");
         }
         else
         {
@@ -927,14 +927,14 @@ public partial class SettingsVideoDefaults : ScrollContainer
                     $"Invalid default image duration: {text}", 1);
                 double cur = _globalData.Settings.VideoDefaultImageDuration;
                 _imageDurationInput.Text = cur <= 0
-                    ? "Until stopped"
+                    ? UiLocalizer.T("Until stopped")
                     : UiUtilities.FormatTime(cur);
                 return;
             }
 
             seconds = Math.Max(0.0, seconds);
             if (seconds <= 0)
-                _imageDurationInput.Text = "Until stopped";
+                _imageDurationInput.Text = UiLocalizer.T("Until stopped");
             else
             {
                 _imageDurationInput.Text = formatted;
@@ -975,7 +975,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             (float)AppSettings.SystemDefaultVideoImageDuration);
         _imageDurationResetButton.Visible = !atDefault;
         if (!atDefault)
-            _imageDurationResetButton.TooltipText = "Reset to default: Until stopped (images only)";
+            _imageDurationResetButton.TooltipText = UiLocalizer.T("Reset to default: Until stopped (images only)");
     }
 
     // ── Fades ──────────────────────────────────────────────────────────────
@@ -1034,7 +1034,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             _globalData.Settings.VideoDefaultFadeIn, AppSettings.SystemDefaultVideoFadeIn);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeInResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeIn)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeIn)));
     }
 
     private void UpdateFadeOutResetButton()
@@ -1044,7 +1044,7 @@ public partial class SettingsVideoDefaults : ScrollContainer
             _globalData.Settings.VideoDefaultFadeOut, AppSettings.SystemDefaultVideoFadeOut);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeOutResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeOut)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultVideoFadeOut)));
     }
 
     /// <summary>

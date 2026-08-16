@@ -269,7 +269,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             if (_durationInput != null)
             {
                 if (s.TextDefaultDuration <= 0)
-                    _durationInput.Text = "Until stopped";
+                    _durationInput.Text = UiLocalizer.T("Until stopped");
                 else
                     _durationInput.Text = UiUtilities.FormatTime(s.TextDefaultDuration);
             }
@@ -393,7 +393,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             s.TextDefaultTargetLayerMode, s.TextDefaultTargetLayerId);
         _targetLayerResetButton.Visible = !atDefault;
         if (!atDefault)
-            _targetLayerResetButton.TooltipText = "Reset to default: First available layer";
+            _targetLayerResetButton.TooltipText = UiLocalizer.T("Reset to default: First available layer");
     }
 
     // ── Duration ───────────────────────────────────────────────────────────
@@ -417,7 +417,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             || trimmed.Equals("0", StringComparison.OrdinalIgnoreCase))
         {
             seconds = 0;
-            _durationInput.Text = "Until stopped";
+            _durationInput.Text = UiLocalizer.T("Until stopped");
         }
         else
         {
@@ -427,13 +427,13 @@ public partial class SettingsTextDefaults : ScrollContainer
                 _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                     $"Invalid default text duration: {text}", 1);
                 double cur = _globalData.Settings.TextDefaultDuration;
-                _durationInput.Text = cur <= 0 ? "Until stopped" : UiUtilities.FormatTime(cur);
+                _durationInput.Text = cur <= 0 ? UiLocalizer.T("Until stopped") : UiUtilities.FormatTime(cur);
                 return;
             }
 
             seconds = Math.Max(0.0, seconds);
             if (seconds <= 0)
-                _durationInput.Text = "Until stopped";
+                _durationInput.Text = UiLocalizer.T("Until stopped");
             else
             {
                 _durationInput.Text = formatted;
@@ -474,7 +474,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             (float)AppSettings.SystemDefaultTextDuration);
         _durationResetButton.Visible = !atDefault;
         if (!atDefault)
-            _durationResetButton.TooltipText = "Reset to default: Until stopped";
+            _durationResetButton.TooltipText = UiLocalizer.T("Reset to default: Until stopped");
     }
 
     // ── Opacity ────────────────────────────────────────────────────────────
@@ -517,7 +517,7 @@ public partial class SettingsTextDefaults : ScrollContainer
                                   - AppSettings.SystemDefaultTextOpacity) < 1e-4f;
         _opacityResetButton.Visible = !atDefault;
         if (!atDefault)
-            _opacityResetButton.TooltipText = "Reset to default: 100%";
+            _opacityResetButton.TooltipText = UiLocalizer.T("Reset to default: 100%");
     }
 
     // ── BBCode ─────────────────────────────────────────────────────────────
@@ -558,7 +558,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _bbcodeResetButton.Visible = !atDefault;
         if (!atDefault)
             _bbcodeResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultTextUseBbcode ? "On" : "Off")}";
+                UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultTextUseBbcode ? "On" : "Off"));
     }
 
     // ── Font name / size / colour ──────────────────────────────────────────
@@ -611,7 +611,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             AppSettings.SystemDefaultTextFontName, StringComparison.Ordinal);
         _fontNameResetButton.Visible = !atDefault;
         if (!atDefault)
-            _fontNameResetButton.TooltipText = "Reset to default: theme font";
+            _fontNameResetButton.TooltipText = UiLocalizer.T("Reset to default: theme font");
     }
 
     private void OnFontSizeChanged(double value)
@@ -652,7 +652,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _fontSizeResetButton.Visible = !atDefault;
         if (!atDefault)
             _fontSizeResetButton.TooltipText =
-                $"Reset to default: {AppSettings.SystemDefaultTextFontSize}";
+                UiLocalizer.ResetDefaultTip(AppSettings.SystemDefaultTextFontSize);
     }
 
     private void OnFontColorPopupClosed()
@@ -692,7 +692,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             .IsEqualApprox(AppSettings.SystemDefaultTextFontColor);
         _fontColorResetButton.Visible = !atDefault;
         if (!atDefault)
-            _fontColorResetButton.TooltipText = "Reset to default: white";
+            _fontColorResetButton.TooltipText = UiLocalizer.T("Reset to default: white");
     }
 
     // ── Alignment ──────────────────────────────────────────────────────────
@@ -733,7 +733,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         bool atDefault = _globalData.Settings.TextDefaultHAlign == AppSettings.SystemDefaultTextHAlign;
         _hAlignResetButton.Visible = !atDefault;
         if (!atDefault)
-            _hAlignResetButton.TooltipText = "Reset to default: Center";
+            _hAlignResetButton.TooltipText = UiLocalizer.T("Reset to default: Center");
     }
 
     private void OnVAlignSelected(long index)
@@ -772,7 +772,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         bool atDefault = _globalData.Settings.TextDefaultVAlign == AppSettings.SystemDefaultTextVAlign;
         _vAlignResetButton.Visible = !atDefault;
         if (!atDefault)
-            _vAlignResetButton.TooltipText = "Reset to default: Center";
+            _vAlignResetButton.TooltipText = UiLocalizer.T("Reset to default: Center");
     }
 
     // ── Autowrap / margins ─────────────────────────────────────────────────
@@ -813,7 +813,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _autowrapResetButton.Visible = !atDefault;
         if (!atDefault)
             _autowrapResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultTextAutowrap ? "On" : "Off")}";
+                UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultTextAutowrap ? "On" : "Off"));
     }
 
     private void OnMarginsChanged(double value)
@@ -854,7 +854,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _marginsResetButton.Visible = !atDefault;
         if (!atDefault)
             _marginsResetButton.TooltipText =
-                $"Reset to default: {AppSettings.SystemDefaultTextMargins}";
+                UiLocalizer.ResetDefaultTip(AppSettings.SystemDefaultTextMargins);
     }
 
     // ── Outline ────────────────────────────────────────────────────────────
@@ -897,7 +897,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _outlineSizeResetButton.Visible = !atDefault;
         if (!atDefault)
             _outlineSizeResetButton.TooltipText =
-                $"Reset to default: {AppSettings.SystemDefaultTextOutlineSize}";
+                UiLocalizer.ResetDefaultTip(AppSettings.SystemDefaultTextOutlineSize);
     }
 
     private void OnOutlineColorPopupClosed()
@@ -938,7 +938,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             .IsEqualApprox(AppSettings.SystemDefaultTextOutlineColor);
         _outlineColorResetButton.Visible = !atDefault;
         if (!atDefault)
-            _outlineColorResetButton.TooltipText = "Reset to default: black";
+            _outlineColorResetButton.TooltipText = UiLocalizer.T("Reset to default: black");
     }
 
     // ── Background ─────────────────────────────────────────────────────────
@@ -981,7 +981,7 @@ public partial class SettingsTextDefaults : ScrollContainer
         _backgroundResetButton.Visible = !atDefault;
         if (!atDefault)
             _backgroundResetButton.TooltipText =
-                $"Reset to default: {(AppSettings.SystemDefaultTextBackgroundEnabled ? "On" : "Off")}";
+                UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultTextBackgroundEnabled ? "On" : "Off"));
     }
 
     private void OnBackgroundColorPopupClosed()
@@ -1023,7 +1023,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             .IsEqualApprox(AppSettings.SystemDefaultTextBackgroundColor);
         _backgroundColorResetButton.Visible = !atDefault;
         if (!atDefault)
-            _backgroundColorResetButton.TooltipText = "Reset to default background colour";
+            _backgroundColorResetButton.TooltipText = UiLocalizer.T("Reset to default background colour");
     }
 
     // ── Fades ──────────────────────────────────────────────────────────────
@@ -1082,7 +1082,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             _globalData.Settings.TextDefaultFadeIn, AppSettings.SystemDefaultTextFadeIn);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeInResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeIn)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeIn)));
     }
 
     private void UpdateFadeOutResetButton()
@@ -1092,7 +1092,7 @@ public partial class SettingsTextDefaults : ScrollContainer
             _globalData.Settings.TextDefaultFadeOut, AppSettings.SystemDefaultTextFadeOut);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeOutResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeOut)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultTextFadeOut)));
     }
 
     /// <summary>

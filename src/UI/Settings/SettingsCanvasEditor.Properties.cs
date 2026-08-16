@@ -17,6 +17,7 @@ using Cue2.Domain.Commands;
 using Cue2.Services;
 using Cue2.UI.Popups;
 
+using Cue2.UI.Utilities;
 namespace Cue2.UI.Settings;
 
 /// <summary>
@@ -53,7 +54,7 @@ public partial class SettingsCanvasEditor
                 break;
             default:
                 _emptyPropsLabel.Visible = true;
-                _emptyPropsLabel.Text = "Select Canvas, a Screen, or a Target Layer.";
+                _emptyPropsLabel.Text = UiLocalizer.T("Select Canvas, a Screen, or a Target Layer.");
                 break;
         }
     }
@@ -118,11 +119,11 @@ public partial class SettingsCanvasEditor
             {
                 _outputProps.Visible = false;
                 _emptyPropsLabel.Visible = true;
-                _emptyPropsLabel.Text = "Screen not found.";
+                _emptyPropsLabel.Text = UiLocalizer.T("Screen not found.");
                 return;
             }
 
-            _outputPropsTitle.Text = "Screen";
+            _outputPropsTitle.Text = UiLocalizer.T("Screen");
             _screenNameLineEdit.Text = screen.OutputName;
             _outputPosXLineEdit.Text = screen.CanvasPosition.X.ToString();
             _outputPosYLineEdit.Text = screen.CanvasPosition.Y.ToString();
@@ -140,7 +141,7 @@ public partial class SettingsCanvasEditor
 
             if (screen.IsVirtual)
             {
-                _outputResolutionLabel.Text = "Virtual Output — not shown on a physical display";
+                _outputResolutionLabel.Text = UiLocalizer.T("Virtual Output — not shown on a physical display");
             }
             else if (screen.IsWindow)
             {
@@ -188,10 +189,10 @@ public partial class SettingsCanvasEditor
         _outputOptionMonitorMap.Clear();
 
         // Destination options: Virtual, Window, then physical displays.
-        _screenOutputOption.AddItem("Virtual Output");
+        UiLocalizer.AddTranslatedItem(_screenOutputOption, "Virtual Output");
         _outputOptionMonitorMap.Add(VideoOutputDevice.VirtualMonitorIndex);
 
-        _screenOutputOption.AddItem("Window");
+        UiLocalizer.AddTranslatedItem(_screenOutputOption, "Window");
         _outputOptionMonitorMap.Add(VideoOutputDevice.WindowMonitorIndex);
 
         var displays = _displaysManager.GetAvailableDisplays();
@@ -231,19 +232,19 @@ public partial class SettingsCanvasEditor
 
         if (screen != null && screen.IsWindow)
         {
-            offsetLabel.Text = "Window Position";
+            offsetLabel.Text = UiLocalizer.T("Window Position");
             if (_displayOffsetXLineEdit != null)
-                _displayOffsetXLineEdit.TooltipText = "Desktop X position of the portable window";
+                _displayOffsetXLineEdit.TooltipText = UiLocalizer.T("Desktop X position of the portable window");
             if (_displayOffsetYLineEdit != null)
-                _displayOffsetYLineEdit.TooltipText = "Desktop Y position of the portable window";
+                _displayOffsetYLineEdit.TooltipText = UiLocalizer.T("Desktop Y position of the portable window");
         }
         else
         {
-            offsetLabel.Text = "Display Offset";
+            offsetLabel.Text = UiLocalizer.T("Display Offset");
             if (_displayOffsetXLineEdit != null)
-                _displayOffsetXLineEdit.TooltipText = "Offset from the target display origin (X)";
+                _displayOffsetXLineEdit.TooltipText = UiLocalizer.T("Offset from the target display origin (X)");
             if (_displayOffsetYLineEdit != null)
-                _displayOffsetYLineEdit.TooltipText = "Offset from the target display origin (Y)";
+                _displayOffsetYLineEdit.TooltipText = UiLocalizer.T("Offset from the target display origin (Y)");
         }
     }
 
@@ -257,7 +258,7 @@ public partial class SettingsCanvasEditor
             {
                 _layerProps.Visible = false;
                 _emptyPropsLabel.Visible = true;
-                _emptyPropsLabel.Text = "Layer not found.";
+                _emptyPropsLabel.Text = UiLocalizer.T("Layer not found.");
                 return;
             }
 

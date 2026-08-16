@@ -175,7 +175,7 @@ public partial class SettingsInputMap : ScrollContainer
         sectionRoot.AddThemeConstantOverride("separation", 2);
 
         var header = new Button();
-        header.Text = $"▼  {categoryTitle}";
+        header.Text = $"▼  {UiLocalizer.T(categoryTitle)}";
         header.Alignment = HorizontalAlignment.Left;
         header.Flat = true;
         header.FocusMode = FocusModeEnum.None;
@@ -202,7 +202,9 @@ public partial class SettingsInputMap : ScrollContainer
         {
             section.Expanded = !section.Expanded;
             content.Visible = section.Expanded;
-            header.Text = section.Expanded ? $"▼  {section.Title}" : $"▶  {section.Title}";
+            header.Text = section.Expanded
+                ? $"▼  {UiLocalizer.T(section.Title)}"
+                : $"▶  {UiLocalizer.T(section.Title)}";
         };
 
         // Attach section to the tree first so card _Ready runs when children are added.
@@ -259,7 +261,7 @@ public partial class SettingsInputMap : ScrollContainer
             {
                 section.Expanded = true;
                 section.Content.Visible = true;
-                section.Header.Text = $"▼  {section.Title}";
+                section.Header.Text = $"▼  {UiLocalizer.T(section.Title)}";
             }
         }
 
@@ -301,6 +303,24 @@ public partial class SettingsInputMap : ScrollContainer
         if (!GodotObject.IsInstanceValid(this))
             return;
         UiLocalizer.LocalizeTree(this);
+        RelocalizeCategoryHeaders();
+        foreach (var card in _cardsByAction.Values)
+        {
+            if (card != null && GodotObject.IsInstanceValid(card))
+                card.RefreshDisplay();
+        }
+    }
+
+    private void RelocalizeCategoryHeaders()
+    {
+        foreach (var section in _sectionByAction.Values.Distinct())
+        {
+            if (section?.Header == null || !GodotObject.IsInstanceValid(section.Header))
+                continue;
+            section.Header.Text = section.Expanded
+                ? $"▼  {UiLocalizer.T(section.Title)}"
+                : $"▶  {UiLocalizer.T(section.Title)}";
+        }
     }
 
 }

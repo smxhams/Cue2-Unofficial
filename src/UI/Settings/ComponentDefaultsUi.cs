@@ -128,9 +128,8 @@ public static class ComponentDefaultsUi
     public static void AddOptionItem(OptionButton button, string label, int metadata)
     {
         if (button == null) return;
-        int index = button.ItemCount;
-        button.AddItem(label);
-        button.SetItemMetadata(index, metadata);
+        UiLocalizer.AddTranslatedItem(button, label);
+        button.SetItemMetadata(button.ItemCount - 1, metadata);
     }
 
     /// <summary>

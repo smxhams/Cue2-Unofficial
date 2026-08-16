@@ -268,7 +268,9 @@ public partial class SettingsCueLights : ScrollContainer
         {
             _ = cueLight.PingAsync();
             connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;
-            connectionStatusColourRect.TooltipText = cueLight.CueLightIsConnected ? "Connected" : "Disconnected";
+            connectionStatusColourRect.TooltipText = cueLight.CueLightIsConnected
+                ? UiLocalizer.T("Connected")
+                : UiLocalizer.T("Disconnected");
         };
         
         var identifyButton = instance.GetNode<Button>("%IdentifyButton");

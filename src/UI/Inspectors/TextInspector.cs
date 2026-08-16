@@ -293,15 +293,15 @@ public partial class TextInspector : Control
             return;
 
         _hAlignOption.Clear();
-        _hAlignOption.AddItem("Left", (int)HorizontalAlignment.Left);
-        _hAlignOption.AddItem("Center", (int)HorizontalAlignment.Center);
-        _hAlignOption.AddItem("Right", (int)HorizontalAlignment.Right);
-        _hAlignOption.AddItem("Fill", (int)HorizontalAlignment.Fill);
+        UiLocalizer.AddTranslatedItem(_hAlignOption, "Left", (int)HorizontalAlignment.Left);
+        UiLocalizer.AddTranslatedItem(_hAlignOption, "Center", (int)HorizontalAlignment.Center);
+        UiLocalizer.AddTranslatedItem(_hAlignOption, "Right", (int)HorizontalAlignment.Right);
+        UiLocalizer.AddTranslatedItem(_hAlignOption, "Fill", (int)HorizontalAlignment.Fill);
 
         _vAlignOption.Clear();
-        _vAlignOption.AddItem("Top", (int)VerticalAlignment.Top);
-        _vAlignOption.AddItem("Center", (int)VerticalAlignment.Center);
-        _vAlignOption.AddItem("Bottom", (int)VerticalAlignment.Bottom);
+        UiLocalizer.AddTranslatedItem(_vAlignOption, "Top", (int)VerticalAlignment.Top);
+        UiLocalizer.AddTranslatedItem(_vAlignOption, "Center", (int)VerticalAlignment.Center);
+        UiLocalizer.AddTranslatedItem(_vAlignOption, "Bottom", (int)VerticalAlignment.Bottom);
         // Godot VerticalAlignment has no Fill in all versions; skip if undefined.
 
         _alignOptionsReady = true;
@@ -367,7 +367,7 @@ public partial class TextInspector : Control
         {
             _fontOption.Clear();
             // Index 0 = theme default (empty FontName).
-            _fontOption.AddItem("Default");
+            UiLocalizer.AddTranslatedItem(_fontOption, "Default");
             _fontOption.SetItemMetadata(0, string.Empty);
 
             bool uniformFont = InspectorMultiEditSupport.TryGetUniformString(
@@ -616,23 +616,23 @@ public partial class TextInspector : Control
         if (linked)
         {
             _contentTextEdit.PlaceholderText =
-                "Closed captions from video will show here during playback (static content is still used in the inspector / when CC is off).";
+                UiLocalizer.T("Closed captions from video will show here during playback (static content is still used in the inspector / when CC is off).");
         }
         else
         {
-            _contentTextEdit.PlaceholderText = "Enter overlay text…";
+            _contentTextEdit.PlaceholderText = UiLocalizer.T("Enter overlay text…");
         }
     }
 
     private void ShowNoSelection()
     {
         _infoLabel.Visible = true;
-        _infoLabel.Text = "No shell selected";
+        _infoLabel.Text = UiLocalizer.T("No shell selected");
         _infoLabel.TooltipText = string.Empty;
         _emptyState.Visible = false;
         _contentRoot.Visible = false;
         if (_addTextButton != null)
-            _addTextButton.Text = "Add Text Component";
+            _addTextButton.Text = UiLocalizer.T("Add Text Component");
         ClearPreview();
     }
 
@@ -643,7 +643,7 @@ public partial class TextInspector : Control
         _emptyState.Visible = true;
         _contentRoot.Visible = false;
         if (_addTextButton != null)
-            _addTextButton.Text = "Add Text Component";
+            _addTextButton.Text = UiLocalizer.T("Add Text Component");
         ClearPreview();
     }
 
@@ -654,9 +654,9 @@ public partial class TextInspector : Control
     {
         int selected = InspectorMultiEditSupport.GetSelectedCues().Count;
         _infoLabel.Visible = true;
-        _infoLabel.Text = $"No text on {selected} selected cue(s)";
+        _infoLabel.Text = UiLocalizer.Tf("No text on {0} selected cue(s)", selected);
         _infoLabel.TooltipText =
-            "None of the selected cues have a text component. Add text to all selected cues.";
+            UiLocalizer.T("None of the selected cues have a text component. Add text to all selected cues.");
         _emptyState.Visible = true;
         _contentRoot.Visible = false;
         if (_addTextButton != null)
@@ -671,9 +671,9 @@ public partial class TextInspector : Control
         _emptyState.Visible = false;
         _contentRoot.Visible = true;
         if (_addTextButton != null)
-            _addTextButton.Text = "Add Text Component";
+            _addTextButton.Text = UiLocalizer.T("Add Text Component");
         if (_deleteTextButton != null)
-            _deleteTextButton.TooltipText = "Remove text component from this cue";
+            _deleteTextButton.TooltipText = UiLocalizer.T("Remove text component from this cue");
     }
 
     private void ShowContentMulti()
@@ -693,13 +693,13 @@ public partial class TextInspector : Control
         if (_addTextButton != null)
         {
             _addTextButton.Text = missing > 0
-                ? $"Add Text to {missing} Missing Cue(s)"
+                ? UiLocalizer.Tf("Add Text to {0} Missing Cue(s)", missing)
                 : "Add Text Component";
             _addTextButton.Visible = true;
         }
 
         if (_deleteTextButton != null)
-            _deleteTextButton.TooltipText = $"Remove text component from {withText} cue(s)";
+            _deleteTextButton.TooltipText = UiLocalizer.Tf("Remove text component from {0} cue(s)", withText);
     }
 
     private void ClearPreview()
@@ -756,7 +756,7 @@ public partial class TextInspector : Control
                 if (dur <= 0)
                 {
                     _durationLineEdit.Text = "0 (until stopped)";
-                    _durationLineEdit.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+                    _durationLineEdit.TooltipText = UiLocalizer.T("0 = stay active until stopped. Enter a time to auto-end.");
                 }
                 else
                 {
@@ -909,7 +909,7 @@ public partial class TextInspector : Control
         try
         {
             _targetLayerOption.Clear();
-            _targetLayerOption.AddItem("No Output");
+            _targetLayerOption.AddItem(UiLocalizer.T("No Output"));
             _targetLayerOption.SetItemMetadata(0, -1);
 
             bool uniformLayer = InspectorMultiEditSupport.TryGetUniform(
@@ -1231,7 +1231,7 @@ public partial class TextInspector : Control
                 if (dur <= 0)
                 {
                     _durationLineEdit.Text = "0 (until stopped)";
-                    _durationLineEdit.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+                    _durationLineEdit.TooltipText = UiLocalizer.T("0 = stay active until stopped. Enter a time to auto-end.");
                 }
                 else
                 {

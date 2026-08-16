@@ -120,19 +120,19 @@ public partial class ShellBar
 		if (locked)
 		{
 			// Show Mode: copy is read-only; mutating actions are omitted.
-			AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
+			AddContextMenuItem(UiLocalizer.T("Copy"), "CopySelectedCues", ShellContextMenuId.Copy);
 		}
 		else
 		{
-			AddContextMenuItem("Cut", "CutSelectedCues", ShellContextMenuId.Cut);
-			AddContextMenuItem("Copy", "CopySelectedCues", ShellContextMenuId.Copy);
-			AddContextMenuItem("Paste", "PasteCues", ShellContextMenuId.Paste);
+			AddContextMenuItem(UiLocalizer.T("Cut"), "CutSelectedCues", ShellContextMenuId.Cut);
+			AddContextMenuItem(UiLocalizer.T("Copy"), "CopySelectedCues", ShellContextMenuId.Copy);
+			AddContextMenuItem(UiLocalizer.T("Paste"), "PasteCues", ShellContextMenuId.Paste);
 			_contextMenu.AddSeparator();
-			AddContextMenuItem("Duplicate", "DuplicateSelectedCues", ShellContextMenuId.Duplicate);
-			AddContextMenuItem("Delete", "DeleteCue", ShellContextMenuId.Delete);
+			AddContextMenuItem(UiLocalizer.T("Duplicate"), "DuplicateSelectedCues", ShellContextMenuId.Duplicate);
+			AddContextMenuItem(UiLocalizer.T("Delete"), "DeleteCue", ShellContextMenuId.Delete);
 			_contextMenu.AddSeparator();
-			AddContextMenuItem("Group", "GroupSelectedCues", ShellContextMenuId.Group);
-			AddContextMenuItem("Create Cue", "CreateCue", ShellContextMenuId.CreateCue);
+			AddContextMenuItem(UiLocalizer.T("Group"), "GroupSelectedCues", ShellContextMenuId.Group);
+			AddContextMenuItem(UiLocalizer.T("Create Cue"), "CreateCue", ShellContextMenuId.CreateCue);
 		}
 
 		// Popup at cursor (screen coords — PopupMenu is a Window).

@@ -155,8 +155,8 @@ public partial class ControlComponentCard : PanelContainer
         if (_fadeModeOption != null)
         {
             _fadeModeOption.Clear();
-            _fadeModeOption.AddItem("Absolute", (int)ControlFadeMode.Absolute);
-            _fadeModeOption.AddItem("Relative", (int)ControlFadeMode.Relative);
+            UiLocalizer.AddTranslatedItem(_fadeModeOption, "Absolute", (int)ControlFadeMode.Absolute);
+            UiLocalizer.AddTranslatedItem(_fadeModeOption, "Relative", (int)ControlFadeMode.Relative);
             _fadeModeOption.ItemSelected += OnFadeModeSelected;
         }
 
@@ -266,7 +266,7 @@ public partial class ControlComponentCard : PanelContainer
         // picking, which would leave BaseButton latched and require a second click — same fix as
         // ShellBar reorder grabber (OnDragBarGuiInput / ReleaseDragGrabber).
         _pickTargetButton.Icon = GetThemeIcon("Right", "AtlasIcons");
-        _pickTargetButton.TooltipText = "Hold and release over a cue in the list to set target";
+        _pickTargetButton.TooltipText = UiLocalizer.T("Hold and release over a cue in the list to set target");
         _pickTargetButton.KeepPressedOutside = false;
         _pickTargetButton.GuiInput += OnPickTargetButtonGuiInput;
 
@@ -391,7 +391,7 @@ public partial class ControlComponentCard : PanelContainer
             if (_moveDownButton != null)
                 _moveDownButton.Disabled = _orderIndex >= _orderCount - 1;
 
-            _actionLabel.Text = ControlComponent.GetActionDisplayName(_component.Action).ToUpperInvariant();
+            _actionLabel.Text = UiLocalizer.T(ControlComponent.GetActionDisplayName(_component.Action)).ToUpperInvariant();
 
             bool isTranslate = _component.Action == ControlAction.TranslateLayer;
             bool showCueTarget = !isTranslate;
@@ -440,30 +440,30 @@ public partial class ControlComponentCard : PanelContainer
                 float sessionDefault = _globalData?.Settings?.StopFadeDuration ?? 0f;
                 double displayFade = _component.ResolveStopFadeDuration(sessionDefault);
                 _fadeLineEdit.Text = UiUtilities.FormatTime(displayFade);
-                _fadeLineEdit.PlaceholderText = $"session ({UiUtilities.FormatTime(sessionDefault)})";
+                _fadeLineEdit.PlaceholderText = UiLocalizer.Tf("session ({0})", UiUtilities.FormatTime(sessionDefault));
                 _fadeLineEdit.TooltipText =
-                    "Stop fade-out time. 0 = immediate. Default follows session Stop Fade.";
+                    UiLocalizer.T("Stop fade-out time. 0 = immediate. Default follows session Stop Fade.");
             }
             else if (_component.Action == ControlAction.Go)
             {
                 _fadeLineEdit.Text = UiUtilities.FormatTime(_component.GoFadeInDuration);
-                _fadeLineEdit.PlaceholderText = "0 (no fade-in)";
+                _fadeLineEdit.PlaceholderText = UiLocalizer.T("0 (no fade-in)");
                 _fadeLineEdit.TooltipText =
-                    "GO fade-in time for the target cue. 0 = no control fade-in (default).";
+                    UiLocalizer.T("GO fade-in time for the target cue. 0 = no control fade-in (default).");
             }
             else if (isPropertyFade)
             {
                 _fadeLineEdit.Text = UiUtilities.FormatTime(_component.PropertyFadeDuration);
-                _fadeLineEdit.PlaceholderText = "1.000";
+                _fadeLineEdit.PlaceholderText = UiLocalizer.T("1.000");
                 _fadeLineEdit.TooltipText =
-                    "Property fade duration. 0 = snap immediately. Default 1s.";
+                    UiLocalizer.T("Property fade duration. 0 = snap immediately. Default 1s.");
             }
             else if (isTranslate)
             {
                 _fadeLineEdit.Text = UiUtilities.FormatTime(_component.TranslateDuration);
-                _fadeLineEdit.PlaceholderText = "0 (instant)";
+                _fadeLineEdit.PlaceholderText = UiLocalizer.T("0 (instant)");
                 _fadeLineEdit.TooltipText =
-                    "Layer translate duration. 0 = instant change (default).";
+                    UiLocalizer.T("Layer translate duration. 0 = instant change (default).");
             }
 
             RefreshPropertyFadeUi(isPropertyFade);
@@ -567,7 +567,7 @@ public partial class ControlComponentCard : PanelContainer
         {
             _noFadableLabel.Visible = showNoFadable;
             if (showNoFadable)
-                _noFadableLabel.Text = "No valid fadable properties";
+                _noFadableLabel.Text = UiLocalizer.T("No valid fadable properties");
         }
         if (_noFadableSpacer != null)
             _noFadableSpacer.Visible = showNoFadable;
@@ -624,7 +624,7 @@ public partial class ControlComponentCard : PanelContainer
         for (int i = 0; i < available.Count; i++)
         {
             var prop = available[i];
-            _fadePropertyOption.AddItem(ControlComponent.GetFadePropertyDisplayName(prop), i);
+            UiLocalizer.AddTranslatedItem(_fadePropertyOption, ControlComponent.GetFadePropertyDisplayName(prop), i);
             _fadePropertyOption.SetItemMetadata(i, (int)prop);
             if (prop == selected)
                 selectIdx = i;
@@ -643,8 +643,8 @@ public partial class ControlComponentCard : PanelContainer
                 if (_audioFadeCaption != null)
                 {
                     _audioFadeCaption.Visible = true;
-                    _audioFadeCaption.Text = "Volume:";
-                    _audioFadeCaption.TooltipText = "Overall audio volume (dB). Applies to active playback only.";
+                    _audioFadeCaption.Text = UiLocalizer.T("Volume:");
+                    _audioFadeCaption.TooltipText = UiLocalizer.T("Overall audio volume (dB). Applies to active playback only.");
                 }
                 if (_audioFadeRow != null)
                     _audioFadeRow.Visible = true;
@@ -840,7 +840,7 @@ public partial class ControlComponentCard : PanelContainer
                         ? $"{UiUtilities.LinearToDb(linear)}dB"
                         : string.Empty;
                     volumeEdit.TooltipText =
-                        "Cue's current level. Edit to add this cell to the multi-cell fade set.";
+                        UiLocalizer.T("Cue's current level. Edit to add this cell to the multi-cell fade set.");
                     volumeEdit.Modulate = new Color(0.75f, 0.75f, 0.78f, 1f);
                 }
 
@@ -965,7 +965,7 @@ public partial class ControlComponentCard : PanelContainer
             // Reuse message label for seek-with-no-media (hidden when Fade also active — mutually exclusive).
             _noFadableLabel.Visible = showNoSeekable;
             if (showNoSeekable)
-                _noFadableLabel.Text = "No seekable media on target";
+                _noFadableLabel.Text = UiLocalizer.T("No seekable media on target");
         }
         if (_noFadableSpacer != null)
             _noFadableSpacer.Visible = showNoSeekable;
@@ -1001,7 +1001,7 @@ public partial class ControlComponentCard : PanelContainer
                                    !_component.IsTargetAtDefault;
             _targetResetButton.Visible = showTargetReset;
             if (showTargetReset)
-                _targetResetButton.TooltipText = "Clear target";
+                _targetResetButton.TooltipText = UiLocalizer.T("Clear target");
         }
 
         if (_fadeResetButton != null)
@@ -1018,15 +1018,15 @@ public partial class ControlComponentCard : PanelContainer
                 }
                 else if (_component.Action == ControlAction.Go)
                 {
-                    _fadeResetButton.TooltipText = "Reset fade-in to 0";
+                    _fadeResetButton.TooltipText = UiLocalizer.T("Reset fade-in to 0");
                 }
                 else if (_component.Action == ControlAction.Fade)
                 {
-                    _fadeResetButton.TooltipText = "Reset fade time to 1s";
+                    _fadeResetButton.TooltipText = UiLocalizer.T("Reset fade time to 1s");
                 }
                 else if (_component.Action == ControlAction.TranslateLayer)
                 {
-                    _fadeResetButton.TooltipText = "Reset translate time to 0 (instant)";
+                    _fadeResetButton.TooltipText = UiLocalizer.T("Reset translate time to 0 (instant)");
                 }
             }
         }
@@ -1346,7 +1346,7 @@ public partial class ControlComponentCard : PanelContainer
         if (_targetLayerOption == null || _component == null) return;
 
         _targetLayerOption.Clear();
-        _targetLayerOption.AddItem("(select layer)", 0);
+        UiLocalizer.AddTranslatedItem(_targetLayerOption, "(select layer)", 0);
         _targetLayerOption.SetItemMetadata(0, -1);
 
         int selectedIdx = 0;
@@ -2379,7 +2379,7 @@ public partial class ControlComponentCard : PanelContainer
         {
             if (IsSelfTarget(shell.CueId) && _component?.Action != ControlAction.Fade)
             {
-                _pickBadgeLabel.Text = "Cannot target self";
+                _pickBadgeLabel.Text = UiLocalizer.T("Cannot target self");
             }
             else
             {
@@ -2394,7 +2394,7 @@ public partial class ControlComponentCard : PanelContainer
         }
         else
         {
-            _pickBadgeLabel.Text = "Pick cue…";
+            _pickBadgeLabel.Text = UiLocalizer.T("Pick cue…");
         }
     }
 

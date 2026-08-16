@@ -146,6 +146,35 @@ public partial class LibraryInspector : Control
         if (!GodotObject.IsInstanceValid(this))
             return;
         UiLocalizer.LocalizeTree(this);
+        RelocalizeDialogs();
+    }
+
+    /// <summary>
+    /// Re-applies English-source captions on code-built library dialogs after a locale change.
+    /// </summary>
+    private void RelocalizeDialogs()
+    {
+        if (_saveDialog != null)
+        {
+            _saveDialog.Title = UiLocalizer.T("Save to Library");
+            _saveDialog.OkButtonText = UiLocalizer.T("Save");
+        }
+
+        if (_saveIncludeChildren != null)
+            _saveIncludeChildren.Text = UiLocalizer.T("Include nested children");
+        if (_saveIncludeMedia != null)
+            _saveIncludeMedia.Text = UiLocalizer.T("Copy media into library");
+        if (_saveNameEdit != null)
+            _saveNameEdit.PlaceholderText = UiLocalizer.T("Cue name");
+
+        if (_nameDialog != null)
+            _nameDialog.OkButtonText = UiLocalizer.T("OK");
+
+        if (_confirmDialog != null)
+        {
+            _confirmDialog.Title = UiLocalizer.T("Confirm");
+            _confirmDialog.CancelButtonText = UiLocalizer.T("Cancel");
+        }
     }
 
     /// <summary>
@@ -275,9 +304,9 @@ public partial class LibraryInspector : Control
 
         if (_insertModeOption != null && _insertModeOption.ItemCount == 0)
         {
-            _insertModeOption.AddItem("Below selection", (int)LibraryInsertMode.BelowSelection);
-            _insertModeOption.AddItem("End of list", (int)LibraryInsertMode.End);
-            _insertModeOption.AddItem("As child of selection", (int)LibraryInsertMode.AsChild);
+            UiLocalizer.AddTranslatedItem(_insertModeOption, "Below selection", (int)LibraryInsertMode.BelowSelection);
+            UiLocalizer.AddTranslatedItem(_insertModeOption, "End of list", (int)LibraryInsertMode.End);
+            UiLocalizer.AddTranslatedItem(_insertModeOption, "As child of selection", (int)LibraryInsertMode.AsChild);
             _insertModeOption.Selected = 0;
         }
 
@@ -372,30 +401,30 @@ public partial class LibraryInspector : Control
         // Save options dialog
         _saveDialog = new AcceptDialog
         {
-            Title = "Save to Library",
-            OkButtonText = "Save",
+            Title = UiLocalizer.T("Save to Library"),
+            OkButtonText = UiLocalizer.T("Save"),
             DialogHideOnOk = false
         };
         var saveVBox = new VBoxContainer();
         saveVBox.AddThemeConstantOverride("separation", 8);
 
-        _saveFolderLabel = new Label { Text = "Folder: /" };
+        _saveFolderLabel = new Label { Text = UiLocalizer.T("Folder: /") };
         saveVBox.AddChild(_saveFolderLabel);
 
-        saveVBox.AddChild(new Label { Text = "Name" });
-        _saveNameEdit = new LineEdit { PlaceholderText = "Cue name" };
+        saveVBox.AddChild(new Label { Text = UiLocalizer.T("Name") });
+        _saveNameEdit = new LineEdit { PlaceholderText = UiLocalizer.T("Cue name") };
         saveVBox.AddChild(_saveNameEdit);
 
         _saveIncludeChildren = new CheckBox
         {
-            Text = "Include nested children",
+            Text = UiLocalizer.T("Include nested children"),
             ButtonPressed = true
         };
         saveVBox.AddChild(_saveIncludeChildren);
 
         _saveIncludeMedia = new CheckBox
         {
-            Text = "Copy media into library",
+            Text = UiLocalizer.T("Copy media into library"),
             ButtonPressed = true
         };
         saveVBox.AddChild(_saveIncludeMedia);
@@ -407,8 +436,8 @@ public partial class LibraryInspector : Control
         // Generic name dialog (new folder / rename)
         _nameDialog = new AcceptDialog
         {
-            Title = "Name",
-            OkButtonText = "OK",
+            Title = UiLocalizer.T("Name"),
+            OkButtonText = UiLocalizer.T("OK"),
             DialogHideOnOk = false
         };
         _nameDialogEdit = new LineEdit
@@ -423,9 +452,9 @@ public partial class LibraryInspector : Control
         // Confirm (delete / overwrite)
         _confirmDialog = new ConfirmationDialog
         {
-            Title = "Confirm",
-            OkButtonText = "Delete",
-            CancelButtonText = "Cancel"
+            Title = UiLocalizer.T("Confirm"),
+            OkButtonText = UiLocalizer.T("Delete"),
+            CancelButtonText = UiLocalizer.T("Cancel")
         };
         _confirmDialog.Confirmed += OnConfirmDialogConfirmed;
         AddChild(_confirmDialog);
@@ -1110,9 +1139,9 @@ public partial class LibraryInspector : Control
         if (exists)
         {
             // Ask overwrite via confirm then re-save
-            _confirmDialog.DialogText = $"'{name}' already exists. Overwrite?";
+            _confirmDialog.DialogText = UiLocalizer.Tf("'{0}' already exists. Overwrite?", name);
             _confirmCallback = () => DoSave(cue, name, overwrite: true);
-            _confirmDialog.OkButtonText = "Overwrite";
+            _confirmDialog.OkButtonText = UiLocalizer.T("Overwrite");
             PopupLibraryDialog(_confirmDialog, ConfirmDialogDesignSize);
             return;
         }
@@ -1183,7 +1212,7 @@ public partial class LibraryInspector : Control
     private void OnNewFolderPressed()
     {
         if (_library == null) return;
-        _nameDialog.Title = "New Folder";
+        _nameDialog.Title = UiLocalizer.T("New Folder");
         _nameDialogEdit.Text = "New Folder";
         _nameDialogCallback = name =>
         {
@@ -1216,7 +1245,7 @@ public partial class LibraryInspector : Control
             var entry = _visibleEntries.FirstOrDefault(e =>
                 string.Equals(e.RelativePath, _selectedEntryRelative, StringComparison.OrdinalIgnoreCase));
             string current = entry?.DisplayName ?? System.IO.Path.GetFileNameWithoutExtension(_selectedEntryRelative);
-            _nameDialog.Title = "Rename Cue";
+            _nameDialog.Title = UiLocalizer.T("Rename Cue");
             _nameDialogEdit.Text = current;
             _nameDialogCallback = name =>
             {
@@ -1250,7 +1279,7 @@ public partial class LibraryInspector : Control
         if (!string.IsNullOrEmpty(_selectedFolder))
         {
             string current = System.IO.Path.GetFileName(_selectedFolder.Replace('/', System.IO.Path.DirectorySeparatorChar));
-            _nameDialog.Title = "Rename Folder";
+            _nameDialog.Title = UiLocalizer.T("Rename Folder");
             _nameDialogEdit.Text = current;
             _nameDialogCallback = name =>
             {
@@ -1282,8 +1311,8 @@ public partial class LibraryInspector : Control
             var entry = _visibleEntries.FirstOrDefault(e =>
                 string.Equals(e.RelativePath, _selectedEntryRelative, StringComparison.OrdinalIgnoreCase));
             string label = entry?.DisplayName ?? _selectedEntryRelative;
-            _confirmDialog.DialogText = $"Delete library cue '{label}'?\nThis cannot be undone.";
-            _confirmDialog.OkButtonText = "Delete";
+            _confirmDialog.DialogText = UiLocalizer.Tf("Delete library cue '{0}'?\nThis cannot be undone.", label);
+            _confirmDialog.OkButtonText = UiLocalizer.T("Delete");
             string path = _selectedEntryRelative;
             _confirmCallback = () =>
             {
@@ -1305,8 +1334,8 @@ public partial class LibraryInspector : Control
         if (!string.IsNullOrEmpty(_selectedFolder))
         {
             _confirmDialog.DialogText =
-                $"Delete folder '/{_selectedFolder}' and all of its contents?\nThis cannot be undone.";
-            _confirmDialog.OkButtonText = "Delete";
+                UiLocalizer.Tf("Delete folder '/{0}' and all of its contents?\nThis cannot be undone.", _selectedFolder);
+            _confirmDialog.OkButtonText = UiLocalizer.T("Delete");
             string folder = _selectedFolder;
             _confirmCallback = () =>
             {
@@ -1361,6 +1390,6 @@ public partial class LibraryInspector : Control
         _confirmCallback = null;
         // Reset overwrite button text after use
         if (_confirmDialog != null)
-            _confirmDialog.OkButtonText = "Delete";
+            _confirmDialog.OkButtonText = UiLocalizer.T("Delete");
     }
 }

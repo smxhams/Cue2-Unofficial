@@ -57,8 +57,8 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         if (_transportOption != null)
         {
             _transportOption.Clear();
-            _transportOption.AddItem("UDP", 0);
-            _transportOption.AddItem("TCP", 1);
+            UiLocalizer.AddTranslatedItem(_transportOption, "UDP", 0);
+            UiLocalizer.AddTranslatedItem(_transportOption, "TCP", 1);
             _transportOption.ItemSelected += OnTransportSelected;
         }
 
@@ -340,7 +340,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         if (_interfaceOptionButton == null) return;
 
         _interfaceOptionButton.Clear();
-        _interfaceOptionButton.AddItem("Automatic", 0);
+        UiLocalizer.AddTranslatedItem(_interfaceOptionButton, "Automatic", 0);
 
         var interfaces = NetworkInterface.GetAllNetworkInterfaces()
             .Where(ni => (ni.OperationalStatus == OperationalStatus.Up ||

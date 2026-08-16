@@ -50,7 +50,7 @@ public partial class AboutWindow : Window
         _licenseLinkButton = GetNode<LinkButton>("%LicenseLinkButton");
 
         _versionLabel.Text = $"Cue2 {Version.FullVersionString}";
-        _copyrightLabel.Text = "Copyright © 2025-2026 Samuel Moxham";
+        _copyrightLabel.Text = UiLocalizer.T("Copyright © 2025-2026 Samuel Moxham");
 
         _authorsRichTextLabel.Text = Authors;
         

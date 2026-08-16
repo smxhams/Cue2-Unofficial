@@ -59,6 +59,7 @@ public partial class VersionMismatchDialog : Window
 
 		ResolveNodes();
 		ConnectUiSignals();
+		UiLocalizer.LocalizeTree(this);
 	}
 
 	/// <inheritdoc />
@@ -109,51 +110,51 @@ public partial class VersionMismatchDialog : Window
 			? "(unknown file)"
 			: System.IO.Path.GetFileName(filePath);
 
-		Title = "Showfile Version Differs";
+		Title = UiLocalizer.T("Showfile Version Differs");
 		if (_titleLabel != null)
-			_titleLabel.Text = "Showfile Version Differs";
+			_titleLabel.Text = UiLocalizer.T("Showfile Version Differs");
 
 		string fileDisplay = fileVersion.ToDisplayString();
 		string appDisplay = $"{Cue2.Version.FullVersionString} (format {ShowfileFormat.CurrentFormatVersion})";
 
 		var summary = new System.Text.StringBuilder();
-		summary.AppendLine($"\"{fileName}\" was saved with a different version of Cue2.");
+		summary.AppendLine(UiLocalizer.Tf("\"{0}\" was saved with a different version of Cue2.", fileName));
 		summary.AppendLine();
-		summary.AppendLine($"Showfile:  {fileDisplay}");
-		summary.AppendLine($"This app:  {appDisplay}");
+		summary.AppendLine(UiLocalizer.Tf("Showfile:  {0}", fileDisplay));
+		summary.AppendLine(UiLocalizer.Tf("This app:  {0}", appDisplay));
 		summary.AppendLine();
 
 		if (fileVersion.IsLegacyOrUnknown)
 		{
-			summary.AppendLine(
+			summary.AppendLine(UiLocalizer.T(
 				"This file has no version metadata (created before version tracking). " +
-				"Cue2 will attempt to migrate it to the current format when opening.");
+				"Cue2 will attempt to migrate it to the current format when opening."));
 		}
 		else if (fileVersion.IsOlderFormat)
 		{
-			summary.AppendLine(
+			summary.AppendLine(UiLocalizer.T(
 				"The showfile format is older than this version of Cue2. " +
-				"Opening will attempt to migrate the data to the current format.");
+				"Opening will attempt to migrate the data to the current format."));
 		}
 		else if (fileVersion.IsNewerFormat)
 		{
-			summary.AppendLine(
+			summary.AppendLine(UiLocalizer.T(
 				"The showfile format is newer than this version of Cue2 understands. " +
 				"Opening may fail, drop settings, or behave unexpectedly. " +
 				"Cue2 will not re-label the file as this version’s format, and will not " +
-				"overwrite the original on Save — use Save As if you need a copy this app can own.");
+				"overwrite the original on Save — use Save As if you need a copy this app can own."));
 		}
 		else if (!fileVersion.MatchesCurrentApp)
 		{
 			// Informational only when dialog is shown for other reasons; same-format app
 			// mismatches no longer open this dialog by themselves.
-			summary.AppendLine(
+			summary.AppendLine(UiLocalizer.T(
 				"The file format matches, but the app version differs. " +
-				"Opening should usually work; review the show after load.");
+				"Opening should usually work; review the show after load."));
 		}
 		else
 		{
-			summary.AppendLine("Version details differ; proceed with care.");
+			summary.AppendLine(UiLocalizer.T("Version details differ; proceed with care."));
 		}
 
 		if (_summaryLabel != null)
@@ -161,9 +162,9 @@ public partial class VersionMismatchDialog : Window
 
 		if (_backupLabel != null)
 		{
-			_backupLabel.Text =
+			_backupLabel.Text = UiLocalizer.T(
 				"Before opening, make a backup copy of this showfile (.c2) and its media folders " +
-				"(Audio, Video, Images, Waveforms, Backups). Opening or migrating can change the file when you save.";
+				"(Audio, Video, Images, Waveforms, Backups). Opening or migrating can change the file when you save.");
 		}
 	}
 

@@ -311,7 +311,7 @@ public partial class SettingsGeneral : ScrollContainer
         bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.GoScale, AppSettings.DefaultGoScale);
         _goScaleResetButton.Visible = !atDefault;
         if (!atDefault)
-            _goScaleResetButton.TooltipText = $"Reset to default: {GoScaleLabel(AppSettings.DefaultGoScale)}";
+            _goScaleResetButton.TooltipText = UiLocalizer.ResetDefaultTip(GoScaleLabel(AppSettings.DefaultGoScale));
     }
 
     private static int GoScaleToIndex(float scale)
@@ -390,7 +390,7 @@ public partial class SettingsGeneral : ScrollContainer
         bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.CueListScale, AppSettings.DefaultCueListScale);
         _cueListScaleResetButton.Visible = !atDefault;
         if (!atDefault)
-            _cueListScaleResetButton.TooltipText = $"Reset to default: {CueListScaleLabel(AppSettings.DefaultCueListScale)}";
+            _cueListScaleResetButton.TooltipText = UiLocalizer.ResetDefaultTip(CueListScaleLabel(AppSettings.DefaultCueListScale));
     }
 
     private static int CueListScaleToIndex(float scale)
@@ -460,7 +460,7 @@ public partial class SettingsGeneral : ScrollContainer
         bool atDefault = Mathf.IsEqualApprox(_globalData.Settings.StopFadeDuration, AppSettings.DefaultStopFadeDuration);
         _stopFadeResetButton.Visible = !atDefault;
         if (!atDefault)
-            _stopFadeResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultStopFadeDuration:0.#}s";
+            _stopFadeResetButton.TooltipText = UiLocalizer.ResetDefaultTip($"{AppSettings.DefaultStopFadeDuration:0.#}s");
     }
 
     // ── Double Go Protection ──────────────────────────────────────────────
@@ -550,7 +550,7 @@ public partial class SettingsGeneral : ScrollContainer
         if (!atDefault)
         {
             string defaultText = AppSettings.DefaultMediaBackupEnabled ? "Enabled" : "Disabled";
-            _mediaBackupResetButton.TooltipText = $"Reset to default: {defaultText}";
+            _mediaBackupResetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
         }
     }
 
@@ -598,7 +598,7 @@ public partial class SettingsGeneral : ScrollContainer
         if (!atDefault)
         {
             string defaultText = AppSettings.DefaultMultiEditEnabled ? "Enabled" : "Disabled";
-            _multiEditResetButton.TooltipText = $"Reset to default: {defaultText}";
+            _multiEditResetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
         }
     }
 
@@ -643,7 +643,7 @@ public partial class SettingsGeneral : ScrollContainer
         if (!atDefault)
         {
             string defaultText = AppSettings.DefaultSelectNewCues ? "Enabled" : "Disabled";
-            _selectNewCuesResetButton.TooltipText = $"Reset to default: {defaultText}";
+            _selectNewCuesResetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
         }
     }
 
@@ -691,7 +691,7 @@ public partial class SettingsGeneral : ScrollContainer
         if (!atDefault)
         {
             string defaultText = AppSettings.DefaultShowTimelineWaveforms ? "Enabled" : "Disabled";
-            _timelineWaveformsResetButton.TooltipText = $"Reset to default: {defaultText}";
+            _timelineWaveformsResetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
         }
     }
 }

@@ -14,6 +14,7 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Inspectors;
@@ -61,8 +62,11 @@ public partial class InspectorTabsController : TabContainer
 	/// <summary>Last cue id that triggered auto-switch logic (-2 = never, -1 = none).</summary>
 	private int _lastAutoSwitchCueId = -2;
 
-	/// <summary>Base tab titles keyed by control name (before indicator suffix).</summary>
+	/// <summary>English tab titles keyed by control name (catalog keys).</summary>
 	private readonly Dictionary<string, string> _baseTitles = new();
+
+	/// <summary>English tab tooltips keyed by control name (catalog keys).</summary>
+	private readonly Dictionary<string, string> _baseTooltips = new();
 
 	/// <summary>Small filled circle shown as tab icon when that tab has cue content.</summary>
 	private Texture2D _contentDotIcon;
@@ -78,6 +82,7 @@ public partial class InspectorTabsController : TabContainer
 
 		_globalSignals.ShellFocused += OnShellFocused;
 		_globalSignals.SyncShellInspector += OnSyncIndicators;
+		_globalSignals.LocaleChanged += OnLocaleChanged;
 
 		if (_globalData.HistoryManager != null)
 		{
@@ -96,6 +101,7 @@ public partial class InspectorTabsController : TabContainer
 		{
 			_globalSignals.ShellFocused -= OnShellFocused;
 			_globalSignals.SyncShellInspector -= OnSyncIndicators;
+			_globalSignals.LocaleChanged -= OnLocaleChanged;
 		}
 
 		if (_globalData?.HistoryManager != null)
@@ -114,6 +120,16 @@ public partial class InspectorTabsController : TabContainer
 		{
 			OnSyncIndicators();
 		}
+	}
+
+	/// <summary>
+	/// Re-translates tab titles and tooltips when the UI language changes.
+	/// </summary>
+	private void OnLocaleChanged(string localeCode)
+	{
+		if (!GodotObject.IsInstanceValid(this))
+			return;
+		RefreshIndicatorsFromFocusedCue();
 	}
 
 	private void OnShellFocused(int cueId)
@@ -225,8 +241,10 @@ public partial class InspectorTabsController : TabContainer
 			}
 
 			bool hasContent = contentTabs.Contains(name);
-			// Title stays clean; icon marks presence.
-			SetTabTitle(i, baseTitle);
+			// Title stays clean; icon marks presence. English key is cached; display is translated.
+			SetTabTitle(i, UiLocalizer.T(baseTitle));
+			if (_baseTooltips.TryGetValue(name, out string tipKey) && !string.IsNullOrEmpty(tipKey))
+				SetTabTooltip(i, UiLocalizer.T(tipKey));
 			SetTabIcon(i, hasContent ? _contentDotIcon : null);
 		}
 	}
@@ -284,16 +302,28 @@ public partial class InspectorTabsController : TabContainer
 	private void CacheBaseTitles()
 	{
 		_baseTitles.Clear();
+		_baseTooltips.Clear();
 		for (int i = 0; i < GetTabCount(); i++)
 		{
 			var control = GetTabControl(i);
 			if (control == null)
 				continue;
 			// Prefer existing title (scene may customize); fall back to node name.
+			// Capture English before/after LocalizeTree via MetaTooltip on the page root.
 			string title = GetTabTitle(i);
 			if (string.IsNullOrEmpty(title))
 				title = control.Name;
 			_baseTitles[control.Name] = title;
+
+			string tip = string.Empty;
+			if (control.HasMeta(UiLocalizer.MetaTooltip))
+				tip = control.GetMeta(UiLocalizer.MetaTooltip).AsString();
+			if (string.IsNullOrEmpty(tip))
+				tip = GetTabTooltip(i);
+			if (string.IsNullOrEmpty(tip))
+				tip = control.TooltipText;
+			if (!string.IsNullOrEmpty(tip))
+				_baseTooltips[control.Name] = tip;
 		}
 	}
 

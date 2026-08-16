@@ -357,7 +357,7 @@ public partial class VideoInspector
 			if (isImage)
 			{
 				_durationValue.TooltipText =
-					"How long the image stays on screen. 0 or blank = stay active until stopped.";
+					UiLocalizer.T("How long the image stays on screen. 0 or blank = stay active until stopped.");
 			}
 		}
 		if (_durationLabel != null)
@@ -472,7 +472,7 @@ public partial class VideoInspector
 					foreach (var (_, comp) in targets)
 						comp.StartTime = 0.0;
 					textField.Text = "00:00.000";
-					textField.TooltipText = "00m:00s.000ms";
+					textField.TooltipText = UiLocalizer.T("00m:00s.000ms");
 					GD.Print("VideoInspector:TimeFieldSubmitted - Start time reset to 0");
 				}
 				else if (textField == _endTimeInput)
@@ -484,7 +484,7 @@ public partial class VideoInspector
 						comp.EndTime = -1.0; // Undefined = play to end
 					double metaDur = _focusedVideoComponent?.Metadata?.Duration ?? 0;
 					textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
-					textField.TooltipText = "End time undefined (plays full file)";
+					textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
 					GD.Print("VideoInspector:TimeFieldSubmitted - End time set to undefined (full)");
 				}
 
@@ -587,7 +587,7 @@ public partial class VideoInspector
 				if (primaryDur > 0 && timeSecs >= primaryDur)
 				{
 					textField.Text = $"Full ({UiUtilities.FormatTime(primaryDur)})";
-					textField.TooltipText = "End time undefined (plays full file)";
+					textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
 				}
 				else
 				{
@@ -642,7 +642,7 @@ public partial class VideoInspector
 			if (_focusedVideoComponent.EndTime < 0)
 			{
 				textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
-				textField.TooltipText = "End time undefined (plays full file)";
+				textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
 			}
 			else
 			{
@@ -700,7 +700,7 @@ public partial class VideoInspector
 		_focusedVideoComponent = cue.GetVideoComponent();
 		if (_focusedVideoComponent == null)
 		{
-			_infoLabel.Text = "No Video File";
+			_infoLabel.Text = UiLocalizer.T("No Video File");
 			_selectFileContainer.Visible = true;
 			_inspectorContent.Visible = false;
 			_previewContainer.Visible = false;
@@ -749,7 +749,7 @@ public partial class VideoInspector
 				if (_focusedVideoComponent.Duration <= 0)
 				{
 					_durationValue.Text = "0 (until stopped)";
-					_durationValue.TooltipText = "0 = stay active until stopped. Enter a time to auto-end.";
+					_durationValue.TooltipText = UiLocalizer.T("0 = stay active until stopped. Enter a time to auto-end.");
 				}
 				else
 				{

@@ -4,6 +4,7 @@
 using System;
 using Cue2.Domain.Connections;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Settings;
@@ -113,7 +114,7 @@ public partial class OscInputActionCard : PanelContainer
     private void ApplyActionLabel()
     {
         if (_actionNameLabel == null) return;
-        string label = PrettifyActionName(Action);
+        string label = UiLocalizer.T(PrettifyActionName(Action));
         _actionNameLabel.Text = label;
         // Full name always available on hover when the ellipsis clips the label.
         _actionNameLabel.TooltipText = label;
@@ -132,7 +133,7 @@ public partial class OscInputActionCard : PanelContainer
         try
         {
             _bindingLineEdit.Text = binding.HasBinding ? binding.Address : string.Empty;
-            _bindingLineEdit.PlaceholderText = binding.HasBinding ? string.Empty : "None";
+            _bindingLineEdit.PlaceholderText = binding.HasBinding ? string.Empty : UiLocalizer.T("None");
         }
         finally
         {
@@ -146,8 +147,8 @@ public partial class OscInputActionCard : PanelContainer
             _resetButton.Visible = nonDefault;
             var factory = OscActionBinding.GetDefaultFor(Action);
             _resetButton.TooltipText = factory.HasBinding
-                ? $"Reset to default ({factory.Address})"
-                : "Reset to default (no OSC)";
+                ? UiLocalizer.Tf("Reset to default ({0})", factory.Address)
+                : UiLocalizer.T("Reset to default (no OSC)");
         }
     }
 

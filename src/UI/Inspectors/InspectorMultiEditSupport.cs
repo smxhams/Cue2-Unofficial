@@ -14,6 +14,7 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Inspectors;
@@ -29,8 +30,11 @@ namespace Cue2.UI.Inspectors;
 /// </remarks>
 public static class InspectorMultiEditSupport
 {
-    /// <summary>Placeholder for mixed / multi LineEdit fields.</summary>
+    /// <summary>Placeholder for mixed / multi LineEdit fields (English catalog key).</summary>
     public const string MultiPlaceholder = "Multiple selected";
+
+    /// <summary>Translated multi-edit placeholder for LineEdit / TextEdit fields.</summary>
+    public static string LocalizedMultiPlaceholder => UiLocalizer.T(MultiPlaceholder);
 
     /// <summary>
     /// True when the show setting allows multi-edit and more than one cue is selected.
@@ -324,10 +328,13 @@ public static class InspectorMultiEditSupport
         IReadOnlyList<(Cue Cue, object Component)> targets,
         int selectedCount)
     {
+        string kind = UiLocalizer.T(componentLabel);
         if (targets == null || targets.Count == 0)
-            return $"None of the {selectedCount} selected cue(s) have a {componentLabel} component.";
+            return UiLocalizer.Tf("None of the {0} selected cue(s) have a {1} component.", selectedCount, kind);
 
         string ids = string.Join(", ", targets.Select(t => t.Cue?.Id ?? -1));
-        return $"Editing {componentLabel} on {targets.Count} of {selectedCount} selected cue(s).\nCue IDs: {ids}";
+        return UiLocalizer.Tf(
+            "Editing {0} on {1} of {2} selected cue(s).\nCue IDs: {3}",
+            kind, targets.Count, selectedCount, ids);
     }
 }

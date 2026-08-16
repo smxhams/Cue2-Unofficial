@@ -97,7 +97,7 @@ public partial class SettingsOscConnections : Control
                 || _testSendButton.TooltipText.Contains("all", StringComparison.OrdinalIgnoreCase))
             {
                 _testSendButton.TooltipText =
-                    "Send the test message on the selected connection (or all, if chosen).";
+                    UiLocalizer.T("Send the test message on the selected connection (or all, if chosen).");
             }
         }
         if (_testPathLineEdit != null)
@@ -247,7 +247,7 @@ public partial class SettingsOscConnections : Control
             Name = "TestTargetOption",
             CustomMinimumSize = new Vector2(140, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            TooltipText = "Which OSC connection receives the test message.",
+            TooltipText = UiLocalizer.T("Which OSC connection receives the test message."),
         };
         _testTargetOption.UniqueNameInOwner = true;
         int insertAt = _testSendButton.GetIndex();
@@ -276,7 +276,7 @@ public partial class SettingsOscConnections : Control
         var list = OscConnections.Connections;
         if (list == null || list.Count == 0)
         {
-            _testTargetOption.AddItem("(no connections)", 0);
+            _testTargetOption.AddItem(UiLocalizer.T("(no connections)"), 0);
             _testTargetOption.SetItemMetadata(0, TestTargetAllId);
             _testTargetOption.Disabled = true;
             return;
@@ -302,7 +302,7 @@ public partial class SettingsOscConnections : Control
 
         // Optional multi-dest fan-out (explicit choice only).
         int allIdx = idx;
-        _testTargetOption.AddItem("All connections", allIdx);
+        _testTargetOption.AddItem(UiLocalizer.T("All connections"), allIdx);
         _testTargetOption.SetItemMetadata(allIdx, TestTargetAllId);
 
         if (previousId == noPriorSelection)

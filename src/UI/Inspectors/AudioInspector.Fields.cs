@@ -59,7 +59,7 @@ public partial class AudioInspector
                     foreach (var (_, comp) in targets)
                         comp.StartTime = 0.0;
                     textField.Text = "00:00.000";
-                    textField.TooltipText = "00m:00s.000ms";
+                    textField.TooltipText = UiLocalizer.T("00m:00s.000ms");
                 }
                 else if (textField == _endTimeInput)
                 {
@@ -70,7 +70,7 @@ public partial class AudioInspector
                         comp.EndTime = -1.0;
                     double metaDur = _focusedAudioComponent?.Metadata?.Duration ?? 0;
                     textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
-                    textField.TooltipText = "End time undefined (plays full file)";
+                    textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
                 }
 
                 SyncDuration();
@@ -171,7 +171,7 @@ public partial class AudioInspector
                 if (primaryMeta > 0 && timeSecs >= primaryMeta)
                 {
                     textField.Text = $"Full ({UiUtilities.FormatTime(primaryMeta)})";
-                    textField.TooltipText = "End time undefined (plays full file)";
+                    textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
                 }
                 else
                 {
@@ -225,7 +225,7 @@ public partial class AudioInspector
             if (_focusedAudioComponent.EndTime < 0)
             {
                 textField.Text = $"Full ({UiUtilities.FormatTime(metaDur)})";
-                textField.TooltipText = "End time undefined (plays full file)";
+                textField.TooltipText = UiLocalizer.T("End time undefined (plays full file)");
             }
             else
             {
@@ -288,7 +288,7 @@ public partial class AudioInspector
         _focusedAudioComponent = cue.GetAudioComponent();
         if (_focusedAudioComponent == null)
         {
-            _infoLabel.Text = "No Audio File";
+            _infoLabel.Text = UiLocalizer.T("No Audio File");
             _selectFileContainer.Visible = true;
             _inspectorContent.Visible = false;
             _fileUrl.Text = "";
@@ -636,12 +636,12 @@ public partial class AudioInspector
             }
 
             // Add patches as options
-            _outputOptionButton.AddItem("No output");
+            _outputOptionButton.AddItem(UiLocalizer.T("No output"));
             int selectedIndex = 0;
 
             foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
             {
-                _outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+                _outputOptionButton.AddItem(UiLocalizer.Tf("Patch: {0}", patch.Value.Name));
                 int idx = _outputOptionButton.GetItemCount() - 1;
                 _outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
                 if (patch.Value.Id == assignedPatchId)
@@ -650,7 +650,7 @@ public partial class AudioInspector
 
             foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
             {
-                _outputOptionButton.AddItem($"Direct Output: {output}");
+                _outputOptionButton.AddItem(UiLocalizer.Tf("Direct Output: {0}", output));
                 int idx = _outputOptionButton.GetItemCount() - 1;
                 if (!string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput)
                     && output == _focusedAudioComponent.DirectOutput)
@@ -661,7 +661,7 @@ public partial class AudioInspector
 
             if (selectedIndex == 0 && !string.IsNullOrEmpty(_focusedAudioComponent.DirectOutput))
             {
-                _outputOptionButton.AddItem($"!!! Missing output: {_focusedAudioComponent.DirectOutput}");
+                _outputOptionButton.AddItem(UiLocalizer.Tf("!!! Missing output: {0}", _focusedAudioComponent.DirectOutput));
                 selectedIndex = _outputOptionButton.GetItemCount() - 1;
             }
             if (selectedIndex == 0 && assignedPatchId >= 0
@@ -669,7 +669,7 @@ public partial class AudioInspector
                     || !_globalData.Settings.GetAudioOutputPatches().ContainsKey(assignedPatchId)))
             {
                 string name = _focusedAudioComponent.Patch?.Name ?? $"id {assignedPatchId}";
-                _outputOptionButton.AddItem($"!!! Missing patch: {name}");
+                _outputOptionButton.AddItem(UiLocalizer.Tf("!!! Missing patch: {0}", name));
                 selectedIndex = _outputOptionButton.GetItemCount() - 1;
             }
 

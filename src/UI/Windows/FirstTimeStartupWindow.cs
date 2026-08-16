@@ -408,7 +408,7 @@ public partial class FirstTimeStartupWindow : Window
 		bool atDefault = Mathf.IsEqualApprox(_userDataManager.UiScale, UserDataManager.DefaultUiScale);
 		_uiScaleResetButton.Visible = !atDefault;
 		if (!atDefault)
-			_uiScaleResetButton.TooltipText = $"Reset to default: {UserDataManager.DefaultUiScale * 100f:0}%";
+			_uiScaleResetButton.TooltipText = ResetDefaultTip($"{UserDataManager.DefaultUiScale * 100f:0}%");
 	}
 
 	// ── Dismiss ───────────────────────────────────────────────────────────

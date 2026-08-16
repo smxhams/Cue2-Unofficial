@@ -152,10 +152,10 @@ public partial class ResourceInUseDeleteDialog : Window
 			_replacements.AddRange(replacements);
 
 		int count = usingCues?.Count ?? 0;
-		string kind = string.IsNullOrWhiteSpace(resourceKindLabel) ? "resource" : resourceKindLabel;
-		string name = string.IsNullOrWhiteSpace(resourceName) ? "(unnamed)" : resourceName;
+		string kind = UiLocalizer.T(string.IsNullOrWhiteSpace(resourceKindLabel) ? "resource" : resourceKindLabel);
+		string name = string.IsNullOrWhiteSpace(resourceName) ? UiLocalizer.T("(unnamed)") : resourceName;
 
-		string title = $"Delete {kind}?";
+		string title = UiLocalizer.Tf("Delete {0}?", kind);
 		Title = title;
 		if (_titleLabel != null)
 			_titleLabel.Text = title;
@@ -166,14 +166,13 @@ public partial class ResourceInUseDeleteDialog : Window
 			return;
 		}
 
-		string cueWord = count == 1 ? "cue" : "cues";
-		_summaryLabel.Text =
-			$"\"{name}\" is used by {count} {cueWord}.\n" +
-			$"Choose what to do with {(count == 1 ? "that cue" : "those cues")} before deleting.";
+		_summaryLabel.Text = count == 1
+			? UiLocalizer.Tf("\"{0}\" is used by 1 cue.\nChoose what to do with that cue before deleting.", name)
+			: UiLocalizer.Tf("\"{0}\" is used by {1} cues.\nChoose what to do with those cues before deleting.", name, count);
 
 		string tip = CueResourceUsage.BuildCueListTooltip(usingCues);
 		_summaryLabel.TooltipText = string.IsNullOrEmpty(tip)
-			? "No cue numbers available."
+			? UiLocalizer.T("No cue numbers available.")
 			: tip;
 
 		if (_replaceOption == null || _replaceCheck == null || _unassignCheck == null)

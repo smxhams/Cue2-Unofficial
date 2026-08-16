@@ -5,6 +5,7 @@ using System;
 using Godot;
 using Cue2.Services;
 
+using Cue2.UI.Utilities;
 namespace Cue2.UI.Settings;
 
 /// <summary>
@@ -85,7 +86,7 @@ public partial class InputActionCard : PanelContainer
     private void ApplyActionLabel()
     {
         if (_actionNameLabel == null) return;
-        string label = PrettifyActionName(Action);
+        string label = UiLocalizer.T(PrettifyActionName(Action));
         _actionNameLabel.Text = label;
         // Full name always available on hover when the ellipsis clips the label.
         _actionNameLabel.TooltipText = label;
@@ -117,7 +118,7 @@ public partial class InputActionCard : PanelContainer
         if (_bindingButton == null) return;
         if (string.IsNullOrEmpty(Action) || !InputMap.HasAction(Action))
         {
-            _bindingButton.Text = "Unbound";
+            _bindingButton.Text = UiLocalizer.T("Unbound");
             UpdateResetButton();
             return;
         }
@@ -125,7 +126,7 @@ public partial class InputActionCard : PanelContainer
         var events = InputMap.ActionGetEvents(Action);
         if (events.Count == 0)
         {
-            _bindingButton.Text = "Unbound";
+            _bindingButton.Text = UiLocalizer.T("Unbound");
             UpdateResetButton();
             return;
         }
@@ -162,7 +163,7 @@ public partial class InputActionCard : PanelContainer
         if (!atDefault)
         {
             string defaultText = _globalData?.GetDefaultBindingDisplay(Action) ?? "default";
-            _resetButton.TooltipText = $"Reset to default: {defaultText}";
+            _resetButton.TooltipText = UiLocalizer.ResetDefaultTip(defaultText);
         }
     }
 
@@ -220,7 +221,7 @@ public partial class InputActionCard : PanelContainer
         ListeningStarted?.Invoke(this);
 
         _isListeningForInput = true;
-        _bindingButton.Text = "Press key... (Esc cancels)";
+        _bindingButton.Text = UiLocalizer.T("Press key... (Esc cancels)");
         // Pause global input action listener (reuses existing focus signals as a coordination mechanism)
         _globalSignals.EmitSignal(nameof(GlobalSignals.TextEditFocusEntered));
         GD.Print($"InputActionCard:StartListening - Listening for new binding for '{Action}'");
@@ -267,7 +268,7 @@ public partial class InputActionCard : PanelContainer
             BindingConflict?.Invoke(conflict, combo);
             GD.Print($"InputActionCard:_UnhandledInput - Rejected '{combo}' for '{Action}'; used by '{conflict}'");
             // Stay listening so the user can try another key, but restore button hint.
-            _bindingButton.Text = "Press key... (Esc cancels)";
+            _bindingButton.Text = UiLocalizer.T("Press key... (Esc cancels)");
             return;
         }
 

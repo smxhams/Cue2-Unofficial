@@ -17,8 +17,9 @@ namespace Cue2.Services;
 /// locale from <see cref="UserDataManager"/>. Supported locales are listed in
 /// <see cref="SupportedLocales"/> (extend CSV columns + this list to add languages).
 /// <para/>
-/// Automation: run <c>tools/i18n/extract_ui_strings.py --merge translations/cue2.csv</c>
-/// to discover new scene strings, then fill empty locale cells (spreadsheet, Weblate, or LLM).
+/// Automation: <c>python tools/i18n/update_catalog.py</c> extracts new English keys
+/// and fills every locale column (mi/es/de/ru/ja/ar/hi). Use
+/// <c>extract_ui_strings.py --report-unwrapped</c> to list raw UI assignments.
 /// UI code uses English source strings as keys via <see cref="Cue2.UI.Utilities.UiLocalizer"/>.
 /// </remarks>
 public partial class LocalizationService : Node
@@ -35,19 +36,42 @@ public partial class LocalizationService : Node
 	/// <summary>Spanish locale code (ISO 639-1).</summary>
 	public const string LocaleSpanish = "es";
 
+	/// <summary>German locale code (ISO 639-1). Layout-stress: long compounds.</summary>
+	public const string LocaleGerman = "de";
+
+	/// <summary>Russian locale code (ISO 639-1). Cyrillic.</summary>
+	public const string LocaleRussian = "ru";
+
+	/// <summary>Japanese locale code (ISO 639-1). CJK mixed scripts, no word spaces.</summary>
+	public const string LocaleJapanese = "ja";
+
+	/// <summary>Arabic locale code (ISO 639-1). RTL + joining letters.</summary>
+	public const string LocaleArabic = "ar";
+
+	/// <summary>Hindi locale code (ISO 639-1). Devanagari combining marks.</summary>
+	public const string LocaleHindi = "hi";
+
 	/// <summary>
-	/// Supported UI locales: ISO-style code and native display name.
-	/// Display names stay in their own language so the picker remains usable in any locale.
+	/// Supported UI locales: ISO-style code, native name, and English name.
+	/// The picker shows <c>Native (English)</c> so scripts stay visible and identifiable.
 	/// </summary>
 	/// <remarks>
-	/// Order: English (default), te reo Māori (pipeline / Aotearoa test), Spanish
+	/// Cherry-picked for script / layout testing rather than market coverage:
+	/// English (default), te reo Māori (macrons), Spanish (Latin accents),
+	/// German (long compounds), Russian (Cyrillic), Japanese (CJK),
+	/// Arabic (RTL), Hindi (Devanagari).
 	/// </remarks>
-	public static readonly IReadOnlyList<(string Code, string DisplayName)> SupportedLocales =
-		new List<(string, string)>
+	public static readonly IReadOnlyList<(string Code, string DisplayName, string EnglishName)> SupportedLocales =
+		new List<(string, string, string)>
 		{
-			(DefaultLocale, "English"),
-			(LocaleMaori, "Te reo Māori"),
-			(LocaleSpanish, "Español"),
+			(DefaultLocale, "English", "English"),
+			(LocaleMaori, "Te reo Māori", "Māori"),
+			(LocaleSpanish, "Español", "Spanish"),
+			(LocaleGerman, "Deutsch", "German"),
+			(LocaleRussian, "Русский", "Russian"),
+			(LocaleJapanese, "日本語", "Japanese"),
+			(LocaleArabic, "العربية", "Arabic"),
+			(LocaleHindi, "हिन्दी", "Hindi"),
 		};
 
 	private GlobalData _globalData;
@@ -77,6 +101,8 @@ public partial class LocalizationService : Node
 
 			string preferred = _globalData?.UserDataManager?.Locale ?? DefaultLocale;
 			ApplyLocale(preferred, emitSignal: false);
+			// Autoload _Ready runs before the main scene exists; apply layout once the tree is up.
+			CallDeferred(MethodName.ApplyUiLayoutDirection);
 
 			_initialized = true;
 			GD.Print($"LocalizationService:Initialize - Ready. Locale={TranslationServer.GetLocale()} " +
@@ -110,7 +136,7 @@ public partial class LocalizationService : Node
 		if (string.IsNullOrWhiteSpace(localeCode))
 			return false;
 
-		foreach (var (code, _) in SupportedLocales)
+		foreach (var (code, _, _) in SupportedLocales)
 		{
 			if (string.Equals(code, localeCode, StringComparison.OrdinalIgnoreCase))
 				return true;
@@ -140,12 +166,28 @@ public partial class LocalizationService : Node
 		if (string.IsNullOrWhiteSpace(localeCode))
 			return DefaultLocale;
 
-		foreach (var (code, name) in SupportedLocales)
+		foreach (var (code, name, _) in SupportedLocales)
 		{
 			if (string.Equals(code, localeCode, StringComparison.OrdinalIgnoreCase))
 				return name;
 		}
 		return localeCode;
+	}
+
+	/// <summary>
+	/// Picker caption: native name, plus English in parentheses when they differ.
+	/// </summary>
+	/// <param name="nativeName">Name in the language itself.</param>
+	/// <param name="englishName">English language name.</param>
+	/// <returns>e.g. <c>日本語 (Japanese)</c>, or <c>English</c> when both match.</returns>
+	public static string FormatPickerLabel(string nativeName, string englishName)
+	{
+		if (string.IsNullOrWhiteSpace(nativeName))
+			return englishName ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(englishName) ||
+		    string.Equals(nativeName, englishName, StringComparison.OrdinalIgnoreCase))
+			return nativeName;
+		return $"{nativeName} ({englishName})";
 	}
 
 	/// <summary>
@@ -162,6 +204,7 @@ public partial class LocalizationService : Node
 
 		string previous = TranslationServer.GetLocale();
 		TranslationServer.SetLocale(resolved);
+		ApplyUiLayoutDirection();
 
 		GD.Print($"LocalizationService:ApplyLocale - {previous} → {resolved}");
 
@@ -190,6 +233,7 @@ public partial class LocalizationService : Node
 		string previous = TranslationServer.GetLocale();
 		TranslationServer.SetLocale(resolved);
 		EnsureLocaleRegistered(resolved);
+		ApplyUiLayoutDirection();
 
 		if (!string.Equals(previous, resolved, StringComparison.OrdinalIgnoreCase))
 		{
@@ -221,8 +265,8 @@ public partial class LocalizationService : Node
 		int selectedIndex = 0;
 		for (int i = 0; i < SupportedLocales.Count; i++)
 		{
-			var (code, displayName) = SupportedLocales[i];
-			button.AddItem(displayName, i);
+			var (code, displayName, englishName) = SupportedLocales[i];
+			button.AddItem(FormatPickerLabel(displayName, englishName), i);
 			button.SetItemMetadata(i, code);
 			if (string.Equals(code, resolved, StringComparison.OrdinalIgnoreCase))
 				selectedIndex = i;
@@ -248,6 +292,51 @@ public partial class LocalizationService : Node
 		Variant meta = button.GetItemMetadata(index);
 		string code = meta.AsString();
 		return ResolveLocale(code);
+	}
+
+	/// <summary>
+	/// True when <paramref name="localeCode"/> is a right-to-left UI locale (currently Arabic).
+	/// </summary>
+	/// <param name="localeCode">ISO-style locale code.</param>
+	/// <returns>True for RTL locales.</returns>
+	public bool IsRtlLocale(string localeCode)
+	{
+		string resolved = ResolveLocale(localeCode);
+		return string.Equals(resolved, LocaleArabic, StringComparison.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
+	/// Sets <see cref="Control.LayoutDirection"/> to follow the application locale
+	/// on each window's first control so Arabic flips chrome without per-widget wiring.
+	/// Children inherit unless they override.
+	/// </summary>
+	public void ApplyUiLayoutDirection()
+	{
+		SceneTree tree = GetTree();
+		if (tree?.Root == null)
+			return;
+
+		ApplyLayoutToTree(tree.Root);
+	}
+
+	/// <summary>
+	/// Walks a node tree and assigns <see cref="Control.LayoutDirectionEnum.ApplicationLocale"/>
+	/// on the first control under each viewport/window (children inherit).
+	/// </summary>
+	/// <param name="node">Root to walk.</param>
+	private static void ApplyLayoutToTree(Node node)
+	{
+		if (node == null || !GodotObject.IsInstanceValid(node))
+			return;
+
+		if (node is Control control)
+		{
+			control.LayoutDirection = Control.LayoutDirectionEnum.ApplicationLocale;
+			return;
+		}
+
+		foreach (Node child in node.GetChildren())
+			ApplyLayoutToTree(child);
 	}
 
 	/// <summary>

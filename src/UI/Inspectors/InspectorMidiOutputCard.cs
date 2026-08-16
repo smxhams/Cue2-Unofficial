@@ -4,6 +4,7 @@
 using System;
 using Cue2.Domain.Cues;
 using Cue2.Services;
+using Cue2.UI.Utilities;
 using Godot;
 
 namespace Cue2.UI.Inspectors;
@@ -139,7 +140,7 @@ public partial class InspectorMidiOutputCard : PanelContainer
 
         if (!foundCurrent)
         {
-            _deviceOption.AddItem("(no device)");
+            _deviceOption.AddItem(UiLocalizer.T("(no device)"));
             _deviceOption.SetItemMetadata(0, string.Empty);
             _deviceOption.Select(0);
         }
@@ -152,7 +153,7 @@ public partial class InspectorMidiOutputCard : PanelContainer
         try
         {
             if (_nameLabel != null)
-                _nameLabel.Text = "MIDI Output";
+                _nameLabel.Text = UiLocalizer.T("MIDI Output");
 
             PopulateDeviceOptions();
             EnsureTypeOptions();

@@ -280,14 +280,14 @@ public partial class SettingsAudio : ScrollContainer
         _openDevicesList.Clear();
         if (_audioDevices == null)
         {
-            _openDevicesList.AddItem("AudioDevices service unavailable.");
+            _openDevicesList.AddItem(UiLocalizer.T("AudioDevices service unavailable."));
             return;
         }
 
         var lines = _audioDevices.GetOpenDeviceStatusLines();
         if (lines == null || lines.Count == 0)
         {
-            _openDevicesList.AddItem("No audio devices open.");
+            _openDevicesList.AddItem(UiLocalizer.T("No audio devices open."));
             return;
         }
 
@@ -349,7 +349,7 @@ public partial class SettingsAudio : ScrollContainer
         bool atDefault = _globalData.Settings.AudioLatencyMode == AppSettings.DefaultAudioLatencyMode;
         _latencyModeResetButton.Visible = !atDefault;
         if (!atDefault)
-            _latencyModeResetButton.TooltipText = "Reset to default: Balanced";
+            _latencyModeResetButton.TooltipText = UiLocalizer.T("Reset to default: Balanced");
     }
 
     // ── Declick ramp ────────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ public partial class SettingsAudio : ScrollContainer
         bool atDefault = _globalData.Settings.AudioDeclickMs == AppSettings.DefaultAudioDeclickMs;
         _declickResetButton.Visible = !atDefault;
         if (!atDefault)
-            _declickResetButton.TooltipText = $"Reset to default: {AppSettings.DefaultAudioDeclickMs} ms";
+            _declickResetButton.TooltipText = UiLocalizer.ResetDefaultTip($"{AppSettings.DefaultAudioDeclickMs} ms");
     }
 
     // ── Master volume (dB LineEdit) + mute (runtime) ────────────────────────
@@ -472,7 +472,7 @@ public partial class SettingsAudio : ScrollContainer
             _globalData.Settings.AudioMasterVolume, AppSettings.DefaultAudioMasterVolume);
         _masterVolumeResetButton.Visible = !atDefault;
         if (!atDefault)
-            _masterVolumeResetButton.TooltipText = "Reset to default: 0.0dB";
+            _masterVolumeResetButton.TooltipText = UiLocalizer.T("Reset to default: 0.0dB");
     }
 
     private void OnMasterMuteToggled(bool pressed)
@@ -554,7 +554,7 @@ public partial class SettingsAudio : ScrollContainer
         _outputMaxResetButton.Visible = !atDefault;
         if (!atDefault)
             _outputMaxResetButton.TooltipText =
-                $"Reset to default: {FormatDb(AppSettings.DefaultAudioOutputMaxDb)}";
+                UiLocalizer.ResetDefaultTip(FormatDb(AppSettings.DefaultAudioOutputMaxDb));
     }
 
     // ── Output min (silence floor) ──────────────────────────────────────────
@@ -628,7 +628,7 @@ public partial class SettingsAudio : ScrollContainer
         _outputMinResetButton.Visible = !atDefault;
         if (!atDefault)
             _outputMinResetButton.TooltipText =
-                $"Reset to default: {FormatDb(AppSettings.DefaultAudioOutputMinDb)}";
+                UiLocalizer.ResetDefaultTip(FormatDb(AppSettings.DefaultAudioOutputMinDb));
     }
 
     /// <summary>

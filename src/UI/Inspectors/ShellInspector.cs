@@ -510,7 +510,7 @@ public partial class ShellInspector : Control
 		{
 			if (_cueId != null)
 			{
-				_cueId.Text = "MULTI-EDITING";
+				_cueId.Text = UiLocalizer.T("MULTI-EDITING");
 				_cueId.TooltipText = FormatMultiEditIdTooltip(selected);
 			}
 
@@ -544,7 +544,7 @@ public partial class ShellInspector : Control
 			if (_durationValue != null)
 			{
 				_durationValue.Text = "";
-				_durationValue.PlaceholderText = "—";
+				_durationValue.PlaceholderText = UiLocalizer.T("—");
 			}
 
 			if (_followOption != null)
@@ -601,7 +601,7 @@ public partial class ShellInspector : Control
 			if (_midiEnabledCheckBox != null)
 				_midiEnabledCheckBox.SetPressedNoSignal(false);
 			if (_midiCaptureButton != null)
-				_midiCaptureButton.Text = "Capture";
+				_midiCaptureButton.Text = UiLocalizer.T("Capture");
 			if (_midiResetButton != null)
 				_midiResetButton.Visible = false;
 			if (_midiTypeOption != null)
@@ -640,9 +640,9 @@ public partial class ShellInspector : Control
 	private void ClearMultiEditPlaceholders()
 	{
 		if (_cueNum != null)
-			_cueNum.PlaceholderText = "No Selection";
+			_cueNum.PlaceholderText = UiLocalizer.T("No Selection");
 		if (_cueName != null)
-			_cueName.PlaceholderText = "No Selection";
+			_cueName.PlaceholderText = UiLocalizer.T("No Selection");
 		if (_preWaitInput != null)
 			_preWaitInput.PlaceholderText = "";
 		if (_postWaitInput != null)
@@ -650,9 +650,9 @@ public partial class ShellInspector : Control
 		if (_durationValue != null)
 			_durationValue.PlaceholderText = "";
 		if (_clockTimeInput != null)
-			_clockTimeInput.PlaceholderText = "HH:mm:ss";
+			_clockTimeInput.PlaceholderText = UiLocalizer.T("HH:mm:ss");
 		if (_notesTextEdit != null)
-			_notesTextEdit.PlaceholderText = "Cue notes…";
+			_notesTextEdit.PlaceholderText = UiLocalizer.T("Cue notes…");
 		SyncDeleteHotkeyTooltip();
 	}
 
@@ -721,9 +721,8 @@ public partial class ShellInspector : Control
 	/// </summary>
 	private void AddFollowOption(FollowType type, string label)
 	{
-		int index = _followOption.ItemCount;
-		_followOption.AddItem(label);
-		_followOption.SetItemMetadata(index, (int)type);
+		UiLocalizer.AddTranslatedItem(_followOption, label);
+		_followOption.SetItemMetadata(_followOption.ItemCount - 1, (int)type);
 	}
 
 	/// <summary>
@@ -807,7 +806,7 @@ public partial class ShellInspector : Control
 			_postWaitInput.Text = UiUtilities.FormatTime(_focusedCue.PostWait);
 			var duration = _focusedCue.TotalDuration;
 			if (duration < 0)
-				_durationValue.Text = "Until Stopped";
+				_durationValue.Text = UiLocalizer.T("Until Stopped");
 			else
 				_durationValue.Text = UiUtilities.FormatTime(_focusedCue.TotalDuration);
 
@@ -1241,7 +1240,7 @@ public partial class ShellInspector : Control
 		if (_hotkeyBindingButton != null && !_isListeningForHotkey)
 		{
 			if (_focusedCue == null || !_focusedCue.HasHotkey)
-				_hotkeyBindingButton.Text = "None";
+				_hotkeyBindingButton.Text = UiLocalizer.T("None");
 			else
 				_hotkeyBindingButton.Text = _focusedCue.GetHotkeyDisplay();
 		}
@@ -1251,7 +1250,7 @@ public partial class ShellInspector : Control
 			bool nonDefault = _focusedCue != null && _focusedCue.IsHotkeyNonDefault;
 			_hotkeyResetButton.Visible = nonDefault;
 			if (nonDefault)
-				_hotkeyResetButton.TooltipText = "Reset to default (no hotkey)";
+				_hotkeyResetButton.TooltipText = UiLocalizer.T("Reset to default (no hotkey)");
 		}
 	}
 
@@ -1338,7 +1337,7 @@ public partial class ShellInspector : Control
 	{
 		_isListeningForHotkey = true;
 		if (_hotkeyBindingButton != null)
-			_hotkeyBindingButton.Text = "Press key... (Esc cancels)";
+			_hotkeyBindingButton.Text = UiLocalizer.T("Press key... (Esc cancels)");
 		// Pause global input action listener while capturing (same coordination as InputActionCard).
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.TextEditFocusEntered));
 		GD.Print("ShellInspector:StartHotkeyListening - Listening for cue hotkey");
@@ -1399,7 +1398,7 @@ public partial class ShellInspector : Control
 				$"Hotkey '{combo}' is already used by '{conflict}'", (int)LogType.Warning);
 			GD.Print($"ShellInspector:_UnhandledInput - Rejected '{combo}'; used by '{conflict}'");
 			if (_hotkeyBindingButton != null)
-				_hotkeyBindingButton.Text = "Press key... (Esc cancels)";
+				_hotkeyBindingButton.Text = UiLocalizer.T("Press key... (Esc cancels)");
 			return;
 		}
 
@@ -1588,7 +1587,7 @@ public partial class ShellInspector : Control
 
 		byte mask = _focusedCue?.ClockDaysMask ?? Cue.ClockDaysAll;
 		_clockDaysButton.Text = FormatClockDaysSummary(mask);
-		_clockDaysButton.TooltipText = "Choose which weekdays the clock trigger may fire.\nCurrent: " +
+		_clockDaysButton.TooltipText = UiLocalizer.T("Choose which weekdays the clock trigger may fire.\nCurrent: ") +
 		                               FormatClockDaysSummary(mask);
 	}
 
@@ -1655,7 +1654,7 @@ public partial class ShellInspector : Control
 			bool nonDefault = _focusedCue != null && _focusedCue.IsClockNonDefault;
 			_clockResetButton.Visible = nonDefault;
 			if (nonDefault)
-				_clockResetButton.TooltipText = "Reset to default (no clock, every day)";
+				_clockResetButton.TooltipText = UiLocalizer.T("Reset to default (no clock, every day)");
 		}
 	}
 
@@ -1841,7 +1840,7 @@ public partial class ShellInspector : Control
 		if (_clockTimeInput != null)
 			_clockTimeInput.Text = "";
 		if (_clockDaysButton != null)
-			_clockDaysButton.Text = "Every day";
+			_clockDaysButton.Text = UiLocalizer.T("Every day");
 		if (_clockResetButton != null)
 			_clockResetButton.Visible = false;
 
@@ -1917,14 +1916,14 @@ public partial class ShellInspector : Control
 		UpdateMidiData1Prefix();
 
 		if (_midiCaptureButton != null && !_isCapturingMidi)
-			_midiCaptureButton.Text = "Capture";
+			_midiCaptureButton.Text = UiLocalizer.T("Capture");
 
 		if (_midiResetButton != null)
 		{
 			bool nonDefault = _focusedCue != null && _focusedCue.IsMidiTriggerNonDefault;
 			_midiResetButton.Visible = nonDefault;
 			if (nonDefault)
-				_midiResetButton.TooltipText = "Reset to default (no MIDI trigger)";
+				_midiResetButton.TooltipText = UiLocalizer.T("Reset to default (no MIDI trigger)");
 		}
 	}
 
@@ -2109,7 +2108,7 @@ public partial class ShellInspector : Control
 
 		_isCapturingMidi = true;
 		if (_midiCaptureButton != null)
-			_midiCaptureButton.Text = "Waiting…";
+			_midiCaptureButton.Text = UiLocalizer.T("Waiting…");
 		_midiManager.StartCapture();
 		GD.Print("ShellInspector:OnMidiCapturePressed - Capture armed");
 	}
@@ -2123,7 +2122,7 @@ public partial class ShellInspector : Control
 		_isCapturingMidi = false;
 		_midiManager?.CancelCapture();
 		if (_midiCaptureButton != null)
-			_midiCaptureButton.Text = "Capture";
+			_midiCaptureButton.Text = UiLocalizer.T("Capture");
 		GD.Print("ShellInspector:CancelMidiCapture - Cancelled");
 	}
 
@@ -2135,7 +2134,7 @@ public partial class ShellInspector : Control
 		if (!_isCapturingMidi) return;
 		_isCapturingMidi = false;
 		if (_midiCaptureButton != null)
-			_midiCaptureButton.Text = "Capture";
+			_midiCaptureButton.Text = UiLocalizer.T("Capture");
 
 		var targets = GetEditTargets();
 		if (targets.Count == 0) return;

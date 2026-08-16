@@ -201,7 +201,7 @@ public partial class AudioInspector : Control
             _zoomSlider.MaxValue = 20;
             _zoomSlider.Step = 0.1;
             _zoomSlider.Value = 1;
-            _zoomSlider.TooltipText = "Zoom waveform (1× = full file)";
+            _zoomSlider.TooltipText = UiLocalizer.T("Zoom waveform (1× = full file)");
             _zoomSlider.ValueChanged += OnZoomChanged;
         }
 
@@ -212,7 +212,7 @@ public partial class AudioInspector : Control
             CustomMinimumSize = new Vector2(0, 14),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             Visible = false,
-            TooltipText = "Scroll zoomed waveform"
+            TooltipText = UiLocalizer.T("Scroll zoomed waveform")
         };
         _waveformAccordian.AddChild(_waveformScroll);
         _waveformScroll.ValueChanged += OnWaveformScrollChanged; 
@@ -333,12 +333,13 @@ public partial class AudioInspector : Control
             return;
         }
 
-        string tooltip = $"Duration: {UiUtilities.FormatTime(meta.Duration)}\n" +
-                         $"Channels: {meta.Channels}\n" +
-                         $"Sample Rate: {meta.SampleRate} Hz\n" +
-                         $"Bit Depth: {meta.BitDepth}\n" +
-                         $"Codec: {meta.Codec}\n" +
-                         $"Format: {meta.Format}";
+        string tooltip =
+            UiLocalizer.Tf("Duration: {0}", UiUtilities.FormatTime(meta.Duration)) + "\n" +
+            UiLocalizer.Tf("Channels: {0}", meta.Channels) + "\n" +
+            UiLocalizer.Tf("Sample Rate: {0} Hz", meta.SampleRate) + "\n" +
+            UiLocalizer.Tf("Bit Depth: {0}", meta.BitDepth) + "\n" +
+            UiLocalizer.Tf("Codec: {0}", meta.Codec) + "\n" +
+            UiLocalizer.Tf("Format: {0}", meta.Format);
 
         _fileMetadataLabel.Text = compact;
         _fileMetadataLabel.TooltipText = tooltip;

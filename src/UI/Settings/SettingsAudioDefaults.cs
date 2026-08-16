@@ -438,7 +438,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
             _globalData.Settings.AudioDefaultPan, AppSettings.SystemDefaultAudioPan);
         ComponentDefaultsUi.UpdateResetButton(
             _panResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatPan(AppSettings.SystemDefaultAudioPan)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatPan(AppSettings.SystemDefaultAudioPan)));
     }
 
     // ── Loop ───────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
         bool atDefault = _globalData.Settings.AudioDefaultLoop == AppSettings.SystemDefaultAudioLoop;
         ComponentDefaultsUi.UpdateResetButton(
             _loopResetButton, atDefault,
-            $"Reset to default: {(AppSettings.SystemDefaultAudioLoop ? "On" : "Off")}");
+            UiLocalizer.ResetDefaultTip((AppSettings.SystemDefaultAudioLoop ? "On" : "Off")));
     }
 
     // ── Play count ─────────────────────────────────────────────────────────
@@ -536,7 +536,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
                          == AppSettings.SystemDefaultAudioPlayCount;
         ComponentDefaultsUi.UpdateResetButton(
             _playCountResetButton, atDefault,
-            $"Reset to default: {AppSettings.SystemDefaultAudioPlayCount}");
+            UiLocalizer.ResetDefaultTip(AppSettings.SystemDefaultAudioPlayCount));
     }
 
     // ── Fade in / out ──────────────────────────────────────────────────────
@@ -611,7 +611,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
             _globalData.Settings.AudioDefaultFadeIn, AppSettings.SystemDefaultAudioFadeIn);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeInResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeIn)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeIn)));
     }
 
     private void UpdateFadeOutResetButton()
@@ -621,7 +621,7 @@ public partial class SettingsAudioDefaults : ScrollContainer
             _globalData.Settings.AudioDefaultFadeOut, AppSettings.SystemDefaultAudioFadeOut);
         ComponentDefaultsUi.UpdateResetButton(
             _fadeOutResetButton, atDefault,
-            $"Reset to default: {UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeOut)}");
+            UiLocalizer.ResetDefaultTip(UiUtilities.FormatTime(AppSettings.SystemDefaultAudioFadeOut)));
     }
 
     /// <summary>

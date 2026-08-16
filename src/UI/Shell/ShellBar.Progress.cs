@@ -56,17 +56,17 @@ public partial class ShellBar
 		{
 			case FollowType.Continue:
 				_followButton.Text = "→";
-				_followButton.TooltipText = "Auto-continue: next cue starts after post-wait.\nClick to cycle → Auto-follow → None";
+				_followButton.TooltipText = UiLocalizer.T("Auto-continue: next cue starts after post-wait.\nClick to cycle → Auto-follow → None");
 				_followButton.Modulate = Colors.White;
 				break;
 			case FollowType.Follow:
 				_followButton.Text = "↳";
-				_followButton.TooltipText = "Auto-follow: next cue starts when this cue completes.\nClick to cycle → None → Auto-continue";
+				_followButton.TooltipText = UiLocalizer.T("Auto-follow: next cue starts when this cue completes.\nClick to cycle → None → Auto-continue");
 				_followButton.Modulate = Colors.White;
 				break;
 			default:
 				_followButton.Text = "";
-				_followButton.TooltipText = "Continue mode: None.\nClick to set Auto-continue (→), then Auto-follow (↳).";
+				_followButton.TooltipText = UiLocalizer.T("Continue mode: None.\nClick to set Auto-continue (→), then Auto-follow (↳).");
 				// Keep hit target visible without drawing a permanent glyph.
 				_followButton.Modulate = new Color(1, 1, 1, 0.35f);
 				break;

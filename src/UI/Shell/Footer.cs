@@ -322,7 +322,7 @@ public partial class Footer : Control
         if (_bkgProcessStatusBar != null)
         {
             _bkgProcessStatusBar.Value = 0;
-            _bkgProcessStatusBar.TooltipText = "Background process";
+            _bkgProcessStatusBar.TooltipText = UiLocalizer.T("Background process");
         }
         if (_processStatusLabel != null)
             _processStatusLabel.Text = string.Empty;
@@ -495,38 +495,38 @@ public partial class Footer : Control
 
         if (audioStatuses.Count == 0 && videoStatuses.Count == 0)
         {
-            _devicesFooterButton.TooltipText = "Devices\n\nNo audio or video devices are currently used or configured.";
+            _devicesFooterButton.TooltipText = UiLocalizer.T("Devices\n\nNo audio or video devices are currently used or configured.");
             _devicesFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
             return;
         }
 
         bool hasProblem = false;
-        string tooltip = "Devices:\n";
+        string tooltip = T("Devices:") + "\n";
 
         if (audioStatuses.Count > 0)
         {
-            tooltip += "\nAudio Devices:\n";
+            tooltip += "\n" + T("Audio Devices:") + "\n";
             foreach (var entry in audioStatuses.OrderBy(e => e.Key))
             {
                 bool connected = entry.Value;
                 if (!connected) hasProblem = true;
 
                 string indicator = connected ? "🟢 " : "🔴 ";
-                string status = connected ? "connected" : "being used but not connected";
+                string status = connected ? T("connected") : T("being used but not connected");
                 tooltip += $"{indicator}{entry.Key} ({status})\n";
             }
         }
 
         if (videoStatuses.Count > 0)
         {
-            tooltip += "\nVideo Outputs:\n";
+            tooltip += "\n" + T("Video Outputs:") + "\n";
             foreach (var entry in videoStatuses.OrderBy(e => e.Key))
             {
                 bool connected = entry.Value;
                 if (!connected) hasProblem = true;
 
                 string indicator = connected ? "🟢 " : "🔴 ";
-                string status = connected ? "connected" : "target monitor unavailable";
+                string status = connected ? T("connected") : T("target monitor unavailable");
                 tooltip += $"{indicator}{entry.Key} ({status})\n";
             }
         }
@@ -574,20 +574,20 @@ public partial class Footer : Control
         if (!hasAnyConfigured)
         {
             _connectionsFooterButton.TooltipText =
-                "Connections\n\nNo OSC or MIDI connections are currently configured.";
+                UiLocalizer.T("Connections\n\nNo OSC or MIDI connections are currently configured.");
             _connectionsFooterButton.AddThemeColorOverride("font_color", GlobalStyles.Success);
             return;
         }
 
         bool hasProblem = false;
         var sb = new StringBuilder();
-        sb.AppendLine("Connections:");
+        sb.AppendLine(T("Connections:"));
 
         // ── OSC send destinations ───────────────────────────────────────────
         if (oscSends.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("OSC Send:");
+            sb.AppendLine(T("OSC Send:"));
             foreach (var row in oscSends.OrderBy(r => r.Label, StringComparer.OrdinalIgnoreCase))
             {
                 if (!row.Ok)
@@ -602,7 +602,7 @@ public partial class Footer : Control
         if (_oscListen != null)
         {
             sb.AppendLine();
-            sb.AppendLine("OSC Listen:");
+            sb.AppendLine(T("OSC Listen:"));
 
             bool enabled = _oscListen.OscListenEnabled;
             bool listening = _oscListen.IsListening;
@@ -619,16 +619,16 @@ public partial class Footer : Control
 
             if (!enabled)
             {
-                sb.AppendLine($"⚪ Disabled ({portPart})");
+                sb.AppendLine($"⚪ {Tf("Disabled ({0})", portPart)}");
             }
             else if (listening)
             {
-                sb.AppendLine($"🟢 Listening ({portPart})");
+                sb.AppendLine($"🟢 {Tf("Listening ({0})", portPart)}");
             }
             else
             {
                 hasProblem = true;
-                sb.AppendLine($"🔴 Enabled but not listening ({portPart})");
+                sb.AppendLine($"🔴 {Tf("Enabled but not listening ({0})", portPart)}");
             }
         }
 
@@ -639,18 +639,18 @@ public partial class Footer : Control
             if (!midiNativeReady)
             {
                 hasProblem = true;
-                sb.AppendLine("MIDI:");
-                sb.AppendLine("🔴 Native MIDI library unavailable");
+                sb.AppendLine(T("MIDI:"));
+                sb.AppendLine("🔴 " + T("Native MIDI library unavailable"));
             }
             else if (!midiEnabled)
             {
-                sb.AppendLine("MIDI (disabled):");
+                sb.AppendLine(T("MIDI (disabled):"));
                 AppendMidiSessionLines(sb, "Inputs", midiInputs, midiEnabled: false, ref hasProblem);
                 AppendMidiSessionLines(sb, "Outputs", midiOutputs, midiEnabled: false, ref hasProblem);
             }
             else
             {
-                sb.AppendLine("MIDI:");
+                sb.AppendLine(T("MIDI:"));
                 AppendMidiSessionLines(sb, "Inputs", midiInputs, midiEnabled: true, ref hasProblem);
                 AppendMidiSessionLines(sb, "Outputs", midiOutputs, midiEnabled: true, ref hasProblem);
             }
@@ -675,13 +675,13 @@ public partial class Footer : Control
         if (statuses == null || statuses.Count == 0)
             return;
 
-        sb.AppendLine($"  {heading}:");
+        sb.AppendLine($"  {T(heading)}:");
         foreach (var entry in statuses.OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase))
         {
             if (!midiEnabled)
             {
                 // Intentionally closed while MIDI is off — not a fault.
-                sb.AppendLine($"  ⚪ {entry.Key} (session — MIDI off)");
+                sb.AppendLine($"  ⚪ {entry.Key} ({T("session — MIDI off")})");
                 continue;
             }
 
@@ -690,7 +690,7 @@ public partial class Footer : Control
                 hasProblem = true;
 
             string indicator = open ? "🟢 " : "🔴 ";
-            string status = open ? "open" : "session device offline";
+            string status = open ? T("open") : T("session device offline");
             sb.AppendLine($"  {indicator}{entry.Key} ({status})");
         }
     }

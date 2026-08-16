@@ -172,15 +172,15 @@ public partial class LogWindow : Window
 		if (remaining <= 0)
 		{
 			_loadMoreButton.Disabled = true;
-			_loadMoreButton.Text = "No older logs";
+			_loadMoreButton.Text = UiLocalizer.T("No older logs");
 			return;
 		}
 
 		_loadMoreButton.Disabled = false;
 		int nextBatch = Math.Min(PageSize, remaining);
 		_loadMoreButton.Text = nextBatch == PageSize
-			? "Load next 100"
-			: $"Load next {nextBatch}";
+			? UiLocalizer.T("Load next 100")
+			: UiLocalizer.Tf("Load next {0}", nextBatch);
 	}
 
 	/// <summary>

@@ -6,6 +6,7 @@ using Cue2.Domain.Cues;
 using Cue2.Services;
 using Godot;
 
+using Cue2.UI.Utilities;
 namespace Cue2.UI.Settings;
 
 /// <summary>
@@ -109,7 +110,7 @@ public partial class MidiInputActionCard : PanelContainer
     private void ApplyActionLabel()
     {
         if (_actionNameLabel == null) return;
-        string label = PrettifyActionName(Action);
+        string label = UiLocalizer.T(PrettifyActionName(Action));
         _actionNameLabel.Text = label;
         // Full name always available on hover when the ellipsis clips the label.
         _actionNameLabel.TooltipText = label;
@@ -125,7 +126,7 @@ public partial class MidiInputActionCard : PanelContainer
 
         var binding = _midiManager?.GetInputMapBinding(Action) ?? MidiActionBinding.Unbound();
         if (!binding.HasBinding)
-            _bindingButton.Text = "None";
+            _bindingButton.Text = UiLocalizer.T("None");
         else
             _bindingButton.Text = binding.GetDisplay();
 
@@ -133,7 +134,7 @@ public partial class MidiInputActionCard : PanelContainer
         {
             _resetButton.Visible = binding.IsNonDefault;
             if (binding.IsNonDefault)
-                _resetButton.TooltipText = "Reset to default (no MIDI)";
+                _resetButton.TooltipText = UiLocalizer.T("Reset to default (no MIDI)");
         }
     }
 
@@ -170,7 +171,7 @@ public partial class MidiInputActionCard : PanelContainer
     {
         _isCapturing = true;
         if (_bindingButton != null)
-            _bindingButton.Text = "MIDI… (Esc)";
+            _bindingButton.Text = UiLocalizer.T("MIDI… (Esc)");
 
         if (!_captureSubscribed && _midiManager != null)
         {

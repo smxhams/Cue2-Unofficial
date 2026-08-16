@@ -291,7 +291,7 @@ public partial class SettingsMidi : Control
             {
                 Text = "Remove",
                 FocusMode = FocusModeEnum.None,
-                TooltipText = $"Remove '{name}' from this session",
+                TooltipText = UiLocalizer.Tf("Remove '{0}' from this session", name),
             };
             removeBtn.AddThemeFontSizeOverride("font_size", 11);
             string captured = name;
@@ -311,7 +311,7 @@ public partial class SettingsMidi : Control
         if (_addDeviceOption == null || _midiManager == null) return;
 
         _addDeviceOption.Clear();
-        _addDeviceOption.AddItem("Select device to add…");
+        _addDeviceOption.AddItem(UiLocalizer.T("Select device to add…"));
         _addDeviceOption.SetItemMetadata(0, "");
         _addDeviceOption.SetItemDisabled(0, true);
 
@@ -345,7 +345,7 @@ public partial class SettingsMidi : Control
 
         if (!_midiManager.IsNativeReady)
         {
-            _statusLabel.Text = "Native library missing";
+            _statusLabel.Text = UiLocalizer.T("Native library missing");
             return;
         }
 
@@ -491,7 +491,7 @@ public partial class SettingsMidi : Control
             {
                 Text = "Remove",
                 FocusMode = FocusModeEnum.None,
-                TooltipText = $"Remove '{name}' from session outputs",
+                TooltipText = UiLocalizer.Tf("Remove '{0}' from session outputs", name),
             };
             removeBtn.AddThemeFontSizeOverride("font_size", 11);
             string captured = name;
@@ -507,7 +507,7 @@ public partial class SettingsMidi : Control
         if (_addOutputOption == null || _midiManager == null) return;
 
         _addOutputOption.Clear();
-        _addOutputOption.AddItem("Select output to add…");
+        _addOutputOption.AddItem(UiLocalizer.T("Select output to add…"));
         _addOutputOption.SetItemMetadata(0, "");
         _addOutputOption.SetItemDisabled(0, true);
 

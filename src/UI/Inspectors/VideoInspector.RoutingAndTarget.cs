@@ -17,8 +17,8 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Cue2.Services;
-using Cue2.Media.Audio;
 using Cue2.UI.Utilities;
+using Cue2.Media.Audio;
 using Godot;
 using Cue2.UI.Preview;
 
@@ -79,7 +79,7 @@ public partial class VideoInspector
 
 			// Index 0: explicit none. Use metadata so id does not collide with layer 0
 			// (Godot remaps AddItem id -1 to the item index).
-			_targetLayerOptionButton.AddItem("No Output");
+			_targetLayerOptionButton.AddItem(UiLocalizer.T("No Output"));
 			_targetLayerOptionButton.SetItemMetadata(0, -1);
 
 			int targetId = _focusedVideoComponent.TargetLayerId;
@@ -105,7 +105,7 @@ public partial class VideoInspector
 			// Keep the stored id when the layer was deleted — show missing entry, do not reassign.
 			if (!matched && targetId >= 0)
 			{
-				_targetLayerOptionButton.AddItem("!!! Missing Layer");
+				_targetLayerOptionButton.AddItem(UiLocalizer.T("!!! Missing Layer"));
 				int missIdx = _targetLayerOptionButton.ItemCount - 1;
 				_targetLayerOptionButton.SetItemMetadata(missIdx, targetId);
 				selectedIndex = missIdx;
@@ -271,12 +271,12 @@ public partial class VideoInspector
 			for (int i = 0; i < itemCount; i++)
 				_outputOptionButton.RemoveItem(_outputOptionButton.GetItemCount() - 1);
 
-			_outputOptionButton.AddItem("No output");
+			_outputOptionButton.AddItem(UiLocalizer.T("No output"));
 			int selectedIndex = 0;
 
 			foreach (var patch in _globalData.Settings.GetAudioOutputPatches())
 			{
-				_outputOptionButton.AddItem($"Patch: {patch.Value.Name}");
+				_outputOptionButton.AddItem(UiLocalizer.Tf("Patch: {0}", patch.Value.Name));
 				int idx = _outputOptionButton.GetItemCount() - 1;
 				_outputOptionButton.SetItemMetadata(idx, patch.Value.Id);
 				if (patch.Value.Id == assignedPatchId)
@@ -285,7 +285,7 @@ public partial class VideoInspector
 
 			foreach (var output in _audioDevices.GetAvailableAudioDeviceNames())
 			{
-				_outputOptionButton.AddItem($"Direct Output: {output}");
+				_outputOptionButton.AddItem(UiLocalizer.Tf("Direct Output: {0}", output));
 				int idx = _outputOptionButton.GetItemCount() - 1;
 				if (!string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput)
 				    && output == _focusedVideoComponent.DirectOutput)
@@ -296,13 +296,13 @@ public partial class VideoInspector
 
 			if (selectedIndex == 0 && !string.IsNullOrEmpty(_focusedVideoComponent.DirectOutput))
 			{
-				_outputOptionButton.AddItem($"!!! Missing output: {_focusedVideoComponent.DirectOutput}");
+				_outputOptionButton.AddItem(UiLocalizer.Tf("!!! Missing output: {0}", _focusedVideoComponent.DirectOutput));
 				selectedIndex = _outputOptionButton.GetItemCount() - 1;
 			}
 			if (selectedIndex == 0 && assignedPatchId >= 0)
 			{
 				string name = _focusedVideoComponent.Patch?.Name ?? $"ID {assignedPatchId}";
-				_outputOptionButton.AddItem($"!!! Missing patch: {name}");
+				_outputOptionButton.AddItem(UiLocalizer.Tf("!!! Missing patch: {0}", name));
 				selectedIndex = _outputOptionButton.GetItemCount() - 1;
 			}
 
