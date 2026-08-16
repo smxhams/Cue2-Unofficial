@@ -82,11 +82,11 @@ public partial class AboutWindow : Window
     {
         var dependencies = new Dictionary<string, (string License, string Url)>
         {
-            { "FFmpeg.AutoGen v8.0.0", (FfmpegLicenseAutogen, "https://github.com/Ruslan-B/FFmpeg.AutoGen/blob/8.0/LICENSE.txt") },
+            { "FFmpeg.AutoGen v9.0.1.1", (FfmpegLicenseAutogen, "https://github.com/Ruslan-B/FFmpeg.AutoGen/blob/9.0/LICENSE.txt") },
             { "FFmpeg (native libraries)", (FfmpegNativeLicense, "https://ffmpeg.org/legal.html") },
-            { "Godot v4.5.1", (GodotLicense, "https://github.com/godotengine/godot/blob/master/LICENSE.txt") },
+            { "Godot v4.7.1", (GodotLicense, "https://github.com/godotengine/godot/blob/master/LICENSE.txt") },
             { "Melanchall.DryWetMidi v8.0.3", (DryWetMidiLicense, "https://github.com/melanchall/drywetmidi/blob/master/LICENSE") },
-            { "SDL3-CS v3.3.2.1", (Sdl3CsLicense, "https://github.com/edwardgushchin/SDL3-CS/blob/master/LICENSE") },
+            { "SDL3-CS v3.4.14.1", (Sdl3CsLicense, "https://github.com/edwardgushchin/SDL3-CS/blob/master/LICENSE") },
             { "Rug.Osc v1.2.5", (RugOscLicense, "https://bitbucket.org/rugcode/rug.osc/wiki/License") }
         };
 
@@ -171,7 +171,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.";
     
     
-    private const string GodotLicense = @"Godot v4.5.1 : MIT License
+    private const string GodotLicense = @"Godot v4.7.1 : MIT License
 
 Copyright © 2014-present Godot Engine contributors.
 Copyright © 2007-2014 Juan Linietsky, Ariel Manzur.
@@ -196,7 +196,7 @@ SOFTWARE.
 
  -- Godot Engine <https://godotengine.org>";
 
-    private const string FfmpegLicenseAutogen = @"FFmpeg.AutoGen v8.0.0 : MIT License
+    private const string FfmpegLicenseAutogen = @"FFmpeg.AutoGen v9.0.1.1 : MIT License
 
 Copyright © 2025 Ruslan Balanukhin (Rationale One)
 
@@ -236,7 +236,7 @@ LGPLv2.1 text: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 
 Copyright © 2000-2025 the FFmpeg developers";
 
-    private const string Sdl3CsLicense = @"SDL3-CS v3.3.2.1 : zlib License
+    private const string Sdl3CsLicense = @"SDL3-CS v3.4.14.1 : zlib License
 
 Copyright © 2024-2025 Eduard Gushchin <eduardgushchin@yandex.ru>
   

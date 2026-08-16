@@ -52,6 +52,17 @@ public partial class MediaEngine : Node
             LinkFFmpegLibraries();
             GD.Print($"MediaEngine:_Ready - FFmpeg version: {ffmpeg.av_version_info()}");
         }
+        catch (NotSupportedException ex)
+        {
+            string msg =
+                "FFmpeg.AutoGen could not bind a native function (wrong FFmpeg ABI). " +
+                "FFmpeg.AutoGen 9 requires FFmpeg 9 shared libraries " +
+                "(avutil-61, avcodec-63, avformat-63, swresample-7, swscale-10). " +
+                ex.Message;
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"MediaEngine:_Ready - Failed to initialize MediaEngine: {msg}", 2);
+            GD.PrintErr($"MediaEngine:_Ready - Initialization error: {msg}, {ex.StackTrace}");
+        }
         catch (Exception ex)
         {
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
@@ -78,15 +89,17 @@ public partial class MediaEngine : Node
         {
             string platformDir = NativeLibPaths.GetPlatformDir(out string platformLabel);
 
-            // Load order: avutil first (dependency of the rest). Major versions = FFmpeg 8.x.
-            (string name, string major)[] libs =
+            // Load order: avutil first (dependency of the rest). Majors come from
+            // FFmpeg.AutoGen so they stay in lockstep with the bindings (9.x = 61/63/63/7/10).
+            string[] loadOrder = { "avutil", "swresample", "avcodec", "avformat", "swscale" };
+            var libs = new (string name, string major)[loadOrder.Length];
+            for (int i = 0; i < loadOrder.Length; i++)
             {
-                ("avutil", "60"),
-                ("avcodec", "62"),
-                ("avformat", "62"),
-                ("swresample", "6"),
-                ("swscale", "9"),
-            };
+                string name = loadOrder[i];
+                if (!ffmpeg.LibraryVersionMap.TryGetValue(name, out int major))
+                    throw new InvalidOperationException($"FFmpeg.AutoGen has no LibraryVersionMap entry for '{name}'.");
+                libs[i] = (name, major.ToString());
+            }
 
             var fileNames = new string[libs.Length];
             for (int i = 0; i < libs.Length; i++)

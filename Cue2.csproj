@@ -2,7 +2,7 @@
 SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 SPDX-License-Identifier: MIT
 -->
-<Project Sdk="Godot.NET.Sdk/4.6.1">  
+<Project Sdk="Godot.NET.Sdk/4.7.1">  
 <PropertyGroup>  
 <TargetFramework>net8.0</TargetFramework>  
 <EnableDynamicLoading>true</EnableDynamicLoading>  
@@ -11,11 +11,12 @@ SPDX-License-Identifier: MIT
 <NoWarn>$(NoWarn);NU1701</NoWarn>
 </PropertyGroup>  
 <ItemGroup>  
-<PackageReference Include="FFmpeg.AutoGen" Version="8.0.0.1" />  
+<PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />  
 <PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />  
  <PackageReference Include="Rug.Osc" Version="1.2.5" />
-<PackageReference Include="SDL3-CS" Version="3.4.2" />  
+<PackageReference Include="SDL3-CS" Version="3.4.14.1" />  
 <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />  
+<PackageReference Update="GodotSharp" Version="4.7.1" />  
 </ItemGroup>  
 <ItemGroup>
   <Compile Remove="bin\**" />

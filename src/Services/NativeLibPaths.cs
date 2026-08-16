@@ -82,7 +82,7 @@ public static class NativeLibPaths
     /// </summary>
     /// <param name="name">Base name without prefix/suffix (e.g. <c>avutil</c>, <c>avcodec</c>).</param>
     /// <param name="major">ABI major version (e.g. <c>60</c>, <c>62</c>).</param>
-    /// <returns>File name such as <c>avutil-60.dll</c>, <c>libavutil.60.dylib</c>, or <c>libavutil.so.60</c>.</returns>
+    /// <returns>File name such as <c>avutil-61.dll</c>, <c>libavutil.61.dylib</c>, or <c>libavutil.so.61</c>.</returns>
     public static string GetFFmpegLibraryFileName(string name, string major)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

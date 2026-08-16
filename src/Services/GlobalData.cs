@@ -241,9 +241,9 @@ public partial class GlobalData : Node
 	/// loaded from <c>bin/{platform}/</c> (see <c>MediaEngine</c> / <c>docs/export-packaging.md</c>).
 	/// </para>
 	/// <para>
-	/// Current project natives are FFmpeg 8.x full builds (macOS often Homebrew-linked; Windows
-	/// shared libs with GPL features). Lists below are demuxer-backed for that class of build —
-	/// not a promise that every codec variant will open on every machine.
+	/// Current project natives are FFmpeg 9.x shared LGPL builds (macOS often Homebrew-linked).
+	/// Lists below are demuxer-backed for that class of build — not a promise that every
+	/// codec variant will open on every machine.
 	/// </para>
 	/// <para>
 	/// Keep disjoint from <see cref="AudioFileFilters"/> and <see cref="ImageFileFilters"/> so drop
@@ -274,12 +274,12 @@ public partial class GlobalData : Node
 	/// not motion video. HEIC/HEIF are omitted — this project's FFmpeg build has no heif demuxer.
 	/// </remarks>
 	public static readonly List<string> ImageFileFilters = new List<string> {
-		// Widespread (verified open with project FFmpeg 8.x)
+		// Widespread (verified open with project FFmpeg 9.x)
 		"*.png", "*.apng", "*.jpg", "*.jpeg", "*.jpe", "*.jfif", "*.bmp", "*.gif", "*.webp",
 		"*.tif", "*.tiff", "*.tga", "*.svg",
 		// HDR / film sequence stills
 		"*.exr", "*.hdr", "*.dpx", "*.dds",
-		// Modern still codecs present in full FFmpeg 8 builds (libjxl / jpeg2000 / av1 still)
+		// Modern still codecs present in full FFmpeg 9 builds (libjxl / jpeg2000 / av1 still)
 		"*.avif", "*.jxl", "*.jp2", "*.j2k", "*.jpf",
 		// Netpbm / misc stills demuxed by image2
 		"*.ico", "*.qoi", "*.pbm", "*.pgm", "*.ppm", "*.pnm", "*.pcx", "*.fits",

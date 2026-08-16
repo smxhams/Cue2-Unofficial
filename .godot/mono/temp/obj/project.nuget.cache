@@ -1,16 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "3FHjCKKv9JE=",
+  "dgSpecHash": "60l5tCZpZEw=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\smxham\\.nuget\\packages\\ffmpeg.autogen\\8.0.0.1\\ffmpeg.autogen.8.0.0.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.6.1\\godot.sourcegenerators.4.6.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.6.1\\godotsharp.4.6.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.6.1\\godotsharpeditor.4.6.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\ffmpeg.autogen\\9.0.1.1\\ffmpeg.autogen.9.0.1.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.7.1\\godot.sourcegenerators.4.7.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.7.1\\godotsharp.4.7.1.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.7.1\\godotsharpeditor.4.7.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\melanchall.drywetmidi\\8.0.3\\melanchall.drywetmidi.8.0.3.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\rug.osc\\1.2.5\\rug.osc.1.2.5.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs\\3.4.2\\sdl3-cs.3.4.2.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs\\3.4.14.1\\sdl3-cs.3.4.14.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs.native\\3.4.2\\sdl3-cs.native.3.4.2.nupkg.sha512"
   ],
   "logs": []
