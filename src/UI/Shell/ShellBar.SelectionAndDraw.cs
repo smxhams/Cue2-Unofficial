@@ -285,29 +285,19 @@ public partial class ShellBar
 	}
 
 	/// <summary>
-	/// Root shells keep L/R content margins; nested shells use zero horizontal inset so their
-	/// trailing Pre/Dur/Post/Follow columns line up with the root grid (margins would stack
-	/// per nest level and shift those fields left).
+	/// All rows share the same panel inset. Nesting is a flat virtual list, so zeroing
+	/// margins on children would shift them left relative to root rows (the old stacked
+	/// PanelContainer margins no longer apply).
 	/// </summary>
 	private void ApplyPanelMetricsForDepth()
 	{
 		if (_panelStyle == null) return;
 		GlobalStyles.ApplyShellChromeMetrics(_panelStyle);
-
-		int depth = ComputeNestDepth();
-		if (depth > 0)
-		{
-			_panelStyle.ContentMarginLeft = 0;
-			_panelStyle.ContentMarginRight = 0;
-			// Nested selection still uses a left accent via colour strip; skip L/R border inset.
-			_panelStyle.BorderWidthLeft = 0;
-			_panelStyle.BorderWidthRight = 0;
-		}
 	}
 
 	/// <summary>
 	/// Rebuilds shell body colour: zebra base × desaturated cue wash × hover/selection.
-	/// Border width/margins stay fixed per depth (root vs nested).
+	/// Border width/margins are the same for root and nested rows.
 	/// </summary>
 	public void RefreshShellChrome()
 	{
@@ -323,24 +313,25 @@ public partial class ShellBar
 			: (showHover ? GlobalStyles.ShellChromeState.Hover : GlobalStyles.ShellChromeState.Normal);
 
 		_panelStyle.BgColor = GlobalStyles.ShellBackgroundFor(cueColor, even, state);
-		// Nested shells: no side border (avoids extra inset); root keeps state border colour.
-		_panelStyle.BorderColor = ComputeNestDepth() > 0
-			? new Color(0, 0, 0, 0)
-			: GlobalStyles.ShellBorderFor(state);
+		_panelStyle.BorderColor = GlobalStyles.ShellBorderFor(state);
 		AddThemeStyleboxOverride("panel", _panelStyle);
 		// Hatch overlay is drawn in _Draw; keep it in sync with chrome refreshes.
 		QueueRedraw();
 	}
 
 	/// <summary>
-	/// Draws disarmed hatch behind shell text: one diagonal direction when disarmed,
-	/// both directions (X hatch) when also skip-if-disarmed. Limited to the main row
-	/// (not nested child shells under an expanded group).
+	/// Quiet grey used for nest tree guides (readable on both zebra rows).
+	/// </summary>
+	private static readonly Color TreeGuideColor = new Color(0.48f, 0.48f, 0.48f, 0.38f);
+
+	/// <summary>
+	/// Draws nest tree guides, then the disarmed hatch behind shell text.
+	/// Hatch is one diagonal when disarmed, both directions when also skip-if-disarmed.
 	/// </summary>
 	public override void _Draw()
 	{
 		base._Draw();
-		if (_cue == null || _cue.Armed)
+		if (_cue == null)
 			return;
 
 		float rowH = ShellColumnLayout.RowMinHeight;
@@ -351,9 +342,14 @@ public partial class ShellBar
 		if (width < 2f || rowH < 2f)
 			return;
 
-		// Subtle lines so text stays readable over the hatch.
-		var lineColor = new Color(0.85f, 0.9f, 0.95f, 0.18f);
-		const float lineWidth = 1.25f;
+		DrawTreeGuides(rowH);
+
+		if (_cue.Armed)
+			return;
+
+		// Quiet grey hatch so text stays readable over the disarmed state.
+		var lineColor = new Color(0.70f, 0.72f, 0.74f, 0.14f);
+		const float lineWidth = 1.125f;
 		const float spacing = 10f;
 
 		// Primary diagonal set (top-left → bottom-right).
@@ -362,6 +358,76 @@ public partial class ShellBar
 		// Second set completes X hatch when skip-if-disarmed is enabled.
 		if (_cue.SkipIfDisarmed)
 			DrawDiagonalHatch(width, rowH, spacing, lineColor, lineWidth, forward: false);
+	}
+
+	/// <summary>
+	/// Paints file-tree guides in the nest indent: a continuing <c>|</c> for
+	/// ancestors that still have later siblings, and <c>├</c> / <c>└</c> for this row.
+	/// Extra colour-rail width (one strip per nest level) is subtracted so the same
+	/// logical slot shares an X across depths.
+	/// </summary>
+	/// <param name="rowH">This cue's row height in local coordinates.</param>
+	private void DrawTreeGuides(float rowH)
+	{
+		if (_treeIndent == null || !_treeIndent.Visible || _cue == null)
+			return;
+
+		int depth = ComputeNestDepth();
+		if (depth <= 0)
+			return;
+
+		float slotW = ShellColumnLayout.NestIndent;
+		float indentW = _treeIndent.Size.X;
+		if (slotW < 2f || indentW < 2f)
+			return;
+
+		// ColorPanel grows by one strip+gap per nest level; TreeIndent starts after that
+		// rail, so undo the extra width or deeper slots drift right of shallower ones.
+		float colorShift = depth * (ShellColumnLayout.ColorWidth + ShellColumnLayout.ColorNestGap);
+		float indentX = _treeIndent.GlobalPosition.X - GlobalPosition.X - colorShift;
+		float midY = rowH * 0.5f;
+		float lineW = Mathf.Max(1f, ShellColumnLayout.Scale);
+
+		float stubRight = _treeIndent.GlobalPosition.X - GlobalPosition.X + indentW;
+		if (_collapseButton != null && IsInstanceValid(_collapseButton))
+			stubRight = _collapseButton.GlobalPosition.X - GlobalPosition.X;
+
+		var node = _cue;
+		for (int i = depth - 1; i >= 0 && node != null; i--)
+		{
+			bool isLast = IsLastSibling(node);
+			// Pixel-center the stroke so 1px guides stay crisp on integer layouts.
+			float x = Mathf.Round(indentX + i * slotW + slotW * 0.5f) + 0.5f;
+
+			if (i < depth - 1)
+			{
+				if (!isLast)
+					DrawLine(new Vector2(x, 0f), new Vector2(x, rowH), TreeGuideColor, lineW);
+			}
+			else
+			{
+				float yEnd = isLast ? midY : rowH;
+				DrawLine(new Vector2(x, 0f), new Vector2(x, yEnd), TreeGuideColor, lineW);
+				if (stubRight > x + 1f)
+					DrawLine(new Vector2(x, midY), new Vector2(stubRight, midY), TreeGuideColor, lineW);
+			}
+
+			node = node.ParentId >= 0 ? CueList.FetchCueFromId(node.ParentId) : null;
+		}
+	}
+
+	/// <summary>
+	/// True when <paramref name="cue"/> is the last entry in its parent's
+	/// <see cref="Cue.ChildCues"/> (or has no parent).
+	/// </summary>
+	private static bool IsLastSibling(Cue cue)
+	{
+		if (cue == null || cue.ParentId < 0)
+			return true;
+		var siblings = CueList.FetchCueFromId(cue.ParentId)?.ChildCues;
+		if (siblings == null || siblings.Count == 0)
+			return true;
+		return siblings[^1] == cue.Id;
 	}
 
 	/// <summary>

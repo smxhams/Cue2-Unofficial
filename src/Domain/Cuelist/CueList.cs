@@ -380,6 +380,101 @@ public partial class CueList : Control
 	}
 
 	/// <summary>
+	/// Global rectangle of the cuelist scroll viewport (used by pick-target / overlay tools).
+	/// </summary>
+	/// <returns>Viewport bounds in global coordinates, or an empty rect if unavailable.</returns>
+	public Rect2 GetCueListScrollGlobalRect()
+	{
+		if (_cueListScroll == null || !IsInstanceValid(_cueListScroll))
+			return new Rect2();
+		return _cueListScroll.GetGlobalRect();
+	}
+
+	/// <summary>
+	/// Applies a mouse-wheel step to the cuelist. Positive <paramref name="steps"/> scrolls down.
+	/// </summary>
+	/// <param name="steps">Wheel notches (typically ±1, or <see cref="InputEventMouseButton.Factor"/>).</param>
+	public void ScrollCueListByWheel(float steps)
+	{
+		if (_cueListScroll == null || !IsInstanceValid(_cueListScroll) || Mathf.IsZeroApprox(steps))
+			return;
+		float rowH = VirtualRowHeight;
+		ScrollCueListByPixels(steps * rowH * 3f);
+	}
+
+	/// <summary>
+	/// Adds <paramref name="deltaPx"/> to the cuelist vertical scroll (positive = down).
+	/// </summary>
+	/// <param name="deltaPx">Pixels to add.</param>
+	public void ScrollCueListByPixels(float deltaPx)
+	{
+		ApplyCueListScrollDelta(deltaPx);
+	}
+
+	/// <summary>
+	/// Scrolls the cuelist when the pointer is in the top or bottom edge band of the
+	/// scroll viewport. Speed scales from 0 at the inner edge of the band to a maximum
+	/// at the viewport edge (and just outside it).
+	/// </summary>
+	/// <param name="globalMouse">Pointer position in global coordinates.</param>
+	/// <param name="delta">Frame delta in seconds.</param>
+	public void AutoScrollCueListFromPointer(Vector2 globalMouse, double delta)
+	{
+		if (_cueListScroll == null || !IsInstanceValid(_cueListScroll) || delta <= 0)
+			return;
+
+		var view = _cueListScroll.GetGlobalRect();
+		if (view.Size.Y < 8f)
+			return;
+
+		// Must be over the list horizontally (small slop for the scrollbar).
+		if (globalMouse.X < view.Position.X - 8f ||
+		    globalMouse.X > view.Position.X + view.Size.X + 8f)
+			return;
+
+		float zone = Mathf.Max(36f, VirtualRowHeight * 2.5f);
+		zone = Mathf.Min(zone, view.Size.Y * 0.35f);
+		float maxSpeed = Mathf.Max(220f, VirtualRowHeight * 22f);
+
+		float top = view.Position.Y;
+		float bottom = top + view.Size.Y;
+		float dy = 0f;
+
+		if (globalMouse.Y <= top + zone && globalMouse.Y >= top - zone)
+		{
+			float closeness = 1f - Mathf.Clamp((globalMouse.Y - top) / zone, 0f, 1f);
+			dy = -maxSpeed * closeness;
+		}
+		else if (globalMouse.Y >= bottom - zone && globalMouse.Y <= bottom + zone)
+		{
+			float closeness = 1f - Mathf.Clamp((bottom - globalMouse.Y) / zone, 0f, 1f);
+			dy = maxSpeed * closeness;
+		}
+
+		if (Mathf.IsZeroApprox(dy))
+			return;
+		ApplyCueListScrollDelta(dy * (float)delta);
+	}
+
+	/// <summary>
+	/// Adds <paramref name="deltaPx"/> to the cuelist vertical scroll, clamped to the bar range.
+	/// </summary>
+	/// <param name="deltaPx">Pixels to add (positive = down).</param>
+	private void ApplyCueListScrollDelta(float deltaPx)
+	{
+		if (_cueListScroll == null || !IsInstanceValid(_cueListScroll))
+			return;
+
+		int next = _cueListScroll.ScrollVertical + Mathf.RoundToInt(deltaPx);
+		var vBar = _cueListScroll.GetVScrollBar();
+		if (vBar != null)
+			next = (int)Mathf.Clamp(next, vBar.MinValue, vBar.MaxValue);
+		else
+			next = Mathf.Max(0, next);
+		_cueListScroll.ScrollVertical = next;
+	}
+
+	/// <summary>
 	/// True when Show Mode is locking cue/cuelist document edits.
 	/// </summary>
 	private bool IsCueEditingLocked() =>

@@ -70,14 +70,18 @@ size_flags_vertical = 3
 [node name="DropFileName" type="Label" parent="MarginContainer/VBoxContainer/FileOptionsContainer/MarginContainer/OptionsListContiner" unique_id=1765762191]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 0
 text = "Files Dropped"
 tooltip_text = ""
+autowrap_mode = 3
 
 [node name="DropTargetLabel" type="Label" parent="MarginContainer/VBoxContainer/FileOptionsContainer/MarginContainer/OptionsListContiner" unique_id=2030158069]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Drop Location: Cue Number: - Name: "
+autowrap_mode = 3
 
 [node name="ActionBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=987654321]
 layout_mode = 2

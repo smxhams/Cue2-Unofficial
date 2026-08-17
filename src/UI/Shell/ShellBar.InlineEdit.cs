@@ -335,11 +335,23 @@ public partial class ShellBar
 		{
 			if (IsCueEditingLocked()) return;
 			if (_isEditingMemo) return;
-			_memoLineEdit.Editable = true;
-			_memoLineEdit.FocusMode = FocusModeEnum.Click;
-			_memoLineEdit.GrabFocus();
-			_isEditingMemo = true;
+			BeginInlineMemoEdit();
 		}
+	}
+
+	/// <summary>
+	/// Enters double-click inline edit for the memo (notes) field.
+	/// </summary>
+	private void BeginInlineMemoEdit()
+	{
+		if (_memoLineEdit == null || _cue == null) return;
+		_isEditingMemo = true;
+		_memoLineEdit.Editable = true;
+		_memoLineEdit.FocusMode = FocusModeEnum.All;
+		_memoLineEdit.GrabFocus();
+		if (_memoLineEdit.HasMethod("edit") && !_memoLineEdit.IsEditing())
+			_memoLineEdit.Edit();
+		_memoLineEdit.SelectAll();
 	}
 
 	private void OnMemoEditToggled(bool editing)
@@ -359,13 +371,24 @@ public partial class ShellBar
 			return;
 		}
 
-		CommitMemoEdit();
+		CommitMemoEdit(releaseFocus: false);
+	}
+
+	private void OnMemoFocusExited()
+	{
+		CommitMemoEdit(releaseFocus: false);
+	}
+
+	private void OnMemoTextSubmitted(string _)
+	{
+		CommitMemoEdit(releaseFocus: true);
 	}
 
 	/// <summary>
 	/// Commits double-click memo-notes edit to the model (same guards as name/number).
 	/// </summary>
-	private void CommitMemoEdit()
+	/// <param name="releaseFocus">When true, clear focus after commit (Enter path).</param>
+	private void CommitMemoEdit(bool releaseFocus)
 	{
 		if (!_isEditingMemo || _memoLineEdit == null || _cue == null)
 			return;
@@ -380,8 +403,10 @@ public partial class ShellBar
 			// Restore display from model; do not record during undo/redo or Show Mode.
 			_memoLineEdit.Text = flatCurrent;
 			_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue.Notes)
-				? "Memo cue — double-click to edit notes."
+				? UiLocalizer.T("Memo cue — double-click to edit notes.")
 				: _cue.Notes;
+			if (releaseFocus && _memoLineEdit.HasFocus())
+				_memoLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 			return;
 		}
 
@@ -399,8 +424,11 @@ public partial class ShellBar
 		}
 
 		_memoLineEdit.TooltipText = string.IsNullOrEmpty(_cue.Notes)
-			? "Memo cue — double-click to edit notes."
+			? UiLocalizer.T("Memo cue — double-click to edit notes.")
 			: _cue.Notes;
+
+		if (releaseFocus && _memoLineEdit.HasFocus())
+			_memoLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
 	}
 
 	private void OnPreWaitFocusEntered()

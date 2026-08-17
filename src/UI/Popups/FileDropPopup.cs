@@ -126,6 +126,8 @@ public partial class FileDropPopup : Window
 			: string.Empty;
 
 		dropTargetLabel.Text = FormatDropTargetLine();
+		EnableLabelWrap(dropFileNameLabel);
+		EnableLabelWrap(dropTargetLabel);
 
 		var headerSep = new HSeparator();
 		container.AddChild(headerSep);
@@ -138,7 +140,7 @@ public partial class FileDropPopup : Window
 		// Position options (only meaningful for ShellBar target)
 		if (_targetType == FileDropTargetType.ShellBar && _targetCueId >= 0)
 		{
-			container.AddChild(new Label { Text = UiLocalizer.T("Insert Position:") });
+			container.AddChild(CreateWrappingLabel(UiLocalizer.T("Insert Position:")));
 
 			var posContainer = new VBoxContainer();
 			posContainer.AddThemeConstantOverride("separation", 2);
@@ -149,14 +151,14 @@ public partial class FileDropPopup : Window
 		}
 		else
 		{
-			container.AddChild(new Label { Text = UiLocalizer.T("Insert Location: End of list (or after current selection)") });
+			container.AddChild(CreateWrappingLabel(UiLocalizer.T("Insert Location: End of list (or after current selection)")));
 		}
 
 		// Multi-file options
 		if (_files.Length > 1)
 		{
 			container.AddChild(new HSeparator());
-			container.AddChild(new Label { Text = UiLocalizer.T("Multiple Files Action:") });
+			container.AddChild(CreateWrappingLabel(UiLocalizer.T("Multiple Files Action:")));
 
 			var multiContainer = new VBoxContainer();
 			multiContainer.AddThemeConstantOverride("separation", 2);
@@ -210,6 +212,7 @@ public partial class FileDropPopup : Window
 			Text = text,
 			ButtonPressed = isDefault || _chosenMultiFileMode == mode
 		};
+		EnableButtonWrap(cb);
 
 		if (isDefault) _chosenMultiFileMode = mode;
 
@@ -237,6 +240,7 @@ public partial class FileDropPopup : Window
 			Text = text,
 			ButtonPressed = isDefault || _chosenInsertMode == mode
 		};
+		EnableButtonWrap(cb);
 
 		if (isDefault) _chosenInsertMode = mode;
 
@@ -318,4 +322,38 @@ public partial class FileDropPopup : Window
 	/// Returns the cue id of the shell that was the drop target (or -1).
 	/// </summary>
 	public int GetTargetCueId() => _targetCueId;
+
+	/// <summary>
+	/// Creates a full-width wrapping label for popup option headers.
+	/// </summary>
+	/// <param name="text">Already-localized label text.</param>
+	/// <returns>Configured label.</returns>
+	private static Label CreateWrappingLabel(string text)
+	{
+		var label = new Label { Text = text };
+		EnableLabelWrap(label);
+		return label;
+	}
+
+	/// <summary>
+	/// Allows a label to wrap inside the popup width instead of stretching the window.
+	/// </summary>
+	/// <param name="label">Label to configure.</param>
+	private static void EnableLabelWrap(Label label)
+	{
+		if (label == null) return;
+		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+	}
+
+	/// <summary>
+	/// Allows a checkbox / button caption to wrap inside the popup width.
+	/// </summary>
+	/// <param name="button">Button or checkbox to configure.</param>
+	private static void EnableButtonWrap(Button button)
+	{
+		if (button == null) return;
+		button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+	}
 }

@@ -191,131 +191,126 @@ public partial class CueList
 		Cue groupCue = null;
 		Cue firstParentForFocus = null;
 
-		// Determine insertion base location once
+		// Determine insertion base location once (model sibling index, not virtual container index).
 		var (targetContainer, baseInsertIndex, parentIdForNew) = ResolveInsertLocation(targetCueId, insertMode);
 
 		bool useSingleGroup = multiFileMode == MultiFileDropMode.WrapInOneGroup && files.Length > 1;
 		bool useParentPerFile = multiFileMode == MultiFileDropMode.ParentPerFile && files.Length > 1;
 
-		if (useSingleGroup)
+		BeginVirtualRefreshSuppress();
+		try
 		{
-			// Create a wrapper group cue first (shell defaults, then override display name)
-			groupCue = new Cue();
-			_globalData?.Settings?.ApplyShellDefaults(groupCue);
-			groupCue.Name = $"Group ({files.Length} files)";
-			groupCue.CueNum = groupCue.Id.ToString();
-
-			CreateShellAndInsert(groupCue, targetContainer, baseInsertIndex, parentIdForNew);
-			newCues.Add(groupCue);
-
-			// Subsequent children go into the group's child container, at end of it
-			targetContainer = groupCue.ShellBar?.ShellChildContainer ?? targetContainer;
-			baseInsertIndex = targetContainer.GetChildCount(); // append children
-			parentIdForNew = groupCue.Id;
-			// Expand the new group
-			groupCue.Expanded = true;
-		}
-
-		int currentIndex = baseInsertIndex;
-
-		foreach (string filePath in files)
-		{
-			if (!File.Exists(filePath)) continue;
-
-			string baseName = Path.GetFileNameWithoutExtension(filePath);
-			if (string.IsNullOrWhiteSpace(baseName))
-				baseName = null;
-
-			// Optional empty parent for ParentPerFile mode (2 cues per file)
-			Cue perFileParent = null;
-			VBoxContainer mediaContainer = targetContainer;
-			int mediaInsertIndex;
-			int mediaParentId = parentIdForNew;
-
-			if (useParentPerFile)
+			if (useSingleGroup)
 			{
-				perFileParent = new Cue();
-				_globalData?.Settings?.ApplyShellDefaults(perFileParent);
-				perFileParent.Name = baseName ?? $"Cue {perFileParent.Id}";
-				perFileParent.CueNum = perFileParent.Id.ToString();
+				// Create a wrapper group cue first (shell defaults, then override display name)
+				groupCue = new Cue();
+				_globalData?.Settings?.ApplyShellDefaults(groupCue);
+				groupCue.Name = $"Group ({files.Length} files)";
+				groupCue.CueNum = groupCue.Id.ToString();
+				groupCue.Expanded = true;
 
-				CreateShellAndInsert(perFileParent, targetContainer, currentIndex, parentIdForNew);
-				newCues.Add(perFileParent);
-				firstParentForFocus ??= perFileParent;
+				CreateShellAndInsert(groupCue, targetContainer, baseInsertIndex, parentIdForNew);
+				newCues.Add(groupCue);
 
-				// Next sibling parent inserts after this parent shell
-				currentIndex = (perFileParent.ShellBar?.GetIndex() ?? currentIndex) + 1;
-
-				mediaContainer = perFileParent.ShellBar?.ShellChildContainer ?? targetContainer;
-				mediaInsertIndex = mediaContainer.GetChildCount();
-				mediaParentId = perFileParent.Id;
-				perFileParent.Expanded = true;
-			}
-			else if (useSingleGroup)
-			{
-				// Always append inside the shared group
-				mediaInsertIndex = mediaContainer.GetChildCount();
-			}
-			else
-			{
-				mediaInsertIndex = currentIndex;
+				parentIdForNew = groupCue.Id;
 			}
 
-			var cue = new Cue();
-			_globalData?.Settings?.ApplyShellDefaults(cue);
-			cue.Name = baseName ?? $"Cue {cue.Id}";
-			cue.CueNum = cue.Id.ToString();
+			int currentIndex = baseInsertIndex;
 
-			// Add the appropriate component
-			string ext = Path.GetExtension(filePath).ToLowerInvariant();
-			bool isAudio = GlobalData.AudioFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
-			bool isVideoOrImage = GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)) ||
-			                       GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+			foreach (string filePath in files)
+			{
+				if (!File.Exists(filePath)) continue;
 
-			// Store show-relative path immediately when media backup is enabled
-			string pathToStore = ResolveMediaPathForNewCue(filePath, isAudio);
+				string baseName = Path.GetFileNameWithoutExtension(filePath);
+				if (string.IsNullOrWhiteSpace(baseName))
+					baseName = null;
 
-			if (isAudio)
-			{
-				cue.AddAudioComponent(pathToStore);
-			}
-			else if (isVideoOrImage)
-			{
-				cue.AddVideoComponent(pathToStore);
-				// Video may contain audio - we will discover on metadata
-			}
-			else
-			{
-				// Should have been filtered; drop orphan empty parent if we already inserted one
-				if (perFileParent != null)
+				// Optional empty parent for ParentPerFile mode (2 cues per file)
+				Cue perFileParent = null;
+				int mediaInsertIndex;
+				int mediaParentId = parentIdForNew;
+
+				if (useParentPerFile)
 				{
-					int orphanIndex = perFileParent.ShellBar?.GetIndex() ?? -1;
-					if (orphanIndex >= 0 && orphanIndex < currentIndex)
-						currentIndex = orphanIndex;
-					RemoveCue(perFileParent);
-					newCues.Remove(perFileParent);
-					if (firstParentForFocus == perFileParent)
-						firstParentForFocus = null;
+					perFileParent = new Cue();
+					_globalData?.Settings?.ApplyShellDefaults(perFileParent);
+					perFileParent.Name = baseName ?? $"Cue {perFileParent.Id}";
+					perFileParent.CueNum = perFileParent.Id.ToString();
+					perFileParent.Expanded = true;
+
+					CreateShellAndInsert(perFileParent, targetContainer, currentIndex, parentIdForNew);
+					newCues.Add(perFileParent);
+					firstParentForFocus ??= perFileParent;
+
+					currentIndex++;
+					mediaInsertIndex = perFileParent.ChildCues.Count;
+					mediaParentId = perFileParent.Id;
 				}
-				continue;
+				else if (useSingleGroup)
+				{
+					mediaInsertIndex = groupCue?.ChildCues.Count ?? 0;
+				}
+				else
+				{
+					mediaInsertIndex = currentIndex;
+				}
+
+				var cue = new Cue();
+				_globalData?.Settings?.ApplyShellDefaults(cue);
+				cue.Name = baseName ?? $"Cue {cue.Id}";
+				cue.CueNum = cue.Id.ToString();
+
+				// Add the appropriate component
+				string ext = Path.GetExtension(filePath).ToLowerInvariant();
+				bool isAudio = GlobalData.AudioFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+				bool isVideoOrImage = GlobalData.VideoFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase)) ||
+				                       GlobalData.ImageFileFilters.Any(e => e.TrimStart('*').Equals(ext, StringComparison.OrdinalIgnoreCase));
+
+				// Store show-relative path immediately when media backup is enabled
+				string pathToStore = ResolveMediaPathForNewCue(filePath, isAudio);
+
+				if (isAudio)
+				{
+					cue.AddAudioComponent(pathToStore);
+				}
+				else if (isVideoOrImage)
+				{
+					cue.AddVideoComponent(pathToStore);
+					// Video may contain audio - we will discover on metadata
+				}
+				else
+				{
+					// Should have been filtered; drop orphan empty parent if we already inserted one
+					if (perFileParent != null)
+					{
+						currentIndex = Math.Max(0, currentIndex - 1);
+						RemoveCue(perFileParent);
+						newCues.Remove(perFileParent);
+						if (firstParentForFocus == perFileParent)
+							firstParentForFocus = null;
+					}
+					continue;
+				}
+
+				CreateShellAndInsert(cue, targetContainer, mediaInsertIndex, mediaParentId);
+
+				// Advance sibling insert index for separate (non-group, non parent-per-file) mode
+				if (!useSingleGroup && !useParentPerFile)
+					currentIndex++;
+
+				newCues.Add(cue);
+
+				// Kick off async metadata + waveform (fire and forget with logging)
+				_ = ApplyMetadataToNewCueAsync(cue, filePath, mediaEngine);
+
+				// Parent duration depends on child media
+				if (perFileParent != null)
+					perFileParent.CalculateTotalDuration();
 			}
-
-			CreateShellAndInsert(cue, mediaContainer, mediaInsertIndex, mediaParentId);
-
-			// Advance sibling insert index for separate (non-group, non parent-per-file) mode
-			if (!useSingleGroup && !useParentPerFile)
-			{
-				currentIndex = targetContainer.GetChildCount();
-			}
-
-			newCues.Add(cue);
-
-			// Kick off async metadata + waveform (fire and forget with logging)
-			_ = ApplyMetadataToNewCueAsync(cue, filePath, mediaEngine);
-
-			// Parent duration depends on child media
-			if (perFileParent != null)
-				perFileParent.CalculateTotalDuration();
+		}
+		finally
+		{
+			EndVirtualRefreshSuppress();
 		}
 
 		if (newCues.Count == 0)

@@ -103,29 +103,24 @@ public partial class ShellBar
 
 	private void UpdateColor(Color color)
 	{
-		_colorBarStyle ??= _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
-		if (_colorBarStyle == null) return;
-		_colorBarStyle.BgColor = _cue.Color;
-		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
-		ConfigureColorPanelLayout();
-		// Shell body wash follows cue colour.
-		RefreshShellChrome();
+		// Ancestor rails on descendant rows use this cue's colour — refresh every bound row.
+		if (_globalData?.Cuelist != null)
+			_globalData.Cuelist.RefreshVisibleHierarchyChrome();
+		else
+		{
+			RebuildColorRail();
+			RefreshShellChrome();
+		}
 	}
 
 	public void RelationshipChanged()
 	{
-		// Always update collapse UI state. Do not early-return on transient mismatch;
-		// after sync in reorder or structure the counts should align.
-		if (_cue != null && _cue.ChildCues.Count > 0 &&
-			ShellChildContainer.GetChildCount() != _cue.ChildCues.Count)
-		{
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-				$"ShellBar:RelationshipChanged - Mismatch of data with UI elements for cue {_cue.Id}", (int)LogType.Warning);
-		}
-
-		UpdateCollapseUI();
-		// Hierarchy changes (group/reorder) can change nesting depth for this row and children.
-		RefreshTreeLayoutRecursive();
+		// Virtual rows are reused; nest chrome (chevron, indent, colour rail) must be re-applied
+		// on this row and every other bound row that may have changed depth.
+		if (_globalData?.Cuelist != null)
+			_globalData.Cuelist.RefreshVisibleHierarchyChrome();
+		else
+			RefreshHierarchyChrome();
 	}
 
 	private void CollapsedPressed()
@@ -137,9 +132,9 @@ public partial class ShellBar
 	}
 
 	/// <summary>
-	/// Updates the expand/collapse chevron and nested child visibility.
-	/// Row order is Color | Drag | Issue | TreeIndent | Collapse | … so left chrome stays flush
-	/// while collapse/name step right with nest depth.
+	/// Updates the expand/collapse chevron from <see cref="Cue.ChildCues"/>.
+	/// Child visibility is owned by the virtual list (<see cref="CueList.NotifyVirtualStructureChanged"/>),
+	/// not by nesting ShellBars inside <see cref="ShellChildContainer"/>.
 	/// </summary>
 	private void UpdateCollapseUI()
 	{
@@ -155,17 +150,13 @@ public partial class ShellBar
 			: MouseFilterEnum.Ignore;
 
 		if (hasChildren)
-		{
 			_collapseButton.Icon = GetThemeIcon(_cue.Expanded ? "Down" : "Right", "AtlasIcons");
-			if (ShellChildContainer != null)
-				ShellChildContainer.Visible = _cue.Expanded;
-		}
 		else
-		{
 			_collapseButton.Icon = null;
-			if (ShellChildContainer != null)
-				ShellChildContainer.Visible = false;
-		}
+
+		// Nesting is data + VisibleRowIds; never grow this row with a leftover child VBox.
+		if (ShellChildContainer != null)
+			ShellChildContainer.Visible = false;
 	}
 
 	/// <summary>

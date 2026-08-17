@@ -29,8 +29,8 @@ public partial class ShellBar : PanelContainer
 	private Cue _cue;
 	
 	// Ui Properties
-	private Panel _colorPanel;
-	private StyleBoxFlat _colorBarStyle;
+	/// <summary>Left nest-color rail (ancestor strips + own colour). HBox of ColorRects.</summary>
+	private HBoxContainer _colorPanel;
 	private Panel _groupPanel;
 	private Panel _shellPanel;
 	private Button _dragButton;
@@ -137,6 +137,8 @@ public partial class ShellBar : PanelContainer
 		{
 			_memoLineEdit.GuiInput += OnMemoGuiInput;
 			_memoLineEdit.EditingToggled += OnMemoEditToggled;
+			_memoLineEdit.FocusExited += OnMemoFocusExited;
+			_memoLineEdit.TextSubmitted += OnMemoTextSubmitted;
 		}
 		if (_followButton != null)
 			_followButton.Pressed += OnFollowButtonPressed;
@@ -186,14 +188,12 @@ public partial class ShellBar : PanelContainer
 			_groupPanel.MouseFilter = MouseFilterEnum.Ignore;
 		}
 
-		// Structure:
+		// Structure (flat virtual list — children are sibling rows, not nested VBoxes):
 		//   OuterHBox
-		//     ColorPanel          ← full shell height (row + nested children)
+		//     ColorPanel          ← ancestor colours + own colour (own strip is rightmost)
 		//     ContentVBox
 		//       RowHBox (Leading | Trailing)
-		//       ShellChildContainer
-		// ColorPanel is a sibling of ContentVBox so it spans expanded groups as a nest visual.
-		// ColorNestGap (1px) sits between parent and child colour strips when nested.
+		// ColorNestGap sits between colour strips and between the rail and row content.
 		var outerHBox = GetNodeOrNull<HBoxContainer>("OuterHBox");
 		if (outerHBox != null)
 		{
@@ -234,8 +234,10 @@ public partial class ShellBar : PanelContainer
 
 		if (ShellChildContainer != null)
 		{
+			// Unused after virtualization (nesting is data + VisibleRowIds). Keep hidden
+			// so a leftover child cannot grow this row past VirtualRowHeight.
+			ShellChildContainer.Visible = false;
 			ShellChildContainer.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-			// Zero gap so parent colour strip reads continuous through nested children.
 			ShellChildContainer.AddThemeConstantOverride("separation", 0);
 		}
 
@@ -318,6 +320,12 @@ public partial class ShellBar : PanelContainer
 
 	public override void _Notification(int what)
 	{
+		if (what == NotificationResized)
+		{
+			QueueRedraw();
+			return;
+		}
+
 		// Permanent cleanup only when the node is actually being destroyed.
 		if (what != NotificationPredelete)
 			return;
@@ -331,10 +339,6 @@ public partial class ShellBar : PanelContainer
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		}
 		UnbindCue();
-		// Drop duplicated theme StyleBox so it is not retained after node free
-		if (_colorPanel != null && IsInstanceValid(_colorPanel))
-			_colorPanel.RemoveThemeStyleboxOverride("panel");
-		_colorBarStyle = null;
 		_issueActiveStyle = null;
 		_issueIdleStyle = null;
 	}
@@ -348,8 +352,8 @@ public partial class ShellBar : PanelContainer
 
 	/// <summary>
 	/// Applies shared column widths and cuelist scale from <see cref="ShellColumnLayout"/> to this row.
-	/// Color strip lives in OuterHBox (full shell height including nested children).
-	/// Row layout: [Leading: Drag|Issue|Indent|Collapse|Num|Name(expand)] | [Trailing: Pre|Dur|Post|Follow].
+	/// Color rail lives in OuterHBox (ancestor colours + own colour).
+	/// Row layout: [Color rail | Leading: Drag|Issue|Indent|Collapse|Num|Name(expand)] | [Trailing: Pre|Dur|Post|Follow].
 	/// Trailing is fixed-width and non-expanding so nest indent never shifts time columns.
 	/// </summary>
 	public void ApplyColumnLayout()
@@ -370,8 +374,8 @@ public partial class ShellBar : PanelContainer
 		var outerHBox = GetNodeOrNull<HBoxContainer>("OuterHBox");
 		outerHBox?.AddThemeConstantOverride("separation", ShellColumnLayout.ColorNestGap);
 
-		// Full-height nest indicator: beside ContentVBox, not inside the cue row.
-		ConfigureColorPanelLayout();
+		// Nest colour rail: ancestor strips + own colour (own strip stays on the right).
+		RebuildColorRail();
 		if (_dragButton != null)
 		{
 			_dragButton.CustomMinimumSize = new Vector2(ShellColumnLayout.DragWidth, ctrlH);
@@ -491,28 +495,93 @@ public partial class ShellBar : PanelContainer
 	}
 
 	/// <summary>
-	/// Ensures ColorPanel is a full-height left strip (row + nested ShellChildContainer).
+	/// Rebuilds the left nest-color rail: one strip per ancestor (root first) plus this cue
+	/// on the right. Parent strips on descendant rows make the group colour appear to span
+	/// children. Extra rail width is compensated when drawing tree guides.
 	/// </summary>
-	private void ConfigureColorPanelLayout()
+	private void RebuildColorRail()
 	{
 		if (_colorPanel == null)
 			return;
 
-		_colorPanel.CustomMinimumSize = new Vector2(ShellColumnLayout.ColorWidth, 0);
+		int depth = _cue != null ? ComputeNestDepth() : 0;
+		int stripCount = depth + 1;
+		float stripW = ShellColumnLayout.ColorWidth;
+		int sep = ShellColumnLayout.ColorNestGap;
+
+		_colorPanel.AddThemeConstantOverride("separation", sep);
+		_colorPanel.CustomMinimumSize = new Vector2(
+			stripCount * stripW + Mathf.Max(0, stripCount - 1) * sep, 0);
 		_colorPanel.SizeFlagsHorizontal = SizeFlags.Fill;
 		_colorPanel.SizeFlagsVertical = SizeFlags.ExpandFill;
 		_colorPanel.MouseFilter = MouseFilterEnum.Ignore;
 
-		// Continuous vertical strip: no rounded corners or content inset on the bar itself.
-		if (_colorBarStyle != null)
+		var colors = new Color[stripCount];
+		if (_cue == null)
 		{
-			_colorBarStyle.ContentMarginLeft = 0;
-			_colorBarStyle.ContentMarginRight = 0;
-			_colorBarStyle.ContentMarginTop = 0;
-			_colorBarStyle.ContentMarginBottom = 0;
-			_colorBarStyle.SetCornerRadiusAll(0);
-			_colorBarStyle.AntiAliasing = false;
+			colors[0] = Colors.Black;
 		}
+		else
+		{
+			var current = _cue;
+			for (int i = depth; i >= 0; i--)
+			{
+				colors[i] = current?.Color ?? Colors.Black;
+				if (current == null || current.ParentId < 0)
+					break;
+				current = CueList.FetchCueFromId(current.ParentId);
+			}
+		}
+
+		int rectIndex = 0;
+		foreach (var child in _colorPanel.GetChildren())
+		{
+			if (child is not ColorRect rect)
+				continue;
+			if (rectIndex < stripCount)
+			{
+				rect.Visible = true;
+				rect.Color = colors[rectIndex];
+				rect.CustomMinimumSize = new Vector2(stripW, 0);
+				rect.SizeFlagsHorizontal = SizeFlags.Fill;
+				rect.SizeFlagsVertical = SizeFlags.ExpandFill;
+				rect.MouseFilter = MouseFilterEnum.Ignore;
+				rectIndex++;
+			}
+			else
+			{
+				rect.Visible = false;
+			}
+		}
+
+		while (rectIndex < stripCount)
+		{
+			var rect = new ColorRect
+			{
+				Name = $"ColorRail{rectIndex}",
+				Color = colors[rectIndex],
+				CustomMinimumSize = new Vector2(stripW, 0),
+				SizeFlagsHorizontal = SizeFlags.Fill,
+				SizeFlagsVertical = SizeFlags.ExpandFill,
+				MouseFilter = MouseFilterEnum.Ignore
+			};
+			_colorPanel.AddChild(rect);
+			rectIndex++;
+		}
+	}
+
+	/// <summary>
+	/// Re-applies nest-dependent chrome after ParentId / ChildCues change without a full
+	/// <see cref="SetCue"/> (virtual rows are reused across hierarchy edits).
+	/// </summary>
+	public void RefreshHierarchyChrome()
+	{
+		if (!IsInstanceValid(this))
+			return;
+		UpdateCollapseUI();
+		ApplyTreeIndent();
+		RebuildColorRail();
+		RefreshShellChrome();
 	}
 
 	/// <summary>
@@ -528,10 +597,11 @@ public partial class ShellBar : PanelContainer
 		float indent = depth * ShellColumnLayout.NestIndent;
 		_treeIndent.CustomMinimumSize = new Vector2(indent, 0);
 		_treeIndent.SizeFlagsHorizontal = SizeFlags.Fill;
+		_treeIndent.SizeFlagsVertical = SizeFlags.ExpandFill;
 		// Hide zero-width spacer so HBox separation is not doubled at root.
 		_treeIndent.Visible = depth > 0;
+		QueueRedraw();
 
-		// Depth affects panel margins used for column alignment.
 		ApplyPanelMetricsForDepth();
 		if (_panelStyle != null)
 			AddThemeStyleboxOverride("panel", _panelStyle);
@@ -559,19 +629,13 @@ public partial class ShellBar : PanelContainer
 	}
 
 	/// <summary>
-	/// Refreshes column layout and tree indent for this shell and all nested descendants.
-	/// Call after reparent / group / reorder so depth-based indent stays correct.
+	/// Refreshes column layout and nest chrome for this shell.
+	/// Descendants are sibling rows in the virtual list — <see cref="CueList"/> refreshes those.
 	/// </summary>
 	public void RefreshTreeLayoutRecursive()
 	{
 		ApplyColumnLayout();
-		if (ShellChildContainer == null)
-			return;
-		foreach (var child in ShellChildContainer.GetChildren())
-		{
-			if (child is ShellBar childShell)
-				childShell.RefreshTreeLayoutRecursive();
-		}
+		RefreshHierarchyChrome();
 	}
 
 	private void OnUpdateShellBar(int cueId)
@@ -665,7 +729,7 @@ public partial class ShellBar : PanelContainer
 	private void DefineUi()
 	{
 		// Define Ui
-		_colorPanel = GetNode<Panel>("%ColorPanel");
+		_colorPanel = GetNode<HBoxContainer>("%ColorPanel");
 		_groupPanel = GetNode<Panel>("%GroupPanel");
 		_shellPanel = GetNode<Panel>("%ShellPanel");
 		_dragButton = GetNode<Button>("%DragBar");
@@ -772,12 +836,7 @@ public partial class ShellBar : PanelContainer
 		_cueNumLineEdit.Text = cue.CueNum;
 		_cueNameLineEdit.Text = cue.Name;
 		RefreshTimesFromCue();
-		if (_colorBarStyle == null)
-			_colorBarStyle = _colorPanel.GetThemeStylebox("panel").Duplicate() as StyleBoxFlat;
-		if (_colorBarStyle != null)
-			_colorBarStyle.BgColor = _cue.Color;
-		_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
-		ConfigureColorPanelLayout();
+		RebuildColorRail();
 		UpdateFollowMode(cue.Follow);
 		// Initialize collapse/expand UI based on children (SetCue path)
 		UpdateCollapseUI();
@@ -846,15 +905,9 @@ public partial class ShellBar : PanelContainer
 		if (!_isEditingCueNum)
 			_cueNumLineEdit.Text = _cue.CueNum;
 		RefreshTimesFromCue();
-		if (_colorBarStyle != null)
-		{
-			_colorBarStyle.BgColor = _cue.Color;
-			_colorPanel.AddThemeStyleboxOverride("panel", _colorBarStyle);
-		}
 		UpdateFollowMode(_cue.Follow);
-		UpdateCollapseUI();
 		RefreshIssueIndicatorFromService();
-		RefreshShellChrome();
+		RefreshHierarchyChrome();
 		ApplyMemoMode();
 	}
 

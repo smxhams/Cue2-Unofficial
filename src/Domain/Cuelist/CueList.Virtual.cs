@@ -195,6 +195,22 @@ public partial class CueList
 	}
 
 	/// <summary>
+	/// Re-applies nest indent, collapse chevron, and ancestor colour rails on every bound row.
+	/// Needed after ParentId / ChildCues change because the virtual pool reuses ShellBars
+	/// without calling <see cref="ShellBar.SetCue"/>.
+	/// </summary>
+	internal void RefreshVisibleHierarchyChrome()
+	{
+		if (_cueContainer == null || !IsInstanceValid(_cueContainer))
+			return;
+		foreach (var child in _cueContainer.GetChildren())
+		{
+			if (child is ShellBar sb && IsInstanceValid(sb))
+				sb.RefreshHierarchyChrome();
+		}
+	}
+
+	/// <summary>
 	/// Binds pooled ShellBars to the viewport (plus overscan) and sizes spacers so scroll
 	/// height matches the full visible list.
 	/// </summary>
@@ -269,6 +285,9 @@ public partial class CueList
 			if (idx != insertAt)
 				_cueContainer.MoveChild(shell, insertAt);
 			shell.SetZebraIndex(i);
+			// Reused rows keep their previous cue binding — nest chrome (indent / chevron /
+			// ancestor colour rails) must still update when ParentId or ChildCues change.
+			shell.RefreshHierarchyChrome();
 			insertAt++;
 		}
 

@@ -334,6 +334,11 @@ public partial class ControlComponentCard : PanelContainer
             return;
         }
 
+        // Wheel / trackpad: the hold started on the inspector button, which captures
+        // the pointer so the cuelist never sees the wheel. Forward it while over the list.
+        if (TryHandlePickScrollInput(@event))
+            return;
+
         // Release left button: assign shell under cursor (if any).
         if (@event is InputEventMouseButton mb &&
             mb.ButtonIndex == MouseButton.Left &&
@@ -350,7 +355,52 @@ public partial class ControlComponentCard : PanelContainer
         if (!_pickActive)
             return;
 
+        var list = _globalData?.Cuelist;
+        if (list != null)
+            list.AutoScrollCueListFromPointer(GetViewport().GetMousePosition(), delta);
+
         UpdatePickCursorAndBadge();
+    }
+
+    /// <summary>
+    /// Applies wheel / trackpad pan to the cuelist while pick-target is held and the
+    /// pointer is over the list. Marks the event handled so the inspector does not scroll.
+    /// </summary>
+    /// <param name="event">Viewport input event.</param>
+    /// <returns>True when the event was consumed as a cuelist scroll.</returns>
+    private bool TryHandlePickScrollInput(InputEvent @event)
+    {
+        var list = _globalData?.Cuelist;
+        if (list == null)
+            return false;
+
+        var view = list.GetCueListScrollGlobalRect();
+        if (view.Size.Y < 1f)
+            return false;
+
+        var mouse = GetViewport().GetMousePosition();
+        if (!view.Grow(8f).HasPoint(mouse))
+            return false;
+
+        if (@event is InputEventMouseButton wheel &&
+            wheel.Pressed &&
+            (wheel.ButtonIndex == MouseButton.WheelUp || wheel.ButtonIndex == MouseButton.WheelDown))
+        {
+            float steps = wheel.Factor > 0.01f ? wheel.Factor : 1f;
+            float dir = wheel.ButtonIndex == MouseButton.WheelUp ? -1f : 1f;
+            list.ScrollCueListByWheel(dir * steps);
+            GetViewport()?.SetInputAsHandled();
+            return true;
+        }
+
+        if (@event is InputEventPanGesture pan && !Mathf.IsZeroApprox(pan.Delta.Y))
+        {
+            list.ScrollCueListByPixels(pan.Delta.Y);
+            GetViewport()?.SetInputAsHandled();
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

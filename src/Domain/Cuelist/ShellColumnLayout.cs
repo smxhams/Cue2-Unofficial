@@ -235,8 +235,9 @@ public static class ShellColumnLayout
 	}
 
 	/// <summary>
-	/// Width of fixed left chrome before tree indent (color + nest gap + drag + issue + separations).
-	/// Color, drag, and issue always stay flush left on every row.
+	/// Width of fixed left chrome before tree indent for a root row
+	/// (one colour strip + nest gap + drag + issue + separations).
+	/// Nested rows add further colour strips to the left of this chrome.
 	/// </summary>
 	public static float FixedLeftChromeWidth =>
 		ColorWidth + ColorNestGap

@@ -1191,10 +1191,14 @@ public sealed class AudioSourceDecoder : IDisposable
             released += Cue2.Media.Audio.MediaMemory.FloatBufferBytes(_convertScratch);
             _convertScratch = null;
         }
+        if (_ring != null)
+        {
+            released += (long)_ring.Capacity * sizeof(float);
+            _ring = null;
+        }
         _pcmFrameCount = 0;
         _pcmReadFrame = 0;
         _usePcmStore = false;
-        _ring = null;
         _discardOutputFrames = 0;
         if (released > 0)
             Cue2.Media.Audio.MediaMemory.NoteReleased(released);
@@ -1269,6 +1273,7 @@ public sealed class AudioSourceDecoder : IDisposable
         public float[] ToArray()
         {
             if (_count == _data.Length) return _data;
+            Cue2.Media.Audio.MediaMemory.NoteReleased((long)_data.Length * sizeof(float));
             var exact = new float[_count];
             Array.Copy(_data, exact, _count);
             return exact;
@@ -1288,6 +1293,8 @@ public sealed class AudioSourceDecoder : IDisposable
                     break;
                 }
             }
+            // Old backing store becomes LOH garbage; count it so stop compact can reclaim.
+            Cue2.Media.Audio.MediaMemory.NoteReleased((long)_data.Length * sizeof(float));
             Array.Resize(ref _data, newSize);
         }
     }

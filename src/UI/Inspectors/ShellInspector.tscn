@@ -78,6 +78,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 placeholder_text = "No Selection"
+max_length = 100
 
 [node name="HSeparator" type="HSeparator" parent="MarginContainer/ScrollContainer/HBoxContainer/GridContainer/GridContainer" unique_id=538649934]
 layout_mode = 2

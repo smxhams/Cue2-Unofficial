@@ -433,6 +433,7 @@ public partial class ShellInspector : Control
 		_focusedCueId = cueId;
 		_focusedCue.NameChanged += OnNameChanged;
 		_focusedCue.CueNumChanged += OnCueNumChanged;
+		_focusedCue.NotesChanged += OnNotesChangedFromModel;
 		_focusedCue.FollowChanged += OnFollowChanged;
 		EnsureFollowOptions();
 		ClearMultiEditPlaceholders();
@@ -475,6 +476,7 @@ public partial class ShellInspector : Control
 		if (_focusedCue == null) return;
 		_focusedCue.NameChanged -= OnNameChanged;
 		_focusedCue.CueNumChanged -= OnCueNumChanged;
+		_focusedCue.NotesChanged -= OnNotesChangedFromModel;
 		_focusedCue.FollowChanged -= OnFollowChanged;
 	}
 
@@ -885,6 +887,27 @@ public partial class ShellInspector : Control
 		try
 		{
 			_cueNum.Text = cueNum ?? string.Empty;
+		}
+		finally
+		{
+			_isRefreshingUi = false;
+		}
+	}
+
+	/// <summary>
+	/// Updates the inspector notes field when the model changes from shell-bar memo edits.
+	/// </summary>
+	/// <param name="notes">New notes text.</param>
+	private void OnNotesChangedFromModel(string notes)
+	{
+		if (_isMultiEdit || _isRefreshingUi || _notesTextEdit == null) return;
+		if (_notesTextEdit.HasFocus())
+			return;
+
+		_isRefreshingUi = true;
+		try
+		{
+			_notesTextEdit.Text = notes ?? string.Empty;
 		}
 		finally
 		{

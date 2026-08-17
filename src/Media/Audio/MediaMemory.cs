@@ -59,7 +59,9 @@ public static class MediaMemory
     /// <para>
     /// Compact still pauses the process briefly when it runs (STW), but that happens
     /// after the stop/GO hot path, not inside it — and never as a double Aggressive
-    /// + <see cref="GC.WaitForPendingFinalizers"/> pair.
+    /// + <see cref="GC.WaitForPendingFinalizers"/> pair. Uses
+    /// <see cref="GCCollectionMode.Forced"/> so the collect cannot be skipped
+    /// (Optimized was leaving CompactOnce unused and the working set high).
     /// </para>
     /// </remarks>
     /// <param name="forceIfAtLeastBytes">Minimum pending release to trigger compact (default 8 MiB).</param>
@@ -113,10 +115,12 @@ public static class MediaMemory
         GD.Print(
             $"MediaMemory:Reclaim - Compacting LOH after releasing ~{pending / (1024.0 * 1024.0):F1} MiB (deferred)");
 
-        // One compacting collection. Previous path used Aggressive + WaitForPendingFinalizers
-        // + second Aggressive collect, which multi-hundred-ms stalled the stop hot path.
+        // Forced (not Optimized): Optimized may no-op when the GC thinks gen2 is
+        // "not due", which leaves CompactOnce unused and the process working set high
+        // (LOH holes from PCM/frame arrays). Still one collect — not the old
+        // Aggressive + WaitForPendingFinalizers + second Aggressive hitch.
         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-        GC.Collect(GC.MaxGeneration, GCCollectionMode.Optimized, blocking: true, compacting: true);
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
     /// <summary>

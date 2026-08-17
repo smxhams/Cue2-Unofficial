@@ -71,11 +71,6 @@ import/reimport_missing_imported_files=false
 
 theme/default_font_multichannel_signed_distance_field=true
 
-[internationalization]
-
-locale/fallback="en"
-rendering/root_node_layout_direction=0
-
 [input]
 
 ui_left={
