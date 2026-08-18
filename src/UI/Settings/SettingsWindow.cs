@@ -72,6 +72,14 @@ public partial class SettingsWindow : Window
 	private FileDialog _settingsFileDialog;
 
 	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public SettingsWindow()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
+	/// <summary>
 	/// Initializes the settings UI, restores last window geometry and sub-menu, and wires signals.
 	/// Stays hidden until geometry is applied so the default scene size never flashes on screen.
 	/// </summary>

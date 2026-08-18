@@ -433,33 +433,11 @@ public partial class TextInspector : Control
         int contentH = Mathf.Max(1, Mathf.RoundToInt(_fontPopup.GetContentsMinimumSize().Y));
         _fontPopup.Size = new Vector2I(width, Mathf.Min(FontPopupMaxHeight, contentH));
 
-        // Screen-space position of the button's bottom-left (handles scaled/sub-window transforms).
-        Transform2D screenXform = _fontOption.GetScreenTransform();
-        Vector2 topLeft = screenXform * Vector2.Zero;
-        Vector2 bottomLeft = screenXform * new Vector2(0f, _fontOption.Size.Y);
-        var pos = new Vector2I(Mathf.RoundToInt(bottomLeft.X), Mathf.RoundToInt(bottomLeft.Y));
-
-        // Keep the popup on the usable screen area; flip above the button if needed.
-        int screenIdx = DisplayServer.WindowGetCurrentScreen();
-        Rect2I usable = DisplayServer.ScreenGetUsableRect(screenIdx);
         int popupH = Mathf.Min(FontPopupMaxHeight, Mathf.Max(1, (int)_fontPopup.Size.Y));
         if (popupH <= 1)
             popupH = FontPopupMaxHeight;
 
-        if (pos.X + width > usable.Position.X + usable.Size.X)
-            pos.X = usable.Position.X + usable.Size.X - width;
-        if (pos.X < usable.Position.X)
-            pos.X = usable.Position.X;
-
-        if (pos.Y + popupH > usable.Position.Y + usable.Size.Y)
-        {
-            // Open above the button.
-            pos.Y = Mathf.RoundToInt(topLeft.Y) - popupH;
-            if (pos.Y < usable.Position.Y)
-                pos.Y = usable.Position.Y;
-        }
-
-        _fontPopup.Position = pos;
+        PlaceFontPopup(width, popupH);
 
         // OptionButton may reposition after this signal; re-apply once the popup is shown.
         CallDeferred(MethodName.ApplyFontPopupPlacement, width, popupH);
@@ -477,15 +455,21 @@ public partial class TextInspector : Control
 
         _fontPopup.MaxSize = new Vector2I(width, FontPopupMaxHeight);
         _fontPopup.Size = new Vector2I(width, Mathf.Clamp(height, 1, FontPopupMaxHeight));
+        PlaceFontPopup(width, (int)_fontPopup.Size.Y);
+    }
 
+    /// <summary>
+    /// Places the font popup under the option button in native screen space or
+    /// embedder-local space (Linux popup-embed policy).
+    /// </summary>
+    private void PlaceFontPopup(int width, int popupH)
+    {
         Transform2D screenXform = _fontOption.GetScreenTransform();
         Vector2 topLeft = screenXform * Vector2.Zero;
         Vector2 bottomLeft = screenXform * new Vector2(0f, _fontOption.Size.Y);
-        var pos = new Vector2I(Mathf.RoundToInt(bottomLeft.X), Mathf.RoundToInt(bottomLeft.Y));
-
-        int screenIdx = DisplayServer.WindowGetCurrentScreen();
-        Rect2I usable = DisplayServer.ScreenGetUsableRect(screenIdx);
-        int popupH = (int)_fontPopup.Size.Y;
+        Vector2I pos = UiUtilities.ScreenPointToPopupPosition(_fontPopup, bottomLeft);
+        Vector2I topLeftPos = UiUtilities.ScreenPointToPopupPosition(_fontPopup, topLeft);
+        Rect2I usable = UiUtilities.GetPopupUsableRect(_fontPopup);
 
         if (pos.X + width > usable.Position.X + usable.Size.X)
             pos.X = usable.Position.X + usable.Size.X - width;
@@ -494,7 +478,7 @@ public partial class TextInspector : Control
 
         if (pos.Y + popupH > usable.Position.Y + usable.Size.Y)
         {
-            pos.Y = Mathf.RoundToInt(topLeft.Y) - popupH;
+            pos.Y = topLeftPos.Y - popupH;
             if (pos.Y < usable.Position.Y)
                 pos.Y = usable.Position.Y;
         }

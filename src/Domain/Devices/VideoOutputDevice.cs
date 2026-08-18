@@ -167,6 +167,7 @@ public partial class VideoOutputDevice : Window, IDisposable
         OutputId = _nextOutputId++;
         Mode = ModeEnum.Windowed;
         Borderless = true;
+        LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
         DisplayServer.ScreenSetKeepOn(true);
 
         // OS close button on portable windows hides rather than frees the output device.

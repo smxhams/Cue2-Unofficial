@@ -43,6 +43,14 @@ public partial class VersionMismatchDialog : Window
 
 	private bool _signalsConnected;
 
+	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public VersionMismatchDialog()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
 	/// <inheritdoc />
 	public override void _Ready()
 	{

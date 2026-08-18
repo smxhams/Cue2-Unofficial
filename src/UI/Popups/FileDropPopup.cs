@@ -36,6 +36,14 @@ public partial class FileDropPopup : Window
 	private MultiFileDropMode _chosenMultiFileMode = MultiFileDropMode.SeparateCues;
 
 	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public FileDropPopup()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
+	/// <summary>
 	/// Raised when the user confirms the drop action with their choices.
 	/// </summary>
 	public event Action<FileDropChoices> Confirmed;

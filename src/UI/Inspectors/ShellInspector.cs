@@ -1537,22 +1537,21 @@ public partial class ShellInspector : Control
 		// Sync checkbox state from current edit targets before showing.
 		SyncClockDayCheckboxesFromModel();
 
-		// Measure content, then place directly under the button in *screen* coordinates.
-		// With embed_subwindows=false, PopupPanel.Popup uses absolute screen coords — not viewport.
+		// Measure content, then place under the button. Popup() uses screen coords when native
+		// and embedder-local coords when Linux popup-embed is active.
 		_clockDaysPopup.ResetSize();
 		var size = _clockDaysPopup.GetContentsMinimumSize();
 		int width = Math.Max((int)Math.Ceiling(size.X), 120);
 		int height = Math.Max((int)Math.Ceiling(size.Y), 10);
 
-		// Local → screen transform accounts for window position, UI scale, and parent offsets.
 		var screenXform = _clockDaysButton.GetScreenTransform();
 		Vector2 buttonTopLeft = screenXform.Origin;
 		Vector2 buttonBottomLeft = screenXform * new Vector2(0f, _clockDaysButton.Size.Y);
-		var screenPos = new Vector2I(
-			(int)Math.Round(buttonTopLeft.X),
-			(int)Math.Round(buttonBottomLeft.Y) + 2);
+		Vector2I popupPos = UiUtilities.ScreenPointToPopupPosition(
+			_clockDaysPopup,
+			new Vector2(buttonTopLeft.X, buttonBottomLeft.Y + 2f));
 
-		_clockDaysPopup.Popup(new Rect2I(screenPos, new Vector2I(width, height)));
+		_clockDaysPopup.Popup(new Rect2I(popupPos, new Vector2I(width, height)));
 	}
 
 	private void OnClockDaysPopupHide()

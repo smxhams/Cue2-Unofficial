@@ -45,6 +45,14 @@ public partial class FirstTimeStartupWindow : Window
 	private bool _isSyncingLanguage;
 
 	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public FirstTimeStartupWindow()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
+	/// <summary>
 	/// Initializes UI, applies scale, wires dismiss, language, and UI-scale handlers.
 	/// </summary>
 	public override void _Ready()

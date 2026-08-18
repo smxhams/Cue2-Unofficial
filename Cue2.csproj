@@ -12,7 +12,7 @@ SPDX-License-Identifier: MIT
 </PropertyGroup>  
 <ItemGroup>  
 <PackageReference Include="FFmpeg.AutoGen" Version="9.0.1.1" />  
-<PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />  
+
  <PackageReference Include="Rug.Osc" Version="1.2.5" />
 <PackageReference Include="SDL3-CS" Version="3.4.14.1" />  
 <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />  

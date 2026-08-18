@@ -244,6 +244,9 @@ public partial class GlobalSignals : Node
 	/// </summary>
 	public override void _Ready()
 	{
+		// Linux: embed OptionButton/Popup lists; ForceNative is set in each Window constructor.
+		LinuxWindowEmbedPolicy.EnablePopupEmbedding(GetTree().Root);
+
 		// Scan for existing text fields / OptionButtons at startup
 		ScanForUiKeyboardPolicy(GetTree().Root);
 
@@ -272,6 +275,10 @@ public partial class GlobalSignals : Node
 
 	private void OnNodeAdded(Node node)
 	{
+		// FileDialog / AcceptDialog are created without our constructors; apply while still hidden.
+		if (node is Window window)
+			LinuxWindowEmbedPolicy.ApplyToAppWindow(window);
+
 		if (SuppressUiKeyboardScan)
 			return;
 		if (node is LineEdit or TextEdit)

@@ -34,6 +34,14 @@ public partial class LogWindow : Window
 	/// </summary>
 	private int _oldestDisplayedIndex;
 
+	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public LogWindow()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
 	public override void _Ready()
 	{
 		_eventLogger = GetNode<EventLogger>("/root/EventLogger");

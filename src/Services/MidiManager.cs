@@ -4,10 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using Cue2.Domain.Cuelist;
 using Cue2.Domain.Playback;
@@ -19,9 +16,6 @@ using Cue2.Domain.Connections;
 using Cue2.Domain.Library;
 using Cue2.Domain.Commands;
 using Godot;
-using Melanchall.DryWetMidi.Common;
-using Melanchall.DryWetMidi.Core;
-using Melanchall.DryWetMidi.Multimedia;
 
 namespace Cue2.Services;
 
@@ -41,35 +35,27 @@ public readonly struct MidiInputMessage
 }
 
 /// <summary>
-/// Application-wide MIDI input service (Melanchall.DryWetMidi).
-/// Supports multiple session input devices: enumerate available ports, add/remove
+/// Application-wide MIDI input/output service (official RtMidi 6.0 C API).
+/// Supports multiple session devices: enumerate available ports, add/remove
 /// devices to the session, open all when MIDI is enabled, and forward events for
-/// monitoring and (later) cue triggers.
+/// monitoring, Input Map actions, and cue triggers.
 /// </summary>
 /// <remarks>
-/// DryWetMidi ships native libs that NuGet copies next to the managed assembly under
-/// <c>.godot/mono/temp/bin/</c> (editor) or <c>data_Cue2_*/</c> (export). Godot's process
-/// DLL search path may not include those folders, so we load natives via
+/// RtMidi natives are loaded via <see cref="RtMidiInterop"/> /
 /// <see cref="NativeLibPaths"/> (export dirs first, then <c>res://bin/{platform}/</c>).
+/// Hot-plug is detected by a 1.5s availability poll (RtMidi has no device watcher).
 /// </remarks>
 public partial class MidiManager : Node
 {
     private GlobalSignals _globalSignals;
 
     /// <summary>Device name → open input handle (only entries currently listening).</summary>
-    private readonly Dictionary<string, InputDevice> _openDevices =
+    private readonly Dictionary<string, RtMidiInterop.InputPort> _openDevices =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Device name → open output handle.</summary>
-    private readonly Dictionary<string, OutputDevice> _openOutputs =
+    private readonly Dictionary<string, RtMidiInterop.OutputPort> _openOutputs =
         new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Reverse map so ErrorOccurred / DeviceRemoved can resolve a name when
-    /// <see cref="MidiDevice.Name"/> throws on a removed device.
-    /// </summary>
-    private readonly Dictionary<InputDevice, string> _openDeviceNames = new();
-    private readonly Dictionary<OutputDevice, string> _openOutputNames = new();
 
     /// <summary>Session-configured input names (order preserved; may include offline devices).</summary>
     private readonly List<string> _sessionInputNames = new();
@@ -87,20 +73,9 @@ public partial class MidiManager : Node
     private bool _midiEnabled;
     private bool _monitorEnabled = true;
     private bool _nativeReady;
-    private static bool _resolverRegistered;
     private bool _isCapturing;
-    private bool _watcherHooked;
 
-    /// <summary>Cached absolute path of the DryWetMidi native library (empty until first resolve).</summary>
-    private static string _cachedNativeLibraryPath = string.Empty;
-
-    /// <summary>Handle from the first successful <see cref="NativeLibrary"/> load; shared by the DllImport resolver.</summary>
-    private static IntPtr _nativeLibraryHandle = IntPtr.Zero;
-
-    /// <summary>Serializes path resolve + load so concurrent P/Invoke resolvers do not race.</summary>
-    private static readonly object NativeLibraryLock = new();
-
-    /// <summary>Main-thread work queued from DryWetMidi background callbacks.</summary>
+    /// <summary>Main-thread work queued from RtMidi background callbacks.</summary>
     private readonly ConcurrentQueue<Action> _mainThreadActions = new();
 
     private readonly ConcurrentQueue<string> _pendingLogLines = new();
@@ -159,7 +134,7 @@ public partial class MidiManager : Node
 
     /// <summary>True when at least one session input is open and listening.</summary>
     public bool IsAnyInputOpen => _openDevices.Count > 0 &&
-                                  _openDevices.Values.Any(d => d != null && d.IsListeningForEvents);
+                                  _openDevices.Values.Any(d => d != null && d.IsOpen);
 
     /// <summary>Number of currently open listening input devices.</summary>
     public int OpenInputCount => _openDevices.Count(kv => IsOpenHandleHealthy(kv.Key));
@@ -227,10 +202,7 @@ public partial class MidiManager : Node
         _inputActionsListener = GetNodeOrNull<InputActionsListener>("/root/InputActionsListener");
         _nativeReady = EnsureNativeLibraryLoaded();
         if (_nativeReady)
-        {
-            HookDevicesWatcher();
             RefreshDeviceList();
-        }
         else
             GD.PrintErr("MidiManager:_Ready - Native MIDI library unavailable; device list disabled.");
         GD.Print("MidiManager:_Ready - MIDI manager ready.");
@@ -238,7 +210,7 @@ public partial class MidiManager : Node
 
     public override void _Process(double delta)
     {
-        // Marshal device-watcher / error callbacks onto the Godot main thread first.
+        // Marshal error callbacks onto the Godot main thread first.
         int actions = 0;
         while (actions < 32 && _mainThreadActions.TryDequeue(out Action action))
         {
@@ -265,8 +237,7 @@ public partial class MidiManager : Node
         // Deferred note-offs for Note On components with a duration.
         ProcessPendingNoteOffs(delta);
 
-        // Periodic reconcile: catches unplug/replug when DevicesWatcher is silent or incomplete
-        // (Windows Equals/Name limitations, missed USB events, zombie open handles).
+        // Periodic reconcile: RtMidi has no hot-plug watcher; poll catches unplug/replug.
         if (_nativeReady && (_midiEnabled || _sessionInputNames.Count > 0 || _sessionOutputNames.Count > 0))
         {
             _devicePollAccum += delta;
@@ -280,7 +251,6 @@ public partial class MidiManager : Node
 
     public override void _ExitTree()
     {
-        UnhookDevicesWatcher();
         CancelCapture();
         _pendingNoteOffs.Clear();
         CloseAllInputs();
@@ -306,10 +276,8 @@ public partial class MidiManager : Node
             {
                 if (_openOutputs.TryGetValue(device, out var outDev) && outDev != null)
                 {
-                    outDev.SendEvent(new NoteOffEvent((SevenBitNumber)note, (SevenBitNumber)0)
-                    {
-                        Channel = (FourBitNumber)Math.Clamp(ch0, 0, 15)
-                    });
+                    byte status = (byte)(0x80 | (Math.Clamp(ch0, 0, 15) & 0x0F));
+                    outDev.TrySend(new[] { status, (byte)note, (byte)0 }, out _);
                 }
             }
             catch (Exception ex)
@@ -562,47 +530,25 @@ public partial class MidiManager : Node
     // ── Native load (Godot path) ────────────────────────────────────────────
 
     /// <summary>
-    /// Loads <c>Melanchall_DryWetMidi_Native*</c> via <see cref="NativeLibPaths"/> and
-    /// registers a DllImport resolver so DryWetMidi P/Invoke finds it under Godot.
+    /// Loads the platform RtMidi shared library via <see cref="RtMidiInterop"/>.
     /// </summary>
-    /// <remarks>
-    /// Path and handle are cached process-wide. Without that, every DryWetMidi P/Invoke
-    /// (device enum, DevicesWatcher, open ports) re-ran directory search and logged "Found".
-    /// </remarks>
     private bool EnsureNativeLibraryLoaded()
     {
         try
         {
-            RegisterDllImportResolver();
+            if (RtMidiInterop.IsLoaded)
+                return true;
 
-            lock (NativeLibraryLock)
+            if (RtMidiInterop.TryLoad(out string path, out string error))
             {
-                if (_nativeLibraryHandle != IntPtr.Zero)
-                    return true;
-
-                string path = ResolveNativeLibraryPathUnlocked(out string platformLabel);
-                if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                {
-                    GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - Native library missing for {platformLabel}. " +
-                                "Expected Melanchall_DryWetMidi_Native* beside the app or under res://bin/ " +
-                                "(see docs/export-packaging.md).");
-                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                        $"MIDI: native library not found for {platformLabel}", (int)LogType.Error);
-                    return false;
-                }
-
-                if (!NativeLibrary.TryLoad(path, out IntPtr handle) || handle == IntPtr.Zero)
-                {
-                    GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - NativeLibrary.TryLoad failed for {path}");
-                    _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                        $"MIDI: failed to load native library at {path}", (int)LogType.Error);
-                    return false;
-                }
-
-                _nativeLibraryHandle = handle;
-                GD.Print($"MidiManager:EnsureNativeLibraryLoaded - Loaded {path} (handle={handle}) [{platformLabel}]");
+                GD.Print($"MidiManager:EnsureNativeLibraryLoaded - Loaded {path}");
                 return true;
             }
+
+            GD.PrintErr($"MidiManager:EnsureNativeLibraryLoaded - {error}");
+            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                $"MIDI: native library not found — {error}", (int)LogType.Error);
+            return false;
         }
         catch (Exception ex)
         {
@@ -611,97 +557,6 @@ public partial class MidiManager : Node
                 $"MIDI: failed to load native library — {ex.Message}", (int)LogType.Error);
             return false;
         }
-    }
-
-    /// <summary>
-    /// Registers a one-time DllImport resolver on the DryWetMidi assembly so P/Invoke
-    /// uses our cached native handle under Godot.
-    /// </summary>
-    private static void RegisterDllImportResolver()
-    {
-        if (_resolverRegistered) return;
-        try
-        {
-            Assembly dryWetAssembly = typeof(InputDevice).Assembly;
-            NativeLibrary.SetDllImportResolver(dryWetAssembly, ResolveDryWetMidiNative);
-            _resolverRegistered = true;
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"MidiManager:RegisterDllImportResolver - {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// DllImport resolver for Melanchall native libs. Returns the already-loaded handle
-    /// when possible so Hot path P/Invoke does not re-search the filesystem.
-    /// </summary>
-    private static IntPtr ResolveDryWetMidiNative(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
-    {
-        if (string.IsNullOrEmpty(libraryName) ||
-            !libraryName.StartsWith("Melanchall_DryWetMidi_Native", StringComparison.OrdinalIgnoreCase))
-        {
-            return IntPtr.Zero;
-        }
-
-        try
-        {
-            lock (NativeLibraryLock)
-            {
-                if (_nativeLibraryHandle != IntPtr.Zero)
-                    return _nativeLibraryHandle;
-
-                string path = ResolveNativeLibraryPathUnlocked(out _);
-                if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                    return IntPtr.Zero;
-
-                if (NativeLibrary.TryLoad(path, out IntPtr handle) && handle != IntPtr.Zero)
-                {
-                    _nativeLibraryHandle = handle;
-                    return handle;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"MidiManager:ResolveDryWetMidiNative - {ex.Message}");
-        }
-
-        return IntPtr.Zero;
-    }
-
-    /// <summary>
-    /// Resolves the DryWetMidi native library path once and caches it.
-    /// Callers that need thread safety must hold <see cref="NativeLibraryLock"/>.
-    /// </summary>
-    /// <param name="platformLabel">Readable OS/arch label for logs.</param>
-    /// <returns>Absolute path, or empty if not found / unsupported.</returns>
-    private static string ResolveNativeLibraryPathUnlocked(out string platformLabel)
-    {
-        if (!string.IsNullOrEmpty(_cachedNativeLibraryPath))
-        {
-            // Platform label still useful for error paths even when cached.
-            NativeLibPaths.GetDryWetMidiNativeFileName(out platformLabel);
-            return _cachedNativeLibraryPath;
-        }
-
-        string fileName = NativeLibPaths.GetDryWetMidiNativeFileName(out platformLabel);
-        if (string.IsNullOrEmpty(fileName))
-            return string.Empty;
-
-        string platformDir = NativeLibPaths.GetPlatformDir(out _);
-        string path = NativeLibPaths.FindLibraryFile(fileName, platformDir, out string foundDir, out var tried);
-        if (string.IsNullOrEmpty(path))
-        {
-            GD.PrintErr(
-                $"MidiManager:ResolveNativeLibraryPath - {fileName} not found. " +
-                $"Tried: {NativeLibPaths.FormatTriedDirectories(tried)}");
-            return string.Empty;
-        }
-
-        _cachedNativeLibraryPath = path;
-        GD.Print($"MidiManager:ResolveNativeLibraryPath - Found {fileName} in {foundDir}");
-        return path;
     }
 
     // ── Enumeration, hot-plug & session device list ─────────────────────────
@@ -713,146 +568,6 @@ public partial class MidiManager : Node
     public void RefreshDeviceList()
     {
         ReconcileSessionDevices(emitStateIfChanged: true, reason: "refresh", forceStateEmit: true);
-    }
-
-    /// <summary>
-    /// Subscribes to DryWetMidi <see cref="DevicesWatcher"/> for add/remove notifications.
-    /// Callbacks may arrive off-thread and are marshalled to the main thread.
-    /// </summary>
-    private void HookDevicesWatcher()
-    {
-        if (_watcherHooked) return;
-        try
-        {
-            DevicesWatcher.Instance.DeviceAdded += OnWatcherDeviceAdded;
-            DevicesWatcher.Instance.DeviceRemoved += OnWatcherDeviceRemoved;
-            _watcherHooked = true;
-            GD.Print("MidiManager:HookDevicesWatcher - DevicesWatcher subscribed.");
-        }
-        catch (Exception ex)
-        {
-            // Platform may not support watching; poll still covers reconnect.
-            GD.PrintErr($"MidiManager:HookDevicesWatcher - {ex.Message}");
-            _watcherHooked = false;
-        }
-    }
-
-    private void UnhookDevicesWatcher()
-    {
-        if (!_watcherHooked) return;
-        try
-        {
-            DevicesWatcher.Instance.DeviceAdded -= OnWatcherDeviceAdded;
-            DevicesWatcher.Instance.DeviceRemoved -= OnWatcherDeviceRemoved;
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"MidiManager:UnhookDevicesWatcher - {ex.Message}");
-        }
-        finally
-        {
-            _watcherHooked = false;
-        }
-    }
-
-    private void OnWatcherDeviceAdded(object sender, DeviceAddedRemovedEventArgs e)
-    {
-        // May run on a non-Godot thread.
-        string name = null;
-        string kind = "device";
-        try
-        {
-            if (e?.Device is InputDevice input)
-            {
-                name = SafeGetDeviceName(input);
-                kind = "input";
-            }
-            else if (e?.Device is OutputDevice output)
-            {
-                name = SafeGetDeviceName(output);
-                kind = "output";
-            }
-        }
-        catch (Exception ex)
-        {
-            GD.PrintErr($"MidiManager:OnWatcherDeviceAdded - {ex.Message}");
-        }
-
-        string captured = name;
-        string capturedKind = kind;
-        _mainThreadActions.Enqueue(() =>
-        {
-            if (!string.IsNullOrEmpty(captured))
-            {
-                GD.Print($"MidiManager:OnWatcherDeviceAdded - {capturedKind} '{captured}'");
-                EnqueueMonitorLine($"— {capturedKind} added: {captured}");
-                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                    $"MIDI: {capturedKind} connected — {captured}", (int)LogType.Info);
-            }
-            else
-            {
-                EnqueueMonitorLine("— MIDI device added");
-            }
-
-            ReconcileSessionDevices(emitStateIfChanged: true, reason: "device-added");
-        });
-    }
-
-    private void OnWatcherDeviceRemoved(object sender, DeviceAddedRemovedEventArgs e)
-    {
-        // DeviceRemoved instances are non-interactable (Name throws). Match by reference
-        // against our open handles; otherwise fall back to a full reconcile.
-        string knownName = null;
-        bool isOutput = false;
-        if (e?.Device is InputDevice removedIn &&
-            _openDeviceNames.TryGetValue(removedIn, out string mappedIn))
-        {
-            knownName = mappedIn;
-        }
-        else if (e?.Device is OutputDevice removedOut &&
-                 _openOutputNames.TryGetValue(removedOut, out string mappedOut))
-        {
-            knownName = mappedOut;
-            isOutput = true;
-        }
-
-        string captured = knownName;
-        bool capturedIsOutput = isOutput;
-        MidiDevice capturedDevice = e?.Device;
-        _mainThreadActions.Enqueue(() =>
-        {
-            if (!string.IsNullOrEmpty(captured))
-            {
-                GD.Print($"MidiManager:OnWatcherDeviceRemoved - '{captured}'");
-                EnqueueMonitorLine($"— Device removed: {captured}");
-                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                    $"MIDI: device disconnected — {captured}", (int)LogType.Warning);
-                if (capturedIsOutput)
-                    CloseOutput(captured, removeFromSession: false, logNotice: false);
-                else
-                    CloseInput(captured, removeFromSession: false, logNotice: false);
-            }
-            else if (capturedDevice is InputDevice inDev)
-            {
-                string byRef = FindOpenNameByInstance(inDev);
-                if (!string.IsNullOrEmpty(byRef))
-                {
-                    EnqueueMonitorLine($"— Device removed: {byRef}");
-                    CloseInput(byRef, removeFromSession: false, logNotice: false);
-                }
-            }
-            else if (capturedDevice is OutputDevice outDev)
-            {
-                string byRef = FindOpenOutputNameByInstance(outDev);
-                if (!string.IsNullOrEmpty(byRef))
-                {
-                    EnqueueMonitorLine($"— Output removed: {byRef}");
-                    CloseOutput(byRef, removeFromSession: false, logNotice: false);
-                }
-            }
-
-            ReconcileSessionDevices(emitStateIfChanged: true, reason: "device-removed");
-        });
     }
 
     /// <summary>
@@ -982,7 +697,7 @@ public partial class MidiManager : Node
             return false;
         try
         {
-            return device.IsListeningForEvents;
+            return device.IsOpen;
         }
         catch
         {
@@ -991,7 +706,7 @@ public partial class MidiManager : Node
     }
 
     /// <summary>
-    /// Enumerates system input/output names (disposes temp handles we do not own).
+    /// Enumerates system input/output names.
     /// </summary>
     private void EnumerateAvailableDevices()
     {
@@ -999,45 +714,8 @@ public partial class MidiManager : Node
         _availableOutputNames.Clear();
         try
         {
-            foreach (var device in InputDevice.GetAll())
-            {
-                try
-                {
-                    string name = SafeGetDeviceName(device);
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    if (!_availableInputNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-                        _availableInputNames.Add(name);
-                }
-                finally
-                {
-                    if (device != null && !_openDeviceNames.ContainsKey(device))
-                    {
-                        try { device.Dispose(); }
-                        catch { /* ignore */ }
-                    }
-                }
-            }
-            _availableInputNames.Sort(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var device in OutputDevice.GetAll())
-            {
-                try
-                {
-                    string name = SafeGetDeviceName(device);
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    if (!_availableOutputNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-                        _availableOutputNames.Add(name);
-                }
-                finally
-                {
-                    if (device != null && !_openOutputNames.ContainsKey(device))
-                    {
-                        try { device.Dispose(); }
-                        catch { /* ignore */ }
-                    }
-                }
-            }
-            _availableOutputNames.Sort(StringComparer.OrdinalIgnoreCase);
+            _availableInputNames.AddRange(RtMidiInterop.ListInputNames());
+            _availableOutputNames.AddRange(RtMidiInterop.ListOutputNames());
         }
         catch (Exception ex)
         {
@@ -1053,9 +731,7 @@ public partial class MidiManager : Node
             return false;
         try
         {
-            // Touch a cheap property; removed devices throw.
-            _ = device.Name;
-            return true;
+            return device.IsOpen;
         }
         catch
         {
@@ -1094,39 +770,6 @@ public partial class MidiManager : Node
             result[name] = IsOpenOutputHealthy(name);
         }
         return result;
-    }
-
-    private static string SafeGetDeviceName(MidiDevice device)
-    {
-        if (device == null) return null;
-        try { return device.Name; }
-        catch { return null; }
-    }
-
-    private string FindOpenNameByInstance(InputDevice device)
-    {
-        if (device == null) return null;
-        if (_openDeviceNames.TryGetValue(device, out string name))
-            return name;
-        foreach (var kvp in _openDevices)
-        {
-            if (ReferenceEquals(kvp.Value, device))
-                return kvp.Key;
-        }
-        return null;
-    }
-
-    private string FindOpenOutputNameByInstance(OutputDevice device)
-    {
-        if (device == null) return null;
-        if (_openOutputNames.TryGetValue(device, out string name))
-            return name;
-        foreach (var kvp in _openOutputs)
-        {
-            if (ReferenceEquals(kvp.Value, device))
-                return kvp.Key;
-        }
-        return null;
     }
 
     /// <summary>True if a session output is open.</summary>
@@ -1425,27 +1068,13 @@ public partial class MidiManager : Node
 
         try
         {
-            OutputDevice device;
-            try
+            if (!RtMidiInterop.TryOpenOutput(deviceName, out var device, out string openError) || device == null)
             {
-                device = OutputDevice.GetByName(deviceName);
-            }
-            catch (Exception getEx)
-            {
-                GD.Print($"MidiManager:OpenOutput - GetByName('{deviceName}') failed: {getEx.Message}");
+                GD.Print($"MidiManager:OpenOutput - '{deviceName}' failed: {openError}");
                 return false;
             }
-
-            if (device == null)
-                return false;
-
-            // Prepare for sending (DryWetMIDI opens on first send for some platforms;
-            // explicit PrepareForEventsSending avoids first-message lag where available).
-            try { device.PrepareForEventsSending(); }
-            catch { /* optional API depending on version */ }
 
             _openOutputs[deviceName] = device;
-            _openOutputNames[device] = deviceName;
 
             GD.Print($"MidiManager:OpenOutput - Opened '{deviceName}'.");
             EnqueueMonitorLine($"— Opened output: {deviceName}");
@@ -1467,8 +1096,6 @@ public partial class MidiManager : Node
         if (_openOutputs.TryGetValue(deviceName, out var device))
         {
             _openOutputs.Remove(deviceName);
-            if (device != null)
-                _openOutputNames.Remove(device);
 
             if (device != null)
             {
@@ -1542,30 +1169,23 @@ public partial class MidiManager : Node
 
         try
         {
-            MidiEvent ev = type switch
+            byte[] bytes = type switch
             {
-                MidiTriggerMessageType.NoteOn => new NoteOnEvent((SevenBitNumber)data1, (SevenBitNumber)data2)
-                {
-                    Channel = (FourBitNumber)ch0
-                },
-                MidiTriggerMessageType.NoteOff => new NoteOffEvent((SevenBitNumber)data1, (SevenBitNumber)data2)
-                {
-                    Channel = (FourBitNumber)ch0
-                },
-                MidiTriggerMessageType.ControlChange => new ControlChangeEvent(
-                    (SevenBitNumber)data1, (SevenBitNumber)data2)
-                {
-                    Channel = (FourBitNumber)ch0
-                },
-                MidiTriggerMessageType.ProgramChange => new ProgramChangeEvent((SevenBitNumber)data1)
-                {
-                    Channel = (FourBitNumber)ch0
-                },
+                MidiTriggerMessageType.NoteOn => new[] { (byte)(0x90 | ch0), (byte)data1, (byte)data2 },
+                MidiTriggerMessageType.NoteOff => new[] { (byte)(0x80 | ch0), (byte)data1, (byte)data2 },
+                MidiTriggerMessageType.ControlChange => new[] { (byte)(0xB0 | ch0), (byte)data1, (byte)data2 },
+                MidiTriggerMessageType.ProgramChange => new[] { (byte)(0xC0 | ch0), (byte)data1 },
                 _ => null
             };
 
-            if (ev == null) return false;
-            device.SendEvent(ev);
+            if (bytes == null) return false;
+            if (!device.TrySend(bytes, out string sendError))
+            {
+                GD.PrintErr($"MidiManager:SendMessage - {outputDeviceName}: {sendError}");
+                _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+                    $"MIDI send error on '{outputDeviceName}': {sendError}", (int)LogType.Error);
+                return false;
+            }
 
             if (type == MidiTriggerMessageType.NoteOn && noteDurationSeconds > 1e-6)
             {
@@ -1603,14 +1223,9 @@ public partial class MidiManager : Node
             {
                 for (int ch = 0; ch < 16; ch++)
                 {
-                    device.SendEvent(new ControlChangeEvent((SevenBitNumber)123, (SevenBitNumber)0)
-                    {
-                        Channel = (FourBitNumber)ch
-                    });
-                    device.SendEvent(new ControlChangeEvent((SevenBitNumber)120, (SevenBitNumber)0)
-                    {
-                        Channel = (FourBitNumber)ch
-                    });
+                    byte status = (byte)(0xB0 | ch);
+                    device.TrySend(new[] { status, (byte)123, (byte)0 }, out _);
+                    device.TrySend(new[] { status, (byte)120, (byte)0 }, out _);
                 }
             }
             catch (Exception ex)
@@ -1643,27 +1258,19 @@ public partial class MidiManager : Node
 
         try
         {
-            // GetByName throws or fails when the port is gone mid-call.
-            InputDevice device;
-            try
+            string capturedName = deviceName;
+            if (!RtMidiInterop.TryOpenInput(
+                    deviceName,
+                    bytes => OnRawMidiBytes(capturedName, bytes),
+                    err => OnPortError(capturedName, err, isOutput: false),
+                    out var device,
+                    out string openError) || device == null)
             {
-                device = InputDevice.GetByName(deviceName);
-            }
-            catch (Exception getEx)
-            {
-                GD.Print($"MidiManager:OpenInput - GetByName('{deviceName}') failed: {getEx.Message}");
+                GD.Print($"MidiManager:OpenInput - '{deviceName}' failed: {openError}");
                 return false;
             }
-
-            if (device == null)
-                return false;
-
-            device.EventReceived += OnMidiEventReceived;
-            device.ErrorOccurred += OnMidiErrorOccurred;
-            device.StartEventsListening();
 
             _openDevices[deviceName] = device;
-            _openDeviceNames[device] = deviceName;
 
             GD.Print($"MidiManager:OpenInput - Listening on '{deviceName}'.");
             EnqueueMonitorLine($"— Opened input: {deviceName}");
@@ -1691,21 +1298,9 @@ public partial class MidiManager : Node
         if (_openDevices.TryGetValue(deviceName, out var device))
         {
             _openDevices.Remove(deviceName);
-            if (device != null)
-                _openDeviceNames.Remove(device);
 
             if (device != null)
             {
-                try { device.EventReceived -= OnMidiEventReceived; }
-                catch { /* device may already be invalid */ }
-                try { device.ErrorOccurred -= OnMidiErrorOccurred; }
-                catch { /* ignore */ }
-                try
-                {
-                    if (device.IsListeningForEvents)
-                        device.StopEventsListening();
-                }
-                catch { /* unplugged mid-listen */ }
                 try { device.Dispose(); }
                 catch (Exception ex)
                 {
@@ -1732,102 +1327,95 @@ public partial class MidiManager : Node
 
     // ── Event handlers ──────────────────────────────────────────────────────
 
-    private void OnMidiEventReceived(object sender, MidiEventReceivedEventArgs e)
+    /// <summary>
+    /// RtMidi receive callback (may be off-thread). Parses channel voice and queues work.
+    /// </summary>
+    private void OnRawMidiBytes(string deviceName, byte[] bytes)
     {
-        if (e?.Event == null) return;
+        if (bytes == null || bytes.Length == 0)
+            return;
 
-        string deviceName = ResolveSenderName(sender) ?? "?";
-
-        // Structured messages drive capture, cue triggers, and monitor formatting.
-        if (TryParseMidiEvent(deviceName, e.Event, out MidiInputMessage msg))
+        if (TryParseChannelMessage(deviceName ?? "?", bytes, out MidiInputMessage msg))
         {
             _pendingMessages.Enqueue(msg);
             return;
         }
 
-        // Unhandled message types: monitor-only dump when listening.
         if (_monitorEnabled)
         {
-            string line = $"{DateTime.Now:HH:mm:ss.fff}  [{deviceName}] {e.Event.EventType}  {e.Event}";
-            _pendingLogLines.Enqueue(line);
+            string hex = BitConverter.ToString(bytes);
+            _pendingLogLines.Enqueue($"{DateTime.Now:HH:mm:ss.fff}  [{deviceName}] raw {hex}");
         }
     }
 
     /// <summary>
-    /// Resolves a device display name from a DryWetMidi callback sender without throwing
-    /// if the device has already been removed from the system.
-    /// </summary>
-    private string ResolveSenderName(object sender)
-    {
-        if (sender is InputDevice input)
-        {
-            if (_openDeviceNames.TryGetValue(input, out string mapped) && !string.IsNullOrEmpty(mapped))
-                return mapped;
-            return SafeGetDeviceName(input);
-        }
-
-        if (sender is MidiDevice md)
-            return SafeGetDeviceName(md);
-
-        return null;
-    }
-
-    /// <summary>
-    /// Maps a DryWetMidi event into a <see cref="MidiInputMessage"/> for supported trigger types.
+    /// Maps a raw MIDI message into a <see cref="MidiInputMessage"/> for supported trigger types.
     /// Note On with velocity 0 is treated as Note Off.
     /// </summary>
-    private static bool TryParseMidiEvent(string deviceName, MidiEvent midiEvent, out MidiInputMessage msg)
+    private static bool TryParseChannelMessage(string deviceName, byte[] bytes, out MidiInputMessage msg)
     {
         msg = default;
-        switch (midiEvent)
+        if (bytes == null || bytes.Length < 2)
+            return false;
+
+        byte status = bytes[0];
+        if (status < 0x80 || status >= 0xF0)
+            return false;
+
+        int typeNibble = status & 0xF0;
+        int channel = (status & 0x0F) + 1;
+        int data1 = bytes[1] & 0x7F;
+        int data2 = bytes.Length > 2 ? bytes[2] & 0x7F : 0;
+
+        switch (typeNibble)
         {
-            case NoteOnEvent noteOn when noteOn.Velocity == 0:
+            case 0x90 when data2 == 0:
                 msg = new MidiInputMessage
                 {
                     DeviceName = deviceName,
                     MessageType = MidiTriggerMessageType.NoteOff,
-                    Channel = noteOn.Channel + 1,
-                    Data1 = noteOn.NoteNumber,
+                    Channel = channel,
+                    Data1 = data1,
                     Data2 = 0
                 };
                 return true;
-            case NoteOnEvent noteOn:
+            case 0x90:
                 msg = new MidiInputMessage
                 {
                     DeviceName = deviceName,
                     MessageType = MidiTriggerMessageType.NoteOn,
-                    Channel = noteOn.Channel + 1,
-                    Data1 = noteOn.NoteNumber,
-                    Data2 = noteOn.Velocity
+                    Channel = channel,
+                    Data1 = data1,
+                    Data2 = data2
                 };
                 return true;
-            case NoteOffEvent noteOff:
+            case 0x80:
                 msg = new MidiInputMessage
                 {
                     DeviceName = deviceName,
                     MessageType = MidiTriggerMessageType.NoteOff,
-                    Channel = noteOff.Channel + 1,
-                    Data1 = noteOff.NoteNumber,
-                    Data2 = noteOff.Velocity
+                    Channel = channel,
+                    Data1 = data1,
+                    Data2 = data2
                 };
                 return true;
-            case ControlChangeEvent cc:
+            case 0xB0:
                 msg = new MidiInputMessage
                 {
                     DeviceName = deviceName,
                     MessageType = MidiTriggerMessageType.ControlChange,
-                    Channel = cc.Channel + 1,
-                    Data1 = cc.ControlNumber,
-                    Data2 = cc.ControlValue
+                    Channel = channel,
+                    Data1 = data1,
+                    Data2 = data2
                 };
                 return true;
-            case ProgramChangeEvent pc:
+            case 0xC0:
                 msg = new MidiInputMessage
                 {
                     DeviceName = deviceName,
                     MessageType = MidiTriggerMessageType.ProgramChange,
-                    Channel = pc.Channel + 1,
-                    Data1 = pc.ProgramNumber,
+                    Channel = channel,
+                    Data1 = data1,
                     Data2 = 0
                 };
                 return true;
@@ -1836,36 +1424,40 @@ public partial class MidiManager : Node
         }
     }
 
-    private void OnMidiErrorOccurred(object sender, ErrorOccurredEventArgs e)
+    private void OnPortError(string deviceName, string message, bool isOutput)
     {
-        // Often fires when a device is unplugged while open. Marshal close to main thread.
-        string deviceName = ResolveSenderName(sender) ?? "MIDI";
-        string msg = e?.Exception?.Message ?? "Unknown MIDI device error";
-        GD.PrintErr($"MidiManager:OnMidiErrorOccurred - [{deviceName}] {msg}");
-        _pendingLogLines.Enqueue($"! ERROR [{deviceName}]: {msg}");
+        string name = deviceName ?? "MIDI";
+        string msg = message ?? "Unknown MIDI device error";
+        GD.PrintErr($"MidiManager:OnPortError - [{name}] {msg}");
+        _pendingLogLines.Enqueue($"! ERROR [{name}]: {msg}");
 
-        string capturedName = deviceName;
-        InputDevice capturedDevice = sender as InputDevice;
+        string capturedName = name;
+        bool capturedOutput = isOutput;
         _mainThreadActions.Enqueue(() =>
         {
             _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
                 $"MIDI device error: [{capturedName}] {msg}", (int)LogType.Warning);
 
-            string name = capturedName;
-            if (string.IsNullOrEmpty(name) || name == "MIDI")
-                name = FindOpenNameByInstance(capturedDevice) ?? name;
+            if (!string.IsNullOrEmpty(capturedName) && capturedName != "MIDI")
+            {
+                if (capturedOutput && _openOutputs.ContainsKey(capturedName))
+                {
+                    EnqueueMonitorLine($"— Device error / offline: {capturedName}");
+                    CloseOutput(capturedName, removeFromSession: false, logNotice: false);
+                    EmitSignal(SignalName.MidiStateChanged);
+                    return;
+                }
 
-            if (!string.IsNullOrEmpty(name) && name != "MIDI" && _openDevices.ContainsKey(name))
-            {
-                EnqueueMonitorLine($"— Device error / offline: {name}");
-                CloseInput(name, removeFromSession: false, logNotice: false);
-                EmitSignal(SignalName.MidiStateChanged);
+                if (!capturedOutput && _openDevices.ContainsKey(capturedName))
+                {
+                    EnqueueMonitorLine($"— Device error / offline: {capturedName}");
+                    CloseInput(capturedName, removeFromSession: false, logNotice: false);
+                    EmitSignal(SignalName.MidiStateChanged);
+                    return;
+                }
             }
-            else
-            {
-                // Unknown which port failed — full reconcile.
-                ReconcileSessionDevices(emitStateIfChanged: true, reason: "device-error");
-            }
+
+            ReconcileSessionDevices(emitStateIfChanged: true, reason: "device-error");
         });
     }
 

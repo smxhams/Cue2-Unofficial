@@ -10,7 +10,7 @@ using Godot;
 namespace Cue2.Services;
 
 /// <summary>
-/// Resolves on-disk directories for platform native libraries (FFmpeg, DryWetMidi, etc.).
+/// Resolves on-disk directories for platform native libraries (FFmpeg, RtMidi, etc.).
 /// </summary>
 /// <remarks>
 /// Editor builds load from <c>res://bin/{platform}/</c>. Exported Godot C# builds cannot
@@ -95,30 +95,41 @@ public static class NativeLibPaths
     }
 
     /// <summary>
-    /// File name of the Melanchall DryWetMidi native library for the current process, or empty if unsupported.
+    /// File name of the RtMidi 6.0 native library for the current process, or empty if unsupported.
     /// </summary>
     /// <param name="platformLabel">Readable platform label for logs.</param>
-    /// <returns>Native library file name, or empty string when Linux/unsupported.</returns>
-    public static string GetDryWetMidiNativeFileName(out string platformLabel)
+    /// <returns>Native library file name (e.g. <c>rtmidi.dll</c>, <c>librtmidi.so</c>).</returns>
+    public static string GetRtMidiNativeFileName(out string platformLabel)
     {
         Architecture arch = RuntimeInformation.ProcessArchitecture;
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             platformLabel = arch == Architecture.Arm64 ? "Windows ARM64" : "Windows x64";
-            return IntPtr.Size == 4
-                ? "Melanchall_DryWetMidi_Native32.dll"
-                : "Melanchall_DryWetMidi_Native64.dll";
+            return "rtmidi.dll";
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             platformLabel = arch == Architecture.Arm64 ? "macOS ARM64" : "macOS x64";
-            return "Melanchall_DryWetMidi_Native64.dylib";
+            return "librtmidi.dylib";
         }
 
-        platformLabel = "Linux (unsupported by DryWetMidi natives)";
-        return string.Empty;
+        if (arch == Architecture.Arm64)
+        {
+            platformLabel = "Linux ARM64";
+            return "librtmidi.so";
+        }
+
+        if (arch == Architecture.X64)
+        {
+            platformLabel = "Linux x64";
+            return "librtmidi.so";
+        }
+
+        platformLabel = $"Linux x64 (fallback for {arch})";
+        GD.PrintErr($"NativeLibPaths:GetRtMidiNativeFileName - Unsupported Linux arch {arch}; defaulting to linux64 name.");
+        return "librtmidi.so";
     }
 
     /// <summary>

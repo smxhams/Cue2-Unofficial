@@ -80,6 +80,14 @@ public partial class ResourceInUseDeleteDialog : Window
 	private readonly List<(int id, string name)> _replacements = new();
 	private bool _signalsConnected;
 
+	/// <summary>
+	/// Applies Linux native-window policy before the scene window enters the tree.
+	/// </summary>
+	public ResourceInUseDeleteDialog()
+	{
+		LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+	}
+
 	public override void _Ready()
 	{
 		_globalData = GetNode<GlobalData>("/root/GlobalData");

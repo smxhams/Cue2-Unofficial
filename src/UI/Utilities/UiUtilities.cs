@@ -834,6 +834,84 @@ public partial class UiUtilities : Node
     }
 
     /// <summary>
+    /// Maps a desktop-screen point to the coordinate space <see cref="Window.Position"/> expects.
+    /// Native windows use screen coordinates; embedded windows use the embedder viewport.
+    /// </summary>
+    /// <param name="popup">Popup or other window being placed.</param>
+    /// <param name="screenPoint">Point in desktop screen coordinates (e.g. from <see cref="Control.GetScreenTransform"/>).</param>
+    /// <returns>Position suitable for <see cref="Window.Position"/> or <see cref="Window.Popup(Rect2I)"/>.</returns>
+    public static Vector2I ScreenPointToPopupPosition(Window popup, Vector2 screenPoint)
+    {
+        if (popup == null || !GodotObject.IsInstanceValid(popup) || !popup.IsEmbedded())
+            return new Vector2I(Mathf.RoundToInt(screenPoint.X), Mathf.RoundToInt(screenPoint.Y));
+
+        Window embedder = FindParentWindow(popup);
+        if (embedder == null)
+            return new Vector2I(Mathf.RoundToInt(screenPoint.X), Mathf.RoundToInt(screenPoint.Y));
+
+        Vector2 local = embedder.GetScreenTransform().AffineInverse() * screenPoint;
+        return new Vector2I(Mathf.RoundToInt(local.X), Mathf.RoundToInt(local.Y));
+    }
+
+    /// <summary>
+    /// Usable rectangle in the same coordinate space as <see cref="Window.Position"/> for
+    /// <paramref name="popup"/> (desktop usable rect when native; embedder viewport when embedded).
+    /// </summary>
+    /// <param name="popup">Popup being placed.</param>
+    /// <returns>Clamp bounds for the popup position and size.</returns>
+    public static Rect2I GetPopupUsableRect(Window popup)
+    {
+        if (popup != null && GodotObject.IsInstanceValid(popup) && popup.IsEmbedded())
+        {
+            Window embedder = FindParentWindow(popup);
+            if (embedder != null)
+                return new Rect2I(Vector2I.Zero, embedder.Size);
+        }
+
+        int screenIdx = DisplayServer.WindowGetCurrentScreen();
+        return DisplayServer.ScreenGetUsableRect(screenIdx);
+    }
+
+    /// <summary>
+    /// Mouse position in the coordinate space <paramref name="popup"/> uses for <see cref="Window.Position"/>.
+    /// </summary>
+    /// <param name="popup">Popup being placed.</param>
+    /// <param name="viewportHost">Control in the same viewport as the popup (used when embedded).</param>
+    /// <returns>Position suitable for <see cref="Window.Position"/>.</returns>
+    public static Vector2I GetPopupMousePosition(Window popup, Control viewportHost = null)
+    {
+        if (popup != null && GodotObject.IsInstanceValid(popup) && popup.IsEmbedded())
+        {
+            if (viewportHost != null && GodotObject.IsInstanceValid(viewportHost))
+                return (Vector2I)viewportHost.GetGlobalMousePosition();
+
+            Window embedder = FindParentWindow(popup);
+            if (embedder != null)
+                return (Vector2I)embedder.GetMousePosition();
+        }
+
+        return DisplayServer.MouseGetPosition();
+    }
+
+    /// <summary>
+    /// Walks ancestors to find the native/parent <see cref="Window"/> that embeds <paramref name="node"/>.
+    /// </summary>
+    /// <param name="node">Typically an embedded popup.</param>
+    /// <returns>The parent window, or null if none is in the tree yet.</returns>
+    private static Window FindParentWindow(Node node)
+    {
+        Node current = node?.GetParent();
+        while (current != null)
+        {
+            if (current is Window window)
+                return window;
+            current = current.GetParent();
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// True when the window fills the screen via maximize or any fullscreen mode.
     /// </summary>
     /// <param name="window">Window to inspect.</param>
