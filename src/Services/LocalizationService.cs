@@ -12,9 +12,11 @@ namespace Cue2.Services;
 /// Application localization framework built on Godot's <see cref="TranslationServer"/>.
 /// </summary>
 /// <remarks>
-/// Loads message catalogs from <c>res://translations/cue2.csv</c> at runtime, registers
-/// each locale column as a <see cref="Translation"/>, and applies the user's preferred
-/// locale from <see cref="UserDataManager"/>. Supported locales are listed in
+/// Loads message catalogs from <c>res://translations/cue2.csv</c> in the editor. Exported
+/// builds remap that CSV to compiled <c>cue2.*.translation</c> files, so those are loaded
+/// when the source spreadsheet is not readable. Each locale is registered with
+/// <see cref="TranslationServer"/> and the user's preference comes from
+/// <see cref="UserDataManager"/>. Supported locales are listed in
 /// <see cref="SupportedLocales"/> (extend CSV columns + this list to add languages).
 /// <para/>
 /// Automation: <c>python tools/i18n/update_catalog.py</c> extracts new English keys
@@ -354,33 +356,53 @@ public partial class LocalizationService : Node
 	// ── Catalog loading ───────────────────────────────────────────────────
 
 	/// <summary>
-	/// Parses <see cref="CatalogPath"/> and registers one <see cref="Translation"/> per locale column.
+	/// Path pattern for Godot-compiled catalogs produced from <see cref="CatalogPath"/>.
+	/// </summary>
+	/// <param name="localeCode">ISO-style locale code (e.g. <c>es</c>).</param>
+	/// <returns>Resource path of the compiled <see cref="Translation"/>.</returns>
+	public static string GetCompiledCatalogPath(string localeCode) =>
+		$"res://translations/cue2.{localeCode}.translation";
+
+	/// <summary>
+	/// Parses the CSV catalog when it is a real file (editor), otherwise loads the
+	/// compiled <c>.translation</c> resources that Godot packs into exported builds.
 	/// </summary>
 	private void LoadAndRegisterCatalog()
 	{
-		if (!Godot.FileAccess.FileExists(CatalogPath))
-		{
-			GD.PrintErr($"LocalizationService:LoadAndRegisterCatalog - Catalog not found: {CatalogPath}");
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-				$"Translation catalog missing: {CatalogPath}", 1);
+		if (TryLoadCatalogFromCsv())
 			return;
-		}
+
+		if (TryLoadCatalogFromCompiledTranslations())
+			return;
+
+		GD.PrintErr($"LocalizationService:LoadAndRegisterCatalog - No catalog available " +
+		            $"(CSV missing in export is expected; compiled .translation files also missing).");
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"Translation catalog missing: {CatalogPath}", 1);
+	}
+
+	/// <summary>
+	/// Loads and registers translations from the source CSV when FileAccess can read it.
+	/// </summary>
+	/// <returns>True when at least one locale catalog was registered from the CSV.</returns>
+	private bool TryLoadCatalogFromCsv()
+	{
+		if (!Godot.FileAccess.FileExists(CatalogPath))
+			return false;
 
 		using var file = Godot.FileAccess.Open(CatalogPath, Godot.FileAccess.ModeFlags.Read);
 		if (file == null)
 		{
 			Error err = Godot.FileAccess.GetOpenError();
-			GD.PrintErr($"LocalizationService:LoadAndRegisterCatalog - Failed to open catalog: {err}");
-			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-				$"Failed to open translation catalog: {err}", 2);
-			return;
+			GD.Print($"LocalizationService:TryLoadCatalogFromCsv - Cannot open {CatalogPath}: {err}");
+			return false;
 		}
 
 		string text = file.GetAsText();
 		if (string.IsNullOrWhiteSpace(text))
 		{
-			GD.PrintErr("LocalizationService:LoadAndRegisterCatalog - Catalog is empty.");
-			return;
+			GD.Print("LocalizationService:TryLoadCatalogFromCsv - Catalog is empty.");
+			return false;
 		}
 
 		// Strip UTF-8 BOM if present. Keep real newlines — records may be multiline (quoted fields).
@@ -389,13 +411,15 @@ public partial class LocalizationService : Node
 
 		List<List<string>> records = ParseCsvRecords(text);
 		if (records.Count == 0)
-			return;
+			return false;
 
 		List<string> header = records[0];
-		if (header.Count < 2)
+		string headerKey = header.Count > 0 ? (header[0] ?? string.Empty).Trim() : string.Empty;
+		if (header.Count < 2 || !string.Equals(headerKey, "keys", StringComparison.OrdinalIgnoreCase))
 		{
-			GD.PrintErr("LocalizationService:LoadAndRegisterCatalog - Invalid header (need keys + at least one locale).");
-			return;
+			GD.Print("LocalizationService:TryLoadCatalogFromCsv - Not a translation spreadsheet " +
+			         "(export remaps this path); falling back to compiled catalogs.");
+			return false;
 		}
 
 		// Column 0 is keys; remaining columns are locale codes (skip comment columns starting with _).
@@ -410,8 +434,8 @@ public partial class LocalizationService : Node
 
 		if (localeColumns.Count == 0)
 		{
-			GD.PrintErr("LocalizationService:LoadAndRegisterCatalog - No locale columns found.");
-			return;
+			GD.PrintErr("LocalizationService:TryLoadCatalogFromCsv - No locale columns found.");
+			return false;
 		}
 
 		var translations = new Dictionary<string, Translation>(StringComparer.OrdinalIgnoreCase);
@@ -448,6 +472,9 @@ public partial class LocalizationService : Node
 			}
 		}
 
+		if (translations.Count == 0 || messageCount == 0)
+			return false;
+
 		foreach (var kvp in translations)
 		{
 			// Replace any previous registration for this locale from earlier init attempts.
@@ -455,7 +482,48 @@ public partial class LocalizationService : Node
 			_registeredLocales.Add(kvp.Key);
 		}
 
-		GD.Print($"LocalizationService:LoadAndRegisterCatalog - Registered {translations.Count} locale(s), {messageCount} message cell(s) from {records.Count - 1} row(s).");
+		GD.Print($"LocalizationService:TryLoadCatalogFromCsv - Registered {translations.Count} locale(s), " +
+		         $"{messageCount} message cell(s) from {records.Count - 1} row(s).");
+		return true;
+	}
+
+	/// <summary>
+	/// Loads Godot-imported <c>cue2.&lt;locale&gt;.translation</c> resources.
+	/// These are what exported PCK files actually contain (the CSV source is remapped away).
+	/// </summary>
+	/// <returns>True when at least one compiled catalog was registered.</returns>
+	private bool TryLoadCatalogFromCompiledTranslations()
+	{
+		int loaded = 0;
+		foreach (var (code, _, _) in SupportedLocales)
+		{
+			string path = GetCompiledCatalogPath(code);
+			if (!ResourceLoader.Exists(path))
+			{
+				GD.Print($"LocalizationService:TryLoadCatalogFromCompiledTranslations - Missing {path}");
+				continue;
+			}
+
+			var translation = ResourceLoader.Load<Translation>(path);
+			if (translation == null)
+			{
+				GD.PrintErr($"LocalizationService:TryLoadCatalogFromCompiledTranslations - Failed to load {path}");
+				continue;
+			}
+
+			if (string.IsNullOrEmpty(translation.Locale))
+				translation.Locale = code;
+
+			TranslationServer.AddTranslation(translation);
+			_registeredLocales.Add(code);
+			loaded++;
+		}
+
+		if (loaded == 0)
+			return false;
+
+		GD.Print($"LocalizationService:TryLoadCatalogFromCompiledTranslations - Registered {loaded} compiled locale(s).");
+		return true;
 	}
 
 	/// <summary>
@@ -467,6 +535,21 @@ public partial class LocalizationService : Node
 		string locale = ResolveLocale(localeCode);
 		if (_registeredLocales.Contains(locale))
 			return;
+
+		string compiledPath = GetCompiledCatalogPath(locale);
+		if (ResourceLoader.Exists(compiledPath))
+		{
+			var compiled = ResourceLoader.Load<Translation>(compiledPath);
+			if (compiled != null)
+			{
+				if (string.IsNullOrEmpty(compiled.Locale))
+					compiled.Locale = locale;
+				TranslationServer.AddTranslation(compiled);
+				_registeredLocales.Add(locale);
+				GD.Print($"LocalizationService:EnsureLocaleRegistered - Loaded compiled catalog for '{locale}'.");
+				return;
+			}
+		}
 
 		var translation = new Translation { Locale = locale };
 		// Seed the language display name so Tr("LOCALE_NAME_en") works even without CSV.

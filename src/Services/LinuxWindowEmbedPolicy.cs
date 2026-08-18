@@ -13,12 +13,17 @@ namespace Cue2.Services;
 /// Cue2 keeps <c>embed_subwindows=false</c> so video outputs and Settings/About/Log can be
 /// separate desktop windows. On Linux (especially Wayland) native popup windows cannot be
 /// placed under the widget that opened them. Enabling embed on the parent viewport and
-/// <see cref="Window.ForceNative"/> on non-<see cref="Popup"/> windows fixes OptionButton
+/// <see cref="Window.ForceNative"/> on non-<see cref="Popup"/> child windows fixes OptionButton
 /// lists without changing Windows/macOS or turning house screens into embedded views.
 /// <para>
-/// <see cref="ApplyToAppWindow"/> must run in the <see cref="Window"/> constructor — before
-/// the node enters the tree — because Godot decides native vs embedded during enter-tree
-/// when the window is already visible.
+/// Never apply <see cref="Window.ForceNative"/> to <c>/root</c>. That property must be set
+/// before a window is shown; flipping it on the already-visible main viewport can hide or
+/// recreate the main window.
+/// </para>
+/// <para>
+/// <see cref="ApplyToAppWindow"/> must run in each child <see cref="Window"/> constructor —
+/// before the node enters the tree — because Godot decides native vs embedded during
+/// enter-tree when the window is already visible.
 /// </para>
 /// </remarks>
 public static class LinuxWindowEmbedPolicy
@@ -27,7 +32,8 @@ public static class LinuxWindowEmbedPolicy
     public static bool IsLinux => OS.GetName() == "Linux";
 
     /// <summary>
-    /// Embeds popups in <paramref name="root"/> on Linux. No-op on other platforms.
+    /// Embeds popups in <paramref name="root"/> on Linux. Does not change whether
+    /// the main window itself is native.
     /// </summary>
     /// <param name="root">Typically <c>GetTree().Root</c>.</param>
     public static void EnablePopupEmbedding(Window root)
@@ -36,19 +42,25 @@ public static class LinuxWindowEmbedPolicy
             return;
 
         root.GuiEmbedSubwindows = true;
-        ApplyToAppWindow(root);
-        GD.Print("LinuxWindowEmbedPolicy:EnablePopupEmbedding - Embedding popups on Linux; app Windows stay native.");
+        GD.Print("LinuxWindowEmbedPolicy:EnablePopupEmbedding - Embedding popups on Linux; main window stays native.");
     }
 
     /// <summary>
-    /// Marks a non-popup <see cref="Window"/> as a native OS window whose own popups embed.
+    /// Marks a non-popup child <see cref="Window"/> as a native OS window whose own popups embed.
+    /// No-op for <see cref="Popup"/>, the main viewport, and non-Linux hosts.
     /// </summary>
-    /// <param name="window">App window (Settings, video output, dialog, …). Ignored if a <see cref="Popup"/>.</param>
+    /// <param name="window">App window (Settings, video output, dialog, …).</param>
     public static void ApplyToAppWindow(Window window)
     {
         if (!IsLinux || window == null || !GodotObject.IsInstanceValid(window))
             return;
         if (window is Popup)
+            return;
+
+        // The main viewport is already a native window. ForceNative after it is visible
+        // can hide or recreate it on Linux.
+        SceneTree tree = window.GetTree();
+        if (tree?.Root != null && window == tree.Root)
             return;
 
         window.ForceNative = true;

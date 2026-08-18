@@ -265,7 +265,7 @@ public partial class ControlComponentCard : PanelContainer
         // GuiInput + AcceptEvent (not ButtonDown): mouse-up is consumed globally in _Input while
         // picking, which would leave BaseButton latched and require a second click — same fix as
         // ShellBar reorder grabber (OnDragBarGuiInput / ReleaseDragGrabber).
-        _pickTargetButton.Icon = GetThemeIcon("Right", "AtlasIcons");
+        _pickTargetButton.Icon = GetThemeIcon("Target", "AtlasIcons");
         _pickTargetButton.TooltipText = UiLocalizer.T("Hold and release over a cue in the list to set target");
         _pickTargetButton.KeepPressedOutside = false;
         _pickTargetButton.GuiInput += OnPickTargetButtonGuiInput;
@@ -2384,7 +2384,7 @@ public partial class ControlComponentCard : PanelContainer
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             CustomMinimumSize = new Vector2(16, 16)
         };
-        var icon = GetThemeIcon("Right", "AtlasIcons");
+        var icon = GetThemeIcon("Target", "AtlasIcons");
         if (icon != null)
             _pickBadgeIcon.Texture = icon;
         row.AddChild(_pickBadgeIcon);

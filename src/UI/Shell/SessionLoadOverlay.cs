@@ -85,7 +85,9 @@ public partial class SessionLoadOverlay : Control
 			_progressBar.Value = 0;
 		RefreshTexts();
 		Visible = true;
-		MoveToFront();
+		// WindowSetMode on macOS can flush a process frame while Cue2Base is still
+		// inside child _Ready; move_child is illegal then. Raise after setup finishes.
+		CallDeferred(CanvasItem.MethodName.MoveToFront);
 	}
 
 	private void OnSessionLoadProgress(float percent, string statusText, string detail, int completed, int total)

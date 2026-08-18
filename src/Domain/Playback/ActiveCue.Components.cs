@@ -471,16 +471,8 @@ public partial class ActiveCue
             else
                 timeLabel.Text = UiUtilities.FormatTime(videoComponent.TotalDuration);
 
-            // Prefer Image icon when available; fall back to Video.
-            try
-            {
-                typeIcon.Texture = _activeCueBar.GetThemeIcon(
-                    videoComponent.IsImage ? "Image" : "Video", "AtlasIcons");
-            }
-            catch
-            {
-                typeIcon.Texture = _activeCueBar.GetThemeIcon("Video", "AtlasIcons");
-            }
+            typeIcon.Texture = _activeCueBar.GetThemeIcon(
+                videoComponent.IsImage ? "Image" : "Video", "AtlasIcons");
             pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
@@ -682,21 +674,7 @@ public partial class ActiveCue
             else
                 timeLabel.Text = UiUtilities.FormatTime(textComponent.TotalDuration);
 
-            try
-            {
-                typeIcon.Texture = _activeCueBar.GetThemeIcon("Text", "AtlasIcons");
-            }
-            catch
-            {
-                try
-                {
-                    typeIcon.Texture = _activeCueBar.GetThemeIcon("Label", "AtlasIcons");
-                }
-                catch
-                {
-                    // Icon optional.
-                }
-            }
+            typeIcon.Texture = _activeCueBar.GetThemeIcon("Text", "AtlasIcons");
 
             pauseButton.Icon = _activeCueBar.GetThemeIcon(_isPaused ? "Play" : "Pause", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
@@ -1079,19 +1057,7 @@ public partial class ActiveCue
                 };
             }
 
-            string iconName = controlComponent.Action switch
-            {
-                ControlAction.Go => "Play",
-                ControlAction.Pause => "Pause",
-                ControlAction.Stop => "Stop",
-                ControlAction.Resume => "Play",
-                ControlAction.StartNow => "Skip",
-                ControlAction.Fade => "Play",
-                ControlAction.TranslateLayer => "Play",
-                ControlAction.Seek => "Skip",
-                _ => "Play"
-            };
-            typeIcon.Texture = _activeCueBar.GetThemeIcon(iconName, "AtlasIcons");
+            typeIcon.Texture = _activeCueBar.GetThemeIcon("Target", "AtlasIcons");
             stopButton.Icon = _activeCueBar.GetThemeIcon("Stop", "AtlasIcons");
 
             _activeControlComponents.Add(componentPanel, controlComponent);

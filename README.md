@@ -32,6 +32,8 @@ See the project wiki or `src/proposed_README.md` for build instructions.
 ## Export packaging
 Godot export does **not** embed FFmpeg or RtMidi shared libraries into a single exe. After exporting, copy platform natives with `tools/copy-natives-for-export.ps1` (or `.sh`). Rebuild MIDI natives with `python tools/build-rtmidi-natives.py`. Details: [docs/export-packaging.md](docs/export-packaging.md).
 
+macOS releases need a Developer ID signature and notarization **after** the native copy (Godot's built-in notarization is the wrong step for Cue2). See [docs/macos-codesign.md](docs/macos-codesign.md) and `tools/macos-sign-and-notarize.sh`.
+
 ## Platforms
 Cue-2 targets:
 - Windows 10+

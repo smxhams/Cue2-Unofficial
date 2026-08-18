@@ -30,6 +30,13 @@ region = Rect2(0, 96, 32, 32)
 atlas = ExtResource("1_hh4k7")
 region = Rect2(160, 64, 32, 32)
 
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_qsjsb"]
+load_path = "res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex"
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_smkvw"]
+atlas = SubResource("CompressedTexture2D_qsjsb")
+region = Rect2(32, 128, 32, 32)
+
 [sub_resource type="AtlasTexture" id="AtlasTexture_mvudg"]
 atlas = ExtResource("1_hh4k7")
 region = Rect2(192, 64, 32, 32)
@@ -72,15 +79,20 @@ region = Rect2(224, 64, 32, 32)
 atlas = ExtResource("1_hh4k7")
 region = Rect2(64, 0, 32, 32)
 
+[sub_resource type="AtlasTexture" id="AtlasTexture_targt"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(224, 96, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_texti"]
+atlas = ExtResource("1_hh4k7")
+region = Rect2(0, 128, 32, 32)
+
 [sub_resource type="AtlasTexture" id="AtlasTexture_wu7sp"]
 atlas = ExtResource("1_hh4k7")
 region = Rect2(96, 64, 32, 32)
 
-[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_qsjsb"]
-load_path = "res://.godot/imported/icons.png-0624ac9eaac79b3b93c972cae659af9a.ctex"
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_smkvw"]
-atlas = SubResource("CompressedTexture2D_qsjsb")
+[sub_resource type="AtlasTexture" id="AtlasTexture_film1"]
+atlas = ExtResource("1_hh4k7")
 region = Rect2(96, 96, 32, 32)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_fd6x7"]
@@ -831,8 +843,10 @@ AtlasIcons/icons/AudioMute = SubResource("AtlasTexture_dtw0r")
 AtlasIcons/icons/Connection = SubResource("AtlasTexture_b3yhw")
 AtlasIcons/icons/DeleteBin = SubResource("AtlasTexture_jxm3t")
 AtlasIcons/icons/Down = SubResource("AtlasTexture_w6urt")
+AtlasIcons/icons/Image = SubResource("AtlasTexture_smkvw")
 AtlasIcons/icons/Left = SubResource("AtlasTexture_mvudg")
 AtlasIcons/icons/Pause = SubResource("AtlasTexture_82g3v")
+AtlasIcons/icons/Picture = SubResource("AtlasTexture_smkvw")
 AtlasIcons/icons/Play = SubResource("AtlasTexture_kr3sc")
 AtlasIcons/icons/PlusCircled = SubResource("AtlasTexture_et7wo")
 AtlasIcons/icons/Rearrange = SubResource("AtlasTexture_qsjsb")
@@ -840,8 +854,10 @@ AtlasIcons/icons/Refresh = SubResource("AtlasTexture_h1xyv")
 AtlasIcons/icons/Right = SubResource("AtlasTexture_p8lwo")
 AtlasIcons/icons/Skip = SubResource("AtlasTexture_ag3qs")
 AtlasIcons/icons/Stop = SubResource("AtlasTexture_f8m2y")
+AtlasIcons/icons/Target = SubResource("AtlasTexture_targt")
+AtlasIcons/icons/Text = SubResource("AtlasTexture_texti")
 AtlasIcons/icons/Up = SubResource("AtlasTexture_wu7sp")
-AtlasIcons/icons/Video = SubResource("AtlasTexture_smkvw")
+AtlasIcons/icons/Video = SubResource("AtlasTexture_film1")
 Button/colors/icon_pressed_color = Color(0.592157, 0.294118, 0.0313726, 1)
 Button/icons/Delete = SubResource("AtlasTexture_fd6x7")
 Button/styles/disabled = SubResource("StyleBoxFlat_fcguj")

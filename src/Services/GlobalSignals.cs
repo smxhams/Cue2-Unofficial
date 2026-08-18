@@ -244,7 +244,7 @@ public partial class GlobalSignals : Node
 	/// </summary>
 	public override void _Ready()
 	{
-		// Linux: embed OptionButton/Popup lists; ForceNative is set in each Window constructor.
+		// Linux: embed OptionButton/Popup lists inside the main viewport. Do not ForceNative /root.
 		LinuxWindowEmbedPolicy.EnablePopupEmbedding(GetTree().Root);
 
 		// Scan for existing text fields / OptionButtons at startup

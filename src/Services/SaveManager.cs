@@ -113,7 +113,8 @@ public partial class SaveManager : Node
 	}
 	
 	/// <summary>
-	/// Opens the showfile selected by startup preference (open last from user data), after one process frame.
+	/// Opens the showfile selected by startup preference (open last from user data), after the
+	/// main scene has finished <c>_Ready</c>.
 	/// </summary>
 	private void LoadStartupSession()
 	{
@@ -126,9 +127,12 @@ public partial class SaveManager : Node
 		{
 			if (!GodotObject.IsInstanceValid(this))
 				return;
-			// One frame so Cue2Base can paint the session-load overlay first.
+			// Do not start apply on a single ProcessFrame: DisplayServer.WindowSetMode
+			// (maximize restore in MainWindowHandles._Ready) can deliver that frame on
+			// macOS while Cue2Base is still setting up children. SessionLoadOverlay then
+			// hits move_child / MoveToFront on a blocked parent.
 			SessionLoadTimer.Current?.Begin("boot.frame");
-			await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+			await WaitForMainSceneReadyAsync();
 			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
 				return;
 			string path = _globalData.StartupOpenPath;
@@ -142,6 +146,34 @@ public partial class SaveManager : Node
 			GD.PrintErr($"SaveManager:LoadStartupSessionAsync - {ex.Message}");
 			EndSessionApply();
 			FinishLoadTimer("failed");
+		}
+	}
+
+	/// <summary>
+	/// Waits until the current main scene exists and has finished <c>_Ready</c>.
+	/// </summary>
+	/// <remarks>
+	/// A lone <see cref="SceneTree.SignalName.ProcessFrame"/> is not enough at boot:
+	/// macOS window-mode changes can flush that frame mid-child setup.
+	/// </remarks>
+	private async Task WaitForMainSceneReadyAsync()
+	{
+		while (GodotObject.IsInstanceValid(this))
+		{
+			var tree = GetTree();
+			if (tree == null)
+				return;
+
+			var scene = tree.CurrentScene;
+			if (scene != null)
+			{
+				if (scene.IsNodeReady())
+					return;
+				await ToSignal(scene, Node.SignalName.Ready);
+				return;
+			}
+
+			await ToSignal(tree, SceneTree.SignalName.ProcessFrame);
 		}
 	}
 

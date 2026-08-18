@@ -111,8 +111,8 @@ split_offsets = PackedInt32Array(180)
 split_offset = 180
 
 [node name="LeftPanel" type="PanelContainer" parent="MarginContainer/MainVBox/BodyHSplit" unique_id=443773294]
-clip_contents = true
 custom_minimum_size = Vector2(180, 0)
+clip_contents = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -217,17 +217,13 @@ split_offset = -220
 
 [node name="CenterPanel" type="VBoxContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit" unique_id=386143506]
 clip_contents = true
-custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-size_flags_stretch_ratio = 1.0
 theme_override_constants/separation = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel" unique_id=1527729094]
 unique_name_in_owner = true
-clip_contents = true
-custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -237,7 +233,6 @@ vertical_scroll_mode = 3
 
 [node name="SubViewportContainer" type="SubViewportContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel/ScrollContainer" unique_id=166595456]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -271,20 +266,19 @@ size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_canvas_outline")
 
 [node name="ControlsLabel" type="Label" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit/CenterPanel" unique_id=1669559873]
-custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.412004, 0.412004, 0.412004, 1)
 theme_override_font_sizes/font_size = 9
 text = "Drag: move  ·  Handles: resize  ·  Click: select  ·  Ctrl+Scroll: zoom  ·  MMB: pan  ·  Fit: fit view"
-clip_text = true
-text_overrun_behavior = 3
 horizontal_alignment = 1
 vertical_alignment = 1
+clip_text = true
+text_overrun_behavior = 3
 
 [node name="RightPanel" type="PanelContainer" parent="MarginContainer/MainVBox/BodyHSplit/CenterRightSplit" unique_id=1837942953]
-clip_contents = true
 custom_minimum_size = Vector2(220, 0)
+clip_contents = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")

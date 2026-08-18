@@ -235,6 +235,11 @@ Redo={
 ]
 }
 
+[internationalization]
+
+locale/fallback="en"
+locale/translations=PackedStringArray("res://translations/cue2.en.translation", "res://translations/cue2.mi.translation", "res://translations/cue2.es.translation", "res://translations/cue2.de.translation", "res://translations/cue2.ru.translation", "res://translations/cue2.ja.translation", "res://translations/cue2.ar.translation", "res://translations/cue2.hi.translation")
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
