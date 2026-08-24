@@ -1511,22 +1511,7 @@ public partial class MainTitleBarUI : Control
 
     private void StartNewSession()
     {
-        if (_globalData?.IsSessionLoading == true)
-        {
-            _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
-                "Please wait — a showfile is still loading. Cannot start a new session.", (int)LogType.Info);
-            return;
-        }
-
-        _globalData.SessionName = null;
-        _globalData.SessionPath = null;
-        _globalData.SessionDir = null;
-        _globalData.SessionAudioPath = null;
-        _globalData.SessionVideoPath = null;
-        _globalData.SessionImagesPath = null;
-        _globalData.SessionWaveformsPath = null;
-        UpdateTitle();
-        _globalSignals.EmitSignal(nameof(GlobalSignals.NewSession));
+        GetNodeOrNull<SaveManager>("/root/SaveManager")?.RequestNewSession();
     }
 
     private void OpenAboutWindow()
@@ -1684,8 +1669,6 @@ public partial class MainTitleBarUI : Control
 
     private void OnExitButtonPressed()
     {
-        GetTree().Root.PropagateNotification((int)NotificationWMCloseRequest);
-        Task.Delay(100);
-        GetTree().Quit();
+        GetNodeOrNull<SaveManager>("/root/SaveManager")?.RequestQuit();
     }
 }

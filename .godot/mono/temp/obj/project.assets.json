@@ -34,6 +34,22 @@
           }
         }
       },
+      "GodotSharpEditor/4.7.1": {
+        "type": "package",
+        "dependencies": {
+          "GodotSharp": "4.7.1"
+        },
+        "compile": {
+          "lib/net8.0/GodotSharpEditor.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/GodotSharpEditor.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Rug.Osc/1.2.5": {
         "type": "package",
         "compile": {
@@ -95,78 +111,6 @@
           }
         }
       }
-    },
-    "net8.0/win-x64": {
-      "FFmpeg.AutoGen/9.0.1.1": {
-        "type": "package",
-        "compile": {
-          "lib/net8.0/FFmpeg.AutoGen.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net8.0/FFmpeg.AutoGen.dll": {
-            "related": ".xml"
-          }
-        }
-      },
-      "Godot.SourceGenerators/4.7.1": {
-        "type": "package",
-        "build": {
-          "build/Godot.SourceGenerators.props": {}
-        }
-      },
-      "GodotSharp/4.7.1": {
-        "type": "package",
-        "compile": {
-          "lib/net8.0/GodotSharp.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net8.0/GodotSharp.dll": {
-            "related": ".xml"
-          }
-        }
-      },
-      "Rug.Osc/1.2.5": {
-        "type": "package",
-        "compile": {
-          "lib/Rug.Osc.dll": {}
-        },
-        "runtime": {
-          "lib/Rug.Osc.dll": {}
-        }
-      },
-      "SDL3-CS/3.4.14.1": {
-        "type": "package",
-        "compile": {
-          "lib/net8.0/SDL3-CS.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net8.0/SDL3-CS.dll": {
-            "related": ".xml"
-          }
-        }
-      },
-      "SDL3-CS.Native/3.4.2": {
-        "type": "package",
-        "compile": {
-          "lib/net8.0/SDL3-CS.Native.dll": {
-            "related": ".xml"
-          }
-        },
-        "runtime": {
-          "lib/net8.0/SDL3-CS.Native.dll": {
-            "related": ".xml"
-          }
-        },
-        "native": {
-          "runtimes/win-x64/native/SDL3.dll": {}
-        }
-      }
     }
   },
   "libraries": {
@@ -213,6 +157,19 @@
         "godotsharp.nuspec",
         "lib/net8.0/GodotSharp.dll",
         "lib/net8.0/GodotSharp.xml"
+      ]
+    },
+    "GodotSharpEditor/4.7.1": {
+      "sha512": "MAX9wPgjX9BM+EOMxuF++mWKdvO2y0ZiEAfv6D68HGseQc8mX//yc7QrJizXSJ4ii1nh3krXZSyIJ77nmjOgYA==",
+      "type": "package",
+      "path": "godotsharpeditor/4.7.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "godotsharpeditor.4.7.1.nupkg.sha512",
+        "godotsharpeditor.nuspec",
+        "lib/net8.0/GodotSharpEditor.dll",
+        "lib/net8.0/GodotSharpEditor.xml"
       ]
     },
     "Rug.Osc/1.2.5": {
@@ -288,6 +245,7 @@
       "FFmpeg.AutoGen >= 9.0.1.1",
       "Godot.SourceGenerators >= 4.7.1",
       "GodotSharp >= 4.7.1",
+      "GodotSharpEditor >= 4.7.1",
       "Rug.Osc >= 1.2.5",
       "SDL3-CS >= 3.4.14.1",
       "SDL3-CS.Native >= 3.4.2"
@@ -353,6 +311,11 @@
             "version": "[4.7.1, )",
             "autoReferenced": true
           },
+          "GodotSharpEditor": {
+            "target": "Package",
+            "version": "[4.7.1, )",
+            "autoReferenced": true
+          },
           "Rug.Osc": {
             "target": "Package",
             "version": "[1.2.5, )"
@@ -377,31 +340,12 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[8.0.7, 8.0.7]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[8.0.7, 8.0.7]"
-          },
-          {
-            "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[8.0.7, 8.0.7]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
         "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.303/PortableRuntimeIdentifierGraph.json"
-      }
-    },
-    "runtimes": {
-      "win-x64": {
-        "#import": []
       }
     }
   }

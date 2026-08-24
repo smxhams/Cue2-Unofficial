@@ -60,6 +60,12 @@ public partial class HistoryManager : Node
 	private readonly List<HistoryEntry> _redoStack = new();
 	private bool _isRestoring;
 
+	/// <summary>Document-edit generation (cue / cuelist / settings). Selection is ignored.</summary>
+	private int _documentRevision;
+
+	/// <summary>Revision last written to disk (or 0 after New / Open).</summary>
+	private int _savedRevision;
+
 	/// <summary>
 	/// Active continuous-edit session key (typing / drag / spin). Only merges while this is set
 	/// and matches the incoming key. Discrete records (null key) or <see cref="EndCoalesceSession"/>
@@ -109,6 +115,21 @@ public partial class HistoryManager : Node
 	/// </summary>
 	public bool IsRestoring => _isRestoring;
 
+	/// <summary>
+	/// True when cue, cuelist, or show-settings data has changed since the last save (or New / Open).
+	/// Selection-only history does not count.
+	/// </summary>
+	public bool HasUnsavedDocumentChanges => _documentRevision != _savedRevision;
+
+	/// <summary>
+	/// Marks the current document revision as matching disk (after a successful Save / Save As,
+	/// or after New / Open has loaded a clean session).
+	/// </summary>
+	public void MarkSaved()
+	{
+		_savedRevision = _documentRevision;
+	}
+
 	public override void _Ready()
 	{
 		_globalData = GetParent() as GlobalData ?? GetNode<GlobalData>("/root/GlobalData");
@@ -116,7 +137,6 @@ public partial class HistoryManager : Node
 
 		_globalSignals.Undo += Undo;
 		_globalSignals.Redo += Redo;
-		_globalSignals.NewSession += Clear;
 		// Show Mode changes which scopes are applicable — refresh Edit menu CanUndo/CanRedo.
 		_globalSignals.ShowModeChanged += OnShowModeChanged;
 		_globalSignals.SessionLoadStarted += OnSessionLoadStarted;
@@ -131,7 +151,6 @@ public partial class HistoryManager : Node
 		{
 			_globalSignals.Undo -= Undo;
 			_globalSignals.Redo -= Redo;
-			_globalSignals.NewSession -= Clear;
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 			_globalSignals.SessionLoadStarted -= OnSessionLoadStarted;
 			_globalSignals.SessionLoadFinished -= OnSessionLoadFinished;
@@ -425,6 +444,8 @@ public partial class HistoryManager : Node
 			_redoStack.Add(redoEntry);
 
 			RestoreEntry(target);
+			if (IsDocumentScope(target.Scope))
+				_documentRevision--;
 
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
 				$"Undo: {target.Description}", (int)LogType.Info);
@@ -492,6 +513,8 @@ public partial class HistoryManager : Node
 			TrimToMaxDepth();
 
 			RestoreEntry(target);
+			if (IsDocumentScope(target.Scope))
+				_documentRevision++;
 
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
 				$"Redo: {target.Description}", (int)LogType.Info);
@@ -525,10 +548,10 @@ public partial class HistoryManager : Node
 	public void Clear()
 	{
 		_activeCoalesceKey = null;
-		if (_undoStack.Count == 0 && _redoStack.Count == 0) return;
-
 		_undoStack.Clear();
 		_redoStack.Clear();
+		_documentRevision = 0;
+		_savedRevision = 0;
 		EmitSignal(SignalName.HistoryChanged);
 		GD.Print("HistoryManager:Clear - History cleared.");
 	}
@@ -615,10 +638,15 @@ public partial class HistoryManager : Node
 		_redoStack.Clear();
 		// Open or close continuous session: null key = discrete commit, seals any prior session.
 		_activeCoalesceKey = string.IsNullOrEmpty(coalesceKey) ? null : coalesceKey;
+		if (IsDocumentScope(entry.Scope))
+			_documentRevision++;
 		TrimToMaxDepth();
 		EmitSignal(SignalName.HistoryChanged);
 		GD.Print($"HistoryManager:Push - '{entry.Description}' scope={entry.Scope} (undo={_undoStack.Count})");
 	}
+
+	private static bool IsDocumentScope(HistoryScope scope) =>
+		scope is HistoryScope.Cue or HistoryScope.Cuelist or HistoryScope.Settings or HistoryScope.MultiCue;
 
 	private void LogRecordFailure(Exception ex)
 	{

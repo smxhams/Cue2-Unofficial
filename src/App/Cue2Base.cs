@@ -60,6 +60,11 @@ public partial class Cue2Base : Control
 
 		ApplyShowModeUi(_globalData?.Settings?.ShowMode == true);
 
+		GetTree().AutoAcceptQuit = false;
+		var mainWindow = GetWindow();
+		if (mainWindow != null)
+			mainWindow.CloseRequested += OnMainWindowCloseRequested;
+
 		_sessionLoadOverlay = GetNodeOrNull<SessionLoadOverlay>("%SessionLoadOverlay");
 		MaybeShowStartupLoadOverlay();
 
@@ -194,8 +199,17 @@ public partial class Cue2Base : Control
 			_inspectorSplit.Visible = !showMode;
 	}
 
+	private void OnMainWindowCloseRequested()
+	{
+		GetNodeOrNull<SaveManager>("/root/SaveManager")?.RequestQuit();
+	}
+
 	public override void _ExitTree()
 	{
+		var mainWindow = GetWindow();
+		if (mainWindow != null && GodotObject.IsInstanceValid(mainWindow))
+			mainWindow.CloseRequested -= OnMainWindowCloseRequested;
+
 		if (_firstTimeStartupWindow != null && GodotObject.IsInstanceValid(_firstTimeStartupWindow))
 			_firstTimeStartupWindow.TreeExiting -= OnFirstTimeStartupWindowExiting;
 

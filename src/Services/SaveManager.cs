@@ -79,6 +79,26 @@ public partial class SaveManager : Node
 	/// <summary>P0 stage timings for the in-flight open (null when idle).</summary>
 	private SessionLoadTimer _loadTimer;
 
+	private enum PendingCloseKind
+	{
+		None,
+		NewSession,
+		OpenDialog,
+		OpenPath,
+		Quit
+	}
+
+	private PendingCloseKind _pendingClose;
+	private string _pendingOpenPath;
+	private bool _proceedAfterSaveAs;
+	private UnsavedChangesDialog _unsavedDialog;
+
+	/// <summary>
+	/// True when cue / cuelist / show-settings data has changed since the last save or load.
+	/// </summary>
+	public bool HasUnsavedChanges =>
+		_globalData?.HistoryManager?.HasUnsavedDocumentChanges == true;
+
 	public override void _Ready()
 	{
 		_globalData = GetNode<Cue2.Services.GlobalData>("/root/GlobalData");
@@ -421,14 +441,22 @@ public partial class SaveManager : Node
 	{
 		if (_saveDialog != null && IsInstanceValid(_saveDialog))
 			_saveDialog.Hide();
-		// Save As always writes this build's format; user chose a new path (or accepted overwrite).
-		SaveSession(path, skipMediaBackup: false, clearNewerFormatGuard: true);
+		bool proceed = _proceedAfterSaveAs;
+		_proceedAfterSaveAs = false;
+		TaskUtil.Run(async () =>
+		{
+			bool ok = await SaveSessionAsync(path, skipMediaBackup: false, clearNewerFormatGuard: true);
+			if (ok && proceed)
+				ExecutePendingClose();
+		}, "SaveManager.SaveAsThenClose");
 	}
 
 	private void OnSaveDialogCanceled()
 	{
 		if (_saveDialog != null && IsInstanceValid(_saveDialog))
 			_saveDialog.Hide();
+		_proceedAfterSaveAs = false;
+		ClearPendingClose();
 	}
 	
 	
@@ -477,7 +505,7 @@ public partial class SaveManager : Node
 	/// <summary>
 	/// Async save implementation. Prefer this when the caller can await (autosave).
 	/// </summary>
-	private async Task SaveSessionAsync(string selectedPath, bool skipMediaBackup = false, bool clearNewerFormatGuard = false)
+	private async Task<bool> SaveSessionAsync(string selectedPath, bool skipMediaBackup = false, bool clearNewerFormatGuard = false)
 	{
 		// Block accidental overwrite of a newer-format original via any path (autosave, etc.).
 		if (_openedFromNewerFormat &&
@@ -489,7 +517,7 @@ public partial class SaveManager : Node
 				"Save blocked: this show was opened from a newer Cue2 format. Use Save As to write a new file.",
 				(int)LogType.Warning);
 			GD.Print("SaveManager:SaveSession - Blocked overwrite of newer-format session path.");
-			return;
+			return false;
 		}
 
 		// Verify save folder structure (type-based: Audio, Video, Images, Waveforms) — main thread I/O dirs.
@@ -500,7 +528,7 @@ public partial class SaveManager : Node
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to prepare session directory for: {selectedPath}", 2);
 			GD.PrintErr($"SaveManager:SaveSession - PrepareSessionDirectory failed for: {selectedPath}");
-			return;
+			return false;
 		}
 
 		// Session paths must be known before serializing so relative media URLs resolve correctly
@@ -516,7 +544,7 @@ public partial class SaveManager : Node
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Failed to build save data: {ex.Message}", 2);
 			GD.PrintErr($"SaveManager:SaveSession - BuildSaveDataDictionary: {ex.Message}");
-			return;
+			return false;
 		}
 
 		int gen = Interlocked.Increment(ref _saveGeneration);
@@ -540,7 +568,7 @@ public partial class SaveManager : Node
 		if (gen != Volatile.Read(ref _saveGeneration))
 		{
 			GD.Print($"SaveManager:SaveSession - Superseded (gen {gen}); discarding completion for {pathForWrite}");
-			return;
+			return false;
 		}
 
 		if (!writeResult.Ok)
@@ -548,7 +576,7 @@ public partial class SaveManager : Node
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 				$"Failed to write showfile: {selectedPath} ({writeResult.Error})", 2);
 			GD.PrintErr($"SaveManager:SaveSession - Write failed: {pathForWrite} Error: {writeResult.Error}");
-			return;
+			return false;
 		}
 
 		// Successful Save As of a forward-compat open: this file is now owned by current format.
@@ -581,9 +609,11 @@ public partial class SaveManager : Node
 		}
 
 		ConfigureAutosave();
+		_globalData.HistoryManager?.MarkSaved();
 
 		// Update title (in case signal timing)
 		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")?.CallDeferred("UpdateTitle");
+		return true;
 	}
 
 	/// <summary>
@@ -665,6 +695,13 @@ public partial class SaveManager : Node
 	/// <returns>True if the caller should abort.</returns>
 	private bool RejectIfSessionBusy(string actionLabel)
 	{
+		if (IsUnsavedDialogOpen)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Finish the unsaved-changes dialog first.", (int)LogType.Info);
+			return true;
+		}
+
 		if (!IsSessionLoading && !_isOpenInProgress)
 			return false;
 		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
@@ -781,19 +818,9 @@ public partial class SaveManager : Node
 	{
 		if (RejectIfSessionBusy("open a showfile"))
 			return;
-
-		if (_openDialog == null || !IsInstanceValid(_openDialog))
-			_openDialog = GetNodeOrNull<FileDialog>("/root/Cue2Base/OpenDialog");
-
-		if (_openDialog == null || !IsInstanceValid(_openDialog))
-		{
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-				"SaveManager:OpenSession - Open dialog is not available.", (int)LogType.Error);
-			GD.PrintErr("SaveManager:OpenSession - /root/Cue2Base/OpenDialog not found.");
+		if (!ConfirmIfUnsaved(PendingCloseKind.OpenDialog))
 			return;
-		}
-
-		_openDialog.PopupCentered();
+		PopupOpenDialog();
 	}
 	
 	/// <summary>
@@ -803,6 +830,10 @@ public partial class SaveManager : Node
 	/// <param name="selectedPath">The file path of the session to load.</param>
 	private void OpenSelectedSession(string selectedPath)
 	{
+		if (RejectIfSessionBusy("open a showfile"))
+			return;
+		if (!ConfirmIfUnsaved(PendingCloseKind.OpenPath, selectedPath))
+			return;
 		TaskUtil.Run(() => OpenSelectedSessionAsync(selectedPath), "SaveManager.OpenSelectedSession");
 	}
 
@@ -1380,12 +1411,191 @@ public partial class SaveManager : Node
 			GD.Print($"SaveManager:MigrateLegacyEmbeddedWaveformsToDisk - Migrated {written} waveform cache file(s).");
 	}
 
-	/// <summary>Signal handler for File → New / New Session hotkey.</summary>
-	private void OnNewSession()
+	private bool _ignoreNewSessionSignal;
+
+	/// <summary>File → New / New Session hotkey. Prompts when the document is dirty.</summary>
+	public void RequestNewSession()
 	{
 		if (RejectIfSessionBusy("start a new session"))
 			return;
+		if (!ConfirmIfUnsaved(PendingCloseKind.NewSession))
+			return;
+		PerformNewSession();
+	}
+
+	/// <summary>Signal handler for File → New / New Session hotkey.</summary>
+	private void OnNewSession()
+	{
+		if (_ignoreNewSessionSignal)
+			return;
+		RequestNewSession();
+	}
+
+	private void PerformNewSession()
+	{
 		ResetSession(clearSessionIdentity: true, logAsNewSession: true);
+		_ignoreNewSessionSignal = true;
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.NewSession));
+		_ignoreNewSessionSignal = false;
+	}
+
+	/// <summary>
+	/// File → Quit / window close. Prompts when the document is dirty, then quits.
+	/// </summary>
+	public void RequestQuit()
+	{
+		if (IsUnsavedDialogOpen)
+			return;
+		if (IsSessionLoading || _isOpenInProgress)
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Please wait — a showfile is still loading. Cannot quit.", (int)LogType.Info);
+			return;
+		}
+
+		if (!ConfirmIfUnsaved(PendingCloseKind.Quit))
+			return;
+		QuitApplication();
+	}
+
+	private bool IsUnsavedDialogOpen =>
+		_unsavedDialog != null && GodotObject.IsInstanceValid(_unsavedDialog);
+
+	/// <summary>
+	/// Returns true when the caller should proceed immediately. False means a dialog is showing
+	/// (or the user cancelled later); the pending action runs after Save &amp; close / Close.
+	/// </summary>
+	private bool ConfirmIfUnsaved(PendingCloseKind kind, string openPath = null)
+	{
+		if (!HasUnsavedChanges)
+			return true;
+		if (IsUnsavedDialogOpen)
+			return false;
+
+		_pendingClose = kind;
+		_pendingOpenPath = openPath;
+		ShowUnsavedChangesDialog();
+		return false;
+	}
+
+	private void ShowUnsavedChangesDialog()
+	{
+		var dialog = UnsavedChangesDialog.Create(out string err);
+		if (dialog == null)
+		{
+			GD.PrintErr($"SaveManager:ShowUnsavedChangesDialog - {err}");
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Could not open the unsaved-changes dialog.", (int)LogType.Error);
+			ClearPendingClose();
+			return;
+		}
+
+		_unsavedDialog = dialog;
+		dialog.SaveAndClose += OnUnsavedSaveAndClose;
+		dialog.DiscardAndClose += OnUnsavedDiscardAndClose;
+		dialog.Cancelled += OnUnsavedCancelled;
+		dialog.TreeExiting += OnUnsavedDialogExiting;
+		AddChild(dialog);
+		dialog.Configure(_globalData?.SessionName);
+		dialog.ShowConfigured();
+	}
+
+	private void OnUnsavedSaveAndClose()
+	{
+		TaskUtil.Run(SaveThenPendingCloseAsync, "SaveManager.SaveThenClose");
+	}
+
+	private async Task SaveThenPendingCloseAsync()
+	{
+		bool canSaveInPlace = !string.IsNullOrEmpty(_globalData?.SessionPath)
+		                      && !string.IsNullOrEmpty(_globalData.SessionName)
+		                      && !_openedFromNewerFormat;
+		if (canSaveInPlace)
+		{
+			bool ok = await SaveSessionAsync(_globalData.SessionPath);
+			if (ok)
+				ExecutePendingClose();
+			else
+				ClearPendingClose();
+			return;
+		}
+
+		_proceedAfterSaveAs = true;
+		SaveAs();
+	}
+
+	private void OnUnsavedDiscardAndClose()
+	{
+		ExecutePendingClose();
+	}
+
+	private void OnUnsavedCancelled()
+	{
+		ClearPendingClose();
+	}
+
+	private void OnUnsavedDialogExiting()
+	{
+		if (_unsavedDialog == null)
+			return;
+		_unsavedDialog.SaveAndClose -= OnUnsavedSaveAndClose;
+		_unsavedDialog.DiscardAndClose -= OnUnsavedDiscardAndClose;
+		_unsavedDialog.Cancelled -= OnUnsavedCancelled;
+		_unsavedDialog.TreeExiting -= OnUnsavedDialogExiting;
+		_unsavedDialog = null;
+	}
+
+	private void ExecutePendingClose()
+	{
+		PendingCloseKind kind = _pendingClose;
+		string path = _pendingOpenPath;
+		ClearPendingClose();
+
+		switch (kind)
+		{
+			case PendingCloseKind.NewSession:
+				PerformNewSession();
+				break;
+			case PendingCloseKind.OpenDialog:
+				PopupOpenDialog();
+				break;
+			case PendingCloseKind.OpenPath:
+				if (!string.IsNullOrEmpty(path))
+					TaskUtil.Run(() => OpenSelectedSessionAsync(path), "SaveManager.OpenSelectedSession");
+				break;
+			case PendingCloseKind.Quit:
+				QuitApplication();
+				break;
+		}
+	}
+
+	private void ClearPendingClose()
+	{
+		_pendingClose = PendingCloseKind.None;
+		_pendingOpenPath = null;
+		_proceedAfterSaveAs = false;
+	}
+
+	private void PopupOpenDialog()
+	{
+		if (_openDialog == null || !IsInstanceValid(_openDialog))
+			_openDialog = GetNodeOrNull<FileDialog>("/root/Cue2Base/OpenDialog");
+
+		if (_openDialog == null || !IsInstanceValid(_openDialog))
+		{
+			_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+				"SaveManager:OpenSession - Open dialog is not available.", (int)LogType.Error);
+			GD.PrintErr("SaveManager:OpenSession - /root/Cue2Base/OpenDialog not found.");
+			return;
+		}
+
+		_openDialog.PopupCentered();
+	}
+
+	private void QuitApplication()
+	{
+		_globalData?.UserDataManager?.PersistUserData();
+		GetTree()?.Quit();
 	}
 
 	/// <summary>

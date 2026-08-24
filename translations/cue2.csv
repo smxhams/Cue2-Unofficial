@@ -6,6 +6,7 @@ keys,en,mi,es,de,ru,ja,ar,hi
 !!! Missing Layer,!!! Missing Layer,!!! Kāore te paparanga,!!! Falta la capa,!!! Ebene fehlt,!!! Слой отсутствует,!!! レイヤーがありません,!!! الطبقة مفقودة,!!! परत अनुपलब्ध
 !!! Missing output: {0},!!! Missing output: {0},!!! Kāore te putanga: {0},!!! Falta la salida: {0},!!! Ausgabe fehlt: {0},!!! Нет выхода: {0},!!! 出力がありません: {0},!!! المخرج مفقود: {0},!!! आउटपुट गायब: {0}
 !!! Missing patch: {0},!!! Missing patch: {0},!!! Kāore te pātene: {0},!!! Falta el parche: {0},!!! Patch fehlt: {0},!!! Нет патча: {0},!!! パッチがありません: {0},!!! التصحيح مفقود: {0},!!! पैच गायब: {0}
+"""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?","""{0}"" has unsaved changes. Save before closing this session?"
 """{0}"" is used by 1 cue.
 Choose what to do with that cue before deleting.","""{0}"" is used by 1 cue.
 Choose what to do with that cue before deleting.","E whakamahia ana a ""{0}"" e te tohu 1.
@@ -240,6 +241,7 @@ Click to capture MIDI binding. Esc cancels.,Click to capture MIDI binding. Esc c
 Click to change binding,Click to change binding,Click to change binding,Click to change binding,Click to change binding,Click to change binding,Click to change binding,Click to change binding,Click to change binding
 Click to set hotkey. Esc cancels.,Click to set hotkey. Esc cancels.,Pāwhiritia kia tautu te pātuhi-wera. Ka whakakore a Esc.,Clic para asignar atajo. Esc cancela.,"Klicken, um Tastenkürzel zu setzen. Esc bricht ab.","Нажмите, чтобы задать горячую клавишу. Esc отменяет.",クリックしてホットキーを設定。Esc でキャンセル。,انقر لتعيين مفتاح الاختصار. Esc يلغي.,हॉटकी सेट करने के लिए क्लिक करें। Esc रद्द करता है।
 Clock,Clock,Karaka,Reloj,Uhr,Часы,時計,الساعة,घड़ी
+Close,Close,Close,Close,Close,Close,Close,Close,Close
 Close all displays,Close all displays,Katia ngā whakaaturanga katoa,Cerrar todas las pantallas,Alle Anzeigen schließen,Закрыть все экраны,すべてのディスプレイを閉じる,إغلاق كل الشاشات,सभी डिस्प्ले बंद करें
 Close Displays,Close Displays,Katia ngā whakaaturanga,Cerrar pantallas,Anzeigen schließen,Закрыть экраны,ディスプレイを閉じる,إغلاق الشاشات,डिस्प्ले बंद करें
 Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.,Close/hide all house display windows without clearing canvas topology. Runtime-only.
@@ -1235,6 +1237,7 @@ Runtime mute of session master audio (not saved with the show). Same as Settings
 Sample Rate: {0} Hz,Sample Rate: {0} Hz,Au tauira: {0} Hz,Frecuencia de muestreo: {0} Hz,Abtastrate: {0} Hz,Частота дискретизации: {0} Гц,サンプルレート: {0} Hz,معدل العينة: {0} هرتز,सैंपल दर: {0} Hz
 Sampling…,Sampling…,Tātauira…,Muestreando…,Messung…,Замер…,計測中…,جارٍ القياس…,नमूना लिया जा रहा है…
 Save,Save,Tiaki,Guardar,Speichern,Сохранить,保存,حفظ,सहेजें
+Save & close,Save & close,Save & close,Save & close,Save & close,Save & close,Save & close,Save & close,Save & close
 Save / Load filter,Save / Load filter,Tātari tiaki/uta,Filtro guardar/cargar,Save / Load filter,Save / Load filter,Save / Load filter,Save / Load filter,Save / Load filter
 Save As…,Save As…,Tiaki hei…,Guardar como…,Speichern unter…,Сохранить как…,名前を付けて保存…,حفظ باسم…,इस रूप में सहेजें…
 Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file,Save selected settings categories to a .c2settings file
@@ -1494,8 +1497,10 @@ Unassign (set to No Output),Unassign (set to No Output),Wete tautapa (Kāore he 
 Unbound,Unbound,Kāore i herea,Sin asignar,Nicht gebunden,Не назначено,未割り当て,غير مرتبط,अनबाउंड
 Undo,Undo,Wetekina,Deshacer,Rückgängig,Отменить,元に戻す,تراجع,पूर्ववत
 Undo Depth,Undo Depth,Hōhonu wetekina,Profundidad de deshacer,Rückgängig-Tiefe,Глубина отмены,アンドゥの深さ,عمق التراجع,अनडू गहराई
+Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes,Unsaved Changes
 Until stopped,Until stopped,Kia tū rā anō,Hasta detener,Bis gestoppt,Пока не остановят,停止するまで,حتى الإيقاف,रुकने तक
 Until Stopped,Until Stopped,Kia tū rā anō,Hasta detener,Bis gestoppt,Пока не остановят,停止するまで,حتى الإيقاف,रुकने तक
+Untitled,Untitled,Untitled,Untitled,Untitled,Untitled,Untitled,Untitled,Untitled
 Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.,Update checks run in exported builds only.
 Updates,Updates,Updates,Updates,Updates,Updates,Updates,Updates,Updates
 URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here),URL (Can drag and drop files here)
@@ -1640,6 +1645,7 @@ Wrap all files inside one new Group cue,Wrap all files inside one new Group cue,
 X:,X:,X:,X:,X:,X:,X:,X:,X:
 Xport,Xport,Xport,Xport,Xport,Xport,Xport,Xport,Xport
 Y:,Y:,Y:,Y:,Y:,Y:,Y:,Y:,Y:
+You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?,You have unsaved changes. Save before closing this session?
 Zoom %,Zoom %,Topa %,Zoom %,Zoom %,Масштаб %,ズーム %,التكبير ٪,ज़ूम %
 Zoom in,Zoom in,Topa mai,Acercar,Vergrößern,Приблизить,ズームイン,تكبير,ज़ूम इन
 Zoom out,Zoom out,Topa atu,Alejar,Verkleinern,Отдалить,ズームアウト,تصغير,ज़ूम आउट

@@ -1,0 +1,80 @@
+[gd_scene load_steps=4 format=3 uid="uid://c2unsavedchg01"]
+
+[ext_resource type="Theme" uid="uid://vidokm2ilwtk" path="res://src/UI/Assets/base_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://src/UI/Popups/UnsavedChangesDialog.cs" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://dpemt56x826sd" path="res://src/UI/Windows/SubWindowHandles.tscn" id="2_handles"]
+
+[node name="UnsavedChangesDialog" type="Window"]
+disable_3d = true
+oversampling_override = 1.0
+title = "Unsaved Changes"
+initial_position = 4
+size = Vector2i(420, 200)
+unresizable = true
+borderless = true
+exclusive = true
+theme = ExtResource("1_theme")
+script = ExtResource("1_script")
+
+[node name="Panel" type="Panel" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Unsaved Changes"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BodyLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 0
+text = "You have unsaved changes. Save before closing this session?"
+autowrap_mode = 3
+
+[node name="ActionBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 2
+
+[node name="CancelButton" type="Button" parent="MarginContainer/VBoxContainer/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
+[node name="SaveCloseButton" type="Button" parent="MarginContainer/VBoxContainer/ActionBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save & close"
+
+[node name="SubWindowHandles" parent="." instance=ExtResource("2_handles")]
