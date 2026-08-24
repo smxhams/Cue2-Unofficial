@@ -68,6 +68,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_head")
 
 [node name="SequenceProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/SequenceBar"]
 unique_name_in_owner = true
@@ -134,6 +135,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_head")
 
 [node name="PreWaitProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/PreWaitBar"]
 unique_name_in_owner = true
@@ -200,6 +202,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_head")
 
 [node name="PostWaitProgress" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/PostWaitBar"]
 unique_name_in_owner = true
@@ -262,7 +265,7 @@ focus_mode = 0
 theme_override_constants/icon_max_width = 14
 
 [node name="CueProgressHead" type="PanelContainer" parent="PanelContainer/MarginContainer/ProgressBarContainer"]
-custom_minimum_size = Vector2(0, 50)
+custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
@@ -270,7 +273,7 @@ theme_override_styles/panel = SubResource("StyleBoxEmpty_head")
 
 [node name="ProgressBar" type="ProgressBar" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 50)
+custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -321,13 +324,15 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 mouse_filter = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 0
 columns = 2
 
 [node name="LabelName" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 text = "Name"
 clip_text = true
 text_overrun_behavior = 3
@@ -336,14 +341,14 @@ text_overrun_behavior = 3
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 horizontal_alignment = 2
 
 [node name="LabelTimeLeft" type="Label" parent="PanelContainer/MarginContainer/ProgressBarContainer/CueProgressHead/ProgressBar/MarginContainer/HBoxContainer/GridContainer"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 text = "Time"
 vertical_alignment = 2
 
@@ -351,7 +356,7 @@ vertical_alignment = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+size_flags_vertical = 0
 text = "Time Remaining"
 horizontal_alignment = 2
 vertical_alignment = 2
@@ -380,3 +385,4 @@ size_flags_horizontal = 3
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/separation = 1

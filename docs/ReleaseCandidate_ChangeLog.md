@@ -15,6 +15,8 @@ This change log only covers changes between release candidate 1 and public relea
 | Closing Settings logged a Godot disconnect error on the OSC Listen allowlist field | Allowlist is wired with BindLineEditCommit; close no longer unhooks a method that was never connected. |
 | Exported builds had no in-app update path | Settings → Cue2 Preferences → Updates checks GitHub Releases, verifies SHA-256, and can Install and Restart when the install folder is writable. |
 | `.c2` showfiles had no OS icon and did not open Cue2 on double-click | Exported builds register `.c2` as a Cue2 Show (app icon). Double-click / Open With loads that file; a second launch forwards to the running instance. |
+| Quit / New / Open replaced the session with no warning | Unsaved document edits prompt Save & close, Close, or Cancel (UI-scaled). |
+| Active cue list wasted vertical space | Cue head, component rows, and list gaps are packed tighter so more live cues fit. |
 
 ## Details
 
@@ -93,3 +95,15 @@ Exported builds now treat `*.c2` as a Cue2 Show and stamp the **app icon** on th
 - **Linux:** user XDG MIME `application/x-cue2`, a `.desktop` with an absolute `Exec`, and hicolor icons generated from `icon.svg`.
 
 A `.c2` on the command line wins over “Open last showfile” and loads through the existing `SaveManager` path. Dropping a `.c2` on the main window (or on the cuelist with no media files) does the same. A second launch of an exported build forwards the path to the running process and exits (editor instances are not limited). Cue2 Preferences → **Associate .c2 files with Cue2** repairs the association after moving a portable folder. The Godot editor does not write registry/xdg entries. See `docs/export-packaging.md`.
+
+### Unsaved changes on session close
+
+New, Open, Open Recent, OS double-click / drop of a `.c2`, Quit, and the window close button replaced the live session immediately. Document edits (cues, list structure, show settings) were only in memory and the undo stack.
+
+Those actions now check document history. If the show has changed since the last save (or since New / Open), a UI-scaled dialog offers **Save & close**, **Close** (discard), or **Cancel**. Save & close writes in place when there is a path; otherwise it opens Save As and continues only after a successful write. Newer-format shows that cannot overwrite the original also go through Save As. An empty new session or a freshly opened file does not prompt until something is edited. Autosave of the main `.c2` counts as saved. Startup “open last showfile” does not prompt. New Session no longer clears the file path before you can choose Save.
+
+### Tighter active cue list
+
+Each playing cue used a 50px two-line head (name and times stretched to fill it), 25px component rows, 4px gaps between cues, and extra panel padding on pre-wait / post-wait / continue bars. Nested children added another 4px between rows. With several cues running, the Active Cues pane filled up fast.
+
+The cue head is now 36px and the name/time lines sit together instead of spreading apart. Component rows match the 20px wait/continue bars. Gaps are 2px between cues and 1px under nested children. Wait and sequence wrappers no longer pick up default panel padding. Playback, scrub, and pause/stop controls are unchanged.
