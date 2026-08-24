@@ -85,6 +85,18 @@ public partial class GlobalSignals : Node
 	[Signal] public delegate void SelectPreviousCueEventHandler();
 	
 	[Signal] public delegate void ToggleSettingsWindowEventHandler();
+
+	/// <summary>
+	/// Open Settings on a specific tree item (stable English menu key, e.g. <c>Updates</c>).
+	/// </summary>
+	[Signal] public delegate void OpenSettingsMenuEventHandler(string menuKey);
+
+	/// <summary>
+	/// Updater UI state for Settings and the footer.
+	/// <paramref name="state"/> is <see cref="UpdateUiState"/> as int; <paramref name="message"/> is status text.
+	/// </summary>
+	[Signal] public delegate void UpdateUiStateChangedEventHandler(int state, string message);
+
 	[Signal] public delegate void ToggleLogWindowEventHandler();
 
 	[Signal] public delegate void CuelistExpandOneLayerEventHandler();

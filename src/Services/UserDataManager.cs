@@ -58,6 +58,12 @@ public partial class UserDataManager : Node
 	/// </summary>
 	private float _uiScale = DefaultUiScale;
 
+	private bool _checkForUpdatesOnStartup = true;
+	private bool _includePrereleaseUpdates;
+	private string _skippedUpdateVersion = string.Empty;
+	private string _lastUpdateCheckUtc = string.Empty;
+	private string _registeredShowfileHandlerPath = string.Empty;
+
 	/// <summary>
 	/// Production default UI locale (English).
 	/// </summary>
@@ -77,6 +83,12 @@ public partial class UserDataManager : Node
 
 	/// <summary>Maximum UI scale as a whole percent for sliders/fields.</summary>
 	public const float MaxUiScalePercent = 400f;
+
+	/// <summary>
+	/// Last directory the user chose in Save / Save As (parent of the session folder).
+	/// Used when saving a new unsaved show.
+	/// </summary>
+	private string _lastShowSaveDirectory = string.Empty;
 
 	/// <summary>Cuelist shell number column width (0 = use default).</summary>
 	private float _shellNumberColumnWidth;
@@ -190,6 +202,13 @@ public partial class UserDataManager : Node
 	public string LastSettingsMenu => _lastSettingsMenu;
 
 	/// <summary>
+	/// Last directory used for Save / Save As of a showfile (not the nested session folder).
+	/// Empty until the user has saved at least once on this machine.
+	/// </summary>
+	/// <value>Absolute directory path, or empty.</value>
+	public string LastShowSaveDirectory => _lastShowSaveDirectory;
+
+	/// <summary>
 	/// The configured startup behavior.
 	/// </summary>
 	public StartupBehavior Startup
@@ -277,6 +296,84 @@ public partial class UserDataManager : Node
 			_uiScale = clamped;
 			SaveUserData();
 			_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), _uiScale);
+		}
+	}
+
+	/// <summary>
+	/// When true, exported builds check GitHub Releases a few seconds after launch.
+	/// </summary>
+	public bool CheckForUpdatesOnStartup
+	{
+		get => _checkForUpdatesOnStartup;
+		set
+		{
+			if (_checkForUpdatesOnStartup == value)
+				return;
+			_checkForUpdatesOnStartup = value;
+			SaveUserData();
+		}
+	}
+
+	/// <summary>
+	/// When true, update checks include GitHub prereleases (rc/beta tags).
+	/// </summary>
+	public bool IncludePrereleaseUpdates
+	{
+		get => _includePrereleaseUpdates;
+		set
+		{
+			if (_includePrereleaseUpdates == value)
+				return;
+			_includePrereleaseUpdates = value;
+			SaveUserData();
+		}
+	}
+
+	/// <summary>
+	/// Semantic version the user skipped, or empty.
+	/// </summary>
+	public string SkippedUpdateVersion
+	{
+		get => _skippedUpdateVersion ?? string.Empty;
+		set
+		{
+			string next = value?.Trim() ?? string.Empty;
+			if (_skippedUpdateVersion == next)
+				return;
+			_skippedUpdateVersion = next;
+			SaveUserData();
+		}
+	}
+
+	/// <summary>
+	/// Absolute host path last written into the OS <c>.c2</c> file association, or empty.
+	/// </summary>
+	public string RegisteredShowfileHandlerPath
+	{
+		get => _registeredShowfileHandlerPath ?? string.Empty;
+		set
+		{
+			string next = value?.Trim() ?? string.Empty;
+			if (_registeredShowfileHandlerPath == next)
+				return;
+			_registeredShowfileHandlerPath = next;
+			SaveUserData();
+		}
+	}
+
+	/// <summary>
+	/// UTC timestamp of the last successful or failed auto/manual check (ISO-8601), or empty.
+	/// </summary>
+	public string LastUpdateCheckUtc
+	{
+		get => _lastUpdateCheckUtc ?? string.Empty;
+		set
+		{
+			string next = value?.Trim() ?? string.Empty;
+			if (_lastUpdateCheckUtc == next)
+				return;
+			_lastUpdateCheckUtc = next;
+			SaveUserData();
 		}
 	}
 
@@ -434,6 +531,29 @@ public partial class UserDataManager : Node
 	}
 
 	/// <summary>
+	/// Records the last Save / Save As directory for a later new-show save dialog.
+	/// </summary>
+	/// <param name="directory">Absolute directory (typically the parent of the session folder).</param>
+	/// <param name="persistImmediately">When true, writes user_data.json now.</param>
+	public void SetLastShowSaveDirectory(string directory, bool persistImmediately = true)
+	{
+		if (string.IsNullOrWhiteSpace(directory))
+			return;
+
+		string trimmed = directory.Trim().Replace('\\', '/').TrimEnd('/');
+		if (string.IsNullOrEmpty(trimmed))
+			return;
+
+		if (string.Equals(_lastShowSaveDirectory, trimmed, StringComparison.Ordinal))
+			return;
+
+		_lastShowSaveDirectory = trimmed;
+		GD.Print($"UserDataManager:SetLastShowSaveDirectory - {trimmed}");
+		if (persistImmediately)
+			SaveUserData();
+	}
+
+	/// <summary>
 	/// Adds the specified show file path to the top of the recent files list.
 	/// Duplicates are moved to the top rather than added again. The list is trimmed
 	/// to MaxRecentShowFiles.
@@ -572,9 +692,15 @@ public partial class UserDataManager : Node
 		_isFirstTimeStartup = true;
 		_locale = DefaultLocale;
 		_uiScale = DefaultUiScale;
+		_checkForUpdatesOnStartup = true;
+		_includePrereleaseUpdates = false;
+		_skippedUpdateVersion = string.Empty;
+		_lastUpdateCheckUtc = string.Empty;
+		_registeredShowfileHandlerPath = string.Empty;
 
 		_shellNumberColumnWidth = 0;
 		_shellTimeColumnWidth = 0;
+		_lastShowSaveDirectory = string.Empty;
 
 		// Restore live keyboard shortcuts to project defaults, then clear stored bindings.
 		if (_globalData != null)
@@ -905,6 +1031,26 @@ public partial class UserDataManager : Node
 				_uiScale = DefaultUiScale;
 			}
 
+			if (data.TryGetValue("CheckForUpdatesOnStartup", out var checkUpdVal))
+				_checkForUpdatesOnStartup = checkUpdVal.AsBool();
+			else
+				_checkForUpdatesOnStartup = true;
+
+			if (data.TryGetValue("IncludePrereleaseUpdates", out var preVal))
+				_includePrereleaseUpdates = preVal.AsBool();
+			else
+				_includePrereleaseUpdates = false;
+
+			_skippedUpdateVersion = data.TryGetValue("SkippedUpdateVersion", out var skipVal)
+				? skipVal.AsString() ?? string.Empty
+				: string.Empty;
+			_lastUpdateCheckUtc = data.TryGetValue("LastUpdateCheckUtc", out var lastChkVal)
+				? lastChkVal.AsString() ?? string.Empty
+				: string.Empty;
+			_registeredShowfileHandlerPath = data.TryGetValue("RegisteredShowfileHandlerPath", out var assocVal)
+				? assocVal.AsString() ?? string.Empty
+				: string.Empty;
+
 			if (data.TryGetValue("ShellNumberColumnWidth", out var shellNumW))
 			{
 				_shellNumberColumnWidth = shellNumW.AsSingle();
@@ -912,6 +1058,14 @@ public partial class UserDataManager : Node
 			if (data.TryGetValue("ShellTimeColumnWidth", out var shellTimeW))
 			{
 				_shellTimeColumnWidth = shellTimeW.AsSingle();
+			}
+
+			if (data.TryGetValue("LastShowSaveDirectory", out var lastSaveDirVal))
+			{
+				string lastSaveDir = lastSaveDirVal.AsString();
+				_lastShowSaveDirectory = string.IsNullOrWhiteSpace(lastSaveDir)
+					? string.Empty
+					: lastSaveDir.Trim().Replace('\\', '/').TrimEnd('/');
 			}
 
 			// Custom keyboard shortcuts (Cue2 Preferences → Input Map)
@@ -926,7 +1080,7 @@ public partial class UserDataManager : Node
 			// OutputVSyncMode were machine prefs; they now live in the showfile (Settings). Ignore if present.
 
 			// Future: version handling, other user prefs can be loaded here.
-			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} locale:{_locale} uiScale:{_uiScale} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0}");
+			GD.Print($"UserDataManager:LoadUserData - Loaded {_recentShowFiles.Count} recent show file(s). Window size:{_lastWindowSize} pos(rel):{_lastWindowPosition} maximized:{_wasMaximized} settings size:{_lastSettingsWindowSize} pos(rel):{_lastSettingsWindowPosition} settingsMax:{_settingsWasMaximized} startup:{_startupBehavior} firstTime:{_isFirstTimeStartup} locale:{_locale} uiScale:{_uiScale} autosave:{_autosaveInterval}m backups:{_backupDepth} undoDepth:{_undoDepth} logSessionDepth:{_logSessionDepth} inputMapKeys:{_inputMapBindings?.Count ?? 0} lastSaveDir:{_lastShowSaveDirectory}");
 		}
 		catch (Exception ex)
 		{
@@ -986,6 +1140,11 @@ public partial class UserDataManager : Node
 			data["IsFirstTimeStartup"] = _isFirstTimeStartup;
 			data["Locale"] = string.IsNullOrWhiteSpace(_locale) ? DefaultLocale : _locale;
 			data["UiScale"] = _uiScale;
+			data["CheckForUpdatesOnStartup"] = _checkForUpdatesOnStartup;
+			data["IncludePrereleaseUpdates"] = _includePrereleaseUpdates;
+			data["SkippedUpdateVersion"] = _skippedUpdateVersion ?? string.Empty;
+			data["LastUpdateCheckUtc"] = _lastUpdateCheckUtc ?? string.Empty;
+			data["RegisteredShowfileHandlerPath"] = _registeredShowfileHandlerPath ?? string.Empty;
 
 			data["AutosaveInterval"] = _autosaveInterval;
 			data["BackupDepth"] = _backupDepth;
@@ -996,6 +1155,9 @@ public partial class UserDataManager : Node
 				data["ShellNumberColumnWidth"] = _shellNumberColumnWidth;
 			if (_shellTimeColumnWidth > 0)
 				data["ShellTimeColumnWidth"] = _shellTimeColumnWidth;
+
+			if (!string.IsNullOrEmpty(_lastShowSaveDirectory))
+				data["LastShowSaveDirectory"] = _lastShowSaveDirectory;
 
 			// Live InputMap snapshot (or last loaded if GlobalData not ready)
 			if (_globalData != null)

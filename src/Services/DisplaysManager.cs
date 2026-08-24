@@ -73,6 +73,9 @@ public partial class DisplaysManager : Node
 
     public override void _Ready()
     {
+        if (SingleInstanceGuard.IsSecondary)
+            return;
+
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         Canvas = new Canvas();
@@ -414,9 +417,9 @@ public partial class DisplaysManager : Node
         }
         else
         {
-            output.CurrentScreen = monitorIndex;
-            if (!output.Visible)
-                output.Show();
+            // Do not set CurrentScreen here. Until the output has its own native window
+            // id, Window.GetWindowId() can report the main viewport (Linux embed), and
+            // CurrentScreen would move or fullscreen the operator UI.
             output.UpdateOutputRegion();
         }
 
@@ -424,8 +427,18 @@ public partial class DisplaysManager : Node
         UpdateAllLayerTestPatterns();
 
         string dest = GetOutputDestinationLabel(output);
-        _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
-            $"DisplaysManager: Screen '{output.OutputName}' assigned to {dest}.", 0);
+        if (output.IsPhysical && !LinuxWindowEmbedPolicy.CanPlaceWindowsOnSpecificScreen)
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"DisplaysManager: Screen '{output.OutputName}' assigned to {dest}. "
+                + "This display server cannot place windows on a specific monitor — "
+                + "drag the output window onto the house display.", 1);
+        }
+        else
+        {
+            _globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+                $"DisplaysManager: Screen '{output.OutputName}' assigned to {dest}.", 0);
+        }
         _globalSignals.EmitSignal(nameof(GlobalSignals.DisplaysChanged));
     }
 

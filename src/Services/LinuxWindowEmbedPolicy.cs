@@ -31,6 +31,38 @@ public static class LinuxWindowEmbedPolicy
     /// <summary>True when the process is running on Linux.</summary>
     public static bool IsLinux => OS.GetName() == "Linux";
 
+    /// <summary>True when Godot is using the Wayland display server.</summary>
+    /// <remarks>
+    /// Wayland does not allow apps to set window position or current screen. A new
+    /// toplevel appears on the focused output (usually the operator UI). Sizing that
+    /// window to a full monitor therefore covers or replaces the main Cue2 window.
+    /// </remarks>
+    public static bool IsWayland => DisplayServer.GetName() == "Wayland";
+
+    /// <summary>
+    /// True when the display server can move a native window onto a chosen monitor.
+    /// </summary>
+    /// <value>False on Wayland; true on X11, Windows, and macOS.</value>
+    public static bool CanPlaceWindowsOnSpecificScreen => !IsWayland;
+
+    /// <summary>
+    /// DisplayServer id of the process main viewport, as <see cref="int"/>.
+    /// </summary>
+    /// <remarks>
+    /// Godot binds <see cref="DisplayServer.MainWindowId"/> as <see cref="long"/> (value 0).
+    /// 0 is a valid window id — never treat it as "missing".
+    /// </remarks>
+    public static int MainWindowId => (int)DisplayServer.MainWindowId;
+
+    /// <summary>
+    /// True when <paramref name="windowId"/> is the process main viewport
+    /// (<see cref="MainWindowId"/>, which is 0 — a valid id, not "missing").
+    /// </summary>
+    /// <param name="windowId">DisplayServer window id from <see cref="Window.GetWindowId"/>.</param>
+    /// <returns>True when the id is the operator UI window.</returns>
+    public static bool IsMainWindowId(int windowId) =>
+        windowId == MainWindowId;
+
     /// <summary>
     /// Embeds popups in <paramref name="root"/> on Linux. Does not change whether
     /// the main window itself is native.

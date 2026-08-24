@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" uid="uid://cpxapul4025nc" path="res://src/UI/Settings/SettingsVideoDefaults.tscn" id="17_videodef"]
 [ext_resource type="PackedScene" uid="uid://b1bwv107ue24w" path="res://src/UI/Settings/SettingsTextDefaults.tscn" id="18_textdef"]
 [ext_resource type="PackedScene" path="res://src/UI/Settings/SettingsVideoOutput.tscn" id="19_vidout"]
+[ext_resource type="PackedScene" path="res://src/UI/Settings/SettingsUpdates.tscn" id="20_updates"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpi7s"]
 bg_color = Color(0.0980392, 0.0980392, 0.0980392, 0.6)
@@ -276,6 +277,11 @@ visible = false
 layout_mode = 2
 
 [node name="SettingsCue2Prefs" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" unique_id=238426694 instance=ExtResource("11_giu5g")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="SettingsUpdates" parent="Control/VBoxContainer/MarginContainer/HSplitContainer/Panel/RightSide" instance=ExtResource("20_updates")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

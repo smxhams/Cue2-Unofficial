@@ -30,52 +30,114 @@ public partial class SettingsCanvasEditor
 {
     #region Stage input (move / resize / select)
 
-    public override void _Input(InputEvent @event)
+    /// <summary>
+    /// Stage-local clicks, wheel zoom, and hover. Uses the pointer overlay so Linux
+    /// content-scale / native Settings windows cannot miss the middle of the stage.
+    /// </summary>
+    /// <param name="event">GUI mouse event in overlay-local coordinates.</param>
+    private void OnStageGuiInput(InputEvent @event)
     {
-        // Hidden settings pages remain in the scene tree; never handle stage input off-page.
         if (!IsVisibleInTree() || !_stageInitialized)
             return;
 
-        bool overStage = IsMouseOverStage();
+        if (@event is InputEventMouse mouse)
+        {
+            _lastStageLocalMouse = mouse.Position;
+            _hasStageLocalMouse = true;
+        }
 
         if (@event is InputEventMouseButton mouseEvent)
         {
             if (mouseEvent.ButtonIndex == MouseButton.Middle)
             {
-                if (mouseEvent.Pressed && overStage)
-                    _isPanning = true;
-                else if (!mouseEvent.Pressed)
-                    _isPanning = false;
+                _isPanning = mouseEvent.Pressed;
+                UpdateStageInputProcessing();
+                AcceptEvent();
+                return;
             }
-            else if (mouseEvent.ButtonIndex == MouseButton.Left)
+
+            if (mouseEvent.ButtonIndex == MouseButton.Left)
             {
-                if (mouseEvent.Pressed && overStage)
+                if (mouseEvent.Pressed)
                 {
                     if (BeginCanvasInteraction())
-                        GetViewport().SetInputAsHandled();
+                    {
+                        UpdateStageInputProcessing();
+                        AcceptEvent();
+                    }
                 }
-                else if (!mouseEvent.Pressed && _isDraggingCanvas)
+                else if (_isDraggingCanvas)
                 {
                     EndCanvasInteraction();
-                    GetViewport().SetInputAsHandled();
+                    UpdateStageInputProcessing();
+                    AcceptEvent();
                 }
+
+                return;
             }
-            else if (overStage)
+
+            if (mouseEvent.ButtonIndex == MouseButton.WheelUp && Input.IsKeyPressed(Key.Ctrl))
             {
-                if (mouseEvent.ButtonIndex == MouseButton.WheelUp && Input.IsKeyPressed(Key.Ctrl))
-                {
-                    ZoomIn();
-                    GetViewport().SetInputAsHandled();
-                }
-                else if (mouseEvent.ButtonIndex == MouseButton.WheelDown && Input.IsKeyPressed(Key.Ctrl))
-                {
-                    ZoomOut();
-                    GetViewport().SetInputAsHandled();
-                }
+                ZoomIn();
+                AcceptEvent();
+            }
+            else if (mouseEvent.ButtonIndex == MouseButton.WheelDown && Input.IsKeyPressed(Key.Ctrl))
+            {
+                ZoomOut();
+                AcceptEvent();
             }
         }
         else if (@event is InputEventMouseMotion motionEvent)
         {
+            if (_isPanning)
+            {
+                _canvasLayer.Offset += motionEvent.Relative;
+                AcceptEvent();
+            }
+            else if (_isDraggingCanvas && _dragMode != DragMode.None)
+            {
+                UpdateCanvasDrag();
+                AcceptEvent();
+            }
+            else
+            {
+                UpdateStageCursor();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Continues a drag/pan after the cursor leaves the overlay, and completes on button-up.
+    /// Not used to start interactions — that is <see cref="OnStageGuiInput"/> only.
+    /// </summary>
+    public override void _Input(InputEvent @event)
+    {
+        if (!IsVisibleInTree() || !_stageInitialized)
+            return;
+        if (!_isDraggingCanvas && !_isPanning)
+            return;
+
+        if (@event is InputEventMouseButton mouseEvent && !mouseEvent.Pressed)
+        {
+            if (mouseEvent.ButtonIndex == MouseButton.Left && _isDraggingCanvas)
+            {
+                EndCanvasInteraction();
+                UpdateStageInputProcessing();
+                GetViewport().SetInputAsHandled();
+            }
+            else if (mouseEvent.ButtonIndex == MouseButton.Middle && _isPanning)
+            {
+                _isPanning = false;
+                UpdateStageInputProcessing();
+                GetViewport().SetInputAsHandled();
+            }
+
+            return;
+        }
+
+        if (@event is InputEventMouseMotion motionEvent)
+        {
+            RememberStageMouseFromEvent(motionEvent);
             if (_isPanning)
             {
                 _canvasLayer.Offset += motionEvent.Relative;
@@ -86,24 +148,75 @@ public partial class SettingsCanvasEditor
                 UpdateCanvasDrag();
                 GetViewport().SetInputAsHandled();
             }
-            else if (overStage)
-            {
-                UpdateStageCursor();
-            }
         }
     }
 
+    /// <summary>
+    /// Enables viewport <c>_Input</c> only while a gesture can leave the overlay.
+    /// </summary>
+    private void UpdateStageInputProcessing()
+    {
+        SetProcessInput(IsVisibleInTree() && (_isDraggingCanvas || _isPanning));
+    }
+
+    private void OnStageMouseExited()
+    {
+        if (_isDraggingCanvas || _isPanning)
+            return;
+        MouseDefaultCursorShape = CursorShape.Arrow;
+        if (_stagePointer != null && IsInstanceValid(_stagePointer))
+            _stagePointer.MouseDefaultCursorShape = CursorShape.Arrow;
+    }
+
+    /// <summary>
+    /// True when the pointer is over the center stage, in the same canvas space as
+    /// <see cref="Control.GetGlobalRect"/> (not raw <see cref="Viewport.GetMousePosition"/>).
+    /// </summary>
     private bool IsMouseOverStage()
     {
-        // GetGlobalRect still reports the last layout box while Hidden — other settings
-        // panels occupy the same right-side area, so visibility must be checked first.
         if (!IsVisibleInTree())
             return false;
-        if (_scrollContainer == null || !IsInstanceValid(_scrollContainer))
+        Control host = StageMouseHost;
+        if (host == null || !IsInstanceValid(host) || !host.IsVisibleInTree())
             return false;
-        if (!_scrollContainer.IsVisibleInTree())
-            return false;
-        return _scrollContainer.GetGlobalRect().HasPoint(GetViewport().GetMousePosition());
+        return host.GetGlobalRect().HasPoint(host.GetGlobalMousePosition());
+    }
+
+    /// <summary>Control whose local space matches gizmo / canvas-layer pixels.</summary>
+    private Control StageMouseHost
+    {
+        get
+        {
+            if (_stagePointer != null && IsInstanceValid(_stagePointer))
+                return _stagePointer;
+            if (_subViewportContainer != null && IsInstanceValid(_subViewportContainer))
+                return _subViewportContainer;
+            return _scrollContainer;
+        }
+    }
+
+    /// <summary>
+    /// Stores overlay-local mouse from a viewport event (used while dragging outside the stage).
+    /// </summary>
+    /// <param name="mouse">Mouse event from <see cref="_Input"/>.</param>
+    private void RememberStageMouseFromEvent(InputEventMouse mouse)
+    {
+        Control host = StageMouseHost;
+        if (host == null || mouse == null)
+            return;
+        _lastStageLocalMouse = host.GetGlobalTransformWithCanvas().AffineInverse() * mouse.GlobalPosition;
+        _hasStageLocalMouse = true;
+    }
+
+    /// <summary>Stage-local pixel position (overlay / SubViewportContainer space).</summary>
+    private Vector2 GetStageLocalMouse()
+    {
+        Control host = StageMouseHost;
+        if (host == null)
+            return Vector2.Zero;
+        if (_hasStageLocalMouse)
+            return _lastStageLocalMouse;
+        return host.GetLocalMousePosition();
     }
 
     /// <summary>
@@ -111,8 +224,8 @@ public partial class SettingsCanvasEditor
     /// </summary>
     private Vector2 GetCanvasMousePosition()
     {
-        Vector2 local = _subViewportContainer.GetLocalMousePosition();
-        Vector2 inLayer = local - _canvasLayer.Offset;
+        Vector2 local = GetStageLocalMouse();
+        Vector2 inLayer = local - (_canvasLayer?.Offset ?? Vector2.Zero);
         if (_zoom <= 0.0001f)
             return Vector2.Zero;
         return inLayer / _zoom;
@@ -123,8 +236,8 @@ public partial class SettingsCanvasEditor
     /// </summary>
     private Vector2 GetLayerMousePosition()
     {
-        Vector2 local = _subViewportContainer.GetLocalMousePosition();
-        return local - _canvasLayer.Offset;
+        Vector2 local = GetStageLocalMouse();
+        return local - (_canvasLayer?.Offset ?? Vector2.Zero);
     }
 
     private bool BeginCanvasInteraction()
@@ -183,7 +296,7 @@ public partial class SettingsCanvasEditor
         kind = SelectionKind.None;
         id = -1;
 
-        // Layers first, top-of-stack first (list order) so the top layer wins overlaps.
+        // Layers first, top-of-stack first (list order / highest ZIndex) so the top layer wins overlaps.
         foreach (var layer in DisplaysManager.Layers)
         {
             var r = new Rect2(layer.CanvasPosition, layer.Size);
@@ -249,8 +362,7 @@ public partial class SettingsCanvasEditor
         {
             Vector2 world = zoomedRect.Position + centers[i];
             var handleRect = new Rect2(world - new Vector2(hs, hs) * 0.5f, new Vector2(hs, hs));
-            // Slightly larger hit target
-            if (handleRect.Grow(2f).HasPoint(layerMouse))
+            if (handleRect.Grow(HandleHitSlopPx).HasPoint(layerMouse))
                 return modes[i];
         }
 
@@ -533,23 +645,25 @@ public partial class SettingsCanvasEditor
 
     private void UpdateStageCursor()
     {
-        if (!TryGetSelectedRect(out Vector2I pos, out Vector2I size))
+        CursorShape shape = CursorShape.Arrow;
+        if (TryGetSelectedRect(out Vector2I pos, out Vector2I size))
         {
-            MouseDefaultCursorShape = CursorShape.Arrow;
-            return;
+            Rect2 zoomed = new Rect2(pos.X * _zoom, pos.Y * _zoom, size.X * _zoom, size.Y * _zoom);
+            var handle = HitTestHandle(zoomed, GetLayerMousePosition());
+            shape = handle switch
+            {
+                DragMode.ResizeN or DragMode.ResizeS => CursorShape.Vsize,
+                DragMode.ResizeE or DragMode.ResizeW => CursorShape.Hsize,
+                DragMode.ResizeNE or DragMode.ResizeSW => CursorShape.Bdiagsize,
+                DragMode.ResizeNW or DragMode.ResizeSE => CursorShape.Fdiagsize,
+                DragMode.None when zoomed.HasPoint(GetLayerMousePosition()) => CursorShape.Move,
+                _ => CursorShape.Arrow
+            };
         }
 
-        Rect2 zoomed = new Rect2(pos.X * _zoom, pos.Y * _zoom, size.X * _zoom, size.Y * _zoom);
-        var handle = HitTestHandle(zoomed, GetLayerMousePosition());
-        MouseDefaultCursorShape = handle switch
-        {
-            DragMode.ResizeN or DragMode.ResizeS => CursorShape.Vsize,
-            DragMode.ResizeE or DragMode.ResizeW => CursorShape.Hsize,
-            DragMode.ResizeNE or DragMode.ResizeSW => CursorShape.Bdiagsize,
-            DragMode.ResizeNW or DragMode.ResizeSE => CursorShape.Fdiagsize,
-            DragMode.None when zoomed.HasPoint(GetLayerMousePosition()) => CursorShape.Move,
-            _ => CursorShape.Arrow
-        };
+        MouseDefaultCursorShape = shape;
+        if (_stagePointer != null && IsInstanceValid(_stagePointer))
+            _stagePointer.MouseDefaultCursorShape = shape;
     }
 
     #endregion

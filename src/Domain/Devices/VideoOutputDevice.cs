@@ -165,6 +165,12 @@ public partial class VideoOutputDevice : Window, IDisposable
     public VideoOutputDevice()
     {
         OutputId = _nextOutputId++;
+        // Stay hidden until assigned to a real destination. Default Visible=true would
+        // create a native window on enter-tree (and on Linux embed, GetWindowId can
+        // still report the main viewport until that window exists).
+        Visible = false;
+        Transient = false;
+        Exclusive = false;
         Mode = ModeEnum.Windowed;
         Borderless = true;
         LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
@@ -494,23 +500,127 @@ public partial class VideoOutputDevice : Window, IDisposable
     /// Returns true when this Window has a native DisplayServer window id that can be resized/moved.
     /// Virtual screens never create a usable native window until assigned to a physical output.
     /// </summary>
+    /// <remarks>
+    /// Embedded windows report the embedder id via <see cref="Window.GetWindowId"/>. On Linux
+    /// that is <see cref="LinuxWindowEmbedPolicy.MainWindowId"/> (0). DisplayServer calls with that id
+    /// resize, borderless, or move the operator UI — never treat 0 as "this output".
+    /// </remarks>
     private bool TryGetNativeWindowId(out int windowId)
     {
         windowId = -1;
         if (!IsInsideTree() || !GodotObject.IsInstanceValid(this))
             return false;
+        if (IsEmbedded())
+            return false;
 
         try
         {
             windowId = GetWindowId();
-            // DisplayServer.InvalidWindowId is -1; also reject ids that are not registered yet.
+            // DisplayServer.InvalidWindowId is -1. MainWindowId is 0 — a valid id for
+            // the operator UI, not for a child output.
             if (windowId == DisplayServer.InvalidWindowId || windowId < 0)
+                return false;
+            if (LinuxWindowEmbedPolicy.IsMainWindowId(windowId))
                 return false;
             return true;
         }
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Ensures this output is a native OS window (not an embedded sub-view of /root)
+    /// before DisplayServer placement. Hides first when ForceNative must be applied
+    /// to an already-visible window.
+    /// </summary>
+    /// <returns>True when a distinct native window id exists.</returns>
+    private bool EnsureNativeOutputWindow()
+    {
+        Transient = false;
+        Exclusive = false;
+
+        if (Visible && (IsEmbedded() || !ForceNative))
+        {
+            try { Hide(); } catch { /* ignore */ }
+        }
+
+        LinuxWindowEmbedPolicy.ApplyToAppWindow(this);
+
+        if (!Visible)
+            Show();
+
+        return TryGetNativeWindowId(out _) && !IsEmbedded();
+    }
+
+    /// <summary>Operator-window geometry captured before house-screen placement.</summary>
+    private readonly struct OperatorWindowSnapshot
+    {
+        public DisplayServer.WindowMode Mode { get; init; }
+        public Vector2I Position { get; init; }
+        public Vector2I Size { get; init; }
+        public bool Borderless { get; init; }
+        public bool Valid { get; init; }
+    }
+
+    /// <summary>
+    /// Snapshots the main Cue2 window so house-screen placement can restore it if
+    /// DisplayServer calls accidentally targeted <see cref="LinuxWindowEmbedPolicy.MainWindowId"/>.
+    /// </summary>
+    /// <returns>A snapshot, or default when the main window cannot be queried.</returns>
+    private static OperatorWindowSnapshot CaptureOperatorWindow()
+    {
+        try
+        {
+            int id = LinuxWindowEmbedPolicy.MainWindowId;
+            return new OperatorWindowSnapshot
+            {
+                Mode = DisplayServer.WindowGetMode(id),
+                Position = DisplayServer.WindowGetPosition(id),
+                Size = DisplayServer.WindowGetSize(id),
+                Borderless = DisplayServer.WindowGetFlag(DisplayServer.WindowFlags.Borderless, id),
+                Valid = true
+            };
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    /// <summary>
+    /// Restores the main window when output placement changed its mode, chrome, or rect.
+    /// </summary>
+    /// <param name="before">Snapshot from <see cref="CaptureOperatorWindow"/>.</param>
+    private static void RestoreOperatorWindowIfClobbered(OperatorWindowSnapshot before)
+    {
+        if (!before.Valid)
+            return;
+
+        try
+        {
+            int id = LinuxWindowEmbedPolicy.MainWindowId;
+            var mode = DisplayServer.WindowGetMode(id);
+            bool borderless = DisplayServer.WindowGetFlag(DisplayServer.WindowFlags.Borderless, id);
+            var pos = DisplayServer.WindowGetPosition(id);
+            var size = DisplayServer.WindowGetSize(id);
+            if (mode == before.Mode && borderless == before.Borderless
+                && pos == before.Position && size == before.Size)
+                return;
+
+            GD.Print($"VideoOutputDevice:RestoreOperatorWindowIfClobbered - Main window mutated during output placement "
+                     + $"(mode {mode}->{before.Mode}, borderless {borderless}->{before.Borderless}, "
+                     + $"pos {pos}->{before.Position}, size {size}->{before.Size}). Restoring.");
+
+            DisplayServer.WindowSetMode(before.Mode, id);
+            DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, before.Borderless, id);
+            DisplayServer.WindowSetPosition(before.Position, id);
+            DisplayServer.WindowSetSize(before.Size, id);
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"VideoOutputDevice:RestoreOperatorWindowIfClobbered - Restore failed: {ex.Message}");
         }
     }
 
@@ -875,7 +985,14 @@ public partial class VideoOutputDevice : Window, IDisposable
         var placePos = intendedPos;
         var placeSize = AntiExclusivePlacementSize(intendedSize, fullCoverage);
 
+        // Wayland cannot move a window onto a chosen output. A full-monitor toplevel
+        // is created on the focused screen (the operator UI) and hides the main window.
+        bool compositorPlacesWindow = !LinuxWindowEmbedPolicy.CanPlaceWindowsOnSpecificScreen;
+        if (compositorPlacesWindow)
+            placeSize = WaylandSafeOutputSize(intendedSize);
+
         bool modeOk = Mode == ModeEnum.Windowed && !IsExclusiveFullscreen();
+        bool chromeOk = compositorPlacesWindow ? !Borderless : Borderless;
 
         // Skip only when geometry + safe windowed mode are already applied.
         if (_lastClippedRect == clippedRect
@@ -883,42 +1000,69 @@ public partial class VideoOutputDevice : Window, IDisposable
             && _lastWindowPos == placePos
             && _lastWindowSize == placeSize
             && Visible
-            && Borderless
+            && chromeOk
             && modeOk
             && Size == placeSize)
         {
             return;
         }
 
+        var operatorBefore = CaptureOperatorWindow();
         bool wasFullscreenLike = IsFullscreenLike();
 
         Transparent = OutputTransparent;
-        Unresizable = true;
+        Unresizable = !compositorPlacesWindow;
 
         // Always demote exclusive/fullscreen before free placement (never leave exclusive active).
         if (wasFullscreenLike || Mode != ModeEnum.Windowed)
             ForceBorderlessWindowed();
         else
-        {
             Mode = ModeEnum.Windowed;
-            Borderless = true;
+
+        // Wayland: keep OS chrome so the user can drag the output onto the house display.
+        // X11/Windows/macOS: borderless free placement on the target monitor.
+        Borderless = !compositorPlacesWindow;
+        if (compositorPlacesWindow)
+        {
+            Title = string.IsNullOrWhiteSpace(OutputName) ? "Cue2 Output" : OutputName;
+            MinSize = new Vector2I(320, 180);
+            // Size before Show so the first Wayland toplevel is not created full-monitor.
+            if (Size != placeSize)
+                Size = placeSize;
         }
 
-        CurrentScreen = TargetMonitor;
+        if (!EnsureNativeOutputWindow())
+        {
+            GD.PrintErr($"VideoOutputDevice:UpdatePhysicalMonitorRegion - '{OutputName}' has no native window id; "
+                        + "refusing DisplayServer placement so the main UI is not resized.");
+            HideScreenWindow();
+            RestoreOperatorWindowIfClobbered(operatorBefore);
+            return;
+        }
 
-        if (!Visible)
-            Show();
+        if (LinuxWindowEmbedPolicy.CanPlaceWindowsOnSpecificScreen)
+            CurrentScreen = TargetMonitor;
 
         // When leaving exclusive/fullscreen, bounce visibility so the content surface
         // is recreated cleanly (prevents grey blank windows after mode exit).
         if (wasFullscreenLike && Visible)
         {
             Hide();
-            Show();
-            ForceBorderlessWindowed();
+            EnsureNativeOutputWindow();
+            if (compositorPlacesWindow)
+            {
+                Mode = ModeEnum.Windowed;
+                Borderless = false;
+            }
+            else
+                ForceBorderlessWindowed();
         }
 
-        ApplyNativeWindowGeometry(placePos, placeSize);
+        if (compositorPlacesWindow)
+            ApplyPortableWindowGeometry(placePos, placeSize);
+        else
+            ApplyNativeWindowGeometry(placePos, placeSize);
+
         EnsureContentLayout(intendedSize);
         RefreshLayerHostSizes();
 
@@ -926,20 +1070,35 @@ public partial class VideoOutputDevice : Window, IDisposable
         if (IsExclusiveFullscreen() || Mode != ModeEnum.Windowed)
         {
             GD.Print($"VideoOutputDevice:UpdatePhysicalMonitorRegion - '{OutputName}' demoting Mode={Mode} (exclusive/fullscreen not allowed on outputs).");
-            ForceBorderlessWindowed();
-            CurrentScreen = TargetMonitor;
+            if (compositorPlacesWindow)
+            {
+                Mode = ModeEnum.Windowed;
+                Borderless = false;
+            }
+            else
+            {
+                ForceBorderlessWindowed();
+                CurrentScreen = TargetMonitor;
+            }
+
             // Ensure anti-exclusive size even if fullCoverage detection raced
             var safeSize = placeSize;
-            if (safeSize == DisplayServer.ScreenGetSize(TargetMonitor)
+            if (!compositorPlacesWindow
+                && safeSize == DisplayServer.ScreenGetSize(TargetMonitor)
                 && placePos == DisplayServer.ScreenGetPosition(TargetMonitor))
             {
                 safeSize = AntiExclusivePlacementSize(safeSize, true);
             }
 
-            ApplyNativeWindowGeometry(placePos, safeSize);
+            if (compositorPlacesWindow)
+                ApplyPortableWindowGeometry(placePos, safeSize);
+            else
+                ApplyNativeWindowGeometry(placePos, safeSize);
             EnsureContentLayout(intendedSize);
             RefreshLayerHostSizes();
         }
+
+        RestoreOperatorWindowIfClobbered(operatorBefore);
 
         // Deferred re-check: promotion sometimes happens a frame later on Windows.
         CallDeferred(nameof(DeferredDemoteExclusiveIfNeeded));
@@ -949,7 +1108,35 @@ public partial class VideoOutputDevice : Window, IDisposable
 
         GD.Print($"VideoOutputDevice:UpdatePhysicalMonitorRegion - '{OutputName}' Mode={Mode} Borderless={Borderless} " +
                  $"monitor={TargetMonitor} pos={placePos} size={placeSize} intended={intendedSize} " +
-                 $"full={fullCoverage} exclusivePrevent={fullCoverage} clipped={clippedRect}");
+                 $"full={fullCoverage} exclusivePrevent={fullCoverage} waylandSafe={compositorPlacesWindow} clipped={clippedRect}");
+    }
+
+    /// <summary>
+    /// Caps a house-screen window so a Wayland toplevel (always spawned on the focused
+    /// output) cannot cover the operator UI.
+    /// </summary>
+    /// <param name="intended">Canvas-clipped output size.</param>
+    /// <returns>A size that leaves the main window reachable.</returns>
+    private static Vector2I WaylandSafeOutputSize(Vector2I intended)
+    {
+        Vector2I operatorSize;
+        try
+        {
+            operatorSize = DisplayServer.WindowGetSize(LinuxWindowEmbedPolicy.MainWindowId);
+        }
+        catch
+        {
+            operatorSize = new Vector2I(1280, 720);
+        }
+
+        if (operatorSize.X <= 0 || operatorSize.Y <= 0)
+            operatorSize = new Vector2I(1280, 720);
+
+        int maxW = Mathf.Max(640, (int)(operatorSize.X * 0.55f));
+        int maxH = Mathf.Max(360, (int)(operatorSize.Y * 0.55f));
+        int w = Mathf.Clamp(intended.X > 0 ? intended.X : 640, 320, maxW);
+        int h = Mathf.Clamp(intended.Y > 0 ? intended.Y : 360, 180, maxH);
+        return new Vector2I(w, h);
     }
 
     /// <summary>
@@ -964,6 +1151,7 @@ public partial class VideoOutputDevice : Window, IDisposable
         if (!IsExclusiveFullscreen() && Mode == ModeEnum.Windowed)
             return;
 
+        var operatorBefore = CaptureOperatorWindow();
         GD.Print($"VideoOutputDevice:DeferredDemoteExclusiveIfNeeded - '{OutputName}' Mode={Mode}, forcing borderless windowed.");
         ForceBorderlessWindowed();
 
@@ -980,11 +1168,14 @@ public partial class VideoOutputDevice : Window, IDisposable
                     size = AntiExclusivePlacementSize(monSize, true);
             }
 
-            CurrentScreen = TargetMonitor;
+            if (LinuxWindowEmbedPolicy.CanPlaceWindowsOnSpecificScreen && TryGetNativeWindowId(out _))
+                CurrentScreen = TargetMonitor;
             ApplyNativeWindowGeometry(pos, size);
             EnsureContentLayout(size);
             RefreshLayerHostSizes();
         }
+
+        RestoreOperatorWindowIfClobbered(operatorBefore);
     }
 
     /// <summary>

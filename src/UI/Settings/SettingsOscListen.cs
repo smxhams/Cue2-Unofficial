@@ -108,7 +108,7 @@ public partial class SettingsOscListen : Control
         if (_allowlistApplyButton != null)
             _allowlistApplyButton.Pressed += OnAllowlistApplyPressed;
         if (_allowlistLineEdit != null)
-            _allowlistLineEdit.TextSubmitted += OnAllowlistTextSubmitted;
+            UiUtilities.BindLineEditCommit(_allowlistLineEdit, OnAllowlistTextSubmitted);
 
         if (_oscListen != null)
         {
@@ -178,8 +178,7 @@ public partial class SettingsOscListen : Control
         }
         if (_allowlistApplyButton != null)
             _allowlistApplyButton.Pressed -= OnAllowlistApplyPressed;
-        if (_allowlistLineEdit != null)
-            _allowlistLineEdit.TextSubmitted -= OnAllowlistTextSubmitted;
+        // Allowlist LineEdit is wired with BindLineEditCommit; hooks die with the node.
 
         base._ExitTree();
     }
@@ -411,16 +410,34 @@ public partial class SettingsOscListen : Control
 
         string text = _allowlistLineEdit.Text ?? string.Empty;
         var parts = text.Split(new[] { ',', ';', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        var current = _oscListen.AllowlistIps;
+        if (current.Count == parts.Length)
+        {
+            bool same = true;
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (!string.Equals(current[i], parts[i], StringComparison.Ordinal))
+                {
+                    same = false;
+                    break;
+                }
+            }
+            if (same)
+                return;
+        }
         RecordHistory("Update OSC IP allowlist");
         _oscListen.SetAllowlist(parts);
         // Refresh normalized display
         var list = _oscListen.AllowlistIps;
         _allowlistLineEdit.Text = list.Count == 0 ? string.Empty : string.Join(", ", list);
-        // Apply button has focus_mode=None so it does not take focus — release explicitly.
-        if (_allowlistLineEdit.IsEditing())
-            _allowlistLineEdit.Unedit();
-        _allowlistLineEdit.ReleaseFocus();
-        _allowlistLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+        // Enter: unfocus this field. Focus-exit commit must not steal the next LineEdit's focus.
+        if (_allowlistLineEdit.HasFocus())
+        {
+            if (_allowlistLineEdit.IsEditing())
+                _allowlistLineEdit.Unedit();
+            _allowlistLineEdit.ReleaseFocus();
+            _allowlistLineEdit.CallDeferred(Control.MethodName.ReleaseFocus);
+        }
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             list.Count == 0
                 ? "OSC allowlist cleared (all IPs allowed)"

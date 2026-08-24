@@ -244,7 +244,7 @@ public partial class InputActionCard : PanelContainer
         GD.Print($"InputActionCard:CancelListening - Cancelled listening for '{Action}'");
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _UnhandledKeyInput(InputEvent @event)
     {
         if (!_isListeningForInput) return;
         if (@event is not InputEventKey keyEvent || !keyEvent.Pressed) return;

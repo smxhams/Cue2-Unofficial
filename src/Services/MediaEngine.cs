@@ -44,6 +44,9 @@ public partial class MediaEngine : Node
     
     public override void _Ready()
     {
+        if (SingleInstanceGuard.IsSecondary)
+            return;
+
         _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         try

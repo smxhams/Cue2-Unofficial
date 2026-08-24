@@ -83,7 +83,8 @@ public partial class FirstTimeStartupWindow : Window
 		ApplyLocalizedStrings();
 
 		float userScale = _userDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
-		UiUtilities.RescaleWindow(this, _globalData.BaseDisplayScale);
+		// Size is the scene design size (480×560). Apply after GlobalData's deferred scale refresh.
+		UiUtilities.ApplyScaledDesignWindowSize(this, Size, _globalData.BaseDisplayScale);
 		UiUtilities.RescaleUi(this, userScale, _globalData.BaseDisplayScale);
 
 		_globalSignals.UiScaleChanged += ScaleUi;
@@ -280,8 +281,8 @@ public partial class FirstTimeStartupWindow : Window
 			_uiScaleSlider.ValueChanged += OnUiScaleSliderValueChanged;
 			_uiScaleSlider.DragEnded += OnUiScaleSliderDragEnded;
 		}
-		// Commit typed scale on Enter only (same as SettingsCue2Prefs).
-		_uiScaleNum.TextSubmitted += OnUiScaleTextSubmitted;
+		// Commit typed scale on Enter and when focus leaves the field.
+		UiUtilities.BindLineEditCommit(_uiScaleNum, OnUiScaleTextSubmitted);
 	}
 
 	/// <summary>
@@ -504,8 +505,7 @@ public partial class FirstTimeStartupWindow : Window
 			_uiScaleSlider.ValueChanged -= OnUiScaleSliderValueChanged;
 			_uiScaleSlider.DragEnded -= OnUiScaleSliderDragEnded;
 		}
-		if (_uiScaleNum != null)
-			_uiScaleNum.TextSubmitted -= OnUiScaleTextSubmitted;
+		// UI scale LineEdit is wired with BindLineEditCommit; hooks die with the node.
 		if (_uiScaleResetButton != null)
 			_uiScaleResetButton.Pressed -= OnUiScaleResetPressed;
 

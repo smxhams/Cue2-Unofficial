@@ -54,7 +54,17 @@ public static class Version
     /// Gets the module configuration. 
     /// </summary> 
     /// <value>The module config string.</value> 
-    public static readonly string ModuleConfig = ""; 
+    public static readonly string ModuleConfig = "";
+
+    /// <summary>
+    /// GitHub organization or user that publishes Cue2 Releases (in-app updater feed).
+    /// </summary>
+    public static readonly string GitHubOwner = "Tech-mop";
+
+    /// <summary>
+    /// GitHub repository name that publishes Cue2 Releases.
+    /// </summary>
+    public static readonly string GitHubRepo = "Cue2";
  
     /// <summary> 
     /// Gets the official website URL. 

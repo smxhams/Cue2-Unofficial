@@ -52,8 +52,16 @@ public partial class SettingsCanvasEditor
             return;
         }
 
+        string next = (text ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(next) || next == screen.OutputName)
+        {
+            _screenNameLineEdit.Text = screen.OutputName;
+            _screenNameLineEdit.ReleaseFocus();
+            return;
+        }
+
         RecordDisplaysHistory("Rename screen");
-        _displaysManager.UpdateScreenName(screen.OutputId, text);
+        _displaysManager.UpdateScreenName(screen.OutputId, next);
         RebuildTrees();
         UpdateCanvasGizmos();
         _screenNameLineEdit.ReleaseFocus();

@@ -80,9 +80,9 @@ theme_override_font_sizes/font_size = 10
 text = "Name"
 horizontal_alignment = 1
 
-[node name="TransportLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/ColumnHeaders"]
-layout_mode = 2
+[node name="TransportLabel" type="Label" parent="RootVBox/VSplit/SettingsPane/ColumnHeaders" unique_id=300487754]
 custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
 theme_override_font_sizes/font_size = 10
 text = "Xport"
 horizontal_alignment = 1
@@ -111,6 +111,14 @@ theme_override_font_sizes/font_size = 10
 text = "Port"
 horizontal_alignment = 1
 
+[node name="StatusHeaderSpacer" type="Control" parent="RootVBox/VSplit/SettingsPane/ColumnHeaders"]
+custom_minimum_size = Vector2(12, 0)
+layout_mode = 2
+
+[node name="RetryHeaderSpacer" type="Control" parent="RootVBox/VSplit/SettingsPane/ColumnHeaders"]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+
 [node name="HeaderSpacer" type="Control" parent="RootVBox/VSplit/SettingsPane/ColumnHeaders" unique_id=1046432732]
 custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
@@ -126,32 +134,32 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="TestSendRow" type="HBoxContainer" parent="RootVBox/VSplit/SettingsPane"]
+[node name="TestSendRow" type="HBoxContainer" parent="RootVBox/VSplit/SettingsPane" unique_id=1706494680]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="TestPathLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/TestSendRow"]
+[node name="TestPathLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/TestSendRow" unique_id=1603491520]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "/test/path or /jump 2"
 tooltip_text = "OSC path to send for testing. Args after a space (e.g. /jump 2) are accepted."
+placeholder_text = "/test/path"
 
-[node name="TestArgsLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/TestSendRow"]
+[node name="TestArgsLineEdit" type="LineEdit" parent="RootVBox/VSplit/SettingsPane/TestSendRow" unique_id=740007549]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "args"
 tooltip_text = "Optional args: 1 0.5 \"hi\" true"
+placeholder_text = "args"
 
-[node name="TestSendButton" type="Button" parent="RootVBox/VSplit/SettingsPane/TestSendRow"]
+[node name="TestSendButton" type="Button" parent="RootVBox/VSplit/SettingsPane/TestSendRow" unique_id=1422870552]
 unique_name_in_owner = true
 layout_mode = 2
+tooltip_text = "Send the test message on the selected connection (or all, if chosen)."
 focus_mode = 0
 text = "Test send"
-tooltip_text = "Send the test message on the selected connection (or all, if chosen)."
 
 [node name="MonitorPane" type="VBoxContainer" parent="RootVBox/VSplit" unique_id=2107561550]
 layout_mode = 2

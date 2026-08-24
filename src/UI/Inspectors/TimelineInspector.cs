@@ -500,7 +500,7 @@ public partial class TimelineInspector : Control
     /// Left/Right nudge playhead; Home resets. Play is via the toolbar button only.
     /// </summary>
     /// <param name="event">The input event.</param>
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _UnhandledKeyInput(InputEvent @event)
     {
         if (!Visible || _focusedCue == null || _timeLineContainer == null || !_timeLineContainer.Visible)
             return;

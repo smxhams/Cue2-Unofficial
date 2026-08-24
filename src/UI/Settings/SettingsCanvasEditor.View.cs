@@ -38,11 +38,7 @@ public partial class SettingsCanvasEditor
             int y = int.Parse(_canvasSizeYLineEdit.Text);
 
             if (x == _canvas.CanvasSize.X && y == _canvas.CanvasSize.Y)
-            {
-                _canvasSizeXLineEdit.ReleaseFocus();
-                _canvasSizeYLineEdit.ReleaseFocus();
                 return;
-            }
 
             RecordDisplaysHistory("Change canvas size");
             _canvas.SetCanvasSize(new Vector2I(x, y));
@@ -55,9 +51,6 @@ public partial class SettingsCanvasEditor
 
             _canvasSizeXLineEdit.Text = _canvas.CanvasSize.X.ToString();
             _canvasSizeYLineEdit.Text = _canvas.CanvasSize.Y.ToString();
-
-            _canvasSizeXLineEdit.ReleaseFocus();
-            _canvasSizeYLineEdit.ReleaseFocus();
 
             // Canvas size changes re-clip screens — keep canvas TP geometry aligned.
             _displaysManager?.UpdateCanvasTestPatterns();
@@ -125,6 +118,8 @@ public partial class SettingsCanvasEditor
         if (viewportSize.X < 8f || viewportSize.Y < 8f)
         {
             _subViewportContainer.CustomMinimumSize = Vector2.Zero;
+            if (_stagePointer?.GetParent() is Control collapsedHost)
+                collapsedHost.CustomMinimumSize = Vector2.Zero;
             _viewport.Size = new Vector2I(1, 1);
             return;
         }
@@ -133,6 +128,8 @@ public partial class SettingsCanvasEditor
         _control.Size = zoomedSize;
         _control.Position = Vector2.Zero;
         _subViewportContainer.CustomMinimumSize = viewportSize;
+        if (_stagePointer?.GetParent() is Control stageHost)
+            stageHost.CustomMinimumSize = viewportSize;
         _viewport.Size = new Vector2I(Mathf.Max(1, (int)viewportSize.X), Mathf.Max(1, (int)viewportSize.Y));
         if (_backgroundRect != null)
         {
@@ -278,6 +275,11 @@ public partial class SettingsCanvasEditor
         VisibilityChanged -= OnEditorVisibilityChanged;
         if (_scrollContainer != null && IsInstanceValid(_scrollContainer))
             _scrollContainer.Resized -= OnStageResized;
+        if (_stagePointer != null && IsInstanceValid(_stagePointer))
+        {
+            _stagePointer.GuiInput -= OnStageGuiInput;
+            _stagePointer.MouseExited -= OnStageMouseExited;
+        }
         if (_bodyHSplit != null && IsInstanceValid(_bodyHSplit))
             _bodyHSplit.Resized -= OnBodyHSplitResized;
         if (_historyManager != null)

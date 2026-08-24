@@ -274,7 +274,7 @@ public partial class MidiInputActionCard : PanelContainer
         history.RecordSettingsChange(description, null, "MidiInputMap");
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _UnhandledKeyInput(InputEvent @event)
     {
         if (!_isCapturing) return;
         if (@event is not InputEventKey key || !key.Pressed) return;

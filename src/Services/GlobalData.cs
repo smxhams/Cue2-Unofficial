@@ -3,6 +3,7 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Cue2.App;
 using Cue2.UI.Shell;
@@ -20,6 +21,7 @@ using Godot;
 using Godot.Collections;
 using SDL3;
 using Cue2.UI.Popups;
+using Cue2.UI.Utilities;
 
 namespace Cue2.Services;
 
@@ -108,6 +110,11 @@ public partial class GlobalData : Node
 	public UserDataManager UserDataManager;
 
 	/// <summary>
+	/// GitHub Releases checker / downloader (exported builds). Prefs in <see cref="UserDataManager"/>.
+	/// </summary>
+	public UpdateService UpdateService;
+
+	/// <summary>
 	/// Scoped momento undo/redo stacks for document edits (cue, cuelist, settings).
 	/// </summary>
 	public HistoryManager HistoryManager;
@@ -170,16 +177,20 @@ public partial class GlobalData : Node
 	public int UiOutputWinNum;
 
 	/// <summary>
-	/// Absolute path of a showfile to open after app chrome is ready (e.g. Open last showfile preference).
-	/// Set only from <see cref="UserDataManager"/> startup prefs — not from CLI.
+	/// Absolute path of a showfile to open after app chrome is ready.
+	/// Set from a <c>.c2</c> command-line argument (wins) or Open last showfile recents.
+	/// Null/empty when neither applies so boot seeds a blank new session.
 	/// </summary>
 	public string StartupOpenPath;
+
+	private SingleInstanceGuard _instanceGuard;
 	
 	/// <summary>
-	/// OS display scale of the primary/current screen at startup (HiDPI factor).
+	/// OS / HiDPI display scale of the window's screen (see <see cref="UiUtilities.DetectDisplayScale"/>).
 	/// Combined with user <see cref="UserDataManager.UiScale"/> when rescaling windows.
+	/// Re-read after the display server settles — macOS often reports 1× during autoload <c>_Ready</c>.
 	/// </summary>
-	/// <value>Positive scale factor; defaults to 1.0 when the OS reports an invalid value.</value>
+	/// <value>Positive scale factor in 1–4; defaults to 1.0 when detection fails.</value>
 	public float BaseDisplayScale { get; private set; } = 1.0f;
 	
 
@@ -377,6 +388,13 @@ public partial class GlobalData : Node
 		// Earliest C# we own — process clock for last-show "time to GO" including boot.
 		SessionLoadTimer.Touch();
 
+		string cliShow = ShowfileLaunchArgs.GetShowfileFromCommandLine();
+		if (!SingleInstanceGuard.TryClaimExclusive(cliShow))
+		{
+			GetTree()?.Quit();
+			return;
+		}
+
 		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 		_saveManager = GetNode<SaveManager>("/root/SaveManager");
 
@@ -424,6 +442,18 @@ public partial class GlobalData : Node
 		UserDataManager = new UserDataManager();
 		AddChild(UserDataManager);
 
+		_instanceGuard = new SingleInstanceGuard();
+		_instanceGuard.Name = nameof(SingleInstanceGuard);
+		AddChild(_instanceGuard);
+		_instanceGuard.OpenShowRequested += OnIpcOpenShow;
+
+		ShowfileAssociation.MaybeRegisterOnFirstLaunch();
+		if (ShowfileAssociation.IsRegisteredToThisBuild())
+			UserDataManager.RegisteredShowfileHandlerPath = ShowfileAssociation.HostExecutablePath;
+
+		UpdateService = new UpdateService();
+		AddChild(UpdateService);
+
 		// Localization after user prefs so the saved Locale is available to apply.
 		LocalizationService = new LocalizationService();
 		LocalizationService.Name = nameof(LocalizationService);
@@ -434,27 +464,48 @@ public partial class GlobalData : Node
 		AddChild(HistoryManager);
 
 		DisplaysManager = GetNode<DisplaysManager>("/root/DisplaysManager");
-		
-		int currentScreen = DisplayServer.WindowGetCurrentScreen(GetWindow().GetWindowId());
-		BaseDisplayScale = DisplayServer.ScreenGetScale(currentScreen);
-		if (BaseDisplayScale <= 0f) {
-			BaseDisplayScale = 1.0f; // Fallback if invalid 
-			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "Failed to fetch display scale; using fallback 1.0", 1);
-		}
 
-		// Startup show: Cue2 Preferences → Open last showfile (recents).
-		if (UserDataManager != null)
+		// First read is often too early on macOS HiDPI (window not mapped yet → 1×).
+		// Deferred refresh re-applies after the display server has a real screen.
+		RefreshBaseDisplayScale(notifyUi: false);
+		CallDeferred(nameof(DeferredRefreshDisplayScale));
+
+		// Startup show: CLI .c2 wins, else Cue2 Preferences → Open last showfile (recents).
+		if (!string.IsNullOrEmpty(cliShow) && File.Exists(cliShow))
+		{
+			StartupOpenPath = cliShow;
+			var bootTimer = SessionLoadTimer.Start(StartupOpenPath);
+			bootTimer.IncludesBoot = true;
+			bootTimer.Begin("boot.globaldata");
+			GD.Print("GlobalData:_Ready - Opening showfile from command line: " + StartupOpenPath);
+		}
+		else if (UserDataManager != null)
 		{
 			if (UserDataManager.Startup == UserDataManager.StartupBehavior.OpenLastShowfile)
 			{
 				var recents = UserDataManager.GetRecentShowFiles();
 				if (recents.Count > 0)
 				{
-					StartupOpenPath = recents[0];
-					var bootTimer = SessionLoadTimer.Start(StartupOpenPath);
-					bootTimer.IncludesBoot = true;
-					bootTimer.Begin("boot.globaldata");
-					GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + StartupOpenPath);
+					string lastPath = recents[0];
+					if (File.Exists(lastPath))
+					{
+						StartupOpenPath = lastPath;
+						var bootTimer = SessionLoadTimer.Start(StartupOpenPath);
+						bootTimer.IncludesBoot = true;
+						bootTimer.Begin("boot.globaldata");
+						GD.Print("GlobalData:_Ready - Startup preference: opening last showfile: " + StartupOpenPath);
+					}
+					else
+					{
+						// Missing last-show must not start the open pipeline: DisplaysManager /
+						// Settings skip default seed when StartupOpenPath is set, and the
+						// boot overlay would stick with no file to apply.
+						UserDataManager.RemoveRecentShowFile(lastPath);
+						GD.PrintErr("GlobalData:_Ready - Last showfile is missing; starting a new session: " + lastPath);
+						_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
+							$"Last showfile not found — started a new session: {lastPath}",
+							(int)LogType.Error);
+					}
 				}
 				else
 				{
@@ -477,10 +528,92 @@ public partial class GlobalData : Node
 	}
 
 	/// <summary>
+	/// Re-reads OS / HiDPI scale after the display server has a real screen assignment.
+	/// </summary>
+	/// <param name="notifyUi">
+	/// When true and the value changed, emit <see cref="GlobalSignals.UiScaleChanged"/> so
+	/// already-ready windows re-apply content scale.
+	/// </param>
+	/// <returns>True when <see cref="BaseDisplayScale"/> changed.</returns>
+	public bool RefreshBaseDisplayScale(bool notifyUi = true)
+	{
+		int screen = UiUtilities.ResolveWindowScreen(GetWindow());
+		float detected = UiUtilities.DetectDisplayScale(screen);
+		if (detected <= 0f)
+			detected = 1f;
+
+		if (Mathf.IsEqualApprox(detected, BaseDisplayScale))
+		{
+			GD.Print($"GlobalData:RefreshBaseDisplayScale - unchanged {BaseDisplayScale:0.###} (screen={screen})");
+			return false;
+		}
+
+		float previous = BaseDisplayScale;
+		BaseDisplayScale = detected;
+		GD.Print($"GlobalData:RefreshBaseDisplayScale - {previous:0.###} -> {detected:0.###} (screen={screen})");
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"Display scale {previous:0.##}× → {detected:0.##}× (screen {screen})", 0);
+
+		if (notifyUi)
+		{
+			float userScale = UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.UiScaleChanged), userScale);
+		}
+
+		return true;
+	}
+
+	/// <summary>
+	/// Second-pass scale read after the native window is mapped (macOS HiDPI).
+	/// Registered from autoload <c>_Ready</c> so it runs before deferred window geometry.
+	/// </summary>
+	private void DeferredRefreshDisplayScale()
+	{
+		RefreshBaseDisplayScale(notifyUi: true);
+	}
+
+	/// <summary>
+	/// Second process asked this instance to come to the front and optionally open a show.
+	/// </summary>
+	private void OnIpcOpenShow(string path)
+	{
+		try
+		{
+			Window win = GetTree()?.Root;
+			if (win != null)
+				DisplayServer.WindowMoveToForeground(win.GetWindowId());
+		}
+		catch
+		{
+			// ignore
+		}
+
+		if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+			return;
+
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.OpenSelectedSession), path);
+	}
+
+	/// <summary>
 	/// Shuts down SDL if it was initialized during <see cref="_Ready"/>.
 	/// </summary>
 	public override void _ExitTree()
 	{
+		if (_instanceGuard != null)
+		{
+			_instanceGuard.OpenShowRequested -= OnIpcOpenShow;
+			_instanceGuard = null;
+		}
+
+		foreach (var pair in _defaultInputBindings)
+		{
+			if (pair.Value == null)
+				continue;
+			foreach (InputEvent ev in pair.Value)
+				UiUtilities.DisposeRefCounted(ev);
+		}
+		_defaultInputBindings.Clear();
+
 		if (SDL.WasInit(SDL.InitFlags.Audio) != 0) SDL.Quit();
 		GD.Print("GlobalData:_ExitTree - Cleaned up SDL.");
 	}

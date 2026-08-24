@@ -138,7 +138,20 @@ public static class ShellColumnLayout
 
 	private static void InvalidateCompactStyles()
 	{
+		// Drop C# refs only. LineEdits may still hold the native StyleBox until
+		// ApplyCompactLineEditStyleBoxes runs; disposing here would UAF.
 		_compactStyleScale = float.NaN;
+		_compactNormal = null;
+		_compactFocus = null;
+	}
+
+	/// <summary>
+	/// Releases shared compact LineEdit styleboxes (call on cuelist teardown).
+	/// </summary>
+	public static void DisposeCompactStyles()
+	{
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_compactNormal);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_compactFocus);
 		_compactNormal = null;
 		_compactFocus = null;
 	}

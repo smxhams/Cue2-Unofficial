@@ -173,4 +173,143 @@ public static class DirectoryUtils
     /// </summary>
     private static bool IsDirReady(Error err) =>
         err == Error.Ok || err == Error.AlreadyExists || err == Error.AlreadyInUse;
+
+    /// <summary>
+    /// Folder name under Documents / Desktop for first-time showfile saves.
+    /// </summary>
+    public const string DefaultShowsFolderName = "Cue2";
+
+    /// <summary>
+    /// Resolves a writable default directory for a first-ever showfile save.
+    /// </summary>
+    /// <remarks>
+    /// Order: <c>Documents/Cue2</c>, <c>Documents</c>, <c>Desktop/Cue2</c>, <c>Desktop</c>,
+    /// then Godot <c>user://Shows</c>, then <c>user://</c>. Each candidate is created if
+    /// missing and probed for write access so installed / sandboxed apps do not land in
+    /// a read-only exe folder.
+    /// </remarks>
+    /// <returns>Absolute directory path (may be empty only if even user:// failed).</returns>
+    public static string GetDefaultShowSaveDirectory()
+    {
+        string documents = OS.GetSystemDir(OS.SystemDir.Documents);
+        string documentsCue2 = JoinDir(documents, DefaultShowsFolderName);
+        if (TryEnsureWritableDirectory(documentsCue2))
+            return documentsCue2;
+        if (TryEnsureWritableDirectory(documents))
+            return documents;
+
+        string desktop = OS.GetSystemDir(OS.SystemDir.Desktop);
+        string desktopCue2 = JoinDir(desktop, DefaultShowsFolderName);
+        if (TryEnsureWritableDirectory(desktopCue2))
+            return desktopCue2;
+        if (TryEnsureWritableDirectory(desktop))
+            return desktop;
+
+        string userShows = ProjectSettings.GlobalizePath("user://Shows");
+        if (TryEnsureWritableDirectory(userShows))
+            return userShows;
+
+        string userRoot = ProjectSettings.GlobalizePath("user://");
+        if (TryEnsureWritableDirectory(userRoot))
+            return userRoot;
+
+        GD.PrintErr("DirectoryUtils:GetDefaultShowSaveDirectory - No writable save directory found.");
+        return userRoot ?? string.Empty;
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> exists as a directory.
+    /// </summary>
+    /// <param name="path">Absolute directory path.</param>
+    /// <returns>True when the path is a non-empty existing directory.</returns>
+    public static bool DirectoryExists(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        try
+        {
+            return DirAccess.DirExistsAbsolute(path);
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"DirectoryUtils:DirectoryExists - {path}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Creates <paramref name="path"/> if needed and verifies the process can write a file there.
+    /// </summary>
+    /// <param name="path">Absolute directory path.</param>
+    /// <returns>True when the directory is usable for saving a showfile.</returns>
+    public static bool TryEnsureWritableDirectory(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        try
+        {
+            if (!DirAccess.DirExistsAbsolute(path))
+            {
+                Error mkdir = DirAccess.MakeDirRecursiveAbsolute(path);
+                if (mkdir != Error.Ok && mkdir != Error.AlreadyExists)
+                    return false;
+            }
+
+            if (!DirAccess.DirExistsAbsolute(path))
+                return false;
+
+            string probe = path.TrimEnd('/', '\\') + "/.cue2_write_probe";
+            using (var file = Godot.FileAccess.Open(probe, Godot.FileAccess.ModeFlags.Write))
+            {
+                if (file == null)
+                    return false;
+                file.StoreString("ok");
+            }
+
+            DirAccess.RemoveAbsolute(probe);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            GD.Print($"DirectoryUtils:TryEnsureWritableDirectory - {path}: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Parent directory of a show session folder named after the .c2 file
+    /// (<c>…/MyShow/MyShow.c2</c> → <c>…</c>), otherwise the file's directory.
+    /// Used as the remembered "last save location" for a later new show.
+    /// </summary>
+    /// <param name="savedFilePath">Absolute path of the .c2 the user chose or that was written.</param>
+    /// <returns>Absolute directory, or empty when the path is invalid.</returns>
+    public static string GetShowSaveRootDirectory(string savedFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(savedFilePath))
+            return string.Empty;
+
+        string dir = savedFilePath.GetBaseDir();
+        if (string.IsNullOrEmpty(dir))
+            return string.Empty;
+
+        string fileBase = savedFilePath.GetFile().GetBaseName();
+        if (!string.IsNullOrEmpty(fileBase) && dir.GetFile() == fileBase)
+        {
+            string parent = dir.GetBaseDir();
+            if (!string.IsNullOrEmpty(parent))
+                return parent;
+        }
+
+        return dir;
+    }
+
+    private static string JoinDir(string baseDir, string child)
+    {
+        if (string.IsNullOrWhiteSpace(baseDir))
+            return string.Empty;
+        if (string.IsNullOrWhiteSpace(child))
+            return baseDir;
+        return baseDir.TrimEnd('/', '\\') + "/" + child;
+    }
 }

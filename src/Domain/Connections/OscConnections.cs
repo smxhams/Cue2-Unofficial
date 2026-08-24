@@ -216,6 +216,8 @@ public partial class OscConnections : Node
         _globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
             $"OSC send failed [{name}] {transport} → {dest}: {error}",
             (int)LogType.Warning);
+        // TCP send failures close the socket — refresh per-row status indicators.
+        EmitSignal(SignalName.OscConnectionsStateChanged);
     }
 
     /// <summary>
@@ -447,6 +449,12 @@ public partial class CueOscConnection : GodotObject
     public bool IsConnecting { get; private set; }
 
     /// <summary>
+    /// Latest connect or send-status detail for UI tooltips (plain English, not localized).
+    /// </summary>
+    /// <value>Ready / connecting phrase, or a transport error message.</value>
+    public string LastStatusDetail { get; private set; } = string.Empty;
+
+    /// <summary>
     /// Resolves <see cref="OscConnections"/> — <b>must only be called on the Godot main thread</b>.
     /// Background workers must capture this reference before leaving the main thread.
     /// </summary>
@@ -516,13 +524,15 @@ public partial class CueOscConnection : GodotObject
                 GD.Print($"CueOscConnection:InitialiseSender - UDP auto → {Name}@{Address}:{Port}");
             }
             _sender.Connect();
-            GetManagerMainThread()?.NotifyConnectionStatus(this, "UDP socket ready", phase: "ok");
+            LastStatusDetail = "UDP socket ready";
+            GetManagerMainThread()?.NotifyConnectionStatus(this, LastStatusDetail, phase: "ok");
         }
         catch (Exception ex)
         {
             GD.PrintErr($"CueOscConnection:InitialiseSender - '{Name}': {ex.Message}");
             _sender = null;
-            GetManagerMainThread()?.NotifyConnectionStatus(this, ex.Message, phase: "fail");
+            LastStatusDetail = ex.Message;
+            GetManagerMainThread()?.NotifyConnectionStatus(this, LastStatusDetail, phase: "fail");
         }
     }
 
@@ -533,13 +543,14 @@ public partial class CueOscConnection : GodotObject
     private void BeginTcpConnectAsync(int generation)
     {
         IsConnecting = true;
+        LastStatusDetail = "waiting for remote…";
         var addr = Address;
         int port = Port;
         string name = Name;
         // Capture on main thread only — workers must not call GetNodeOrNull.
         var manager = GetManagerMainThread();
 
-        manager?.NotifyConnectionStatus(this, "waiting for remote…", phase: "connecting");
+        manager?.NotifyConnectionStatus(this, LastStatusDetail, phase: "connecting");
 
         // Fire-and-forget background connect — never block the UI thread.
         System.Threading.ThreadPool.QueueUserWorkItem(_ =>
@@ -562,16 +573,18 @@ public partial class CueOscConnection : GodotObject
                 }
 
                 IsConnecting = false;
+                LastStatusDetail = "TCP session open";
                 GD.Print($"CueOscConnection:BeginTcpConnectAsync - TCP connected → {name}@{addr}:{port}");
-                manager?.NotifyConnectionStatus(this, "TCP session open", phase: "ok");
+                manager?.NotifyConnectionStatus(this, LastStatusDetail, phase: "ok");
             }
             catch (Exception ex)
             {
                 if (generation != System.Threading.Volatile.Read(ref _connectGeneration)) return;
                 IsConnecting = false;
                 CloseTcp();
+                LastStatusDetail = ex.Message;
                 GD.PrintErr($"CueOscConnection:BeginTcpConnectAsync - '{name}': {ex.Message}");
-                manager?.NotifyConnectionStatus(this, ex.Message, phase: "fail");
+                manager?.NotifyConnectionStatus(this, LastStatusDetail, phase: "fail");
             }
         });
     }
@@ -594,12 +607,14 @@ public partial class CueOscConnection : GodotObject
                 CloseTcpUnlocked();
                 _tcpClient = client;
             }
-            manager?.NotifyConnectionStatus(this, "TCP reconnected on send", phase: "ok");
+            LastStatusDetail = "TCP reconnected on send";
+            manager?.NotifyConnectionStatus(this, LastStatusDetail, phase: "ok");
         }
         catch (Exception ex)
         {
             CloseTcp();
-            manager?.NotifyConnectionStatus(this, $"reconnect on send failed: {ex.Message}", phase: "fail");
+            LastStatusDetail = $"reconnect on send failed: {ex.Message}";
+            manager?.NotifyConnectionStatus(this, LastStatusDetail, phase: "fail");
             throw;
         }
     }
@@ -649,6 +664,7 @@ public partial class CueOscConnection : GodotObject
             catch (Exception ex)
             {
                 GD.PrintErr($"CueOscConnection:SendMessage - TCP failed {message}: {ex.Message}");
+                LastStatusDetail = ex.Message;
                 manager?.NotifySendError(this, ex.Message);
                 CloseTcp();
             }

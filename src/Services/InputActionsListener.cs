@@ -221,7 +221,7 @@ public partial class InputActionsListener : Node
     /// Fires enabled cue hotkeys that match a newly pressed key combo.
     /// Multiple cues may share a hotkey; each armed+enabled match is GO'd without moving playhead.
     /// </summary>
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _UnhandledKeyInput(InputEvent @event)
     {
         if (!_listenForInput) return;
         if (@event is not InputEventKey keyEvent || !keyEvent.Pressed || keyEvent.Echo) return;

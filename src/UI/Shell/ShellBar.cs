@@ -339,8 +339,21 @@ public partial class ShellBar : PanelContainer
 			_globalSignals.ShowModeChanged -= OnShowModeChanged;
 		}
 		UnbindCue();
+		if (_issueIndicator != null && IsInstanceValid(_issueIndicator))
+		{
+			_issueIndicator.RemoveThemeStyleboxOverride("normal");
+			_issueIndicator.RemoveThemeStyleboxOverride("hover");
+			_issueIndicator.RemoveThemeStyleboxOverride("pressed");
+			_issueIndicator.RemoveThemeStyleboxOverride("disabled");
+			_issueIndicator.RemoveThemeStyleboxOverride("focus");
+		}
+		RemoveThemeStyleboxOverride("panel");
+		UiUtilities.DisposeRefCounted(_issueActiveStyle);
+		UiUtilities.DisposeRefCounted(_issueIdleStyle);
+		UiUtilities.DisposeRefCounted(_panelStyle);
 		_issueActiveStyle = null;
 		_issueIdleStyle = null;
+		_panelStyle = null;
 	}
 
 	private void OnShellColumnLayoutChanged()

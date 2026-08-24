@@ -156,6 +156,8 @@ public partial class SettingsCanvasEditor : Control
     private const float MinZoom = 0.05f;
     private const float MaxZoom = 3.0f;
     private const float HandleSizePx = 10f;
+    /// <summary>Extra pixels around resize handles so they stay hittable at low zoom / HiDPI.</summary>
+    private const float HandleHitSlopPx = 6f;
     private const float MinItemSize = 16f;
     private const float FitPadding = 48f;
 
@@ -165,6 +167,20 @@ public partial class SettingsCanvasEditor : Control
     private bool _isDraggingCanvas;
     /// <summary>Heavy stage setup is deferred until the panel is actually shown.</summary>
     private bool _stageInitialized;
+
+    /// <summary>
+    /// Full-rect overlay above the SubViewport that receives stage mouse events.
+    /// SubViewport children (outline panel, checker ColorRect) would otherwise swallow
+    /// GUI input, and Linux + content-scale makes Viewport.GetMousePosition mismatch
+    /// GetGlobalRect so _Input hit-tests miss the middle of the stage.
+    /// </summary>
+    private Control _stagePointer;
+
+    /// <summary>Last stage-local mouse from a GuiInput event (preferred over polling).</summary>
+    private Vector2 _lastStageLocalMouse;
+
+    /// <summary>True when <see cref="_lastStageLocalMouse"/> came from a real stage event.</summary>
+    private bool _hasStageLocalMouse;
 
     /// <summary>
     /// True when Displays history restored while this editor was hidden — refresh on next show.
@@ -331,16 +347,23 @@ public partial class SettingsCanvasEditor : Control
         _subViewportContainer.CustomMinimumSize = Vector2.Zero;
         _viewport.Size = new Vector2I(1, 1);
 
-        _scrollContainer.MouseFilter = MouseFilterEnum.Stop;
-        _subViewportContainer.MouseFilter = MouseFilterEnum.Stop;
+        _scrollContainer.MouseFilter = MouseFilterEnum.Ignore;
+        _subViewportContainer.MouseFilter = MouseFilterEnum.Ignore;
+        _scrollContainer.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        _scrollContainer.VerticalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        if (_canvasOutlinePanel != null)
+            _canvasOutlinePanel.MouseFilter = MouseFilterEnum.Ignore;
+        if (_control != null)
+            _control.MouseFilter = MouseFilterEnum.Ignore;
+        InstallStagePointerOverlay();
         _scrollContainer.Resized += OnStageResized;
 
         if (_bodyHSplit != null)
             _bodyHSplit.Resized += OnBodyHSplitResized;
         CallDeferred(nameof(ApplyResponsivePanelLayout));
 
-        // Start input-off; enabled only while this panel is the visible settings page.
-        SetProcessInput(IsVisibleInTree());
+        // Global _Input is only needed while a drag/pan is active (release outside the stage).
+        SetProcessInput(false);
 
         if (IsVisibleInTree())
             CallDeferred(nameof(EnsureStageInitialized));
@@ -411,10 +434,7 @@ public partial class SettingsCanvasEditor : Control
 
         if (IsVisibleInTree())
         {
-            // Only process stage mouse/keyboard while this panel is the active settings page.
-            // Hidden panels stay in the tree and share the right-side layout rect — without
-            // this, _Input keeps hit-testing and mutates canvas while other menus are open.
-            SetProcessInput(true);
+            UpdateStageInputProcessing();
 
             // Heavy init only when user actually opens Canvas Editor (not every Settings open).
             CallDeferred(nameof(EnsureStageInitialized));
@@ -456,6 +476,9 @@ public partial class SettingsCanvasEditor : Control
         }
 
         MouseDefaultCursorShape = CursorShape.Arrow;
+        if (_stagePointer != null && IsInstanceValid(_stagePointer))
+            _stagePointer.MouseDefaultCursorShape = CursorShape.Arrow;
+        UpdateStageInputProcessing();
     }
 
     private void OnWindowSizeChanged()
@@ -717,10 +740,49 @@ private void BindNodes()
         backgroundRect.Material = material;
 
         _backgroundRect = backgroundRect;
+        _backgroundRect.MouseFilter = MouseFilterEnum.Ignore;
         var backgroundLayer = new CanvasLayer();
         backgroundLayer.Layer = -1;
         _viewport.AddChild(backgroundLayer);
         backgroundLayer.AddChild(_backgroundRect);
+    }
+
+    /// <summary>
+    /// Wraps the SubViewport in a host and stacks a pointer overlay on top so stage
+    /// clicks are delivered as local <c>GuiInput</c> regardless of SubViewport swallowing.
+    /// </summary>
+    private void InstallStagePointerOverlay()
+    {
+        if (_stagePointer != null || _scrollContainer == null || _subViewportContainer == null)
+            return;
+        if (_subViewportContainer.GetParent() != _scrollContainer)
+            return;
+
+        var host = new Control
+        {
+            Name = "StageHost",
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        host.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        host.SizeFlagsVertical = SizeFlags.ExpandFill;
+
+        _scrollContainer.RemoveChild(_subViewportContainer);
+        host.AddChild(_subViewportContainer);
+        _subViewportContainer.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _subViewportContainer.MouseFilter = MouseFilterEnum.Ignore;
+
+        _stagePointer = new Control
+        {
+            Name = "StagePointer",
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        _stagePointer.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        host.AddChild(_stagePointer);
+
+        _scrollContainer.AddChild(host);
+
+        _stagePointer.GuiInput += OnStageGuiInput;
+        _stagePointer.MouseExited += OnStageMouseExited;
     }
 
     private void ConnectSignals()
@@ -735,24 +797,24 @@ private void BindNodes()
         _moveLayerUpButton.Pressed += OnMoveLayerUpPressed;
         _moveLayerDownButton.Pressed += OnMoveLayerDownPressed;
 
-        _canvasSizeXLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
-        _canvasSizeYLineEdit.TextSubmitted += OnCanvasSizeSubmitted;
+        UiUtilities.BindLineEditCommit(_canvasSizeXLineEdit, OnCanvasSizeSubmitted);
+        UiUtilities.BindLineEditCommit(_canvasSizeYLineEdit, OnCanvasSizeSubmitted);
         _canvasTestPatternCheckBox.Toggled += OnCanvasTestPatternToggled;
         _canvasTestPatternResetButton.Pressed += OnCanvasTestPatternResetPressed;
 
         _zoomInButton.Pressed += ZoomIn;
         _zoomOutButton.Pressed += ZoomOut;
         _fitButton.Pressed += FitToView;
-        _zoomPercentLineEdit.TextSubmitted += OnZoomPercentSubmitted;
+        UiUtilities.BindLineEditCommit(_zoomPercentLineEdit, OnZoomPercentSubmitted);
 
-        _screenNameLineEdit.TextSubmitted += OnScreenNameSubmitted;
+        UiUtilities.BindLineEditCommit(_screenNameLineEdit, OnScreenNameSubmitted);
         _screenOutputOption.ItemSelected += OnScreenOutputSelected;
-        _outputSizeXLineEdit.TextSubmitted += OnScreenSizeXSubmitted;
-        _outputSizeYLineEdit.TextSubmitted += OnScreenSizeYSubmitted;
-        _outputPosXLineEdit.TextSubmitted += OnScreenPosXSubmitted;
-        _outputPosYLineEdit.TextSubmitted += OnScreenPosYSubmitted;
-        _displayOffsetXLineEdit.TextSubmitted += OnDisplayOffsetXSubmitted;
-        _displayOffsetYLineEdit.TextSubmitted += OnDisplayOffsetYSubmitted;
+        UiUtilities.BindLineEditCommit(_outputSizeXLineEdit, OnScreenSizeXSubmitted);
+        UiUtilities.BindLineEditCommit(_outputSizeYLineEdit, OnScreenSizeYSubmitted);
+        UiUtilities.BindLineEditCommit(_outputPosXLineEdit, OnScreenPosXSubmitted);
+        UiUtilities.BindLineEditCommit(_outputPosYLineEdit, OnScreenPosYSubmitted);
+        UiUtilities.BindLineEditCommit(_displayOffsetXLineEdit, OnDisplayOffsetXSubmitted);
+        UiUtilities.BindLineEditCommit(_displayOffsetYLineEdit, OnDisplayOffsetYSubmitted);
         _screenKeepAspectCheckBox.Toggled += OnScreenKeepAspectToggled;
         _outputTransparentCheckBox.Toggled += OnScreenTransparentToggled;
         _outputTestPatternCheckBox.Toggled += OnScreenTestPatternToggled;
@@ -765,11 +827,11 @@ private void BindNodes()
         _screenTransparentResetButton.Pressed += OnScreenTransparentResetPressed;
         _screenTestPatternResetButton.Pressed += OnScreenTestPatternResetPressed;
 
-        _layerNameLineEdit.TextSubmitted += OnLayerNameSubmitted;
-        _layerSizeXLineEdit.TextSubmitted += OnLayerSizeXSubmitted;
-        _layerSizeYLineEdit.TextSubmitted += OnLayerSizeYSubmitted;
-        _layerPosXLineEdit.TextSubmitted += OnLayerPosXSubmitted;
-        _layerPosYLineEdit.TextSubmitted += OnLayerPosYSubmitted;
+        UiUtilities.BindLineEditCommit(_layerNameLineEdit, OnLayerNameSubmitted);
+        UiUtilities.BindLineEditCommit(_layerSizeXLineEdit, OnLayerSizeXSubmitted);
+        UiUtilities.BindLineEditCommit(_layerSizeYLineEdit, OnLayerSizeYSubmitted);
+        UiUtilities.BindLineEditCommit(_layerPosXLineEdit, OnLayerPosXSubmitted);
+        UiUtilities.BindLineEditCommit(_layerPosYLineEdit, OnLayerPosYSubmitted);
         _layerKeepAspectCheckBox.Toggled += OnLayerKeepAspectToggled;
         _layerTransparentCheckBox.Toggled += OnLayerTransparentToggled;
         _layerTestPatternCheckBox.Toggled += OnLayerTestPatternToggled;

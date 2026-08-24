@@ -39,6 +39,7 @@ public partial class Footer : Control
     
     private Timer _updateTimer;
     private Timer _processHideTimer;
+    private bool _updateAvailableClickable;
 
     // Process resource tracking (CPU / memory)
     private Process _currentProcess;
@@ -116,6 +117,11 @@ public partial class Footer : Control
         _globalSignals.MediaBackupCompleted += OnMediaBackupCompleted;
         _globalSignals.BackgroundProcessProgress += OnBackgroundProcessProgress;
         _globalSignals.BackgroundProcessCompleted += OnBackgroundProcessCompleted;
+        _globalSignals.UpdateUiStateChanged += OnUpdateUiStateChanged;
+        if (_processProgressHost != null)
+            _processProgressHost.GuiInput += OnProcessProgressGuiInput;
+        if (_bkgProcessStatusBar != null)
+            _bkgProcessStatusBar.GuiInput += OnProcessProgressGuiInput;
         _globalSignals.TotalCuesChanged += OnTotalCuesChanged;
 
         try
@@ -183,9 +189,15 @@ public partial class Footer : Control
             _globalSignals.MediaBackupCompleted -= OnMediaBackupCompleted;
             _globalSignals.BackgroundProcessProgress -= OnBackgroundProcessProgress;
             _globalSignals.BackgroundProcessCompleted -= OnBackgroundProcessCompleted;
+            _globalSignals.UpdateUiStateChanged -= OnUpdateUiStateChanged;
             _globalSignals.TotalCuesChanged -= OnTotalCuesChanged;
             _globalSignals.LocaleChanged -= OnLocaleChanged;
         }
+
+        if (_processProgressHost != null)
+            _processProgressHost.GuiInput -= OnProcessProgressGuiInput;
+        if (_bkgProcessStatusBar != null)
+            _bkgProcessStatusBar.GuiInput -= OnProcessProgressGuiInput;
 
         if (_oscConnections != null)
             _oscConnections.OscConnectionsStateChanged -= UpdateConnectionsFooterTooltip;
@@ -249,6 +261,9 @@ public partial class Footer : Control
 
     private void OnBackgroundProcessCompleted()
     {
+        if (_updateAvailableClickable)
+            return;
+
         string finalLabel = _processStatusLabel?.Text;
         if (string.IsNullOrEmpty(finalLabel) || finalLabel.EndsWith("0%", StringComparison.Ordinal))
             finalLabel = "Done";
@@ -256,6 +271,36 @@ public partial class Footer : Control
         if (_bkgProcessStatusBar != null && _bkgProcessStatusBar.Value < 100.0)
             _bkgProcessStatusBar.Value = 100.0;
         CompleteProcessProgress(finalLabel);
+    }
+
+    private void OnUpdateUiStateChanged(int state, string message)
+    {
+        var ui = (UpdateUiState)state;
+        _updateAvailableClickable = ui is UpdateUiState.Available or UpdateUiState.ReadyToInstall;
+        if (_processProgressHost != null)
+        {
+            _processProgressHost.MouseDefaultCursorShape = _updateAvailableClickable
+                ? CursorShape.PointingHand
+                : CursorShape.Arrow;
+        }
+
+        if (ui is UpdateUiState.Idle or UpdateUiState.UpToDate)
+        {
+            _updateAvailableClickable = false;
+            if (_processHideTimer == null || _processHideTimer.IsStopped())
+                SetProcessProgressVisible(false);
+        }
+    }
+
+    private void OnProcessProgressGuiInput(InputEvent @event)
+    {
+        if (!_updateAvailableClickable)
+            return;
+        if (@event is InputEventMouseButton mb && mb.Pressed && mb.ButtonIndex == MouseButton.Left)
+        {
+            _globalSignals?.EmitSignal(GlobalSignals.SignalName.OpenSettingsMenu, "Updates");
+            GetViewport()?.SetInputAsHandled();
+        }
     }
 
     /// <summary>

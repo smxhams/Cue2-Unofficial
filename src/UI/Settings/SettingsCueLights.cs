@@ -112,7 +112,7 @@ public partial class SettingsCueLights : ScrollContainer
             _ = UpdateAllCueLightSettingsAsync();
         };
 
-        _brightnessLineEdit.TextSubmitted += OnBrightnessSubmitted;
+        UiUtilities.BindLineEditCommit(_brightnessLineEdit, OnBrightnessSubmitted);
 
         _testGoButton.Pressed += () => _cueLightManager.AllGo("TEST");
         _testStandbyButton.Pressed += () => _cueLightManager.AllStandby("TEST");
@@ -194,7 +194,14 @@ public partial class SettingsCueLights : ScrollContainer
         if (int.TryParse(text, out int percent))
         {
             percent = Mathf.Clamp(percent, 0, 100);
-            _settings.CueLightBrightness = (byte)(percent * 255 / 100);
+            byte next = (byte)(percent * 255 / 100);
+            if (_settings.CueLightBrightness == next)
+            {
+                _brightnessLineEdit.Text = percent.ToString();
+                _brightnessLineEdit.ReleaseFocus();
+                return;
+            }
+            _settings.CueLightBrightness = next;
             _brightnessLineEdit.Text = percent.ToString();
             _ = UpdateAllCueLightSettingsAsync();
             _globalSignals.EmitSignal(nameof(GlobalSignals.Log), 
@@ -226,26 +233,33 @@ public partial class SettingsCueLights : ScrollContainer
         
         var nameLineEdit = instance.GetNode<LineEdit>("%NameLineEdit");
         nameLineEdit.Text = cueLight.Name;
-        nameLineEdit.TextSubmitted += text =>
+        UiUtilities.BindLineEditCommit(nameLineEdit, text =>
         {
+            if (cueLight.Name == text)
+            {
+                nameLineEdit.ReleaseFocus();
+                return;
+            }
             cueLight.Name = text;
             _ = UpdateAllCueLightSettingsAsync();
             nameLineEdit.ReleaseFocus();
-        }; 
+        });
         
         var ipLineEdit = instance.GetNode<LineEdit>("%IpLineEdit");
         ipLineEdit.Text = cueLight.IpAddress;
-        ipLineEdit.TextSubmitted += text =>
+        UiUtilities.BindLineEditCommit(ipLineEdit, text =>
         {
-            string cleanedIp =  UiUtilities.VerifyIpInput(text, _globalSignals);
+            string cleanedIp = UiUtilities.VerifyIpInput(text, _globalSignals);
             if (cleanedIp != null)
             {
-                cueLight.SetIpAddress(cleanedIp);
+                if (cueLight.IpAddress != cleanedIp)
+                    cueLight.SetIpAddress(cleanedIp);
                 ipLineEdit.Text = cleanedIp;
             }
-            ipLineEdit.Text = cueLight.IpAddress;
+            else
+                ipLineEdit.Text = cueLight.IpAddress;
             ipLineEdit.ReleaseFocus();
-        };
+        });
         
         var connectionStatusColourRect = instance.GetNode<ColorRect>("%ConnectionStatusColourRect");
         connectionStatusColourRect.Color = cueLight.CueLightIsConnected ? Colors.Green : Colors.Red;

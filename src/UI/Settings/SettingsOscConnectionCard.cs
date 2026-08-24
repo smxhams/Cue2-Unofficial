@@ -29,6 +29,8 @@ public partial class SettingsOscConnectionCard : HBoxContainer
     private OptionButton _interfaceOptionButton;
     private LineEdit _destinationLineEdit;
     private LineEdit _portLineEdit;
+    private ColorRect _statusIndicator;
+    private Button _retryButton;
     private Button _deleteButton;
 
     private bool _nameEditing;
@@ -52,7 +54,15 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         _interfaceOptionButton = GetNodeOrNull<OptionButton>("%InterfaceOptionButton");
         _destinationLineEdit = GetNodeOrNull<LineEdit>("%DestinationLineEdit");
         _portLineEdit = GetNodeOrNull<LineEdit>("%PortLineEdit");
+        _statusIndicator = GetNodeOrNull<ColorRect>("%StatusIndicator");
+        _retryButton = GetNodeOrNull<Button>("%RetryButton");
         _deleteButton = GetNodeOrNull<Button>("%DeleteButton");
+
+        // Dynamic tooltips — do not let LocalizeTree freeze the scene defaults.
+        if (_statusIndicator != null)
+            _statusIndicator.SetMeta(UiLocalizer.MetaSkip, true);
+        if (_retryButton != null)
+            _retryButton.SetMeta(UiLocalizer.MetaSkip, true);
 
         if (_transportOption != null)
         {
@@ -82,11 +92,15 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             _portLineEdit.EditingToggled += OnPortEditingToggled;
             _portLineEdit.TextSubmitted += OnPortTextSubmitted;
         }
+        if (_retryButton != null)
+            _retryButton.Pressed += OnRetryPressed;
         if (_deleteButton != null)
             _deleteButton.Pressed += OnDeletePressed;
 
         try
         {
+            if (_retryButton != null)
+                _retryButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
             if (_deleteButton != null)
                 _deleteButton.Icon = GetThemeIcon("DeleteBin", "AtlasIcons");
         }
@@ -113,10 +127,68 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             if (_interfaceOptionButton != null)
                 _interfaceOptionButton.Disabled = connection?.Transport == OscTransport.Tcp;
             LoadInterfaceOptions();
+            RefreshStatus();
         }
         finally
         {
             _isSyncingUi = false;
+        }
+    }
+
+    /// <summary>
+    /// Updates the TCP status square and retry button from the live sender state.
+    /// UDP stays a muted indicator (connectionless); retry is TCP-only.
+    /// </summary>
+    public void RefreshStatus()
+    {
+        if (!GodotObject.IsInstanceValid(this))
+            return;
+
+        var connection = CueOscConnection;
+        bool valid = connection != null && GodotObject.IsInstanceValid(connection);
+        bool isTcp = valid && connection.Transport == OscTransport.Tcp;
+
+        if (_statusIndicator != null)
+        {
+            if (!valid)
+            {
+                _statusIndicator.Color = new Color(0.45f, 0.45f, 0.45f, 1f);
+                _statusIndicator.TooltipText = string.Empty;
+            }
+            else if (!isTcp)
+            {
+                _statusIndicator.Color = new Color(0.45f, 0.45f, 0.45f, 1f);
+                _statusIndicator.TooltipText = UiLocalizer.T("UDP (no persistent connection)");
+            }
+            else if (connection.IsConnecting)
+            {
+                _statusIndicator.Color = GlobalStyles.Warning;
+                _statusIndicator.TooltipText = UiLocalizer.T("Connecting…");
+            }
+            else if (connection.IsSenderOpen)
+            {
+                _statusIndicator.Color = GlobalStyles.Success;
+                _statusIndicator.TooltipText = UiLocalizer.T("Connected");
+            }
+            else
+            {
+                _statusIndicator.Color = GlobalStyles.Danger;
+                string detail = connection.LastStatusDetail;
+                _statusIndicator.TooltipText = string.IsNullOrEmpty(detail)
+                    ? UiLocalizer.T("Not Connected")
+                    : $"{UiLocalizer.T("Not Connected")}: {detail}";
+            }
+        }
+
+        if (_retryButton != null)
+        {
+            // Keep the button in-layout for every row so delete stays aligned with the header.
+            bool canRetry = isTcp && !connection.IsConnecting && !connection.IsSenderOpen;
+            _retryButton.Visible = true;
+            _retryButton.Disabled = !canRetry;
+            _retryButton.TooltipText = isTcp
+                ? UiLocalizer.T("Retry TCP connection")
+                : UiLocalizer.T("UDP (no persistent connection)");
         }
     }
 
@@ -135,6 +207,17 @@ public partial class SettingsOscConnectionCard : HBoxContainer
 
         // Non-blocking: UDP opens inline; TCP connect is background with status in monitor/log.
         CueOscConnection.Reconnect();
+        RefreshStatus();
+    }
+
+    private void OnRetryPressed()
+    {
+        if (_isSyncingUi || CueOscConnection == null) return;
+        if (_historyManager?.IsRestoring == true) return;
+        if (CueOscConnection.Transport != OscTransport.Tcp) return;
+
+        CueOscConnection.Reconnect();
+        RefreshStatus();
     }
 
     private void RequestHistory(string description)
@@ -209,6 +292,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
         RequestHistory("Change OSC connection interface");
         CueOscConnection.NetworkInterface = next;
         CueOscConnection.Reconnect();
+        RefreshStatus();
     }
 
     private void OnDestinationEditingToggled(bool editing)
@@ -235,6 +319,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             RequestHistory($"Set OSC destination to {ip}");
             CueOscConnection.Address = ip;
             CueOscConnection.Reconnect();
+            RefreshStatus();
         }
         else if (_destinationLineEdit != null)
         {
@@ -269,6 +354,7 @@ public partial class SettingsOscConnectionCard : HBoxContainer
             RequestHistory($"Set OSC port to {port}");
             CueOscConnection.Port = port;
             CueOscConnection.Reconnect();
+            RefreshStatus();
         }
         else if (_portLineEdit != null)
         {

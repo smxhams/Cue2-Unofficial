@@ -1,37 +1,20 @@
 // SPDX-FileCopyrightText: 2025-2026 Samuel Moxham
 // SPDX-License-Identifier: MIT
 
-using System;
-using System.IO;
 using Cue2.Services;
 using Godot;
 
 namespace Cue2.UI.Windows;
 
+/// <summary>
+/// Scene script for the Save As file dialog. Path handling and persistence live in
+/// <see cref="SaveManager"/> (this class only seeds filters if the scene is used standalone).
+/// </summary>
 public partial class SaveDialog : FileDialog
 {
-	private GlobalData _globalData;
-	private GlobalSignals _globalSignals;
+	/// <inheritdoc />
 	public override void _Ready()
 	{
-		_globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
-		_globalData = GetNode<GlobalData>("/root/GlobalData");
-		FileSelected += _onFileSelected;
-
 		FileMode = FileModeEnum.SaveFile;
-		AddFilter("*.c2 ; Cue2 Session");
-	}
-	
-	private void _onFileSelected(String @path)
-	{
-		string sessionName = Path.GetFileNameWithoutExtension(@path);
-		string sessionPath = Path.GetDirectoryName(@path) + "\\" + Path.GetFileNameWithoutExtension(@path);
-		GD.Print(sessionPath + " and filename : "+ sessionName);
-		_globalData.SessionName = sessionName;
-		_globalData.SessionPath = @sessionPath;
-
-		// URL and showname made to continue Save process		
-		_globalSignals.EmitSignal(nameof(GlobalSignals.Save));
-
 	}
 }

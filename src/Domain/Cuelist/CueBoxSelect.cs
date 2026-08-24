@@ -112,6 +112,7 @@ internal sealed class CueBoxSelect
 
         _pending = true;
         _active = false;
+        _owner.SyncPointerInputProcessing();
         _originShell = originShell != null && GodotObject.IsInstanceValid(originShell) ? originShell : null;
         _startGlobal = globalPos;
         _startScrollY = GetScrollY();
@@ -188,8 +189,20 @@ internal sealed class CueBoxSelect
         _active = false;
         _originShell = null;
         SetOwnerProcess(false);
+        _owner.SyncPointerInputProcessing();
         UnwireScrollWatch();
         HideMarquee();
+    }
+
+    /// <summary>
+    /// Frees C#-created style resources. Call from the owning cuelist <c>_ExitTree</c>.
+    /// </summary>
+    public void DisposeResources()
+    {
+        Cancel();
+        if (_marqueePanel != null && GodotObject.IsInstanceValid(_marqueePanel))
+            _marqueePanel.RemoveThemeStyleboxOverride("panel");
+        Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_marqueeStyle);
     }
 
     private void ActivateMarquee()
@@ -267,6 +280,7 @@ internal sealed class CueBoxSelect
         _active = false;
         _originShell = null;
         SetOwnerProcess(false);
+        _owner.SyncPointerInputProcessing();
         UnwireScrollWatch();
         HideMarquee();
     }

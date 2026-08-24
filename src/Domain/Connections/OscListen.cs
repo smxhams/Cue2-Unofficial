@@ -273,6 +273,9 @@ public partial class OscListen : Node
 
     public override void _Ready()
     {
+        if (SingleInstanceGuard.IsSecondary)
+            return;
+
         _globalSignals = GetNodeOrNull<GlobalSignals>("/root/GlobalSignals");
         _globalData = GetNodeOrNull<GlobalData>("/root/GlobalData");
         _inputActionsListener = GetNodeOrNull<InputActionsListener>("/root/InputActionsListener");

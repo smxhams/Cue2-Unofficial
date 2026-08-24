@@ -789,13 +789,156 @@ public partial class UiUtilities : Node
 
 
     /// <summary>
+    /// Minimum fraction of the usable screen a first-run main window should occupy.
+    /// Design-size × HiDPI scale is still too small on 5K/6K panels.
+    /// </summary>
+    public const float FirstRunMinScreenFraction = 0.58f;
+
+    /// <summary>
+    /// Maximum fraction of the usable screen a first-run main window may occupy.
+    /// </summary>
+    public const float FirstRunMaxScreenFraction = 0.88f;
+
+    /// <summary>
+    /// Resolves the DisplayServer screen index that currently hosts <paramref name="window"/>.
+    /// </summary>
+    /// <remarks>
+    /// Autoload <c>_Ready</c> can run before the native window is mapped; in that case this
+    /// falls back to the screen under the mouse, then the primary screen.
+    /// </remarks>
+    /// <param name="window">Window to locate; null is allowed.</param>
+    /// <returns>A valid screen index, or 0 when no screens are reported.</returns>
+    public static int ResolveWindowScreen(Window window)
+    {
+        int count = DisplayServer.GetScreenCount();
+        if (count <= 0)
+            return 0;
+
+        if (window != null && GodotObject.IsInstanceValid(window))
+        {
+            int windowId = window.GetWindowId();
+            if (windowId >= 0)
+            {
+                int screen = DisplayServer.WindowGetCurrentScreen(windowId);
+                if (screen >= 0 && screen < count)
+                    return screen;
+            }
+        }
+
+        int mouseScreen = FindScreenAtPoint(DisplayServer.MouseGetPosition());
+        if (mouseScreen >= 0 && mouseScreen < count)
+            return mouseScreen;
+
+        int primary = DisplayServer.GetPrimaryScreen();
+        if (primary >= 0 && primary < count)
+            return primary;
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Detects the OS / HiDPI scale factor used as <c>BaseDisplayScale</c>.
+    /// </summary>
+    /// <remarks>
+    /// Combines <see cref="DisplayServer.ScreenGetScale"/>, <see cref="DisplayServer.ScreenGetMaxScale"/>
+    /// (Godot uses max scale for macOS window pixel conversion), and a DPI/resolution guess when the
+    /// OS still reports 1× — common on first frame, mixed-DPI setups, and 1× 4K/5K panels.
+    /// Do not multiply the result by max-scale again; the guess is only applied when OS scale is ~1.
+    /// </remarks>
+    /// <param name="screen">Screen index, or -1 to use the primary/current screen.</param>
+    /// <returns>Scale factor clamped to 1–4.</returns>
+    public static float DetectDisplayScale(int screen = -1)
+    {
+        int count = DisplayServer.GetScreenCount();
+        if (screen < 0 || (count > 0 && screen >= count))
+            screen = count > 0 ? DisplayServer.GetPrimaryScreen() : 0;
+        if (screen < 0)
+            screen = 0;
+
+        float osScale = SafePositiveScale(DisplayServer.ScreenGetScale(screen));
+        float maxScale = SafePositiveScale(DisplayServer.ScreenGetMaxScale());
+        float scale = Mathf.Max(osScale, maxScale);
+
+        Vector2I size = DisplayServer.ScreenGetSize(screen);
+        int dpi = DisplayServer.ScreenGetDpi(screen);
+        float guessed = 1f;
+        if (scale <= 1.05f)
+        {
+            guessed = GuessScaleFromScreenMetrics(size, dpi);
+            scale = Mathf.Max(scale, guessed);
+        }
+
+        scale = Mathf.Clamp(scale, 1f, 4f);
+        GD.Print($"UiUtilities:DetectDisplayScale - screen={screen} osScale={osScale:0.###} " +
+                 $"maxScale={maxScale:0.###} dpi={dpi} size={size} guessed={guessed:0.###} result={scale:0.###}");
+        return scale;
+    }
+
+    /// <summary>
+    /// Grows a first-run window toward a comfortable fraction of the usable screen.
+    /// Never shrinks below <paramref name="scaledDesign"/> (except to fit the max fraction / min size).
+    /// </summary>
+    /// <param name="scaledDesign">Design-time size already multiplied by display scale.</param>
+    /// <param name="window">Window used to pick the host screen.</param>
+    /// <param name="minSize">Minimum outer size.</param>
+    /// <returns>Size clamped to the usable screen.</returns>
+    public static Vector2I FitFirstRunWindowToUsableScreen(Vector2I scaledDesign, Window window, Vector2I minSize)
+    {
+        Rect2I usable = GetUsableRectForWindow(window);
+        int w = Mathf.Max(minSize.X, scaledDesign.X);
+        int h = Mathf.Max(minSize.Y, scaledDesign.Y);
+
+        if (usable.Size.X > 0 && usable.Size.Y > 0)
+        {
+            int minW = Mathf.RoundToInt(usable.Size.X * FirstRunMinScreenFraction);
+            int minH = Mathf.RoundToInt(usable.Size.Y * FirstRunMinScreenFraction);
+            int maxW = Mathf.RoundToInt(usable.Size.X * FirstRunMaxScreenFraction);
+            int maxH = Mathf.RoundToInt(usable.Size.Y * FirstRunMaxScreenFraction);
+
+            w = Mathf.Max(w, minW);
+            h = Mathf.Max(h, minH);
+            w = Mathf.Clamp(w, minSize.X, Mathf.Max(minSize.X, maxW));
+            h = Mathf.Clamp(h, minSize.Y, Mathf.Max(minSize.Y, maxH));
+        }
+
+        return new Vector2I(w, h);
+    }
+
+    /// <summary>
+    /// Centers a window size on the usable area of the screen that hosts <paramref name="window"/>
+    /// (excludes the macOS menu bar).
+    /// </summary>
+    /// <param name="windowSize">Outer size to place.</param>
+    /// <param name="window">Window used to pick the host screen.</param>
+    /// <returns>Global position suitable for <see cref="DisplayServer.WindowSetPosition"/>.</returns>
+    public static Vector2I CenterWindowOnUsableScreen(Vector2I windowSize, Window window)
+    {
+        Rect2I usable = GetUsableRectForWindow(window);
+        int x = usable.Position.X + Mathf.Max(0, (usable.Size.X - windowSize.X) / 2);
+        int y = usable.Position.Y + Mathf.Max(0, (usable.Size.Y - windowSize.Y) / 2);
+        return new Vector2I(x, y);
+    }
+
+    /// <summary>
+    /// Releases a C#-created Godot object so engine shutdown does not report
+    /// "Leaked unsafe reference". Safe for null or already-freed instances.
+    /// </summary>
+    /// <param name="obj">RefCounted resource or Object created from C# (<c>new StyleBoxFlat()</c>, Duplicate, etc.).</param>
+    public static void DisposeRefCounted(GodotObject obj)
+    {
+        if (obj == null || !GodotObject.IsInstanceValid(obj))
+            return;
+        obj.Dispose();
+    }
+
+    /// <summary>
     /// Applies content scale factor for UI density. Does not intentionally change the OS window
     /// outer size — callers that need a design-time frame size should use <see cref="RescaleWindow"/>
     /// only when no saved geometry exists.
     /// </summary>
     /// <param name="window">Target window.</param>
     /// <param name="scale">User UI scale (typically 0.25–4.0).</param>
-    /// <param name="baseDisplayScale">HiDPI factor from <see cref="DisplayServer.ScreenGetScale"/>.</param>
+    /// <param name="baseDisplayScale">HiDPI factor from <see cref="DetectDisplayScale"/>.</param>
     public static void RescaleUi(Window window, double scale, double baseDisplayScale = 1.0)
     {
         GD.Print($"UiUtilities:RescaleUi - Scale: {scale}, Display Scale: {baseDisplayScale}");
@@ -815,8 +958,9 @@ public partial class UiUtilities : Node
     }
 
     /// <summary>
-    /// Scales the window's outer pixel size by <paramref name="scale"/> and recenters.
-    /// Only for design-time / first-run defaults — never call after restoring saved geometry.
+    /// Scales the window's outer pixel size by <paramref name="scale"/> and recenters on the
+    /// usable screen. Only for design-time / first-run defaults — never call after restoring
+    /// saved geometry, and never call twice on an already-scaled size.
     /// </summary>
     public static void RescaleWindow(Window window, double scale)
     {
@@ -825,12 +969,93 @@ public partial class UiUtilities : Node
         if (scale <= 0.0 || Mathf.IsEqualApprox((float)scale, 1f))
             return;
 
-        var oldSize = window.Size;
-        var newSize = new Vector2I((int)(window.Size.X * scale), (int)(window.Size.Y * scale));
+        ApplyScaledDesignWindowSize(window, window.Size, scale);
+    }
+
+    /// <summary>
+    /// Sets outer size to <paramref name="designSize"/> × <paramref name="displayScale"/>, clamped
+    /// so it fits the usable screen, and centers on that screen.
+    /// </summary>
+    /// <param name="window">Target window.</param>
+    /// <param name="designSize">Unscaled scene / project default size.</param>
+    /// <param name="displayScale">HiDPI / detected display scale.</param>
+    public static void ApplyScaledDesignWindowSize(Window window, Vector2I designSize, double displayScale)
+    {
+        if (window == null || !GodotObject.IsInstanceValid(window))
+            return;
+
+        float scale = displayScale > 0.0 ? (float)displayScale : 1f;
+        Vector2I newSize = new Vector2I(
+            Mathf.Max(1, Mathf.RoundToInt(designSize.X * scale)),
+            Mathf.Max(1, Mathf.RoundToInt(designSize.Y * scale)));
+
+        Rect2I usable = GetUsableRectForWindow(window);
+        if (usable.Size.X > 0 && usable.Size.Y > 0)
+        {
+            int maxW = Mathf.RoundToInt(usable.Size.X * FirstRunMaxScreenFraction);
+            int maxH = Mathf.RoundToInt(usable.Size.Y * FirstRunMaxScreenFraction);
+            newSize = new Vector2I(
+                Mathf.Min(newSize.X, Mathf.Max(1, maxW)),
+                Mathf.Min(newSize.Y, Mathf.Max(1, maxH)));
+        }
+
         window.Size = newSize;
-        var offsetX = window.Position.X + ((oldSize.X - newSize.X) / 2);
-        var offsetY = window.Position.Y + ((oldSize.Y - newSize.Y) / 2);
-        window.Position = new Vector2I((int)offsetX, (int)offsetY);
+        window.Position = CenterWindowOnUsableScreen(newSize, window);
+    }
+
+    /// <summary>
+    /// Usable desktop rectangle for <paramref name="window"/>'s screen, falling back to the
+    /// full screen bounds when the OS reports an empty usable rect.
+    /// </summary>
+    public static Rect2I GetUsableRectForWindow(Window window)
+    {
+        int screen = ResolveWindowScreen(window);
+        Rect2I usable = DisplayServer.ScreenGetUsableRect(screen);
+        if (usable.Size.X > 0 && usable.Size.Y > 0)
+            return usable;
+
+        Vector2I pos = DisplayServer.ScreenGetPosition(screen);
+        Vector2I size = DisplayServer.ScreenGetSize(screen);
+        if (size.X <= 0 || size.Y <= 0)
+            return new Rect2I(Vector2I.Zero, new Vector2I(1920, 1080));
+        return new Rect2I(pos, size);
+    }
+
+    private static float SafePositiveScale(float value)
+    {
+        return value > 0f ? value : 1f;
+    }
+
+    /// <summary>
+    /// Godot-editor-style scale guess from pixel size and DPI. Used only when the OS scale is ~1×.
+    /// </summary>
+    private static float GuessScaleFromScreenMetrics(Vector2I size, int dpi)
+    {
+        if (size.X <= 0 || size.Y <= 0)
+            return 1f;
+
+        int smallest = Mathf.Min(size.X, size.Y);
+        float fromDpi = 1f;
+        if (dpi >= 220)
+            fromDpi = 2f;
+        else if (dpi >= 168)
+            fromDpi = 1.5f;
+        else if (dpi >= 140)
+            fromDpi = 1.25f;
+
+        float fromSize = 1f;
+        if (size.X >= 5120 && size.Y >= 2160)
+            fromSize = 2f;
+        else if (size.X >= 3840 && size.Y >= 2160)
+            fromSize = dpi >= 140 ? 1.5f : 1.25f;
+        else if (dpi >= 192 && smallest >= 1400)
+            fromSize = 2f;
+        else if (dpi >= 144 && smallest >= 1400)
+            fromSize = 1.5f;
+        else if (dpi >= 192 && smallest <= 800)
+            fromSize = 1.5f;
+
+        return Mathf.Max(fromDpi, fromSize);
     }
 
     /// <summary>
@@ -1178,6 +1403,36 @@ public partial class UiUtilities : Node
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// Commits a <see cref="LineEdit"/> on Enter <b>and</b> when focus leaves the field
+    /// (clicking another control, tab, etc.) so the displayed text cannot diverge from the model.
+    /// </summary>
+    /// <remarks>
+    /// Safe to call more than once on the same instance. Hosts must keep
+    /// <paramref name="onCommit"/> idempotent: Enter still fires <see cref="LineEdit.TextSubmitted"/>
+    /// then <see cref="Control.FocusExited"/> after the global unfocus hook.
+    /// </remarks>
+    /// <param name="lineEdit">Field to wire (ignored if null/invalid).</param>
+    /// <param name="onCommit">Apply <c>text</c> to the model (and revert the field on invalid input).</param>
+    public static void BindLineEditCommit(LineEdit lineEdit, Action<string> onCommit)
+    {
+        if (lineEdit == null || !GodotObject.IsInstanceValid(lineEdit) || onCommit == null)
+            return;
+
+        const string metaKey = "cue2_commit_on_blur";
+        if (lineEdit.HasMeta(metaKey))
+            return;
+        lineEdit.SetMeta(metaKey, true);
+
+        lineEdit.TextSubmitted += text => onCommit(text ?? string.Empty);
+        lineEdit.FocusExited += () =>
+        {
+            if (!GodotObject.IsInstanceValid(lineEdit))
+                return;
+            onCommit(lineEdit.Text ?? string.Empty);
+        };
     }
 
     /// <summary>

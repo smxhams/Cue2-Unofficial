@@ -312,6 +312,7 @@ internal sealed class CueReorder(
         MouseOverShellBar = null;
         ResetDropFlags();
         DraggedCueId = -1;
+        owner.SyncPointerInputProcessing();
 
         // Drop any hover wash that thrash-accumulated during the drag.
         owner.ClearAllShellHoverChrome();

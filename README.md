@@ -30,9 +30,17 @@ Attribution is shown in the in-app About dialog.
 See the project wiki or `src/proposed_README.md` for build instructions.
 
 ## Export packaging
-Godot export does **not** embed FFmpeg or RtMidi shared libraries into a single exe. After exporting, copy platform natives with `tools/copy-natives-for-export.ps1` (or `.sh`). Rebuild MIDI natives with `python tools/build-rtmidi-natives.py`. Details: [docs/export-packaging.md](docs/export-packaging.md).
+Godot export does **not** embed FFmpeg or RtMidi as loadable OS libraries. Every shipping build is **export → copy natives → platform-sign**.
 
-macOS releases need a Developer ID signature and notarization **after** the native copy (Godot's built-in notarization is the wrong step for Cue2). See [docs/macos-codesign.md](docs/macos-codesign.md) and `tools/macos-sign-and-notarize.sh`.
+| Platform | Runbook |
+|----------|---------|
+| All (what ships, layouts) | [docs/export-packaging.md](docs/export-packaging.md) |
+| GitHub Releases / in-app updater | [docs/github-releases.md](docs/github-releases.md) |
+| **macOS** (FFmpeg + Developer ID + notarize + zip) | [docs/macos-codesign.md](docs/macos-codesign.md) |
+| Windows (Authenticode / SmartScreen) | [docs/windows-codesign.md](docs/windows-codesign.md) |
+| FFmpeg license + portable macOS build | [docs/FFmpeg-Licensing.md](docs/FFmpeg-Licensing.md) |
+
+Do **not** use Godot’s built-in macOS notarization — it runs before FFmpeg/RtMidi are copied. Rebuild MIDI natives with `python tools/build-rtmidi-natives.py` only when those binaries change.
 
 ## Platforms
 Cue-2 targets:

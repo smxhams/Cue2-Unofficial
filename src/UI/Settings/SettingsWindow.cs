@@ -126,6 +126,10 @@ public partial class SettingsWindow : Window
 
 		// Reveal only after size, position, scale, and menu are ready — avoids open-time flicker.
 		Show();
+
+		// _Input is only for closing the filter popup; keep it off otherwise so slider
+		// drags do not wrap every mouse motion in C# (shutdown InputEvent leaks).
+		SetProcessInput(false);
 	}
 
 	/// <summary>
@@ -499,12 +503,14 @@ public partial class SettingsWindow : Window
 		_filterMenu.Size = new Vector2(menuWidth, menuHeight);
 		_filterMenu.Visible = true;
 		_filterMenu.MoveToFront();
+		SetProcessInput(true);
 	}
 
 	private void HideFilterMenu()
 	{
 		if (_filterMenu != null)
 			_filterMenu.Visible = false;
+		SetProcessInput(false);
 	}
 
 	public override void _Input(InputEvent @event)
@@ -958,6 +964,7 @@ public partial class SettingsWindow : Window
 			"Video Defaults" => "SettingsVideoDefaults",
 			"Text Defaults" => "SettingsTextDefaults",
 			"Cue2 Preferences" => "SettingsCue2Prefs",
+			"Updates" => "SettingsUpdates",
 			_ => null
 		};
 		return menuNode != null;
@@ -1033,6 +1040,25 @@ public partial class SettingsWindow : Window
 		TreeItem tiInputMap = _setTree.CreateItem(tiCue2Preferences);
 		SetTreeItemText(tiInputMap, 0, "Input Map");
 		SetTreeItemTooltip(tiInputMap, 0, "Keyboard shortcuts — saved with Cue2 Preferences, not the show");
+		TreeItem tiUpdates = _setTree.CreateItem(tiCue2Preferences);
+		SetTreeItemText(tiUpdates, 0, "Updates");
+		SetTreeItemTooltip(tiUpdates, 0, "Check for Cue2 updates — saved with Cue2 Preferences, not the show");
+	}
+
+	/// <summary>
+	/// Selects the Settings page for <paramref name="menuKey"/> (stable English tree key).
+	/// </summary>
+	/// <param name="menuKey">E.g. <c>Updates</c> or <c>General</c>.</param>
+	public void OpenMenu(string menuKey)
+	{
+		if (string.IsNullOrWhiteSpace(menuKey) || !TryGetMenuNode(menuKey, out _))
+			return;
+
+		_sessionMenuKey = menuKey;
+		RestoreSelectedMenu();
+		if (!Visible)
+			Show();
+		GrabFocus();
 	}
 
 	/// <summary>

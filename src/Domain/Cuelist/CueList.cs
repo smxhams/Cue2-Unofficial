@@ -206,6 +206,11 @@ public partial class CueList : Control
 		_globalSignals.LocaleChanged += OnLocaleChanged;
 		ApplyShowModeUi(_globalData?.Settings?.IsCueEditingLocked == true);
 		UiLocalizer.LocalizeTree(this);
+
+		// _Input/_Process exist for reorder + marquee only. Leaving them always-on wraps every
+		// mouse motion in C# and leaks InputEventMouseMotion on quit (Godot Mono unsafe refs).
+		SetProcessInput(false);
+		SetProcess(false);
 	}
 
 	public override void _ExitTree()
@@ -237,6 +242,8 @@ public partial class CueList : Control
 			_virtualScrollWired = false;
 		}
 		UnwireHeaderScrollbarPad();
+		_boxSelectController?.DisposeResources();
+		ShellColumnLayout.DisposeCompactStyles();
 		if (Live == this)
 			Live = null;
 		base._ExitTree();

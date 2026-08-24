@@ -1388,7 +1388,7 @@ public partial class ShellInspector : Control
 		GD.Print("ShellInspector:CancelHotkeyListening - Cancelled cue hotkey listen");
 	}
 
-	public override void _UnhandledInput(InputEvent @event)
+	public override void _UnhandledKeyInput(InputEvent @event)
 	{
 		// Esc cancels MIDI capture even when not hotkey-listening.
 		if (_isCapturingMidi &&

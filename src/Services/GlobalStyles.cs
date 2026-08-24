@@ -147,6 +147,26 @@ public partial class GlobalStyles : Node
 			bgColor: new Color(HighColor5.R, HighColor5.G, HighColor5.B, 0.5f));
 	}
 
+	/// <inheritdoc />
+	public override void _ExitTree()
+	{
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_hoverStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_focusedStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_shellRowStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(_dangerStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(NextStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(ActiveStyle);
+		Cue2.UI.Utilities.UiUtilities.DisposeRefCounted(DefaultStyle);
+		_hoverStyle = null;
+		_focusedStyle = null;
+		_shellRowStyle = null;
+		_dangerStyle = null;
+		NextStyle = null;
+		ActiveStyle = null;
+		DefaultStyle = null;
+		base._ExitTree();
+	}
+
 
 	/// <summary>
 	/// Fixed geometry for every shell-row state (must stay identical across hover/select).

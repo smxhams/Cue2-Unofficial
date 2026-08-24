@@ -173,9 +173,86 @@ public partial class SettingsOscConnections : Control
 
     private void OnConnectionsStateChanged()
     {
+        if (_isSyncingUi) return;
         if (_historyManager?.IsRestoring == true) return;
-        if (Visible)
+        if (!Visible) return;
+
+        // TCP connect status fires this signal often — refresh in place instead of
+        // rebuilding cards (which would drop LineEdit focus and transport selection).
+        if (ConnectionCardsNeedRebuild())
             SyncFromModel();
+        else
+            RefreshExistingCards();
+    }
+
+    /// <summary>
+    /// True when the live connection list no longer matches the instantiated cards.
+    /// </summary>
+    private bool ConnectionCardsNeedRebuild()
+    {
+        if (_connectionsContainer == null)
+            return false;
+
+        var list = OscConnections.Connections;
+        int listCount = list?.Count ?? 0;
+        var cards = new System.Collections.Generic.List<SettingsOscConnectionCard>();
+        int other = 0;
+        foreach (var child in _connectionsContainer.GetChildren())
+        {
+            if (child is SettingsOscConnectionCard card)
+                cards.Add(card);
+            else
+                other++;
+        }
+
+        if (listCount == 0)
+            return cards.Count != 0 || other == 0;
+
+        if (other > 0 || cards.Count != listCount)
+            return true;
+
+        for (int i = 0; i < listCount; i++)
+        {
+            var conn = list[i];
+            var card = cards[i];
+            if (conn == null || !GodotObject.IsInstanceValid(conn))
+                return true;
+            if (!GodotObject.IsInstanceValid(card) || card.CueOscConnection != conn)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Refreshes per-row TCP status and the panel summary without recreating cards.
+    /// </summary>
+    /// <param name="refreshTargets">When true, also rebuild the test-send target picker (locale / list identity).</param>
+    private void RefreshExistingCards(bool refreshTargets = false)
+    {
+        _isSyncingUi = true;
+        try
+        {
+            if (_listenCheckBox != null && _oscConnections != null)
+                _listenCheckBox.SetPressedNoSignal(_oscConnections.MonitorEnabled);
+
+            if (_connectionsContainer != null)
+            {
+                foreach (var child in _connectionsContainer.GetChildren())
+                {
+                    if (child is SettingsOscConnectionCard card)
+                        card.RefreshStatus();
+                }
+            }
+
+            if (refreshTargets)
+                RefreshTestTargetOptions();
+            UpdateStatusLabel();
+        }
+        finally
+        {
+            _isSyncingUi = false;
+        }
     }
 
     private void OnHistoryRestored(int scope)
@@ -613,6 +690,7 @@ public partial class SettingsOscConnections : Control
         if (!GodotObject.IsInstanceValid(this))
             return;
         UiLocalizer.LocalizeTree(this);
+        RefreshExistingCards(refreshTargets: true);
     }
 
 }

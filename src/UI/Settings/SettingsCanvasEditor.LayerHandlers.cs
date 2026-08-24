@@ -38,8 +38,16 @@ public partial class SettingsCanvasEditor
             return;
         }
 
+        var layer = DisplaysManager.GetLayerById(_selectedLayerId);
+        string next = text ?? string.Empty;
+        if (layer == null || next == layer.LayerName)
+        {
+            _layerNameLineEdit.ReleaseFocus();
+            return;
+        }
+
         RecordDisplaysHistory("Rename layer");
-        _displaysManager.UpdateLayerName(_selectedLayerId, text);
+        _displaysManager.UpdateLayerName(_selectedLayerId, next);
         RebuildTrees();
         UpdateCanvasGizmos();
         _layerNameLineEdit.ReleaseFocus();

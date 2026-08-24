@@ -64,12 +64,38 @@ public partial class Cue2Base : Control
 		MaybeShowStartupLoadOverlay();
 
 		// Initial window size/position/scale order is owned by MainWindowHandles:
-		// content scale first, then restore saved geometry (or design-size RescaleWindow once).
-		// Do not call RescaleWindow here — it runs after child restore and corrupts saved size/pos
-		// (especially on macOS HiDPI where BaseDisplayScale is often 2).
+		// content scale first, then restore saved geometry (or first-run size from
+		// DetectDisplayScale + usable-screen fit). Do not call RescaleWindow here.
 
 		// Deferred so main window geometry/chrome settles before a modal-style sub-window opens.
 		CallDeferred(nameof(MaybeShowFirstTimeStartup));
+		CallDeferred(nameof(ScheduleStartupUpdateCheck));
+	}
+
+	/// <summary>
+	/// Runs a quiet GitHub update check after welcome/session load so it never blocks GO or first paint.
+	/// </summary>
+	private void ScheduleStartupUpdateCheck()
+	{
+		var timer = new Timer { OneShot = true, WaitTime = 8.0 };
+		timer.Timeout += OnStartupUpdateCheckTimeout;
+		AddChild(timer);
+		timer.Start();
+	}
+
+	private void OnStartupUpdateCheckTimeout()
+	{
+		var udm = _globalData?.UserDataManager;
+		if (udm == null)
+			return;
+		if (udm.IsFirstTimeStartup)
+			return;
+		if (!udm.CheckForUpdatesOnStartup)
+			return;
+		if (_firstTimeStartupWindow != null && GodotObject.IsInstanceValid(_firstTimeStartupWindow))
+			return;
+
+		_globalData.UpdateService?.CheckForUpdates(force: false);
 	}
 
 	/// <summary>

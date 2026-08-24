@@ -1036,6 +1036,7 @@ public partial class CueList
 		// Drop blue hover wash for the session; reorder indicator owns highlight.
 		ClearAllShellHoverChrome();
 		_reorderController.Start(shellbar);
+		SyncPointerInputProcessing();
 	}
 
 	/// <summary>
@@ -1050,6 +1051,17 @@ public partial class CueList
 		if (IsReordering)
 			return;
 		_boxSelectController?.BeginPending(originShell, globalPos, additive);
+		SyncPointerInputProcessing();
+	}
+
+	/// <summary>
+	/// Enables <c>_Input</c> only while reorder or box-select is tracking the pointer.
+	/// </summary>
+	internal void SyncPointerInputProcessing()
+	{
+		bool need = IsReordering
+			|| (_boxSelectController != null && (_boxSelectController.IsPending || _boxSelectController.IsActive));
+		SetProcessInput(need);
 	}
 
 	/// <summary>

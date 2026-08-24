@@ -61,11 +61,8 @@ public partial class AboutWindow : Window
         _copyrightLabel.Text = UiLocalizer.T("Copyright © 2025-2026 Samuel Moxham");
 
         _authorsRichTextLabel.Text = Authors;
-        
-        _licenseRichTextLabel.Text = Cue2License
-            + "\n\nThis product uses FFmpeg under the LGPLv2.1 (see third-party licenses)."
-            + "\n\nShowfiles (.c2) are plain UTF-8 JSON and are not password-protected. "
-            + "Do not store secrets in a showfile.";
+
+        _licenseRichTextLabel.Text = Cue2License;
         _cue2LicenseLinkButton.Uri = Version.Website;
         
 

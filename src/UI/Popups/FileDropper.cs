@@ -196,6 +196,9 @@ public partial class FileDropper : Control
     {
         GD.Print("FileDropper:OnFilesDropped - Files dropped");
 
+        if (TryOpenDroppedShowfile(files))
+            return;
+
         // Show Mode: media drops create or replace cue media — block all drop editing paths.
         if (_globalData?.Settings?.IsCueEditingLocked == true)
         {
@@ -355,6 +358,39 @@ public partial class FileDropper : Control
         public FileDropTargetType TargetType { get; init; }
         public string TargetInfo { get; init; }
         public int TargetCueId { get; init; }
+    }
+
+    /// <summary>
+    /// Opens a dropped <c>.c2</c> when the drop is on window chrome, or on the cuelist with no media files.
+    /// </summary>
+    private bool TryOpenDroppedShowfile(string[] files)
+    {
+        if (files == null || files.Length == 0)
+            return false;
+
+        string show = null;
+        foreach (string file in files)
+        {
+            string resolved = ShowfileLaunchArgs.TryResolveShowfile(file);
+            if (resolved != null)
+            {
+                show = resolved;
+                break;
+            }
+        }
+
+        if (show == null)
+            return false;
+
+        var dropInfo = GetDropTarget(GetGlobalMousePosition());
+        bool mediaAlso = FilterValidMediaFiles(files).Count > 0;
+        bool openShow = dropInfo.TargetType == FileDropTargetType.None
+                        || (dropInfo.TargetType == FileDropTargetType.CueList && !mediaAlso);
+        if (!openShow)
+            return false;
+
+        _globalSignals?.EmitSignal(nameof(GlobalSignals.OpenSelectedSession), show);
+        return true;
     }
 
     private DropTarget GetDropTarget(Vector2 mousePos)

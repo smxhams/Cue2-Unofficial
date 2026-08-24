@@ -136,17 +136,60 @@ public partial class SaveManager : Node
 			if (!GodotObject.IsInstanceValid(this) || _globalData == null)
 				return;
 			string path = _globalData.StartupOpenPath;
+			if (string.IsNullOrEmpty(path))
+				return;
+
 			GD.Print($"SaveManager:LoadStartupSession - Opening startup showfile: {path}");
-			if (!string.IsNullOrEmpty(path))
-				await OpenSelectedSessionAsync(path);
+			if (!File.Exists(path))
+			{
+				AbandonStartupOpenToNewSession(path, "Showfile not found", removeFromRecents: true);
+				return;
+			}
+
+			await OpenSelectedSessionAsync(path, isStartupOpen: true);
 			// Successful open already configured autosave in CompleteOpenSessionAsync.
 		}
 		catch (Exception ex)
 		{
 			GD.PrintErr($"SaveManager:LoadStartupSessionAsync - {ex.Message}");
-			EndSessionApply();
-			FinishLoadTimer("failed");
+			AbandonStartupOpenToNewSession(_globalData?.StartupOpenPath, ex.Message, removeFromRecents: false);
 		}
+	}
+
+	/// <summary>
+	/// Last-show boot failed (missing or unreadable file). Drop the overlay, forget the
+	/// startup path, and seed a playable blank session instead of leaving an unseeded workspace.
+	/// </summary>
+	/// <param name="path">Showfile that could not be opened.</param>
+	/// <param name="reason">Short failure reason for logs.</param>
+	/// <param name="removeFromRecents">True when the file is gone (not when it is merely unreadable).</param>
+	private void AbandonStartupOpenToNewSession(string path, string reason, bool removeFromRecents)
+	{
+		GD.PrintErr($"SaveManager:AbandonStartupOpenToNewSession - {reason}: {path}");
+
+		if (_globalData != null)
+			_globalData.StartupOpenPath = null;
+
+		if (removeFromRecents && !string.IsNullOrEmpty(path))
+			_globalData?.UserDataManager?.RemoveRecentShowFile(path);
+
+		// Cue2Base may have shown the overlay via ShowOpening without BeginSessionApply.
+		if (IsSessionLoading)
+			EndSessionApply();
+		else
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.SessionLoadFinished));
+
+		ResetSession(clearSessionIdentity: true, logAsNewSession: false);
+		_globalData?.HistoryManager?.Clear();
+		ConfigureAutosave();
+		GetNodeOrNull<MainTitleBarUI>("/root/Cue2Base/MainWindowHandles/MainTitleBar")
+			?.CallDeferred("UpdateTitle");
+
+		string pathPart = string.IsNullOrEmpty(path) ? string.Empty : $" ({path})";
+		_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+			$"Could not open last showfile{pathPart} — started a new session. {reason}",
+			(int)LogType.Error);
+		FinishLoadTimer("missing");
 	}
 
 	/// <summary>
@@ -232,6 +275,10 @@ public partial class SaveManager : Node
 	/// Opens the save file dialog to allow the user to choose a directory and name for the session.
 	/// Uses the single dialog instance created in <see cref="CreateSaveDialog"/>.
 	/// </summary>
+	/// <remarks>
+	/// Start folder: current show directory when the session is already on disk; otherwise the
+	/// last Save As location; otherwise a writable Documents/Cue2 (with Desktop / user:// failover).
+	/// </remarks>
 	private void SaveAs()
 	{
 		if (RejectIfSessionBusy("save as"))
@@ -244,29 +291,87 @@ public partial class SaveManager : Node
 			return;
 		}
 
-		if (!string.IsNullOrEmpty(_globalData.SessionPath))
-		{
-			try
-			{
-				string baseDir = _globalData.SessionPath.GetBaseDir();
-				if (DirAccess.DirExistsAbsolute(baseDir))
-				{
-					_saveDialog.CurrentDir = baseDir;
-					GD.Print($"SaveManager:SaveAs - Set save dialog initial directory to existing session path: {baseDir}");
-				}
-				else
-				{
-					GD.Print($"SaveManager:SaveAs - Stored session directory does not exist: {baseDir}. Using default directory.");
-				}
-			}
-			catch (Exception ex)
-			{
-				GD.Print($"SaveManager:SaveAs - Error setting initial directory from session path: {ex.Message}");
-			}
-		}
-
+		ApplySaveDialogStartLocation();
 		_saveDialog.PopupCentered();
 		_globalSignals.EmitSignal(nameof(GlobalSignals.Log), "SaveManager:SaveAs - Waiting on save directory and show name to continue save", 0);
+	}
+
+	/// <summary>
+	/// Sets the Save As dialog folder (and suggested file name) before popup.
+	/// </summary>
+	private void ApplySaveDialogStartLocation()
+	{
+		string dir = ResolveSaveDialogStartDirectory();
+		if (!string.IsNullOrEmpty(dir))
+		{
+			_saveDialog.CurrentDir = dir;
+			GD.Print($"SaveManager:ApplySaveDialogStartLocation - CurrentDir={dir}");
+		}
+
+		if (!string.IsNullOrEmpty(_globalData.SessionName))
+			_saveDialog.CurrentFile = _globalData.SessionName + ".c2";
+		else
+			_saveDialog.CurrentFile = string.Empty;
+	}
+
+	/// <summary>
+	/// Directory the Save As dialog should open in.
+	/// </summary>
+	/// <returns>Absolute writable directory, or empty when none could be resolved.</returns>
+	private string ResolveSaveDialogStartDirectory()
+	{
+		string currentShowDir = FirstExistingDirectory(_globalData.SessionDir, SessionPathDirectory());
+		if (!string.IsNullOrEmpty(currentShowDir))
+			return currentShowDir;
+
+		string last = _globalData.UserDataManager?.LastShowSaveDirectory;
+		if (DirectoryUtils.DirectoryExists(last))
+			return last;
+
+		return DirectoryUtils.GetDefaultShowSaveDirectory();
+	}
+
+	/// <summary>Directory of the open .c2 file, or null when unset.</summary>
+	private string SessionPathDirectory()
+	{
+		if (string.IsNullOrEmpty(_globalData?.SessionPath))
+			return null;
+		try
+		{
+			return _globalData.SessionPath.GetBaseDir();
+		}
+		catch (Exception ex)
+		{
+			GD.Print($"SaveManager:SessionPathDirectory - {_globalData.SessionPath}: {ex.Message}");
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// First candidate that exists as a directory.
+	/// </summary>
+	private static string FirstExistingDirectory(params string[] candidates)
+	{
+		if (candidates == null)
+			return null;
+		foreach (string path in candidates)
+		{
+			if (DirectoryUtils.DirectoryExists(path))
+				return path;
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Persists the last Save As folder (parent of the session directory) for the next new show.
+	/// </summary>
+	/// <param name="savedFilePath">Path written or chosen by the user.</param>
+	private void RememberSaveDirectory(string savedFilePath)
+	{
+		string root = DirectoryUtils.GetShowSaveRootDirectory(savedFilePath);
+		if (string.IsNullOrEmpty(root))
+			return;
+		_globalData.UserDataManager?.SetLastShowSaveDirectory(root);
 	}
 
 	/// <summary>
@@ -456,7 +561,8 @@ public partial class SaveManager : Node
 				: $"Session saved successfully to {sessionPath}",
 			0);
 
-		// Also track newly saved shows in recents
+		// Recents + last Save As folder (parent of the session dir for a later new show).
+		RememberSaveDirectory(sessionPath);
 		_globalData.UserDataManager?.AddRecentShowFile(sessionPath);
 
 		// Background-copy used media into Audio/Video/Images (respects MediaBackupEnabled)
@@ -705,7 +811,11 @@ public partial class SaveManager : Node
 	/// <see cref="CompleteOpenSessionAsync"/>. Used for startup and File → Open.
 	/// </summary>
 	/// <param name="selectedPath">Absolute path of the .c2 file.</param>
-	private async Task OpenSelectedSessionAsync(string selectedPath)
+	/// <param name="isStartupOpen">
+	/// True when this is the boot last-show open. A missing or unreadable file then
+	/// falls back to a blank new session instead of leaving the workspace unseeded.
+	/// </param>
+	private async Task OpenSelectedSessionAsync(string selectedPath, bool isStartupOpen = false)
 	{
 		if (_isOpenInProgress || IsSessionLoading)
 		{
@@ -719,6 +829,8 @@ public partial class SaveManager : Node
 		{
 			_globalSignals.EmitSignal(nameof(GlobalSignals.Log), $"Session file not found: {selectedPath}", 2);
 			GD.PrintErr("SaveManager:OpenSelectedSession - File not found: " + selectedPath);
+			if (isStartupOpen)
+				AbandonStartupOpenToNewSession(selectedPath, "Showfile not found", removeFromRecents: true);
 			return;
 		}
 
@@ -749,6 +861,9 @@ public partial class SaveManager : Node
 				_globalSignals.EmitSignal(nameof(GlobalSignals.Log),
 					$"Failed to read session (session not changed): {readError}", 2);
 				GD.PrintErr($"SaveManager:OpenSelectedSession - Read failed: {readError}");
+				if (isStartupOpen)
+					AbandonStartupOpenToNewSession(selectedPath, readError ?? "Failed to read showfile",
+						removeFromRecents: false);
 				return;
 			}
 

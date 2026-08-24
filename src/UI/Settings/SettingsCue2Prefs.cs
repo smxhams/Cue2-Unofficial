@@ -9,7 +9,7 @@ using static Cue2.UI.Utilities.UiLocalizer;
 namespace Cue2.UI.Settings;
 
 /// <summary>
-/// Cue2 Preferences panel: language, UI scale, startup, autosave, backup depth, undo depth, and log session depth.
+/// Cue2 Preferences panel: language, UI scale, startup, showfile association, autosave, backup depth, undo depth, and log session depth.
 /// Values are stored in <see cref="UserDataManager"/> (persistent across shows).
 /// </summary>
 public partial class SettingsCue2Prefs : ScrollContainer
@@ -35,6 +35,8 @@ public partial class SettingsCue2Prefs : ScrollContainer
 	private Button _logSessionDepthResetButton;
 	private Button _resetUserDataButton;
 	private ConfirmationDialog _resetUserDataDialog;
+	private Button _associateButton;
+	private Label _associateStatusLabel;
 
 	/// <summary>True while rebuilding language options so selection handlers do not re-apply.</summary>
 	private bool _isSyncingLanguage;
@@ -77,7 +79,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		{
 			_uiScaleNum.FocusMode = FocusModeEnum.All;
 			_uiScaleNum.Editable = true;
-			_uiScaleNum.TextSubmitted += OnUiScaleTextSubmitted;
+			UiUtilities.BindLineEditCommit(_uiScaleNum, OnUiScaleTextSubmitted);
 		}
 		if (_uiScaleResetButton != null)
 		{
@@ -117,6 +119,11 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		_logSessionDepthResetButton.Pressed += OnLogSessionDepthResetButtonPressed;
 		_logSessionDepthResetButton.Icon = GetThemeIcon("Refresh", "AtlasIcons");
 
+		_associateButton = GetNodeOrNull<Button>("%AssociateButton");
+		_associateStatusLabel = GetNodeOrNull<Label>("%AssociateStatusLabel");
+		if (_associateButton != null)
+			_associateButton.Pressed += OnAssociatePressed;
+
 		_resetUserDataButton = GetNode<Button>("%ResetUserDataButton");
 		_resetUserDataButton.Pressed += OnResetUserDataButtonPressed;
 
@@ -136,6 +143,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		SyncSettings();
 		ApplyLocalizedLanguageUi();
 		LocalizeTree(this);
+		RefreshAssociateStatus();
 	}
 
 	public override void _ExitTree()
@@ -160,7 +168,64 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			_resetUserDataDialog = null;
 		}
 
+		if (_associateButton != null)
+			_associateButton.Pressed -= OnAssociatePressed;
+
 		base._ExitTree();
+	}
+
+	private void OnAssociatePressed()
+	{
+		if (ShowfileAssociation.IsEditorBuild)
+		{
+			RefreshAssociateStatus();
+			return;
+		}
+
+		if (ShowfileAssociation.TryRegister(out string error))
+		{
+			if (_globalData?.UserDataManager != null)
+				_globalData.UserDataManager.RegisteredShowfileHandlerPath = ShowfileAssociation.HostExecutablePath;
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				"Registered .c2 showfiles with this Cue2 build.", (int)LogType.Info);
+		}
+		else
+		{
+			_globalSignals?.EmitSignal(nameof(GlobalSignals.Log),
+				string.IsNullOrEmpty(error) ? "Could not associate .c2 files." : error,
+				(int)LogType.Warning);
+		}
+
+		RefreshAssociateStatus();
+	}
+
+	private void RefreshAssociateStatus()
+	{
+		if (_associateStatusLabel == null)
+			return;
+
+		if (ShowfileAssociation.IsEditorBuild)
+		{
+			_associateStatusLabel.Text = T("Editor builds do not register file types.");
+			if (_associateButton != null)
+				_associateButton.Disabled = true;
+			return;
+		}
+
+		if (OS.GetName() == "macOS")
+		{
+			_associateStatusLabel.Text = T("macOS uses the Cue2.app bundle (Finder registers on first launch).");
+			if (_associateButton != null)
+				_associateButton.Disabled = true;
+			return;
+		}
+
+		if (_associateButton != null)
+			_associateButton.Disabled = false;
+
+		_associateStatusLabel.Text = ShowfileAssociation.IsRegisteredToThisBuild()
+			? T("This build opens .c2 showfiles.")
+			: T("Not associated with this Cue2 folder.");
 	}
 
 	private void SyncSettings()
@@ -183,6 +248,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 			UpdateUndoDepthResetButton();
 			UpdateLogSessionDepthResetButton();
 			ApplyLocalizedLanguageUi();
+			RefreshAssociateStatus();
 		}
 	}
 
@@ -360,6 +426,7 @@ public partial class SettingsCue2Prefs : ScrollContainer
 		ApplyLocalizedLanguageUi();
 		UpdateLanguageResetButton();
 		ApplyResetUserDataDialogText();
+		RefreshAssociateStatus();
 	}
 
 	private void ApplyResetUserDataDialogText()

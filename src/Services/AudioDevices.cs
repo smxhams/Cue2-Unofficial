@@ -59,6 +59,9 @@ public partial class AudioDevices : Node
 	
     public override void _Ready()
     {
+	    if (SingleInstanceGuard.IsSecondary)
+		    return;
+
 	    _globalData = GetNode<GlobalData>("/root/GlobalData");
 	    _globalSignals = GetNode<GlobalSignals>("/root/GlobalSignals");
 	    _mediaEngine = GetNode<MediaEngine>("/root/MediaEngine");

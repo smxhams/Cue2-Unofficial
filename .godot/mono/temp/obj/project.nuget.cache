@@ -1,16 +1,18 @@
 {
   "version": 2,
-  "dgSpecHash": "YiqL2GXj9X4=",
+  "dgSpecHash": "ShslM7WZxQM=",
   "success": true,
   "projectFilePath": "C:\\MyFiles\\Cue2_Home\\Cue2\\Cue2.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\smxham\\.nuget\\packages\\ffmpeg.autogen\\9.0.1.1\\ffmpeg.autogen.9.0.1.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godot.sourcegenerators\\4.7.1\\godot.sourcegenerators.4.7.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\godotsharp\\4.7.1\\godotsharp.4.7.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\godotsharpeditor\\4.7.1\\godotsharpeditor.4.7.1.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\rug.osc\\1.2.5\\rug.osc.1.2.5.nupkg.sha512",
     "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs\\3.4.14.1\\sdl3-cs.3.4.14.1.nupkg.sha512",
-    "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs.native\\3.4.2\\sdl3-cs.native.3.4.2.nupkg.sha512"
+    "C:\\Users\\smxham\\.nuget\\packages\\sdl3-cs.native\\3.4.2\\sdl3-cs.native.3.4.2.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.7\\microsoft.netcore.app.runtime.win-x64.8.0.7.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.7\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.7.nupkg.sha512",
+    "C:\\Users\\smxham\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.7\\microsoft.aspnetcore.app.runtime.win-x64.8.0.7.nupkg.sha512"
   ],
   "logs": []
 }

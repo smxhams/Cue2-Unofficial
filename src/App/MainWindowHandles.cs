@@ -23,6 +23,12 @@ public partial class MainWindowHandles : Control
 
 	private static readonly Vector2I MinWindowSize = new Vector2I(600, 370);
 
+	/// <summary>Project default size captured before any HiDPI rescale (typically 1152×648).</summary>
+	private Vector2I _startupDesignSize = new Vector2I(1152, 648);
+
+	/// <summary>True when a previous session's size/maximize was applied (not first-run defaults).</summary>
+	private bool _usedSavedGeometry;
+
 	private Timer _resizeSaveTimer;
 	private Vector2I _lastKnownPosition;
 
@@ -77,20 +83,26 @@ public partial class MainWindowHandles : Control
 		window.MinSize = MinWindowSize;
 		window.MaxSize = UiUtilities.ComputeVirtualDesktopSize();
 
+		// Capture the project default before any scale/fit so deferred finalize cannot
+		// double-multiply an already-scaled Size.
+		if (window.Size.X >= MinWindowSize.X && window.Size.Y >= MinWindowSize.Y)
+			_startupDesignSize = window.Size;
+
 		// Startup order (critical on macOS HiDPI):
 		// 1) Content scale only (must not own outer pixel size)
-		// 2) Restore saved geometry OR scale design-time default once — never both
-		// 3) Deferred re-apply after the display server settles
+		// 2) Restore saved geometry OR first-run size (display scale + usable-screen fit)
+		// 3) Deferred re-apply after the display server settles (scale is often 1× in _Ready)
 		_suppressGeometrySave = true;
+		_globalData.RefreshBaseDisplayScale(notifyUi: false);
 		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
 		UiUtilities.RescaleUi(window, userScale, _globalData.BaseDisplayScale);
 		// WrapControls would auto-grow the frame when ContentScaleFactor changes and
 		// overwrite the restored size; main window geometry is managed explicitly.
 		window.WrapControls = false;
 
-		bool restored = RestoreWindowFromUserData(window);
-		if (!restored)
-			UiUtilities.RescaleWindow(window, _globalData.BaseDisplayScale);
+		_usedSavedGeometry = RestoreWindowFromUserData(window);
+		if (!_usedSavedGeometry)
+			ApplyFirstRunGeometry(window);
 
 		_lastKnownPosition = window.Position;
 		CallDeferred(nameof(FinalizeStartupGeometry));
@@ -132,9 +144,9 @@ public partial class MainWindowHandles : Control
 	}
 
 	/// <summary>
-	/// Re-applies restored (or design-scaled) geometry after content scale and the display
+	/// Re-applies restored (or first-run) geometry after content scale and the display
 	/// server finish settling. Prevents size/position from being overwritten by WrapControls
-	/// or a late OS layout pass (common on macOS).
+	/// or a late OS layout pass, and picks up HiDPI scale that was not ready in <c>_Ready</c>.
 	/// </summary>
 	private void FinalizeStartupGeometry()
 	{
@@ -145,6 +157,15 @@ public partial class MainWindowHandles : Control
 			return;
 		}
 
+		_globalData.RefreshBaseDisplayScale(notifyUi: false);
+		float userScale = _globalData.UserDataManager?.UiScale ?? UserDataManager.DefaultUiScale;
+		UiUtilities.RescaleUi(window, userScale, _globalData.BaseDisplayScale);
+		window.WrapControls = false;
+
+		bool useSaved = _usedSavedGeometry
+			&& _hasRestoreRect
+			&& !ShouldDiscardSavedSizeForFirstRun(_restoreSize);
+
 		if (_fillMode == FillMode.Fullscreen)
 		{
 			SetWindowMode(window, DisplayServer.WindowMode.Fullscreen);
@@ -153,14 +174,76 @@ public partial class MainWindowHandles : Control
 		{
 			SetWindowMode(window, DisplayServer.WindowMode.Maximized);
 		}
-		else if (_hasRestoreRect)
+		else if (useSaved)
 		{
 			ApplyGeometry(window, _restoreSize, _restorePosition);
 			_lastKnownPosition = _restorePosition;
 		}
+		else
+		{
+			ApplyFirstRunGeometry(window);
+			_lastKnownPosition = window.Position;
+		}
 
 		_suppressGeometrySave = false;
 		SaveCurrentWindowState();
+	}
+
+	/// <summary>
+	/// First-launch size: design size × display scale, then grow toward a usable-screen fraction
+	/// so 5K/6K panels are not left with a 1152×648-looking frame.
+	/// </summary>
+	private void ApplyFirstRunGeometry(Window window)
+	{
+		if (window == null || !IsInstanceValid(window))
+			return;
+
+		Vector2I size = ComputeFirstRunWindowSize(window);
+		size = UiUtilities.ClampWindowSizeToVirtualDesktop(size, MinWindowSize);
+		Vector2I pos = UiUtilities.CenterWindowOnUsableScreen(size, window);
+		ApplyGeometry(window, size, pos);
+		RememberRestoreRect(size, pos);
+		GD.Print($"MainWindowHandles:ApplyFirstRunGeometry - design={_startupDesignSize} " +
+		         $"scale={_globalData.BaseDisplayScale:0.###} size={size} pos={pos}");
+	}
+
+	/// <summary>
+	/// Design size × current <see cref="GlobalData.BaseDisplayScale"/>, grown to the first-run
+	/// usable-screen fraction and clamped to the max fraction.
+	/// </summary>
+	private Vector2I ComputeFirstRunWindowSize(Window window)
+	{
+		float scale = Mathf.Max(_globalData.BaseDisplayScale, 1f);
+		Vector2I scaled = new Vector2I(
+			Mathf.Max(MinWindowSize.X, Mathf.RoundToInt(_startupDesignSize.X * scale)),
+			Mathf.Max(MinWindowSize.Y, Mathf.RoundToInt(_startupDesignSize.Y * scale)));
+		return UiUtilities.FitFirstRunWindowToUsableScreen(scaled, window, MinWindowSize);
+	}
+
+	/// <summary>
+	/// True when a persisted size is the unscaled project default (or still tiny while the
+	/// first-time welcome is pending) and should be replaced by first-run HiDPI geometry.
+	/// </summary>
+	private bool ShouldDiscardSavedSizeForFirstRun(Vector2I savedSize)
+	{
+		if (savedSize.X < MinWindowSize.X || savedSize.Y < MinWindowSize.Y)
+			return true;
+
+		const int slop = 48;
+		bool nearDesign = savedSize.X <= _startupDesignSize.X + slop
+			&& savedSize.Y <= _startupDesignSize.Y + slop;
+		if (nearDesign && _globalData.BaseDisplayScale > 1.05f)
+			return true;
+
+		var udm = _globalData?.UserDataManager;
+		if (udm != null && udm.IsFirstTimeStartup)
+		{
+			Vector2I target = ComputeFirstRunWindowSize(GetWindow());
+			if (savedSize.X * 4 < target.X * 3 && savedSize.Y * 4 < target.Y * 3)
+				return true;
+		}
+
+		return false;
 	}
 
 	/// <summary>
@@ -176,6 +259,12 @@ public partial class MainWindowHandles : Control
 		bool hasSize = udm.LastWindowSize.X >= MinWindowSize.X && udm.LastWindowSize.Y >= MinWindowSize.Y;
 		if (!hasSize && !udm.WasMaximized)
 			return false;
+
+		if (hasSize && !udm.WasMaximized && ShouldDiscardSavedSizeForFirstRun(udm.LastWindowSize))
+		{
+			GD.Print($"MainWindowHandles:RestoreWindowFromUserData - ignoring leftover unscaled size {udm.LastWindowSize}");
+			return false;
+		}
 
 		if (hasSize)
 		{
@@ -644,5 +733,10 @@ public partial class MainWindowHandles : Control
 
 		_resizeSaveTimer?.Stop();
 		SaveCurrentWindowState();
+		var border = GetNodeOrNull<Panel>("%Border");
+		if (border != null && IsInstanceValid(border))
+			border.RemoveThemeStyleboxOverride("panel");
+		UiUtilities.DisposeRefCounted(_borderStylebox);
+		_borderStylebox = null;
 	}
 }

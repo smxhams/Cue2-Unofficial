@@ -69,6 +69,33 @@ expand_icon = true
 visible = false
 tooltip_text = "Reset to default"
 
+[node name="AssociateRow" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="AssociateLabel" type="Label" parent="VBoxContainer/AssociateRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Showfiles"
+vertical_alignment = 1
+tooltip_text = "Register .c2 files so they use the Cue2 icon and open in Cue2 when double-clicked."
+
+[node name="AssociateButton" type="Button" parent="VBoxContainer/AssociateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Associate .c2 files with Cue2"
+tooltip_text = "Register .c2 files so they use the Cue2 icon and open in Cue2 when double-clicked."
+
+[node name="AssociateStatusLabel" type="Label" parent="VBoxContainer/AssociateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+text = ""
+vertical_alignment = 1
+
 [node name="LanguageRow" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 

@@ -160,6 +160,7 @@ public partial class MainTitleBarUI : Control
         GetNode<Button>("%AboutButton").TooltipText += Version.FullVersionString;
 
         _globalSignals.ToggleSettingsWindow += ToggleSettingsWindow;
+        _globalSignals.OpenSettingsMenu += OnOpenSettingsMenu;
 
         // Reveal menu strip on hover of the hamburger
         GetNode<Button>("%TitleMainMenu").MouseEntered += () => _mainMenuButton.ButtonPressed = true;
@@ -189,6 +190,9 @@ public partial class MainTitleBarUI : Control
         LocalizeTree(this);
         if (_globalSignals != null)
             _globalSignals.LocaleChanged += OnLocaleChanged;
+
+        // _Input only dismisses the hamburger menu; keep it off until the strip is open.
+        SetProcessInput(false);
     }
 
     public override void _ExitTree()
@@ -204,6 +208,7 @@ public partial class MainTitleBarUI : Control
             _globalSignals.VideoOutputControlChanged -= OnVideoOutputControlChanged;
             _globalSignals.AudioMasterControlChanged -= OnAudioMasterControlChanged;
             _globalSignals.ToggleSettingsWindow -= ToggleSettingsWindow;
+            _globalSignals.OpenSettingsMenu -= OnOpenSettingsMenu;
             _globalSignals.NewSession -= UpdateTitle;
             _globalSignals.Save -= UpdateTitle;
             _globalSignals.SaveAs -= UpdateTitle;
@@ -379,6 +384,7 @@ public partial class MainTitleBarUI : Control
         AddChild(_helpDrop);
 
         AddActionRow(_helpItems, "About Cue2…", null, OpenAboutWindow);
+        AddActionRow(_helpItems, "Check for Updates…", null, OpenUpdatesSettings);
         AddSeparator(_helpItems);
         AddActionRow(_helpItems, "Website…", null, () => OS.ShellOpen("https://www.cue2.live/"));
         AddActionRow(_helpItems, "Documentation…", null, () => OS.ShellOpen("https://docs.cue2.live/"));
@@ -1491,11 +1497,13 @@ public partial class MainTitleBarUI : Control
         {
             _mainMenu.Visible = true;
             _mainMenuActive = true;
+            SetProcessInput(true);
         }
         else
         {
             _mainMenu.Visible = false;
             _mainMenuActive = false;
+            SetProcessInput(false);
             _menuHideTimer?.Stop();
             HideAllDrops();
         }
@@ -1623,6 +1631,22 @@ public partial class MainTitleBarUI : Control
         var settingsBtn = GetNodeOrNull<Button>("%SettingsButton");
         if (settingsBtn != null)
             settingsBtn.ButtonPressed = false;
+    }
+
+    private void OpenUpdatesSettings()
+    {
+        OnOpenSettingsMenu("Updates");
+    }
+
+    /// <summary>
+    /// Opens Settings on the given stable English menu key (e.g. Updates).
+    /// </summary>
+    /// <param name="menuKey">Settings tree key.</param>
+    private void OnOpenSettingsMenu(string menuKey)
+    {
+        ToggleSettingsWindowOpen(true);
+        if (_settingsWindow != null && GodotObject.IsInstanceValid(_settingsWindow))
+            _settingsWindow.CallDeferred(SettingsWindow.MethodName.OpenMenu, menuKey ?? "Updates");
     }
 
     private void ToggleSettingsWindow()
